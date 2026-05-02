@@ -1,0 +1,81 @@
+rules:
+  - id: agentshield.detect.unsanitized-user-input-to-llm
+    languages: [python]
+    severity: ERROR
+    message: >-
+      User input from an HTTP request flows directly into an LLM/agent/chain/retriever
+      invocation without passing through a known guardrail or sanitization layer.
+      This is the canonical prompt-injection surface (OWASP LLM01).
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.json[$KEY]
+              - pattern: request.json.get(...)
+              - pattern: request.form[$KEY]
+              - pattern: request.form.get(...)
+              - pattern: request.args.get(...)
+              - pattern: request.args[$KEY]
+              - pattern: request.values.get(...)
+              - pattern: request.data
+              - pattern: $REQ.json()
+              - pattern: $REQ.body
+              - pattern: await $REQ.json()
+              - pattern: await $REQ.body()
+              - pattern: input(...)
+              - pattern: sys.argv[$I]
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $LLM.invoke($X, ...)
+              - pattern: $LLM.ainvoke($X, ...)
+              - pattern: $LLM.run($X, ...)
+              - pattern: $LLM.arun($X, ...)
+              - pattern: $LLM.predict($X, ...)
+              - pattern: $LLM.apredict($X, ...)
+              - pattern: $LLM.stream($X, ...)
+              - pattern: $LLM.astream($X, ...)
+              - pattern: $LLM.batch($X, ...)
+              - pattern: $LLM.generate($X, ...)
+              - pattern: $LLM.agenerate($X, ...)
+              - pattern: $CHAIN.invoke($X, ...)
+              - pattern: $CHAIN.run($X, ...)
+              - pattern: $AGENT.invoke($X, ...)
+              - pattern: $AGENT.run($X, ...)
+              - pattern: $AGENT.execute($X, ...)
+              - pattern: $QE.query($X, ...)
+              - pattern: $QE.aquery($X, ...)
+              - pattern: $CE.chat($X, ...)
+              - pattern: $CE.achat($X, ...)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              - pattern: $G.guard($X, ...)
+              - pattern: $G.scan($X, ...)
+              - pattern: $G.detect_injection($X, ...)
+              - pattern: $G.is_safe($X, ...)
+              - pattern: nemoguardrails.LLMRails(...).generate(...)
+              - pattern: lakera_guard.detect(...)
+              - pattern: rebuff.detect_injection(...)
+              - pattern: presidio_analyzer.AnalyzerEngine().analyze(...)
+              - pattern: bleach.clean(...)
+              - pattern: html.escape(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-001
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Wrap LLM calls with an input guardrail (NeMo Guardrails, Lakera Guard, Rebuff,
+        Llama Guard, or an equivalent). Validate and sanitize user input before it
+        reaches the prompt template. Use structured prompting that strictly delimits
+        user content from instructions.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://atlas.mitre.org/techniques/AML.T0051/"

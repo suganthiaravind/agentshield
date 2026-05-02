@@ -1,0 +1,62 @@
+rules:
+  - id: agentshield.respond.llm-call-without-audit-logging
+    languages: [python]
+    severity: INFO
+    message: >-
+      LLM/agent invocation in this module without surrounding logger / callback /
+      tracer setup. Without an audit trail you can't reconstruct what the agent
+      saw, decided, or did — blocking incident response and post-hoc red-team
+      analysis. AgentShield Framework v1 (AS-R-001).
+    patterns:
+      - pattern-either:
+          - pattern: $X.invoke(...)
+          - pattern: $X.ainvoke(...)
+          - pattern: $X.run(...)
+          - pattern: $X.predict(...)
+          - pattern: $X.generate(...)
+          - pattern: $X.query(...)
+          - pattern: $X.chat(...)
+      - pattern-not-inside: |
+          import logging
+          ...
+      - pattern-not-inside: |
+          from logging import ...
+          ...
+      - pattern-not-inside: |
+          import structlog
+          ...
+      - pattern-not-inside: |
+          from langchain.callbacks import ...
+          ...
+      - pattern-not-inside: |
+          from langchain_core.callbacks import ...
+          ...
+      - pattern-not-inside: |
+          from langsmith import ...
+          ...
+      - pattern-not-inside: |
+          from opentelemetry import ...
+          ...
+      - pattern-not-inside: |
+          callbacks=$CB
+          ...
+    metadata:
+      category: respond
+      agentshield_id: AS-R-001
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM10"]
+        owasp_agentic: []
+        nist_ai_rmf: ["MEASURE-2.7", "MANAGE-3.1"]
+        mitre_atlas: []
+        agentshield_v1: ["AS-R-001"]
+      languages: [python]
+      remediation: >-
+        Add structured logging around every LLM/agent invocation. Capture: input
+        prompt, retrieved documents, tool calls made, model output, latency, token
+        counts. Recommended: LangSmith or OpenTelemetry traces with the LangChain
+        OTEL integration. At minimum: standard `logging` with a dedicated
+        `agent_audit` logger writing JSON.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"
+        - "https://docs.smith.langchain.com/"

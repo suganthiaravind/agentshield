@@ -1,0 +1,56 @@
+rules:
+  - id: agentshield.detect.untrusted-document-loader-to-rag
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A document/web loader that fetches content from URLs is feeding into a vector
+      store or retriever without URL allowlisting or content sanitization. This is
+      the indirect prompt injection / RAG poisoning surface (OWASP LLM01 indirect,
+      LLM08 vector weakness).
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: WebBaseLoader(...)
+              - pattern: UnstructuredURLLoader(...)
+              - pattern: SeleniumURLLoader(...)
+              - pattern: PlaywrightURLLoader(...)
+              - pattern: AsyncHtmlLoader(...)
+              - pattern: RecursiveUrlLoader(...)
+              - pattern: SitemapLoader(...)
+              - pattern: $LOADER_CLASS(url=$URL, ...)
+          - pattern-not-inside: |
+              if $URL in $ALLOWLIST:
+                  ...
+          - pattern-not-inside: |
+              if $URL.startswith($PREFIX):
+                  ...
+          - pattern-not-inside: |
+              assert $URL in $ALLOWLIST
+              ...
+      - patterns:
+          - pattern-either:
+              - pattern: $LOADER.load()
+              - pattern: $LOADER.lazy_load()
+              - pattern: $LOADER.aload()
+          - pattern-inside: |
+              $LOADER = WebBaseLoader(...)
+              ...
+    metadata:
+      category: detect
+      agentshield_id: AS-D-002
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM08"]
+        owasp_agentic: ["T1", "T6"]
+        nist_ai_rmf: ["MAP-2.3"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Implement a URL allowlist before fetching. Sanitize fetched content to strip
+        instruction-like markup before chunking into the vector store. Treat all
+        externally-loaded documents as untrusted input — apply prompt-injection
+        filtering on retrieval and on insertion.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://genai.owasp.org/llmrisk/llm08-vector-and-embedding-weaknesses/"

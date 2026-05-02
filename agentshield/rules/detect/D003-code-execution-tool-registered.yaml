@@ -1,0 +1,69 @@
+rules:
+  - id: agentshield.detect.code-execution-tool-registered
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Agent has access to a code-execution tool (Python REPL, shell, eval). If user
+      input or LLM output reaches the tool's input, this is arbitrary code execution
+      on the host. OWASP LLM05/LLM06, OWASP Agentic T11.
+    pattern-either:
+      - pattern: PythonREPL(...)
+      - pattern: PythonAstREPLTool(...)
+      - pattern: PythonREPLTool(...)
+      - pattern: ShellTool(...)
+      - pattern: BashProcess(...)
+      - pattern: SessionsPythonREPLTool(...)
+      - pattern: from langchain_experimental.tools import PythonREPLTool
+      - pattern: from langchain_community.tools import ShellTool
+      - pattern: from langchain.tools.python.tool import PythonREPLTool
+      - pattern: |
+          $T = Tool(
+              ...,
+              func=exec,
+              ...
+          )
+      - pattern: |
+          $T = Tool(
+              ...,
+              func=eval,
+              ...
+          )
+      - pattern: |
+          @tool
+          def $F(...):
+              ...
+              exec(...)
+              ...
+      - pattern: |
+          @tool
+          def $F(...):
+              ...
+              os.system(...)
+              ...
+      - pattern: |
+          @tool
+          def $F(...):
+              ...
+              subprocess.$M(...)
+              ...
+    metadata:
+      category: detect
+      agentshield_id: AS-D-003
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM05", "LLM06"]
+        owasp_agentic: ["T2", "T11"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0050"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Run code-execution tools inside a sandbox (e.g. SessionsPythonREPLTool,
+        Docker, Firecracker, or seccomp-restricted process). Restrict the agent's
+        tool registry to a narrow allowlist of safe primitives. Require human
+        approval before agent-generated code executes with elevated privileges.
+        Never wire `exec`, `eval`, `os.system`, or unrestricted `subprocess` as a
+        tool function.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"
+        - "https://nvd.nist.gov/vuln/detail/CVE-2023-36258"

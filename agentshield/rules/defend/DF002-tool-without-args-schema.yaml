@@ -1,0 +1,53 @@
+rules:
+  - id: agentshield.defend.tool-without-args-schema
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Tool registered without an explicit `args_schema` (Pydantic model). Without
+      a schema the LLM can pass arbitrary, unvalidated arguments — a classic
+      excessive-agency / tool-misuse vector (OWASP LLM06, OWASP Agentic T2).
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: Tool(name=$N, func=$F, description=$D)
+              - pattern: Tool(name=$N, description=$D, func=$F)
+              - pattern: StructuredTool(name=$N, func=$F, description=$D)
+              - pattern: |
+                  Tool(
+                      name=$N,
+                      func=$F,
+                      description=$D,
+                  )
+          - pattern-not: Tool(..., args_schema=$S, ...)
+      - patterns:
+          - pattern: |
+              @tool
+              def $F(...):
+                  ...
+          - pattern-not: |
+              @tool(args_schema=$S)
+              def $F(...):
+                  ...
+          - pattern-not: |
+              @tool($N, args_schema=$S)
+              def $F(...):
+                  ...
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-002
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM06", "LLM08"]
+        owasp_agentic: ["T2"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: []
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Define a Pydantic `BaseModel` describing the tool's expected arguments and
+        pass it as `args_schema=`. Constrain types, ranges, and allowed values.
+        For high-risk tools (file I/O, network, code-exec) add explicit validation
+        inside the tool function before performing the action.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"
+        - "https://python.langchain.com/docs/how_to/custom_tools/"

@@ -1,0 +1,70 @@
+rules:
+  - id: agentshield.defend.no-guardrails-import-in-llm-module
+    languages: [python]
+    severity: WARNING
+    message: >-
+      This module invokes an LLM/agent/chain but does not import any known
+      guardrails library (NeMo Guardrails, Lakera, Rebuff, Llama Guard, Presidio,
+      Guardrails-AI). High-risk modules should layer at least one input or output
+      filter. Absence-detection — calibrate severity per repo.
+    patterns:
+      - pattern-either:
+          - pattern: $X.invoke(...)
+          - pattern: $X.ainvoke(...)
+          - pattern: $X.run(...)
+          - pattern: $X.predict(...)
+          - pattern: $X.generate(...)
+          - pattern: $X.query(...)
+          - pattern: $X.chat(...)
+      - pattern-not-inside: |
+          import nemoguardrails
+          ...
+      - pattern-not-inside: |
+          from nemoguardrails import ...
+          ...
+      - pattern-not-inside: |
+          import lakera_chainguard
+          ...
+      - pattern-not-inside: |
+          from lakera_chainguard import ...
+          ...
+      - pattern-not-inside: |
+          import rebuff
+          ...
+      - pattern-not-inside: |
+          from rebuff import ...
+          ...
+      - pattern-not-inside: |
+          import guardrails
+          ...
+      - pattern-not-inside: |
+          from guardrails import ...
+          ...
+      - pattern-not-inside: |
+          import presidio_analyzer
+          ...
+      - pattern-not-inside: |
+          from presidio_analyzer import ...
+          ...
+      - pattern-not-inside: |
+          from llama_guard import ...
+          ...
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-001
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM05"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: []
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Add an input/output guardrail layer. Suggested OSS options:
+        NeMo Guardrails (https://github.com/NVIDIA/NeMo-Guardrails),
+        Llama Guard (Meta), Lakera Chainguard, Rebuff, Guardrails-AI.
+        Choose at least one input filter (prompt-injection detector) and one output
+        filter (PII / toxic content). For RAG, add a separate retrieval filter.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

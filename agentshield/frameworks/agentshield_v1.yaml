@@ -1,0 +1,23 @@
+# AgentShield Framework v1
+#
+# Houses agent-security findings that don't yet have a clean external-framework
+# mapping. Entries here should be promoted to OWASP / NIST / MITRE mappings when
+# the public frameworks catch up. Each entry MUST have a non-empty AgentShield ID
+# referenced by at least one rule.
+
+framework: "AgentShield Framework v1"
+version: "0.1.0"
+url: "https://github.com/<TBD>/agentshield"
+
+entries:
+  AS-R-001:
+    name: "Missing audit logging around LLM/agent invocation"
+    bucket: respond
+    summary: >-
+      LLM call paths lack structured logging or tracing instrumentation. Without
+      an audit trail you cannot reconstruct what the agent saw, decided, or did,
+      blocking incident response and post-hoc red-team analysis. Closest external
+      analogue is OWASP LLM10 (unbounded consumption) and NIST AI RMF
+      MEASURE-2.7, but neither captures the specific "no logging at all" failure.
+    rule_ids:
+      - agentshield.respond.llm-call-without-audit-logging

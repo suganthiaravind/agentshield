@@ -1,0 +1,91 @@
+# OWASP LLM Top 10 (2025)
+# Source: https://genai.owasp.org/llm-top-10/
+#
+# This file is a reference dictionary — it describes each OWASP LLM Top 10 entry
+# so reports can render full names and links. Rule → framework mapping lives in
+# each rule's metadata block under `framework_mappings.owasp_llm`.
+
+framework: "OWASP LLM Top 10"
+version: "2025"
+url: "https://genai.owasp.org/llm-top-10/"
+
+entries:
+  LLM01:
+    name: "Prompt Injection"
+    url: "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+    summary: >-
+      An attacker manipulates an LLM through crafted inputs, causing it to ignore
+      instructions, divulge information, or perform unintended actions. Direct
+      injection comes from user input; indirect injection comes from poisoned
+      content the LLM ingests (web pages, documents, RAG sources).
+
+  LLM02:
+    name: "Sensitive Information Disclosure"
+    url: "https://genai.owasp.org/llmrisk/llm02-sensitive-information-disclosure/"
+    summary: >-
+      LLM exposes confidential data (PII, credentials, internal context, IP) in
+      its outputs. Often a result of training-data leakage, system-prompt
+      regurgitation, or insufficient output filtering.
+
+  LLM03:
+    name: "Supply Chain"
+    url: "https://genai.owasp.org/llmrisk/llm03-supply-chain/"
+    summary: >-
+      Compromised models, datasets, or third-party plugins introduce vulnerabilities.
+      Includes malicious model artifacts on Hugging Face, poisoned fine-tuning
+      datasets, and vulnerable dependencies.
+
+  LLM04:
+    name: "Data and Model Poisoning"
+    url: "https://genai.owasp.org/llmrisk/llm04-data-and-model-poisoning/"
+    summary: >-
+      Training, fine-tuning, or RAG data is manipulated to introduce backdoors,
+      biases, or degraded behavior. Affects pre-training, fine-tuning, and
+      embedding/index population stages.
+
+  LLM05:
+    name: "Improper Output Handling"
+    url: "https://genai.owasp.org/llmrisk/llm05-improper-output-handling/"
+    summary: >-
+      Downstream systems treat LLM output as trusted, leading to XSS, SSRF, SQLi,
+      RCE, or path traversal. Common when LLM output is rendered as HTML, executed
+      as code, or passed to a SQL/shell sink without validation.
+
+  LLM06:
+    name: "Excessive Agency"
+    url: "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"
+    summary: >-
+      Agent has too much functionality, permissions, or autonomy. Tools that can
+      execute code, modify databases, send messages, or call external APIs without
+      adequate guardrails enable destructive actions when the LLM is manipulated.
+
+  LLM07:
+    name: "System Prompt Leakage"
+    url: "https://genai.owasp.org/llmrisk/llm07-system-prompt-leakage/"
+    summary: >-
+      System prompt contains sensitive information (credentials, internal logic,
+      role boundaries) and the LLM can be coerced into revealing it. Treat system
+      prompts as untrusted text from the user's perspective.
+
+  LLM08:
+    name: "Vector and Embedding Weaknesses"
+    url: "https://genai.owasp.org/llmrisk/llm08-vector-and-embedding-weaknesses/"
+    summary: >-
+      RAG systems are vulnerable to poisoning of vector stores, retrieval of
+      malicious documents, embedding inversion attacks, and cross-tenant data
+      leakage in shared embeddings.
+
+  LLM09:
+    name: "Misinformation"
+    url: "https://genai.owasp.org/llmrisk/llm09-misinformation/"
+    summary: >-
+      LLM produces plausible-but-false output (hallucination), or is manipulated
+      into spreading misinformation. Compounded by overreliance — users trusting
+      output without verification.
+
+  LLM10:
+    name: "Unbounded Consumption"
+    url: "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"
+    summary: >-
+      Lack of rate limits, quotas, or token caps allows DoS, cost exhaustion, or
+      model extraction. Includes wallet-draining attacks against pay-per-token APIs.
