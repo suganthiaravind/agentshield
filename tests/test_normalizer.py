@@ -30,8 +30,8 @@ def normalized_findings() -> list[Finding]:
 
 def test_normalizer_produces_findings(normalized_findings: list[Finding]) -> None:
     """End-to-end: normalizer returns at least the findings the goldens recorded."""
-    # Goldens record 3 + 0 + 2 + 3 = 8 raw findings across the 4 fixtures.
-    assert len(normalized_findings) >= 8
+    # Goldens record 3 + 0 + 2 + 1 + 3 = 9 raw findings across the 5 fixtures.
+    assert len(normalized_findings) >= 9
 
 
 def test_finding_has_required_fields(normalized_findings: list[Finding]) -> None:
@@ -62,10 +62,18 @@ def test_d001_preserves_framework_mappings(normalized_findings: list[Finding]) -
 
 def test_partition_by_tier(normalized_findings: list[Finding]) -> None:
     by_tier = Normalizer.partition_by_tier(normalized_findings)
-    # Current fixtures only trigger framework rules (tier-1).
+    # Fixtures cover both framework rules (tier-1) and the fallback rule (tier-2).
     assert len(by_tier["framework"]) > 0
+    assert len(by_tier["fallback"]) > 0  # at least d001_fallback_openai_wrapper.py
     assert len(by_tier["judge"]) == 0  # judge tier filled in by Track B, not normalizer
     assert len(by_tier["discovery"]) == 0  # discovery tier filled in by Track D
+
+
+def test_fallback_finding_has_low_confidence(normalized_findings: list[Finding]) -> None:
+    """Fallback rules carry confidence: low so downstream consumers know to triage."""
+    fallback = [f for f in normalized_findings if f.tier == "fallback"]
+    assert len(fallback) > 0
+    assert all(f.confidence == "low" for f in fallback)
 
 
 def test_java_d001_now_fires(normalized_findings: list[Finding]) -> None:

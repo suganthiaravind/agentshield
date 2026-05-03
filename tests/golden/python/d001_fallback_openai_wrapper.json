@@ -1,0 +1,9 @@
+{
+  "fixture": "python/d001_fallback_openai_wrapper.py",
+  "expected_findings": [
+    {
+      "rule_id": "unsanitized-user-input-to-llm-fallback",
+      "line": 45
+    }
+  ]
+}
