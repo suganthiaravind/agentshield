@@ -1,21 +1,21 @@
 """AgentShield CLI entry point.
 
-A1 scaffolding: `--version` works; `scan <path>` prints the planned
-pipeline as TODO markers.
-A2: Tier 1+2 semgrep runner wired in; raw SARIF findings counted.
-A3: SARIF normalized to typed Findings, partitioned by tier.
-Subsequent tracks (A4 report writers, B judge, D discovery) replace
-the remaining TODOs with real behavior.
+A1 scaffolding → A2 semgrep runner → A3 normalizer → A4 report writers.
+End-to-end pipeline working except Tier 3 (judge, Track B) and
+Tier 4 (discovery, Track D), which the CLI flags wire up but the
+implementations stub.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from agentshield import __version__
 from agentshield.normalize import Normalizer, NormalizerError
+from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
 
 
@@ -103,7 +103,25 @@ def cmd_scan(args: argparse.Namespace) -> int:
     print(f"[agentshield] TODO Tier 3 (LLM judge, {judge_state})              — Track B")
     if args.discovery:
         print("[agentshield] TODO Tier 4 (discovery pass, enabled)              — Track D")
-    print("[agentshield] TODO Emit reports (SARIF/JSON/MD)                  — Track A4")
+
+    # A4: emit reports if requested.
+    written: list[str] = []
+    if args.output_sarif:
+        SarifWriter().write(findings, Path(args.output_sarif))
+        written.append(args.output_sarif)
+    if args.output_json:
+        JsonWriter().write(findings, Path(args.output_json))
+        written.append(args.output_json)
+    if args.output_markdown:
+        MarkdownWriter().write(findings, Path(args.output_markdown))
+        written.append(args.output_markdown)
+    if written:
+        print(f"[agentshield] Wrote: {', '.join(written)}")
+    else:
+        print(
+            "[agentshield] (no --output-{sarif,json,markdown} specified; "
+            "use one to persist findings)"
+        )
     return 0
 
 
