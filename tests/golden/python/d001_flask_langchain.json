@@ -1,0 +1,17 @@
+{
+  "fixture": "python/d001_flask_langchain.py",
+  "expected_findings": [
+    {
+      "rule_id": "llm-call-without-audit-logging",
+      "line": 16
+    },
+    {
+      "rule_id": "no-guardrails-import-in-llm-module",
+      "line": 16
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 16
+    }
+  ]
+}

@@ -71,16 +71,27 @@ class SemgrepRunner:
             "Install with: pip install 'agentshield[semgrep]'"
         )
 
-    def run(self, target_path: Path | str) -> dict[str, Any]:
+    def run(self, target_path: Path | str | list[Path | str]) -> dict[str, Any]:
         """Scan `target_path` and return parsed SARIF v2.1.0.
+
+        `target_path` may be a single path (str or Path) or a list. When a
+        list is given, each path is passed explicitly to semgrep — useful
+        for tests that need to bypass semgrep's default ignore patterns
+        (which exclude `tests/`, `fixtures/`, etc. on directory traversal).
 
         Raises SemgrepRunnerError on subprocess failure, timeout, or
         unparseable output. Returns the SARIF dict on success — including
         when zero findings are present.
         """
-        target = Path(target_path)
-        if not target.exists():
-            raise SemgrepRunnerError(f"Target path does not exist: {target}")
+        if isinstance(target_path, (str, Path)):
+            targets = [Path(target_path)]
+        else:
+            targets = [Path(p) for p in target_path]
+        if not targets:
+            raise SemgrepRunnerError("No target paths provided")
+        for t in targets:
+            if not t.exists():
+                raise SemgrepRunnerError(f"Target path does not exist: {t}")
 
         cmd = [
             self._semgrep_executable(),
@@ -93,7 +104,7 @@ class SemgrepRunner:
             "--metrics",
             "off",
             *self.extra_flags,
-            str(target),
+            *[str(t) for t in targets],
         ]
 
         try:

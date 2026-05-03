@@ -1,0 +1,13 @@
+{
+  "fixture": "python/d003_code_exec.py",
+  "expected_findings": [
+    {
+      "rule_id": "code-execution-tool-registered",
+      "line": 7
+    },
+    {
+      "rule_id": "code-execution-tool-registered",
+      "line": 11
+    }
+  ]
+}

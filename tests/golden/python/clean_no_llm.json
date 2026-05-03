@@ -1,0 +1,4 @@
+{
+  "fixture": "python/clean_no_llm.py",
+  "expected_findings": []
+}
