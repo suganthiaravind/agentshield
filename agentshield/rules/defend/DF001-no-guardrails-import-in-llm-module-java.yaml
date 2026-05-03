@@ -39,7 +39,7 @@ rules:
           - pattern: $EMBEDDING.embedAll(...)
           - pattern: $CLIENT.getEmbeddings(...)
       - pattern-not-inside: |
-          import com.lakera.$X...;
+          import com.lakera.$X;
           ...
       - pattern-not-inside: |
           import org.owasp.encoder.$X;

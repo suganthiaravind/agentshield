@@ -46,31 +46,31 @@ rules:
       - patterns:
           - pattern-either:
               - pattern-inside: |
-                  import com.openai.$X...;
+                  import com.openai.$X;
                   ...
               - pattern-inside: |
-                  import com.anthropic.$X...;
+                  import com.anthropic.$X;
                   ...
               - pattern-inside: |
-                  import software.amazon.awssdk.services.bedrockruntime.$X...;
+                  import software.amazon.awssdk.services.bedrockruntime.$X;
                   ...
               - pattern-inside: |
-                  import com.azure.ai.openai.$X...;
+                  import com.azure.ai.openai.$X;
                   ...
               - pattern-inside: |
-                  import com.google.cloud.vertexai.$X...;
+                  import com.google.cloud.vertexai.$X;
                   ...
               - pattern-inside: |
-                  import dev.langchain4j.$X...;
+                  import dev.langchain4j.$X;
                   ...
               - pattern-inside: |
-                  import org.springframework.ai.$X...;
+                  import org.springframework.ai.$X;
                   ...
               - pattern-inside: |
-                  import com.jpmchase.smartsdk.$X...;
+                  import com.jpmchase.smartsdk.$X;
                   ...
               - pattern-inside: |
-                  import com.jpmchase.cdaosmart.$X...;
+                  import com.jpmchase.cdaosmart.$X;
                   ...
           - pattern: $X.$VERB($Y, ...)
           - metavariable-regex:

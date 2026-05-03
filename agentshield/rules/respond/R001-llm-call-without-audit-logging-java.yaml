@@ -51,7 +51,7 @@ rules:
           import org.apache.logging.log4j.$X;
           ...
       - pattern-not-inside: |
-          import io.opentelemetry.$X...;
+          import io.opentelemetry.$X;
           ...
     metadata:
       category: respond

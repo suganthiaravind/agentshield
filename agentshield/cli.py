@@ -1,9 +1,10 @@
 """AgentShield CLI entry point.
 
 A1 scaffolding: `--version` works; `scan <path>` prints the planned
-pipeline as TODO markers. Subsequent tracks (A2 semgrep runner, A3
-normalizer, A4 report writers, B judge, D discovery) replace the
-TODOs with real behavior.
+pipeline as TODO markers.
+A2: Tier 1+2 semgrep runner wired in; raw SARIF findings counted.
+Subsequent tracks (A3 normalizer, A4 report writers, B judge, D
+discovery) replace the remaining TODOs with real behavior.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import sys
 from typing import Sequence
 
 from agentshield import __version__
+from agentshield.runner import SemgrepRunner, SemgrepRunnerError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,15 +63,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
-    """Stub: prints the planned pipeline. Replaced by A2-A4 / B / D."""
+    """Run Tier 1+2 semgrep scan; remaining tiers stubbed pending A3/A4/B/D."""
     print(f"[agentshield] scan target: {args.path}")
-    print(f"[agentshield] TODO Tier 1 (semgrep framework rules)        — Track A2")
-    print(f"[agentshield] TODO Tier 2 (semgrep fallback rules)         — Track A2")
+
+    # Tier 1+2 — wired in A2; produces raw SARIF.
+    print("[agentshield] Tier 1+2: invoking semgrep on bundled rule pack...")
+    try:
+        runner = SemgrepRunner()
+        sarif = runner.run(args.path)
+    except SemgrepRunnerError as exc:
+        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    raw_count = SemgrepRunner.count_raw_findings(sarif)
+    print(f"[agentshield] Tier 1+2: {raw_count} raw finding(s)")
+    print("[agentshield] TODO Normalize SARIF → tier-partitioned Findings  — Track A3")
+
     judge_state = "disabled" if args.no_judge else f"backend={args.llm_backend or 'default'}"
-    print(f"[agentshield] TODO Tier 3 (LLM judge, {judge_state})        — Track B")
+    print(f"[agentshield] TODO Tier 3 (LLM judge, {judge_state})              — Track B")
     if args.discovery:
-        print(f"[agentshield] TODO Tier 4 (discovery pass, enabled)        — Track D")
-    print(f"[agentshield] TODO Emit reports (SARIF/JSON/MD)            — Track A4")
+        print("[agentshield] TODO Tier 4 (discovery pass, enabled)              — Track D")
+    print("[agentshield] TODO Emit reports (SARIF/JSON/MD)                  — Track A4")
     return 0
 
 
