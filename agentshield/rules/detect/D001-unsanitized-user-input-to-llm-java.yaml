@@ -1,0 +1,110 @@
+rules:
+  - id: agentshield.detect.unsanitized-user-input-to-llm-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      User input from an HTTP request (Spring / JAX-RS / Servlet) flows directly
+      into an LLM/agent invocation without passing through a known guardrail or
+      sanitization layer. This is the canonical prompt-injection surface
+      (OWASP LLM01). Java port of agentshield.detect.unsanitized-user-input-to-llm.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # Spring MVC / WebFlux
+              - pattern: |
+                  @RequestParam $T $X
+              - pattern: |
+                  @RequestBody $T $X
+              - pattern: |
+                  @PathVariable $T $X
+              - pattern: |
+                  @RequestHeader $T $X
+              # JAX-RS
+              - pattern: |
+                  @QueryParam($K) $T $X
+              - pattern: |
+                  @FormParam($K) $T $X
+              - pattern: |
+                  @PathParam($K) $T $X
+              # Servlet API
+              - pattern: $REQ.getParameter(...)
+              - pattern: $REQ.getParameterValues(...)
+              - pattern: $REQ.getHeader(...)
+              - pattern: $REQ.getReader()
+              - pattern: $REQ.getInputStream()
+              # CLI / stdin
+              - pattern: $ARGS[$I]
+              - pattern: System.console().readLine(...)
+              - pattern: $SCANNER.nextLine(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # SMARTSDK Java (wraps Google ADK) — user input is 2nd positional arg
+              - pattern: $RUNNER.runStream($AGENT, $X, ...)
+              - pattern: $RUNNER.run($AGENT, $X, ...)
+              - pattern: $RUNNER.runAsync($AGENT, $X, ...)
+              # langchain4j common sinks
+              - pattern: $MODEL.generate($X, ...)
+              - pattern: $MODEL.chat($X, ...)
+              - pattern: $CHAIN.execute($X, ...)
+              - pattern: $ASSISTANT.chat($X, ...)
+              # Spring AI — fluent ChatClient and ChatModel
+              - pattern: $CLIENT.prompt().user($X).call(...)
+              - pattern: $CLIENT.prompt($X).call(...)
+              - pattern: $MODEL.call(new Prompt($X, ...))
+              - pattern: $MODEL.call(new UserMessage($X, ...))
+              - pattern: $MODEL.stream(new Prompt($X, ...))
+              # AWS Bedrock Runtime (direct SDK, not via SMARTSDK)
+              - pattern: $CLIENT.invokeModel($X, ...)
+              - pattern: $CLIENT.invokeModelWithResponseStream($X, ...)
+              - pattern: $CLIENT.converse($X, ...)
+              - pattern: $CLIENT.converseStream($X, ...)
+              # Azure OpenAI Java SDK
+              - pattern: $CLIENT.getChatCompletions($X, ...)
+              - pattern: $CLIENT.getChatCompletionsStream($X, ...)
+              - pattern: $CLIENT.getCompletions($X, ...)
+              # Google ADK Java (SMARTSDK wraps this; direct usage also possible)
+              - pattern: $AGENT.invoke($X, ...)
+              - pattern: $AGENT.run($X, ...)
+              # Embedding sinks (SMARTSDK / RADSDK / langchain4j / Spring AI / Azure)
+              - pattern: $MODEL.embed($X, ...)
+              - pattern: $EMBEDDING.embedAll($X, ...)
+              - pattern: $EMBEDDING.embed($X, ...)
+              - pattern: $CLIENT.getEmbeddings($X, ...)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # OWASP Java Encoder (input/output sanitization)
+              - pattern: org.owasp.encoder.Encode.forJava(...)
+              - pattern: org.owasp.encoder.Encode.forHtml(...)
+              - pattern: Encode.forJava(...)
+              - pattern: Encode.forHtml(...)
+              # Lakera Guard Java SDK
+              - pattern: $G.detect(...)
+              - pattern: $G.scan(...)
+              - pattern: $G.guard(...)
+              - pattern: $G.isSafe(...)
+              # Apache Commons Text escaping
+              - pattern: StringEscapeUtils.escapeHtml4(...)
+              - pattern: StringEscapeUtils.escapeJava(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-001
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Wrap LLM calls with an input guardrail. Java options are sparser than
+        Python: Lakera Guard has a Java client; OWASP Java Encoder can sanitize
+        user-controlled fragments; for prompt-injection specifically, call out
+        to a guardrail service (NeMo Guardrails / Llama Guard) over HTTP.
+        Validate and sanitize user input before it reaches the prompt template.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://atlas.mitre.org/techniques/AML.T0051/"

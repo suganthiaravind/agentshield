@@ -1,0 +1,75 @@
+rules:
+  - id: agentshield.defend.no-guardrails-import-in-llm-module-java
+    languages: [java]
+    severity: WARNING
+    message: >-
+      This module invokes an LLM/agent (SMARTSDK runner, langchain4j model)
+      but does not import any known guardrails / input-sanitization library
+      (Lakera Guard Java SDK, OWASP Java Encoder, Apache Commons Text escaping).
+      Java guardrail ecosystem is sparser than Python — calibrate severity per
+      repo. Java port of agentshield.defend.no-guardrails-import-in-llm-module.
+    patterns:
+      - pattern-either:
+          # SMARTSDK Java (wraps Google ADK)
+          - pattern: $RUNNER.runStream($AGENT, ...)
+          - pattern: $RUNNER.run($AGENT, ...)
+          - pattern: $RUNNER.runAsync($AGENT, ...)
+          # langchain4j
+          - pattern: $MODEL.generate(...)
+          - pattern: $MODEL.chat(...)
+          - pattern: $CHAIN.execute(...)
+          - pattern: $ASSISTANT.chat(...)
+          # Spring AI
+          - pattern: $CLIENT.prompt().user(...).call(...)
+          - pattern: $MODEL.call(new Prompt(...))
+          - pattern: $MODEL.stream(new Prompt(...))
+          # AWS Bedrock Runtime (direct SDK)
+          - pattern: $CLIENT.invokeModel(...)
+          - pattern: $CLIENT.invokeModelWithResponseStream(...)
+          - pattern: $CLIENT.converse(...)
+          - pattern: $CLIENT.converseStream(...)
+          # Azure OpenAI Java SDK
+          - pattern: $CLIENT.getChatCompletions(...)
+          - pattern: $CLIENT.getCompletions(...)
+          # Google ADK Java (direct)
+          - pattern: $AGENT.invoke(...)
+          - pattern: $AGENT.run(...)
+          # Embeddings
+          - pattern: $MODEL.embed(...)
+          - pattern: $EMBEDDING.embedAll(...)
+          - pattern: $CLIENT.getEmbeddings(...)
+      - pattern-not-inside: |
+          import com.lakera.$X...;
+          ...
+      - pattern-not-inside: |
+          import org.owasp.encoder.$X;
+          ...
+      - pattern-not-inside: |
+          import org.apache.commons.text.StringEscapeUtils;
+          ...
+      - pattern-not-inside: |
+          import org.springframework.ai.chat.client.advisor.$X;
+          ...
+      - pattern-not-inside: |
+          import org.springframework.ai.moderation.$X;
+          ...
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-001
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM05"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: []
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Add an input/output guardrail layer. For Java, options include:
+        Lakera Guard Java SDK (com.lakera), OWASP Java Encoder
+        (org.owasp.encoder), Apache Commons Text (StringEscapeUtils), or call
+        out to a hosted guardrail service (NeMo Guardrails / Llama Guard) over
+        HTTP. Choose at least one input filter (prompt-injection detector) and
+        one output filter (PII / toxic content).
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

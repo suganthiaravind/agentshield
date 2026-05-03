@@ -1,0 +1,75 @@
+rules:
+  - id: agentshield.respond.llm-call-without-audit-logging-java
+    languages: [java]
+    severity: INFO
+    message: >-
+      LLM/agent invocation in this module without surrounding logger / tracer
+      setup (SLF4J, Log4j, java.util.logging, OpenTelemetry). Without an audit
+      trail you can't reconstruct what the agent saw, decided, or did —
+      blocking incident response and post-hoc red-team analysis. Java port of
+      agentshield.respond.llm-call-without-audit-logging (AS-R-001).
+    patterns:
+      - pattern-either:
+          # SMARTSDK Java (wraps Google ADK)
+          - pattern: $RUNNER.runStream($AGENT, ...)
+          - pattern: $RUNNER.run($AGENT, ...)
+          - pattern: $RUNNER.runAsync($AGENT, ...)
+          # langchain4j
+          - pattern: $MODEL.generate(...)
+          - pattern: $MODEL.chat(...)
+          - pattern: $CHAIN.execute(...)
+          - pattern: $ASSISTANT.chat(...)
+          # Spring AI
+          - pattern: $CLIENT.prompt().user(...).call(...)
+          - pattern: $MODEL.call(new Prompt(...))
+          - pattern: $MODEL.stream(new Prompt(...))
+          # AWS Bedrock Runtime (direct SDK)
+          - pattern: $CLIENT.invokeModel(...)
+          - pattern: $CLIENT.invokeModelWithResponseStream(...)
+          - pattern: $CLIENT.converse(...)
+          - pattern: $CLIENT.converseStream(...)
+          # Azure OpenAI Java SDK
+          - pattern: $CLIENT.getChatCompletions(...)
+          - pattern: $CLIENT.getCompletions(...)
+          # Google ADK Java (direct)
+          - pattern: $AGENT.invoke(...)
+          - pattern: $AGENT.run(...)
+          # Embeddings
+          - pattern: $MODEL.embed(...)
+          - pattern: $EMBEDDING.embedAll(...)
+          - pattern: $CLIENT.getEmbeddings(...)
+      - pattern-not-inside: |
+          import org.slf4j.Logger;
+          ...
+      - pattern-not-inside: |
+          import org.slf4j.LoggerFactory;
+          ...
+      - pattern-not-inside: |
+          import java.util.logging.Logger;
+          ...
+      - pattern-not-inside: |
+          import org.apache.logging.log4j.$X;
+          ...
+      - pattern-not-inside: |
+          import io.opentelemetry.$X...;
+          ...
+    metadata:
+      category: respond
+      agentshield_id: AS-R-001
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM10"]
+        owasp_agentic: []
+        nist_ai_rmf: ["MEASURE-2.7", "MANAGE-3.1"]
+        mitre_atlas: []
+        agentshield_v1: ["AS-R-001"]
+      languages: [java]
+      remediation: >-
+        Add structured logging around every LLM/agent invocation. Capture: input
+        prompt, retrieved documents, tool calls made, model output, latency,
+        token counts. Recommended: SLF4J + a JSON encoder (Logstash Logback
+        encoder), or OpenTelemetry Java for distributed tracing. At minimum,
+        a dedicated `agent_audit` SLF4J logger writing JSON.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"
+        - "https://opentelemetry.io/docs/languages/java/"

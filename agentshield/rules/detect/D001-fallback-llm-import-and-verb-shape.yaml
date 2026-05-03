@@ -1,0 +1,158 @@
+rules:
+  - id: agentshield.detect.unsanitized-user-input-to-llm-fallback
+    languages: [python]
+    severity: WARNING
+    message: >-
+      User input flows into a method call shaped like an LLM invocation
+      (verbs: invoke / call / run / chat / complete / generate / predict /
+      stream / embed / query / ask / send / respond / create) in a file that
+      imports a known LLM-adjacent library (openai / anthropic / boto3 /
+      google.generativeai / vertexai / cohere / mistralai / together / groq /
+      replicate / huggingface_hub / azure.ai.openai / smart_sdk / llama_index).
+      Fallback / catch-net rule — lower confidence than framework-specific
+      D001. Investigate whether this is an LLM call missing guardrails, or a
+      false positive (RPC, generic service call, etc.). Recommended: route
+      these findings through the AgentShield LLM-judge tier for triage.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.json[$KEY]
+              - pattern: request.json.get(...)
+              - pattern: request.form[$KEY]
+              - pattern: request.form.get(...)
+              - pattern: request.args.get(...)
+              - pattern: request.args[$KEY]
+              - pattern: request.values.get(...)
+              - pattern: request.data
+              - pattern: $REQ.json()
+              - pattern: $REQ.body
+              - pattern: await $REQ.json()
+              - pattern: await $REQ.body()
+              - pattern: input(...)
+              - pattern: sys.argv[$I]
+    pattern-sinks:
+      - patterns:
+          # Gating: file imports at least one LLM-adjacent library.
+          - pattern-either:
+              - pattern-inside: |
+                  import openai
+                  ...
+              - pattern-inside: |
+                  from openai import ...
+                  ...
+              - pattern-inside: |
+                  import anthropic
+                  ...
+              - pattern-inside: |
+                  from anthropic import ...
+                  ...
+              - pattern-inside: |
+                  import boto3
+                  ...
+              - pattern-inside: |
+                  from boto3 import ...
+                  ...
+              - pattern-inside: |
+                  import google.generativeai
+                  ...
+              - pattern-inside: |
+                  from google.generativeai import ...
+                  ...
+              - pattern-inside: |
+                  import vertexai
+                  ...
+              - pattern-inside: |
+                  from vertexai import ...
+                  ...
+              - pattern-inside: |
+                  import cohere
+                  ...
+              - pattern-inside: |
+                  from cohere import ...
+                  ...
+              - pattern-inside: |
+                  import mistralai
+                  ...
+              - pattern-inside: |
+                  from mistralai import ...
+                  ...
+              - pattern-inside: |
+                  import together
+                  ...
+              - pattern-inside: |
+                  from together import ...
+                  ...
+              - pattern-inside: |
+                  import groq
+                  ...
+              - pattern-inside: |
+                  from groq import ...
+                  ...
+              - pattern-inside: |
+                  import replicate
+                  ...
+              - pattern-inside: |
+                  from replicate import ...
+                  ...
+              - pattern-inside: |
+                  from huggingface_hub import ...
+                  ...
+              - pattern-inside: |
+                  from azure.ai.openai import ...
+                  ...
+              - pattern-inside: |
+                  from smart_sdk import ...
+                  ...
+              - pattern-inside: |
+                  import smart_sdk
+                  ...
+              - pattern-inside: |
+                  from llama_index import ...
+                  ...
+              - pattern-inside: |
+                  import llama_index
+                  ...
+          # Match: any method call.
+          - pattern: $X.$VERB($Y, ...)
+          # Constraint: the method name must look LLM-shaped.
+          - metavariable-regex:
+              metavariable: $VERB
+              regex: "^(invoke|ainvoke|call|acall|run|arun|chat|achat|complete|completion|completions|generate|agenerate|predict|apredict|stream|astream|embed|aembed|query|aquery|ask|send|respond|create|acreate|invoke_model|invoke_model_with_response_stream|converse|converse_stream)$"
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              - pattern: $G.guard($X, ...)
+              - pattern: $G.scan($X, ...)
+              - pattern: $G.detect_injection($X, ...)
+              - pattern: $G.is_safe($X, ...)
+              - pattern: nemoguardrails.LLMRails(...).generate(...)
+              - pattern: lakera_guard.detect(...)
+              - pattern: rebuff.detect_injection(...)
+              - pattern: presidio_analyzer.AnalyzerEngine().analyze(...)
+              - pattern: bleach.clean(...)
+              - pattern: html.escape(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-001-FALLBACK
+      severity_normalized: medium
+      confidence: low
+      tier: fallback
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        This is a low-confidence fallback finding. Verify the call is actually
+        an LLM invocation (not RPC / generic service call) before remediating.
+        If confirmed: wrap with an input guardrail (NeMo Guardrails, Lakera,
+        Rebuff, Llama Guard, etc.) and add structured prompting that delimits
+        user content from instructions. Recommended pipeline: route findings
+        from this rule through the LLM-judge tier (see LLM_JUDGE_DESIGN.md)
+        before surfacing to engineers.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://atlas.mitre.org/techniques/AML.T0051/"

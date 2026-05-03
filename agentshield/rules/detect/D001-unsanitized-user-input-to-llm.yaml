@@ -47,13 +47,22 @@ rules:
               - pattern: $QE.aquery($X, ...)
               - pattern: $CE.chat($X, ...)
               - pattern: $CE.achat($X, ...)
-              # SMARTSDK (wraps Google ADK) — user input is 2nd positional arg
+              # SMARTSDK (wraps Google ADK) — user input is 2nd positional arg on runner.*
               - pattern: $RUNNER.run_stream($AGENT, $X, ...)
               - pattern: $RUNNER.run_async($AGENT, $X, ...)
               - pattern: $RUNNER.run($AGENT, $X, ...)
               - pattern: Console($RUNNER.run_stream($AGENT, $X, ...))
               - pattern: Console($RUNNER.run_async($AGENT, $X, ...))
               - pattern: await Console($RUNNER.run_stream($AGENT, $X, ...))
+              # SMARTSDK Content/Part-wrapped form: runner.run(agent, Content(parts=[Part(text=$X)], ...))
+              - pattern: $RUNNER.run($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
+              - pattern: $RUNNER.run_stream($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
+              - pattern: $RUNNER.run_async($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
+              # SMARTSDK / RADSDK embedding sink — user text flowing into embeddings
+              - pattern: $MODEL.embed(data=$X, ...)
+              - pattern: $MODEL.embed($X, ...)
+              - pattern: $MODEL.aembed(data=$X, ...)
+              - pattern: $MODEL.aembed($X, ...)
     pattern-sanitizers:
       - patterns:
           - pattern-either:

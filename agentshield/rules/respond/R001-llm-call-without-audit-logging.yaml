@@ -20,6 +20,11 @@ rules:
           - pattern: $RUNNER.run_stream($AGENT, ...)
           - pattern: $RUNNER.run_async($AGENT, ...)
           - pattern: $RUNNER.run($AGENT, ...)
+          - pattern: Console($RUNNER.run_stream($AGENT, ...))
+          - pattern: Console($RUNNER.run_async($AGENT, ...))
+          # SMARTSDK / RADSDK embedding invocations
+          - pattern: $MODEL.embed(...)
+          - pattern: $MODEL.aembed(...)
       - pattern-not-inside: |
           import logging
           ...

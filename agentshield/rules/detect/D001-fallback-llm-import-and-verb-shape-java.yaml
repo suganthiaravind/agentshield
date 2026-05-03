@@ -1,0 +1,115 @@
+rules:
+  - id: agentshield.detect.unsanitized-user-input-to-llm-fallback-java
+    languages: [java]
+    severity: WARNING
+    message: >-
+      User input flows into a method call shaped like an LLM invocation
+      (verbs: invoke / call / run / chat / complete / generate / predict /
+      stream / embed / query / ask / send / respond) in a file that imports
+      a known LLM-adjacent Java library (com.openai / com.anthropic /
+      software.amazon.awssdk.services.bedrockruntime / com.azure.ai.openai /
+      com.google.cloud.vertexai / dev.langchain4j / org.springframework.ai /
+      com.jpmchase.smartsdk). Fallback / catch-net rule — lower confidence
+      than framework-specific D001. Investigate whether this is an LLM call
+      missing guardrails, or a false positive. Recommended: route these
+      findings through the AgentShield LLM-judge tier for triage.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # Spring MVC / WebFlux
+              - pattern: |
+                  @RequestParam $T $X
+              - pattern: |
+                  @RequestBody $T $X
+              - pattern: |
+                  @PathVariable $T $X
+              - pattern: |
+                  @RequestHeader $T $X
+              # JAX-RS
+              - pattern: |
+                  @QueryParam($K) $T $X
+              - pattern: |
+                  @FormParam($K) $T $X
+              - pattern: |
+                  @PathParam($K) $T $X
+              # Servlet
+              - pattern: $REQ.getParameter(...)
+              - pattern: $REQ.getParameterValues(...)
+              - pattern: $REQ.getHeader(...)
+              - pattern: $REQ.getReader()
+              - pattern: $REQ.getInputStream()
+              - pattern: $ARGS[$I]
+              - pattern: System.console().readLine(...)
+              - pattern: $SCANNER.nextLine(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import com.openai.$X...;
+                  ...
+              - pattern-inside: |
+                  import com.anthropic.$X...;
+                  ...
+              - pattern-inside: |
+                  import software.amazon.awssdk.services.bedrockruntime.$X...;
+                  ...
+              - pattern-inside: |
+                  import com.azure.ai.openai.$X...;
+                  ...
+              - pattern-inside: |
+                  import com.google.cloud.vertexai.$X...;
+                  ...
+              - pattern-inside: |
+                  import dev.langchain4j.$X...;
+                  ...
+              - pattern-inside: |
+                  import org.springframework.ai.$X...;
+                  ...
+              - pattern-inside: |
+                  import com.jpmchase.smartsdk.$X...;
+                  ...
+              - pattern-inside: |
+                  import com.jpmchase.cdaosmart.$X...;
+                  ...
+          - pattern: $X.$VERB($Y, ...)
+          - metavariable-regex:
+              metavariable: $VERB
+              regex: "^(invoke|invokeModel|invokeModelWithResponseStream|converse|converseStream|call|run|runStream|runAsync|chat|complete|completion|getChatCompletions|getChatCompletionsStream|getCompletions|getEmbeddings|generate|predict|stream|embed|embedAll|query|ask|send|respond|execute)$"
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              - pattern: org.owasp.encoder.Encode.forJava(...)
+              - pattern: org.owasp.encoder.Encode.forHtml(...)
+              - pattern: Encode.forJava(...)
+              - pattern: Encode.forHtml(...)
+              - pattern: $G.detect(...)
+              - pattern: $G.scan(...)
+              - pattern: $G.guard(...)
+              - pattern: $G.isSafe(...)
+              - pattern: StringEscapeUtils.escapeHtml4(...)
+              - pattern: StringEscapeUtils.escapeJava(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-001-FALLBACK
+      severity_normalized: medium
+      confidence: low
+      tier: fallback
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Low-confidence fallback finding. Verify the call is actually an LLM
+        invocation (not RPC / DAO / generic service call) before remediating.
+        If confirmed: wrap with an input guardrail (Lakera Guard Java SDK,
+        OWASP Java Encoder, Apache Commons Text), or call out to a hosted
+        guardrail service. Recommended pipeline: route findings from this
+        rule through the LLM-judge tier (see LLM_JUDGE_DESIGN.md) before
+        surfacing to engineers.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://atlas.mitre.org/techniques/AML.T0051/"
