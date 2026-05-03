@@ -3,8 +3,9 @@
 A1 scaffolding: `--version` works; `scan <path>` prints the planned
 pipeline as TODO markers.
 A2: Tier 1+2 semgrep runner wired in; raw SARIF findings counted.
-Subsequent tracks (A3 normalizer, A4 report writers, B judge, D
-discovery) replace the remaining TODOs with real behavior.
+A3: SARIF normalized to typed Findings, partitioned by tier.
+Subsequent tracks (A4 report writers, B judge, D discovery) replace
+the remaining TODOs with real behavior.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import sys
 from typing import Sequence
 
 from agentshield import __version__
+from agentshield.normalize import Normalizer, NormalizerError
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
 
 
@@ -77,7 +79,25 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     raw_count = SemgrepRunner.count_raw_findings(sarif)
     print(f"[agentshield] Tier 1+2: {raw_count} raw finding(s)")
-    print("[agentshield] TODO Normalize SARIF → tier-partitioned Findings  — Track A3")
+
+    # A3: normalize SARIF to typed Findings partitioned by tier.
+    try:
+        normalizer = Normalizer()
+        findings = normalizer.normalize(sarif)
+    except NormalizerError as exc:
+        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        return 2
+    by_tier = Normalizer.partition_by_tier(findings)
+    by_category: dict[str, int] = {}
+    for f in findings:
+        by_category[f.category] = by_category.get(f.category, 0) + 1
+    print(
+        f"[agentshield] Normalized: {len(findings)} finding(s) "
+        f"(framework={len(by_tier['framework'])}, fallback={len(by_tier['fallback'])}) "
+        f"detect={by_category.get('detect', 0)} "
+        f"defend={by_category.get('defend', 0)} "
+        f"respond={by_category.get('respond', 0)}"
+    )
 
     judge_state = "disabled" if args.no_judge else f"backend={args.llm_backend or 'default'}"
     print(f"[agentshield] TODO Tier 3 (LLM judge, {judge_state})              — Track B")
