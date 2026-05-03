@@ -33,7 +33,9 @@ class MarkdownWriter:
     def write(self, findings: list[Finding], output_path: Path | None = None) -> str:
         text = self._build(findings)
         if output_path is not None:
-            output_path.write_text(text)
+            # Force UTF-8 — emoji severity badges (🔴🟡🟢) and dot separators (·)
+            # in the Mappings line don't fit in Windows cp1252.
+            output_path.write_text(text, encoding="utf-8")
         return text
 
     def _build(self, findings: list[Finding]) -> str:

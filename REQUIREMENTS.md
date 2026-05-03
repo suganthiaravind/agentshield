@@ -291,6 +291,7 @@ CLI flags override config-file values. *(Note: config-file loading is wired thro
 | `--bedrock-region` | AWS region | `us-east-1` | region for the Bedrock client |
 | `--no-judge` | flag | off | skip Tier 3 (offline mode) |
 | `--discovery` | flag | off | enable Tier 4 discovery pass *(stub)* |
+| `--scan-all-files` | flag | off | enumerate every `.py`/`.java` file explicitly; bypasses semgrep's default directory ignore (use when scanning a sample/demo repo where target code lives under `tests/`, `examples/`, etc.) |
 | `--output-sarif` | path | — | write SARIF v2.1.0 |
 | `--output-json` | path | — | write JSON report |
 | `--output-markdown` | path | — | write Markdown report |
@@ -377,7 +378,7 @@ For a more thorough first-time run-through with explicit checkpoints, follow [VD
 |---|---|---|
 | `[agentshield] ERROR: semgrep binary not found in PATH` | `[semgrep]` extra not installed, or venv not activated | `pip install -e ".[semgrep]"` and `source .venv/bin/activate` |
 | `[agentshield] ERROR: Target path does not exist` | typo in scan path | `ls` the path; use absolute path if relative is ambiguous |
-| Scan returns 0 findings on a known-vulnerable repo | semgrep silently skipping files (default ignores `tests/`, `fixtures/`, `vendor/`) | move out of those names, or pass file paths explicitly |
+| Scan returns 0 findings on a known-vulnerable repo (or "couldn't identify SMARTSDK / target framework") | semgrep silently skips files under `tests/`, `examples/`, `fixtures/`, `vendor/`, etc. by default | re-run with `--scan-all-files` to enumerate every `.py`/`.java` file explicitly and bypass the directory ignore |
 | `[agentshield] ERROR: semgrep failed (exit 2)` | rule parse error or invalid target | re-run with `--quiet` removed from the runner (edit `agentshield/runner/semgrep_runner.py` temporarily) to see semgrep's stderr |
 
 ### Bedrock / judge issues

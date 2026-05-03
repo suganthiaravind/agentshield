@@ -74,6 +74,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable Tier 4 discovery pass on files with LLM imports + zero findings",
     )
+    scan.add_argument(
+        "--scan-all-files",
+        action="store_true",
+        help=(
+            "Enumerate Python/Java files explicitly and pass them to semgrep, "
+            "bypassing semgrep's default directory ignores (tests/, examples/, "
+            "vendor/, fixtures/, etc.). Use when scanning a sample/demo repo "
+            "where the target code lives under such a directory."
+        ),
+    )
 
     return parser
 
@@ -83,10 +93,32 @@ def cmd_scan(args: argparse.Namespace) -> int:
     print(f"[agentshield] scan target: {args.path}")
 
     # Tier 1+2 — wired in A2; produces raw SARIF.
+    target: Path | str | list[Path]
+    if args.scan_all_files:
+        # Enumerate explicit file list to bypass semgrep's default directory
+        # ignore (which excludes tests/, examples/, vendor/, fixtures/, etc.).
+        root = Path(args.path)
+        if root.is_file():
+            target = [root]
+        else:
+            target = sorted(
+                p
+                for p in root.rglob("*")
+                if p.is_file()
+                and p.suffix in {".py", ".java"}
+                and "__pycache__" not in p.parts
+                and ".venv" not in p.parts
+                and ".git" not in p.parts
+                and "node_modules" not in p.parts
+            )
+        print(f"[agentshield] --scan-all-files: enumerated {len(target)} file(s)")
+    else:
+        target = args.path
+
     print("[agentshield] Tier 1+2: invoking semgrep on bundled rule pack...")
     try:
         runner = SemgrepRunner()
-        sarif = runner.run(args.path)
+        sarif = runner.run(target)
     except SemgrepRunnerError as exc:
         print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
         return 2

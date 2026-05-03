@@ -43,7 +43,9 @@ class SarifWriter:
         sarif = self._build(findings)
         text = json.dumps(sarif, indent=2)
         if output_path is not None:
-            output_path.write_text(text)
+            # Force UTF-8 — SARIF preserves snippets and messages verbatim from
+            # source files / rule descriptions, which may contain non-ASCII.
+            output_path.write_text(text, encoding="utf-8")
         return text
 
     def _build(self, findings: list[Finding]) -> dict:

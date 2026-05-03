@@ -112,6 +112,11 @@ class SemgrepRunner:
                 cmd,
                 capture_output=True,
                 text=True,
+                # Force UTF-8 decode of semgrep stdout/stderr — Windows defaults
+                # to cp1252 and chokes on the non-ASCII characters semgrep emits
+                # (rule names, snippets, glyphs). Reported from VDI testing.
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.timeout,
                 check=False,
             )

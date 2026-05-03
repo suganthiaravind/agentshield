@@ -25,7 +25,9 @@ class JsonWriter:
         }
         text = json.dumps(payload, indent=2, default=str)
         if output_path is not None:
-            output_path.write_text(text)
+            # Force UTF-8 — finding messages can contain non-ASCII glyphs that
+            # don't fit in Windows cp1252.
+            output_path.write_text(text, encoding="utf-8")
         return text
 
     @staticmethod

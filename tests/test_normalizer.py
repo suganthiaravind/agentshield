@@ -30,8 +30,8 @@ def normalized_findings() -> list[Finding]:
 
 def test_normalizer_produces_findings(normalized_findings: list[Finding]) -> None:
     """End-to-end: normalizer returns at least the findings the goldens recorded."""
-    # Goldens record 3 + 0 + 2 + 1 + 3 = 9 raw findings across the 5 fixtures.
-    assert len(normalized_findings) >= 9
+    # Goldens record 3 + 0 + 2 + 1 + 2 + 3 = 11 raw findings across the 6 fixtures.
+    assert len(normalized_findings) >= 11
 
 
 def test_finding_has_required_fields(normalized_findings: list[Finding]) -> None:
