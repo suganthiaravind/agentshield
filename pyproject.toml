@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentshield"
+version = "0.1.0"
+description = "Pre-production security evaluator for AI agents (static analysis)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Suganthi Aravind" }
+]
+keywords = ["security", "ai-agent", "static-analysis", "llm", "owasp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+semgrep = [
+    "semgrep>=1.50",
+]
+judge = [
+    "boto3>=1.28",
+]
+all = [
+    "agentshield[semgrep,judge]",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+agentshield = "agentshield.cli:main"
+
+[project.urls]
+Repository = "https://github.com/suganthiaravind/agentshield"
+Documentation = "https://github.com/suganthiaravind/agentshield/blob/main/ARCHITECTURE.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentshield*"]
+
+[tool.setuptools.package-data]
+agentshield = [
+    "rules/**/*.yaml",
+    "rules/**/*.yml",
+    "frameworks/*.yaml",
+    "frameworks/*.yml",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
