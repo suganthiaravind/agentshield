@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Sequence
 
 from agentshield import __version__
+from agentshield.judge import Boto3BedrockBackend, JudgeOrchestrator
 from agentshield.normalize import Normalizer, NormalizerError
 from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
@@ -54,6 +55,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-judge",
         action="store_true",
         help="Skip Tier 3 LLM judge (offline mode; Tiers 1+2 only)",
+    )
+    scan.add_argument(
+        "--bedrock-model-id",
+        help=(
+            "Bedrock model id or inference-profile ARN, used with "
+            "--llm-backend boto3-bedrock. Required to run the judge tier "
+            "with that backend."
+        ),
+    )
+    scan.add_argument(
+        "--bedrock-region",
+        default="us-east-1",
+        help="AWS region for the boto3-bedrock judge backend (default: us-east-1)",
     )
     scan.add_argument(
         "--discovery",
@@ -99,8 +113,49 @@ def cmd_scan(args: argparse.Namespace) -> int:
         f"respond={by_category.get('respond', 0)}"
     )
 
-    judge_state = "disabled" if args.no_judge else f"backend={args.llm_backend or 'default'}"
-    print(f"[agentshield] TODO Tier 3 (LLM judge, {judge_state})              — Track B")
+    # Tier 3 — LLM judge over fallback findings (Track B4 orchestrator).
+    fallback_count = JudgeOrchestrator.count_fallback(findings)
+    if args.no_judge:
+        print(f"[agentshield] Tier 3 judge: skipped (--no-judge); {fallback_count} fallback finding(s) untriaged")
+    elif fallback_count == 0:
+        print("[agentshield] Tier 3 judge: no fallback findings to triage (skipped)")
+    else:
+        backend_choice = args.llm_backend or "boto3-bedrock"
+        if backend_choice == "boto3-bedrock":
+            if not args.bedrock_model_id:
+                print(
+                    "[agentshield] Tier 3 judge: skipped — boto3-bedrock backend requires "
+                    "--bedrock-model-id (or set bedrock_model_id in agentshield.yaml)"
+                )
+            else:
+                backend = Boto3BedrockBackend(
+                    model_id=args.bedrock_model_id,
+                    region_name=args.bedrock_region,
+                )
+                orchestrator = JudgeOrchestrator(backend)
+                print(
+                    f"[agentshield] Tier 3 judge: triaging {fallback_count} fallback "
+                    f"finding(s) via {backend.name} (model={backend.model_id})..."
+                )
+                findings = orchestrator.triage(findings)
+                verdicts = [f.triage.verdict for f in findings if f.triage]
+                summary = {
+                    "confirmed": verdicts.count("confirmed"),
+                    "dismissed": verdicts.count("dismissed"),
+                    "needs_review": verdicts.count("needs_review"),
+                }
+                print(
+                    f"[agentshield] Tier 3 judge: {summary['confirmed']} confirmed, "
+                    f"{summary['dismissed']} dismissed, {summary['needs_review']} needs_review"
+                )
+        elif backend_choice in {"smartsdk", "copilot"}:
+            print(
+                f"[agentshield] Tier 3 judge: backend={backend_choice} not yet implemented "
+                f"(Track B2/B3) — skipped; {fallback_count} fallback finding(s) untriaged"
+            )
+        elif backend_choice == "none":
+            print(f"[agentshield] Tier 3 judge: backend=none — skipped")
+
     if args.discovery:
         print("[agentshield] TODO Tier 4 (discovery pass, enabled)              — Track D")
 
