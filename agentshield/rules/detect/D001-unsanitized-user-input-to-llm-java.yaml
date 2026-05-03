@@ -9,31 +9,48 @@ rules:
       (OWASP LLM01). Java port of agentshield.detect.unsanitized-user-input-to-llm.
     mode: taint
     pattern-sources:
+      # Spring MVC / WebFlux annotations on method parameters. Parameter
+      # annotations are matched via `pattern-inside <method-with-annotated-param>`
+      # so the taint binding is on the parameter NAME ($X), not on the
+      # annotation declaration itself.
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestParam $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestBody $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @PathVariable $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestHeader $T $X, ...) { ... }
+      # JAX-RS annotations on method parameters.
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @QueryParam($K) $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @FormParam($K) $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @PathParam($K) $T $X, ...) { ... }
+      # Servlet API and CLI sources are expressions whose return value is
+      # tainted — straightforward patterns.
       - patterns:
           - pattern-either:
-              # Spring MVC / WebFlux
-              - pattern: |
-                  @RequestParam $T $X
-              - pattern: |
-                  @RequestBody $T $X
-              - pattern: |
-                  @PathVariable $T $X
-              - pattern: |
-                  @RequestHeader $T $X
-              # JAX-RS
-              - pattern: |
-                  @QueryParam($K) $T $X
-              - pattern: |
-                  @FormParam($K) $T $X
-              - pattern: |
-                  @PathParam($K) $T $X
-              # Servlet API
               - pattern: $REQ.getParameter(...)
               - pattern: $REQ.getParameterValues(...)
               - pattern: $REQ.getHeader(...)
               - pattern: $REQ.getReader()
               - pattern: $REQ.getInputStream()
-              # CLI / stdin
               - pattern: $ARGS[$I]
               - pattern: System.console().readLine(...)
               - pattern: $SCANNER.nextLine(...)

@@ -15,25 +15,39 @@ rules:
       findings through the AgentShield LLM-judge tier for triage.
     mode: taint
     pattern-sources:
+      # Same parameter-annotation source pattern as D001-java — see that file
+      # for the reasoning. Taint binds to $X (the parameter name), via
+      # pattern-inside on a method declaration carrying the annotation.
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestParam $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestBody $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @PathVariable $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @RequestHeader $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @QueryParam($K) $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @FormParam($K) $T $X, ...) { ... }
+      - patterns:
+          - pattern: $X
+          - pattern-inside: |
+              $RT $METHOD(..., @PathParam($K) $T $X, ...) { ... }
       - patterns:
           - pattern-either:
-              # Spring MVC / WebFlux
-              - pattern: |
-                  @RequestParam $T $X
-              - pattern: |
-                  @RequestBody $T $X
-              - pattern: |
-                  @PathVariable $T $X
-              - pattern: |
-                  @RequestHeader $T $X
-              # JAX-RS
-              - pattern: |
-                  @QueryParam($K) $T $X
-              - pattern: |
-                  @FormParam($K) $T $X
-              - pattern: |
-                  @PathParam($K) $T $X
-              # Servlet
               - pattern: $REQ.getParameter(...)
               - pattern: $REQ.getParameterValues(...)
               - pattern: $REQ.getHeader(...)

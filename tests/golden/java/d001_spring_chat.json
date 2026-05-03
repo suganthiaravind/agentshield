@@ -8,6 +8,10 @@
     {
       "rule_id": "no-guardrails-import-in-llm-module-java",
       "line": 21
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm-java",
+      "line": 21
     }
   ]
 }
