@@ -78,19 +78,50 @@ Cost is real but not the primary reason. For a compliance-heavy enterprise like 
 
 ---
 
-## 4. Why Detect / Defend / Respond taxonomy
+## 4. Why Detect / Defend / Respond taxonomy (with dual mapping to security frameworks)
 
-**Decision:** Every finding maps to exactly one of three buckets (already locked in PHASE_I_PLAN §3).
+**Decision:** Every finding carries **two coexisting mappings**:
+1. Exactly one D/D/R `category` — AgentShield's own organizing spine (locked in PHASE_I_PLAN §3).
+2. Many `framework_mappings` — pointers into external standards (OWASP LLM, OWASP Agentic, NIST AI RMF, MITRE ATLAS, AgentShield Framework v1).
+
+These are complementary, not redundant. Concrete shape from rule [`D001`](./agentshield/rules/detect/D001-unsanitized-user-input-to-llm.yaml):
+```yaml
+metadata:
+  category: detect                          # ← D/D/R bucket: exactly one of detect/defend/respond
+  agentshield_id: AS-D-001
+  severity_normalized: high
+  framework_mappings:                       # ← security framework mappings: many, across multiple standards
+    owasp_llm: ["LLM01"]
+    owasp_agentic: ["T6"]
+    nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+    mitre_atlas: ["AML.T0051"]
+    agentshield_v1: []
+```
+
+| Mapping | Cardinality | Purpose | Consumer |
+|---|---|---|---|
+| `category` (D/D/R) | Exactly 1 of 3 | Organizing spine — answers "vulnerability, missing defense, or missing recovery control?" | AgentShield's own report layout (groups findings by D/D/R) |
+| `framework_mappings` | Many, multi-standard | Anchors finding to recognized external taxonomies | OWASP scorecards, NIST audit packs, MITRE attack mapping, compliance dashboards |
+
+A finding in the rendered report reads as both at once:
+> **AS-D-001** [**Detect**] User input flows into LLM without sanitizer
+> Maps to: OWASP LLM01, OWASP Agentic T6, NIST MAP-2.3 + MEASURE-2.7, MITRE ATLAS AML.T0051
 
 **Alternatives considered:**
-- *OWASP-only categorization*. Maps cleanly to LLM01–LLM10 but doesn't capture defensive controls or response readiness — only vulnerabilities.
-- *NIST AI RMF only*. Comprehensive but academic; engineers don't think in MAP/MEASURE/MANAGE/GOVERN.
-- *Flat severity-only* (high/med/low). No structural meaning; can't answer "how is this agent defended?"
+- *OWASP-only categorization*. Maps cleanly to LLM01–LLM10 but doesn't capture defensive controls or response readiness — only vulnerabilities. Loses the "how is this agent defended?" lens entirely.
+- *NIST AI RMF only*. Comprehensive but academic; engineers don't think in MAP / MEASURE / MANAGE / GOVERN day-to-day. Hard to triage findings against.
+- *Flat severity-only* (high / med / low). No structural meaning; loses both the operational lens (D/D/R) and the standards-mapping lens.
+- *Single mapping (D/D/R only, no frameworks)*. Wins for AgentShield's internal narrative but breaks every external integration — compliance teams need OWASP/NIST mappings to satisfy audit, security ops want MITRE for attack-tree work.
+- *Single mapping (frameworks only, no D/D/R)*. Wins for external standards but the report has no organizing spine — engineers see a flat list of OWASP IDs with no narrative for "what's missing in defense vs recovery."
 
-**Why D/D/R wins:**
-- Maps to security-ops mental model: vulnerabilities, defenses, recovery.
-- Each bucket answers a distinct question.
-- Findings still carry full framework mappings (OWASP/NIST/MITRE/AS-v1) for downstream consumers — D/D/R is the *organizing* spine, not the *only* taxonomy.
+**Why dual mapping wins:**
+- D/D/R is the security-ops mental model — vulnerabilities, defenses, recovery. Each bucket answers a distinct operational question. Reports group by this.
+- Framework mappings let one finding satisfy multiple compliance/audit frameworks without duplication. Adding a new framework = adding a new key to `framework_mappings`, no rule rewrite.
+- Decoupling means changes to AgentShield's own taxonomy (D/D/R) don't churn external mappings, and vice versa. Stable contracts in both directions.
+
+**Failure mode if rejected (single mapping only):**
+- D/D/R-only: every external integration becomes a custom translation layer. Compliance teams hand-map findings to their frameworks; brittle and lossy.
+- Framework-only: the report has no AgentShield-native narrative — readers can't answer "is this agent defended?" without manually grouping by control type.
 
 ---
 
