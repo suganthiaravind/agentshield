@@ -130,6 +130,61 @@ Six rules, all Python upstream (no SMARTSDK / RAG SDK alternatives yet — those
 
 ---
 
+## SMARTSDK API surface — partial intake (added 2026-05-02)
+
+User shared a working SMARTSDK example (mortgage-specialist agent). Confirmed:
+
+### Imports
+```python
+from smart_sdk.agents import Agent
+from smart_sdk.models import Model, ModelProvider
+from smart_sdk.runners import LocalRunner, Console
+```
+
+### Class shapes observed
+- `Model(name=..., bedrock_model_id=..., provider=ModelProvider.BEDROCK, bedrock_access_role_arn=..., bedrock_region=...)` — model layer wraps AWS Bedrock via ARN-based config.
+- `Agent(name=..., description=..., model=..., system_message="""...""")` — note SMARTSDK uses `system_message` (Google ADK upstream uses `instruction`).
+- `LocalRunner(app_name=..., user_id=..., session_id=...)` — classic ADK Runner shape.
+
+### Invocation sink (where user input lands)
+```python
+await Console(runner.run_stream(agent, "user query goes here"))
+```
+User input is the **second positional argument** to `run_stream` (first arg is the agent). This is what Detect rules need to treat as a sink.
+
+### Architectural inference
+SMARTSDK wraps Google ADK's agent/runner orchestration but routes model calls through AWS Bedrock (not Vertex AI). This means:
+- Agentic Radar's Google ADK detection MAY work for the agent/runner shape but won't pick up the Bedrock model layer.
+- Our wrapper-layer rules need to handle SMARTSDK's renamed `system_message` (vs. ADK's `instruction`) and SMARTSDK's positional invocation API.
+
+### Anti-pattern observed in real example
+The shared example bakes guardrails into the `system_message` as natural-language instructions:
+```
+IMPORTANT GUARDRAILS:
+1. Only answer questions related to mortgages...
+2. If a question is outside your domain, politely explain...
+```
+This is a **soft / prompt-only guardrail** — easily bypassed via jailbreak. There is no code-level guardrail (NeMo / Lakera / Rebuff) in the example. This is a real, common defense gap worth a dedicated rule.
+
+**Proposed Day 2 addition:** AS-DF-003 — "Agent uses prompt-only guardrails (system_message contains guardrail-keyword instructions) without any code-level guardrail import." Maps to OWASP LLM01 (defense gap).
+
+### Rules updated in this intake
+- D001 (unsanitized input → LLM): added `runner.run_stream`, `runner.run_async`, `runner.run` and `Console(...)` wrappers as sinks.
+- DF001 (no guardrails import): added SMARTSDK invocation patterns to the trigger.
+- R001 (no audit logging): same — added SMARTSDK invocation patterns to the trigger.
+
+### Still needed from SMARTSDK owners (Day 4 dependency)
+- **Tool registration pattern** — does SMARTSDK accept `tools=[...]` like ADK? Custom decorator? Tool registry? Blocks updating D003 + DF002.
+- **Callback / audit-logging hooks** — does `Agent` or `LocalRunner` accept a `callbacks=` param? Auto-instrumentation? Refines R001 false-positive rate.
+- **Async vs. sync surface** — example shows `await Console(runner.run_stream(...))`. Are there sync variants? Other invocation methods?
+- **Java bindings** — example is Python. v0.2 Java rules will need the equivalent surface.
+- **Built-in guardrail support** — does SMARTSDK ship any guardrail wrapper that we should treat as a sanitizer in D001?
+
+### Still needed from RAG SDK owners
+Nothing yet — RAG SDK example not provided. D002 (untrusted document loader) is still upstream-only (LlamaIndex patterns). RAG SDK wrapper rules deferred until a hello-world example arrives.
+
+---
+
 ## What I did NOT do over the weekend
 
 - Touch wrapper-layer rules (waiting on SMARTSDK / RAG SDK API surface)

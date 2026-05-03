@@ -16,6 +16,10 @@ rules:
           - pattern: $X.generate(...)
           - pattern: $X.query(...)
           - pattern: $X.chat(...)
+          # SMARTSDK (wraps Google ADK)
+          - pattern: $RUNNER.run_stream($AGENT, ...)
+          - pattern: $RUNNER.run_async($AGENT, ...)
+          - pattern: $RUNNER.run($AGENT, ...)
       - pattern-not-inside: |
           import nemoguardrails
           ...
