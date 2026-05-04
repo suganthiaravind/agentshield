@@ -97,34 +97,71 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_SAMPLE_FILE_LIMIT = 5
+
+
+def _enumerate_candidate_files(path: Path) -> list[Path]:
+    """Walk the target tree and return scannable .py / .java files.
+
+    Skips common noise directories (__pycache__, .venv, .git, node_modules).
+    Returns the path itself wrapped in a list when given a single file.
+    """
+    if path.is_file():
+        return [path] if path.suffix in {".py", ".java"} else []
+    return sorted(
+        p
+        for p in path.rglob("*")
+        if p.is_file()
+        and p.suffix in {".py", ".java"}
+        and "__pycache__" not in p.parts
+        and ".venv" not in p.parts
+        and ".git" not in p.parts
+        and "node_modules" not in p.parts
+    )
+
+
+def _print_file_summary(files: list[Path], debug: bool) -> None:
+    """Print scanned-files summary: count + first N names (all if --debug)."""
+    n = len(files)
+    if n == 0:
+        print("[agentshield] candidate files: 0 (.py / .java)")
+        print(f"[agentshield] WARNING: no scannable files found — verify the target path")
+        return
+    print(f"[agentshield] candidate files: {n} (.py / .java)")
+    show = files if debug or n <= _SAMPLE_FILE_LIMIT else files[:_SAMPLE_FILE_LIMIT]
+    for p in show:
+        print(f"  - {p}")
+    if not debug and n > _SAMPLE_FILE_LIMIT:
+        print(f"  ... ({n - _SAMPLE_FILE_LIMIT} more; pass --debug to see all)")
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     """Run Tier 1+2 semgrep scan; remaining tiers stubbed pending A3/A4/B/D."""
     print(f"[agentshield] scan target: {args.path}")
 
+    # Always enumerate candidate files for visibility — even when not using
+    # --scan-all-files. Lets users immediately see "did we find any source
+    # files at all?" which is the first thing to check on a 0-findings scan.
+    candidate_files = _enumerate_candidate_files(Path(args.path))
+    _print_file_summary(candidate_files, args.debug)
+    if not args.scan_all_files and candidate_files and Path(args.path).is_dir():
+        # When semgrep walks a directory, it further filters via its built-in
+        # .semgrepignore (skips tests/, examples/, vendor/, etc.). Single-file
+        # invocations bypass that filter entirely, so the note only applies
+        # to directory scans.
+        print(
+            "[agentshield] note: without --scan-all-files, semgrep applies "
+            "its built-in .semgrepignore (skips tests/, examples/, vendor/, "
+            "etc.). Pass --scan-all-files to scan every candidate file above."
+        )
+
     # Tier 1+2 — wired in A2; produces raw SARIF.
     target: Path | str | list[Path]
     if args.scan_all_files:
-        # Enumerate explicit file list to bypass semgrep's default directory
-        # ignore (which excludes tests/, examples/, vendor/, fixtures/, etc.).
-        root = Path(args.path)
-        if root.is_file():
-            target = [root]
-        else:
-            target = sorted(
-                p
-                for p in root.rglob("*")
-                if p.is_file()
-                and p.suffix in {".py", ".java"}
-                and "__pycache__" not in p.parts
-                and ".venv" not in p.parts
-                and ".git" not in p.parts
-                and "node_modules" not in p.parts
-            )
-        print(f"[agentshield] --scan-all-files: enumerated {len(target)} file(s)")
-        if args.debug and isinstance(target, list):
-            print("[agentshield] --debug: file list passed to semgrep:")
-            for p in target:
-                print(f"  {p}")
+        # Pass the explicit file list to semgrep, bypassing its default
+        # directory ignore.
+        target = candidate_files
+        print(f"[agentshield] --scan-all-files: passing all {len(target)} file(s) to semgrep")
     else:
         target = args.path
 
