@@ -84,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
             "where the target code lives under such a directory."
         ),
     )
+    scan.add_argument(
+        "--debug",
+        action="store_true",
+        help=(
+            "Verbose diagnostic output: print the rules path, the list of files "
+            "passed to semgrep (with --scan-all-files), and the raw rule_ids of "
+            "every finding. Use to diagnose 'why did this scan return 0 findings'."
+        ),
+    )
 
     return parser
 
@@ -112,9 +121,17 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 and "node_modules" not in p.parts
             )
         print(f"[agentshield] --scan-all-files: enumerated {len(target)} file(s)")
+        if args.debug and isinstance(target, list):
+            print("[agentshield] --debug: file list passed to semgrep:")
+            for p in target:
+                print(f"  {p}")
     else:
         target = args.path
 
+    if args.debug:
+        runner = SemgrepRunner()
+        print(f"[agentshield] --debug: rules path = {runner.rules_path}")
+        print(f"[agentshield] --debug: semgrep binary = {runner._semgrep_executable()}")
     print("[agentshield] Tier 1+2: invoking semgrep on bundled rule pack...")
     try:
         runner = SemgrepRunner()
@@ -125,6 +142,14 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     raw_count = SemgrepRunner.count_raw_findings(sarif)
     print(f"[agentshield] Tier 1+2: {raw_count} raw finding(s)")
+    if args.debug:
+        for run in sarif.get("runs", []):
+            for r in run.get("results", []):
+                rid = (r.get("ruleId") or "").rsplit(".", 1)[-1]
+                loc = r.get("locations", [{}])[0].get("physicalLocation", {})
+                uri = loc.get("artifactLocation", {}).get("uri", "?")
+                line = loc.get("region", {}).get("startLine", "?")
+                print(f"[agentshield] --debug:   {rid:50s} {uri}:{line}")
 
     # A3: normalize SARIF to typed Findings partitioned by tier.
     try:

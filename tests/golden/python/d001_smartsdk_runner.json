@@ -2,6 +2,10 @@
   "fixture": "python/d001_smartsdk_runner.py",
   "expected_findings": [
     {
+      "rule_id": "llm-call-without-audit-logging",
+      "line": 35
+    },
+    {
       "rule_id": "no-guardrails-import-in-llm-module",
       "line": 35
     },

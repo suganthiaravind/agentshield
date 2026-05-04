@@ -24,6 +24,13 @@ rules:
               - pattern: await $REQ.body()
               - pattern: input(...)
               - pattern: sys.argv[$I]
+              # Lambda / event-driven sources — Lambda functions receive
+              # input via the `event` dict, not HTTP request objects. Real
+              # JPMC Lambda code (moip-cost-anomaly-probe-lambda) reads
+              # event.get("anomalyId"), event["MonitorArn"], etc.
+              - pattern: $EVENT[$KEY]
+              - pattern: $EVENT.get(...)
+              - pattern: $EVENT.get($KEY, ...)
     pattern-sinks:
       - patterns:
           - pattern-either:
@@ -58,6 +65,13 @@ rules:
               - pattern: $RUNNER.run($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
               - pattern: $RUNNER.run_stream($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
               - pattern: $RUNNER.run_async($AGENT, Content(parts=[Part(text=$X, ...)], ...), ...)
+              # SMARTSDK awaited variants — semgrep treats `await expr` as
+              # a distinct AST node, so the unawaited patterns above don't
+              # match `await runner.run(agent, prompt)`. Without these,
+              # taint paths through awaited SMARTSDK calls are silently lost.
+              - pattern: await $RUNNER.run($AGENT, $X, ...)
+              - pattern: await $RUNNER.run_stream($AGENT, $X, ...)
+              - pattern: await $RUNNER.run_async($AGENT, $X, ...)
               # SMARTSDK / RADSDK embedding sink — user text flowing into embeddings
               - pattern: $MODEL.embed(data=$X, ...)
               - pattern: $MODEL.embed($X, ...)

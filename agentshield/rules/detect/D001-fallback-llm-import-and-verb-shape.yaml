@@ -31,6 +31,10 @@ rules:
               - pattern: await $REQ.body()
               - pattern: input(...)
               - pattern: sys.argv[$I]
+              # Lambda / event-driven sources — same as framework D001.
+              - pattern: $EVENT[$KEY]
+              - pattern: $EVENT.get(...)
+              - pattern: $EVENT.get($KEY, ...)
     pattern-sinks:
       - patterns:
           # Gating: file imports at least one LLM-adjacent library.

@@ -22,9 +22,24 @@ rules:
           - pattern: $RUNNER.run($AGENT, ...)
           - pattern: Console($RUNNER.run_stream($AGENT, ...))
           - pattern: Console($RUNNER.run_async($AGENT, ...))
+          # SMARTSDK awaited variants — semgrep treats `await expr` as a
+          # distinct AST node, so the unawaited patterns above don't match
+          # `await runner.run(agent, prompt)`. Diagnosed against the JPMC
+          # moip-cost-anomaly-probe-lambda extract_anomaly.py — without
+          # these patterns the scan produced 0 findings on real prod code.
+          - pattern: await $RUNNER.run($AGENT, ...)
+          - pattern: await $RUNNER.run_stream($AGENT, ...)
+          - pattern: await $RUNNER.run_async($AGENT, ...)
           # SMARTSDK / RADSDK embedding invocations
           - pattern: $MODEL.embed(...)
           - pattern: $MODEL.aembed(...)
+      # Filter known false positives — generic $X.run(...) and $X.invoke(...)
+      # match too broadly. asyncio.run is the most common offender (it's used
+      # to bridge sync/async even in legit SMARTSDK code).
+      - pattern-not: asyncio.run(...)
+      - pattern-not: threading.Thread(...).run(...)
+      - pattern-not: subprocess.run(...)
+      - pattern-not: re.compile(...).run(...)
       - pattern-not-inside: |
           import nemoguardrails
           ...

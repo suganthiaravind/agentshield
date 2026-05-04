@@ -22,15 +22,25 @@ rules:
           - pattern: $RUNNER.run($AGENT, ...)
           - pattern: Console($RUNNER.run_stream($AGENT, ...))
           - pattern: Console($RUNNER.run_async($AGENT, ...))
+          # SMARTSDK awaited variants — semgrep treats `await expr` as a
+          # distinct AST node. Without these, awaited runner calls (the
+          # standard SMARTSDK shape) silently don't match.
+          - pattern: await $RUNNER.run($AGENT, ...)
+          - pattern: await $RUNNER.run_stream($AGENT, ...)
+          - pattern: await $RUNNER.run_async($AGENT, ...)
           # SMARTSDK / RADSDK embedding invocations
           - pattern: $MODEL.embed(...)
           - pattern: $MODEL.aembed(...)
-      - pattern-not-inside: |
-          import logging
-          ...
-      - pattern-not-inside: |
-          from logging import $Y
-          ...
+      # Filter known false positives — same as DF001.
+      - pattern-not: asyncio.run(...)
+      - pattern-not: threading.Thread(...).run(...)
+      - pattern-not: subprocess.run(...)
+      - pattern-not: re.compile(...).run(...)
+      # Suppressors deliberately do NOT include `import logging` or
+      # `from logging import $Y` — most production code has stdlib logging
+      # for error handling but no structured LLM audit trail. Suppressing
+      # on plain `import logging` would silence the rule on essentially
+      # every real codebase. Only structured-audit imports suppress.
       - pattern-not-inside: |
           import structlog
           ...
