@@ -54,7 +54,34 @@ Cost is real but not the primary reason. For a compliance-heavy enterprise like 
 - Tier 3 (LLM) only fires on Tier 2 findings — cost is bounded by finding count, not codebase size. The LLM is used exactly where SNR is worst.
 - Each tier has a clear precision/cost profile, making it auditable.
 
-**Failure mode if collapsed to one tier:** either coverage suffers (pure framework rules) or cost explodes (pure LLM).
+**Common pushback: "if the LLM is so good, why not skip Tier 1 and just use Tier 3 alone?"**
+
+Tier 1 isn't kept *despite* having Tier 3 — it's kept *because* Tier 3 cannot replace it. Going LLM-only would lose every property that makes the tool usable in a compliance workflow:
+
+| What we'd lose by dropping Tier 1 | Why it matters |
+|---|---|
+| **Determinism** | Same commit → same findings, every run. LLM verdicts drift even at `temp=0`. PR-blocking checks become impossible if "flagged today, not yesterday" |
+| **Auditability** | "Why did this fire?" has a definitive answer with a YAML pattern. LLM reasoning text drifts and cannot anchor compliance documentation |
+| **Coverage guarantees** | Tier 1 says: "every X in the codebase is matched, provably." LLMs silently miss findings — false negatives are the worst failure mode for security tools |
+| **Speed** | Tier 1 scans an enterprise repo in seconds. LLM-per-file would take minutes-to-hours on a JPMC monorepo. Pre-commit hooks need <1s; PR checks <30s |
+| **Trust boundary** | Tier 1 runs entirely locally; no code leaves the machine. Tier 3 sends snippets to Bedrock — even within corporate AWS, more compliance surface |
+| **Hallucination risk** | LLMs invent vulnerabilities or miss real ones. Catastrophic for security tools |
+| **Cost** | Real, but probably the smallest factor at JPMC scale — the org can afford the tokens. The other six don't have a budget workaround |
+
+The right framing: **Tier 1 because LLMs cannot deliver determinism + auditability + provable coverage. Tier 3 because LLMs CAN deliver semantic reasoning that Tier 1 cannot.** Each tier does what the others can't.
+
+**What Tier 3 actually compensates for** (specific gaps Tier 1 has, by design):
+
+| Tier 1 limitation | Tier 3 compensation |
+|---|---|
+| Cannot reason about unknown wrappers (someone's bespoke `acme_llm.Client().complete()`) | LLM has framework knowledge from training; identifies "this looks like an LLM call" without a hard-coded rule |
+| Cannot disambiguate ambiguous calls (`service.call(x)` is RPC vs LLM?) | LLM reads surrounding context and decides |
+| Cannot generate per-finding remediation prose | LLM produces context-aware reasoning text |
+| Cannot tell if an absent control is really missing or just renamed | LLM sees the whole file and can spot a renamed equivalent |
+
+Tier 3 is **applied surgically** — only on Tier 2 fallback findings (where SNR is worst). Not on Tier 1's high-precision findings, because those don't need triaging. Token spend stays bounded by finding count, not codebase size.
+
+**Failure mode if collapsed to one tier:** either coverage suffers (pure framework rules) or cost / determinism / auditability all explode at once (pure LLM). The three-tier architecture isn't a compromise — it's the only configuration where each property survives.
 
 ---
 
@@ -261,7 +288,60 @@ These require feeding payloads to a live agent — Promptfoo, Garak, AgentDojo, 
 
 ---
 
-## 13. Open architectural questions (revisit later)
+## 13. Peer SAST tools — where AgentShield sits in the ecosystem
+
+**Decision context:** AgentShield is one of several rule-based static analyzers in the SAST market. This section maps the technology choices against peer tools so the rationale of "why semgrep" extends naturally to "why not SonarQube / CodeQL / Snyk Code."
+
+**The peer set:**
+
+| Tool | Engine | Per-language strategy |
+|---|---|---|
+| **AgentShield** (this product) | Semgrep — single engine + tree-sitter / pfff parsers | One YAML rule DSL across all languages |
+| **SonarQube** | Custom proprietary **SonarSource analyzers** (one per language) | SonarJava, SonarPython, SonarJS/TS, SonarCSharp, SonarKotlin — each is an internal analyzer with its own AST traversal + dataflow |
+| **CodeQL** (GitHub) | Datalog over a database of program facts | One pipeline; deeper inter-procedural analysis than the others |
+| **Snyk Code** | Custom proprietary engine (formerly DeepCode) | Symbolic-AI hybrid; not semgrep |
+| **Semgrep alone** | Same engine AgentShield uses, but with the public/community rule registry | Generic security rules, not agent-specific |
+
+**What AgentShield and SonarQube share** (the closest peer):
+- Both are AST-based static analyzers
+- Both do AST-pattern matching + intra-procedural dataflow
+- Both emit findings with severity, type, location
+- Both produce SARIF output (so they target the same downstream integrations: GitHub code-scanning, IDE plugins, etc.)
+- Both compete in the SAST market alongside Snyk Code, Veracode, Checkmarx
+
+**Where they differ technically:**
+- Sonar's per-language analyzers run **deeper analysis in some areas** — symbolic execution for null-pointer / divide-by-zero detection in Java, type inference, more sophisticated control-flow tracking. Semgrep's intra-procedural taint is competitive; **inter-procedural is weaker** than Sonar's deep Java/C# analysis.
+- Semgrep is **rule-portable** — the same YAML works across languages. Sonar's rules are hard-coded into the per-language analyzer (you can't write one rule that targets both Java and Python with the same pattern).
+- Sonar has commercial product layers (Quality Gate, Sonar AI Code Assurance for LLM-assisted review, added 2024–2025); semgrep has Semgrep Pro for similar enterprise features.
+
+**Where neither helps directly with agentic AI security:**
+
+This is the key point — **AgentShield's value isn't the choice of engine.** SonarQube, CodeQL, and Snyk Code don't ship agent-specific rules; their rule libraries are general-purpose vulnerabilities (SQL injection, XSS, hard-coded credentials, etc.). Semgrep's open registry has some LLM-related rules but nothing close to a structured D/D/R framework with OWASP LLM / Agentic Top 10 / NIST AI RMF / MITRE ATLAS mapping.
+
+The differentiated value AgentShield delivers, layered on top of any sufficiently capable AST engine:
+
+1. **Agent-specific rule pack** — D001/D002/D003/DF001/DF002/R001 + Java mirrors + fallback rules with import-gate + verb-regex
+2. **Dual-mapping schema** — every finding carries D/D/R category AND framework_mappings (OWASP/NIST/MITRE)
+3. **Tier 3 LLM judge** — semantic triage of low-confidence findings via pluggable backend
+4. **Phase II handoff contract** — SARIF feeding dynamic red-team tools (Promptfoo, Garak, AgentDojo, PyRIT)
+
+The same rule set could in theory be ported to SonarQube's rule format or CodeQL — at the cost of giving up cross-language uniformity (each language would need its own rule reimplementation in Sonar's format) and losing the rapid iteration semgrep's YAML enables.
+
+**Why we picked semgrep specifically over SonarQube / CodeQL:**
+- **Cross-language rule reuse**: one YAML pattern covers Python AND Java with `taint` mode. Sonar would require reimplementing each rule per language.
+- **Rule iteration speed**: edit a YAML, run, see the result. Sonar custom rules require Java plugin development; CodeQL requires datalog query authoring.
+- **License**: semgrep is LGPL-2.1; can ship inside an internal product. SonarQube Community Edition is LGPL but the analyzers are not all OSS.
+- **VDI compatibility**: semgrep is a single binary that runs offline. SonarQube needs a server.
+
+**Failure mode if rejected (i.e. if we picked SonarQube instead):**
+- Per-language rule reimplementation doubles the rule maintenance cost.
+- Rule iteration slows from minutes to days (Java plugin dev cycle).
+- Operational overhead of running a Sonar server inside the VDI.
+- The dual-mapping schema, three-tier architecture, and LLM-judge contract are tool-agnostic — but the engine choice still affects feasibility.
+
+---
+
+## 14. Open architectural questions (revisit later)
 
 - **Does the judge tier also re-rank Tier 1 findings?** Currently no, to keep the trust boundary clean. Revisit if Tier 1 false-positive rate proves higher than expected.
 - **Backend fallback** (e.g., try Copilot, fall back to boto3 on failure)? Currently single-backend-per-scan. Revisit if real-world reliability of any single backend is poor.
