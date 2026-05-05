@@ -104,6 +104,8 @@ class MarkdownWriter:
             parts.append(f"NIST AI RMF {', '.join(m.nist_ai_rmf)}")
         if m.mitre_atlas:
             parts.append(f"MITRE ATLAS {', '.join(m.mitre_atlas)}")
+        if m.cwe:
+            parts.append(f"CWE {', '.join(m.cwe)}")
         if m.agentshield_v1:
             parts.append(f"AS-v1 {', '.join(m.agentshield_v1)}")
         return " · ".join(parts) if parts else "_(no external mappings)_"

@@ -118,6 +118,7 @@ class Normalizer:
             owasp_agentic=list(mappings.get("owasp_agentic") or []),
             nist_ai_rmf=list(mappings.get("nist_ai_rmf") or []),
             mitre_atlas=list(mappings.get("mitre_atlas") or []),
+            cwe=list(mappings.get("cwe") or []),
             agentshield_v1=list(mappings.get("agentshield_v1") or []),
         )
 
@@ -149,8 +150,15 @@ class Normalizer:
         (this should never happen in practice — would indicate a rule
         was deleted between scan and normalize). Skips results with
         unparseable locations.
+
+        Deduplicates on (rule_id, file_path, start_line, start_column,
+        end_line, end_column). Two distinct calls on the same line at
+        different columns survive (different start_column); the same
+        call matched by multiple alternative patterns inside one rule's
+        `pattern-either` collapses to a single Finding.
         """
         findings: list[Finding] = []
+        seen: set[tuple[str, str, int, int | None, int | None, int | None]] = set()
         for run in sarif.get("runs") or []:
             for result in run.get("results") or []:
                 semgrep_id = result.get("ruleId") or ""
@@ -165,6 +173,17 @@ class Normalizer:
                 category = metadata.get("category")
                 if category not in {"detect", "defend", "respond"}:
                     continue
+                dedup_key = (
+                    canonical,
+                    location.file_path,
+                    location.start_line,
+                    location.start_column,
+                    location.end_line,
+                    location.end_column,
+                )
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
                 agentshield_id = metadata.get("agentshield_id") or canonical
                 message = (result.get("message") or {}).get("text") or ""
                 findings.append(

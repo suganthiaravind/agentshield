@@ -25,6 +25,7 @@ class FrameworkMappings(BaseModel):
     owasp_agentic: list[str] = Field(default_factory=list)
     nist_ai_rmf: list[str] = Field(default_factory=list)
     mitre_atlas: list[str] = Field(default_factory=list)
+    cwe: list[str] = Field(default_factory=list)
     agentshield_v1: list[str] = Field(default_factory=list)
 
 
