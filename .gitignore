@@ -1,5 +1,11 @@
-# Local-only mining corpus (1.8 GB of cloned reference repos)
-testbed/
+# Third-party OSS clones inside testbed/ are gitignored (1.8 GB of
+# cloned reference repos like langchain, llama-index, etc.). Synthetic
+# regression-target projects we author (smartsdk-lambda,
+# synthetic-vuln-{java,python}-app) live in testbed/ but are tracked —
+# the per-directory testbed/.gitignore handles the include/exclude logic.
+
+# Local Claude Code agent state (per-developer, never committed)
+.claude/
 
 # macOS
 .DS_Store

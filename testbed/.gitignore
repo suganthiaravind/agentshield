@@ -1,0 +1,16 @@
+# Default-deny: third-party OSS clones (langchain, llama-index, langchain4j,
+# spring-ai-examples, etc.) are gitignored — each developer clones them
+# locally for breadth-scan validation. They drift across versions and
+# would bloat the repo (~1.8 GB).
+*
+
+# Explicit allowlist for AgentShield's own synthetic regression-target
+# projects. These are hand-authored as known-answer fixtures for the
+# rule pack and MUST be tracked in version control.
+!.gitignore
+!smartsdk-lambda/
+!smartsdk-lambda/**
+!synthetic-vuln-java-app/
+!synthetic-vuln-java-app/**
+!synthetic-vuln-python-app/
+!synthetic-vuln-python-app/**
