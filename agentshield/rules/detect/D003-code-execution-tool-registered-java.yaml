@@ -1,0 +1,82 @@
+rules:
+  - id: agentshield.detect.code-execution-tool-registered-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A Java method registered as an LLM tool (langchain4j @Tool / Spring AI
+      @Tool) wraps a code-execution primitive (Runtime.exec, ProcessBuilder,
+      ScriptEngine.eval). The agent can invoke the tool with attacker-controlled
+      arguments — direct arbitrary code execution on the host. Java port of
+      agentshield.detect.code-execution-tool-registered (AS-D-003). OWASP
+      LLM05 / LLM06, OWASP Agentic T2 / T11.
+    pattern-either:
+      # langchain4j / Spring AI @Tool annotation wrapping Runtime.exec
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              Runtime.getRuntime().exec(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              Runtime.getRuntime().exec(...);
+              ...
+          }
+      # @Tool wrapping ProcessBuilder
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              new ProcessBuilder(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              new ProcessBuilder(...);
+              ...
+          }
+      # @Tool wrapping ScriptEngine.eval (Nashorn / Rhino / GraalJS)
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              $ENGINE.eval(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              $ENGINE.eval(...);
+              ...
+          }
+      # langchain4j ToolSpecification builder where the implementation is
+      # a method reference / lambda calling Runtime.exec
+      - pattern: ToolSpecification.builder().name(...).description(...).build()
+    metadata:
+      category: detect
+      agentshield_id: AS-D-003
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM05", "LLM06"]
+        owasp_agentic: ["T2", "T11"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        cwe: ["CWE-78", "CWE-94"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Run code-execution tools inside a sandbox: a SecurityManager-restricted
+        classloader, a Docker / Firecracker microVM, or an isolated JVM with no
+        host filesystem / network access. Restrict the agent's tool registry to
+        a narrow allowlist of safe, validated primitives. Require human approval
+        before agent-generated code executes with elevated privileges. Never
+        expose Runtime.exec / ProcessBuilder / ScriptEngine.eval as a tool
+        function to the LLM.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"

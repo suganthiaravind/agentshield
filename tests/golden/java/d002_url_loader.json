@@ -1,0 +1,17 @@
+{
+  "fixture": "java/d002_url_loader.java",
+  "expected_findings": [
+    {
+      "rule_id": "untrusted-document-loader-to-rag-java",
+      "line": 18
+    },
+    {
+      "rule_id": "untrusted-document-loader-to-rag-java",
+      "line": 22
+    },
+    {
+      "rule_id": "untrusted-document-loader-to-rag-java",
+      "line": 26
+    }
+  ]
+}

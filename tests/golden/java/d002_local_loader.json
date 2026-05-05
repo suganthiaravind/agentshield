@@ -1,0 +1,4 @@
+{
+  "fixture": "java/d002_local_loader.java",
+  "expected_findings": []
+}

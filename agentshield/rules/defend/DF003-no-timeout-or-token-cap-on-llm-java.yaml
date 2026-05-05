@@ -1,0 +1,56 @@
+rules:
+  - id: agentshield.defend.no-timeout-or-token-cap-on-llm-java
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Java LLM client builder explicitly disables a bound — null timeout,
+      Duration.ZERO, or 0-second OkHttp timeout — leaving the client open
+      to indefinite hangs or runaway output. OWASP LLM10 Unbounded
+      Consumption, OWASP Agentic T4 Resource Overload. Java port of
+      agentshield.defend.no-timeout-or-token-cap-on-llm (AS-DF-003).
+    pattern-either:
+      # Builder API: explicit null timeout / max tokens (langchain4j, Spring AI,
+      # SMARTSDK Java). Matched as a sub-expression so chain order doesn't matter.
+      - pattern: $X.timeout(null)
+      - pattern: $X.maxTokens(null)
+      - pattern: $X.maxOutputTokens(null)
+      - pattern: $X.maxRetries(null)
+      # Duration.ZERO as a timeout — explicit 0-length deadline.
+      - pattern: $X.timeout(Duration.ZERO)
+      - pattern: $X.timeout(java.time.Duration.ZERO)
+      - pattern: $X.responseTimeout(Duration.ZERO)
+      - pattern: $X.responseTimeout(java.time.Duration.ZERO)
+      # OkHttp convention: 0 means "no timeout" — disabling the read / connect
+      # / write / overall call timeout opens the door to infinite hangs.
+      - pattern: $X.connectTimeout(0, $UNIT)
+      - pattern: $X.readTimeout(0, $UNIT)
+      - pattern: $X.writeTimeout(0, $UNIT)
+      - pattern: $X.callTimeout(0, $UNIT)
+      # AWS Bedrock Runtime override: ClientOverrideConfiguration with no
+      # apiCallTimeout / apiCallAttemptTimeout = unbounded request lifetime.
+      - pattern: $X.apiCallTimeout(Duration.ZERO)
+      - pattern: $X.apiCallAttemptTimeout(Duration.ZERO)
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-003
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM10"]
+        owasp_agentic: ["T4"]
+        nist_ai_rmf: ["MEASURE-2.6", "MANAGE-2.4"]
+        mitre_atlas: []
+        cwe: ["CWE-400"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Set explicit upper bounds on every Java LLM client. (1) langchain4j /
+        Spring AI builders: call `.timeout(Duration.ofSeconds(N))` and
+        `.maxTokens(N)` with finite values matched to your worker SLA. (2)
+        OkHttp transports: never pass 0 to `connectTimeout` / `readTimeout`
+        / `writeTimeout` / `callTimeout` — pass a finite (timeout, TimeUnit)
+        pair. (3) AWS Bedrock Runtime: configure
+        `ClientOverrideConfiguration.builder().apiCallTimeout(Duration.ofSeconds(N))`
+        and a finite `RetryPolicy`. (4) Combine with per-tenant rate limiting
+        upstream of the call to bound aggregate cost.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"

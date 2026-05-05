@@ -1,0 +1,17 @@
+{
+  "fixture": "java/df002_tool_without_schema.java",
+  "expected_findings": [
+    {
+      "rule_id": "tool-without-args-schema-java",
+      "line": 10
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 15
+    },
+    {
+      "rule_id": "tool-without-args-schema-java",
+      "line": 15
+    }
+  ]
+}

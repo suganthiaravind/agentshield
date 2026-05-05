@@ -1,0 +1,29 @@
+{
+  "fixture": "java/d003_code_exec_tool.java",
+  "expected_findings": [
+    {
+      "rule_id": "code-execution-tool-registered-java",
+      "line": 14
+    },
+    {
+      "rule_id": "tool-without-args-schema-java",
+      "line": 14
+    },
+    {
+      "rule_id": "code-execution-tool-registered-java",
+      "line": 20
+    },
+    {
+      "rule_id": "tool-without-args-schema-java",
+      "line": 20
+    },
+    {
+      "rule_id": "code-execution-tool-registered-java",
+      "line": 25
+    },
+    {
+      "rule_id": "tool-without-args-schema-java",
+      "line": 25
+    }
+  ]
+}

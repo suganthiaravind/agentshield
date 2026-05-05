@@ -1,0 +1,4 @@
+{
+  "fixture": "java/d005_keys_from_env.java",
+  "expected_findings": []
+}

@@ -1,0 +1,33 @@
+{
+  "fixture": "java/d006_broad_tools.java",
+  "expected_findings": [
+    {
+      "rule_id": "broad-tool-permissions-java",
+      "line": 17
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 17
+    },
+    {
+      "rule_id": "broad-tool-permissions-java",
+      "line": 22
+    },
+    {
+      "rule_id": "broad-tool-permissions-java",
+      "line": 27
+    },
+    {
+      "rule_id": "broad-tool-permissions-java",
+      "line": 32
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 32
+    },
+    {
+      "rule_id": "broad-tool-permissions-java",
+      "line": 37
+    }
+  ]
+}

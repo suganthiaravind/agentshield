@@ -1,0 +1,4 @@
+{
+  "fixture": "java/df003_bounded_llm.java",
+  "expected_findings": []
+}

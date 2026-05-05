@@ -1,0 +1,149 @@
+rules:
+  - id: agentshield.detect.broad-tool-permissions-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Java method registered as an LLM tool (langchain4j @Tool / Spring AI
+      @Tool) wraps a broad-permission primitive — filesystem mutation
+      (Files.delete / Files.write / Files.move / FileChannel writes) or
+      destructive HTTP (RestTemplate.delete / RestTemplate.put without an
+      explicit URL allowlist). The agent can mutate the host filesystem or
+      send destructive HTTP without per-call human approval. Java port of
+      agentshield.detect.broad-tool-permissions (AS-D-006). OWASP LLM06,
+      OWASP Agentic T2 / T3.
+    pattern-either:
+      # @Tool wrapping java.nio.file.Files mutations
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              Files.delete(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              Files.delete(...);
+              ...
+          }
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              Files.deleteIfExists(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              Files.deleteIfExists(...);
+              ...
+          }
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              Files.write(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              Files.write(...);
+              ...
+          }
+      - pattern: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              Files.move(...);
+              ...
+          }
+      - pattern: |
+          @Tool(...)
+          $RT $METHOD(...) {
+              ...
+              Files.move(...);
+              ...
+          }
+      # @Tool wrapping destructive HTTP — RestTemplate.delete / .put.
+      # `metavariable-type: RestTemplate` constrains $REST so the pattern
+      # doesn't collide with the much-more-common `Map.put(...)` /
+      # `Map.remove(...)` calls that appear in many @Tool method bodies
+      # (Phase B triage of langchain4j surfaced this as a 100% FP source
+      # on SessionsREPLTool — the @Tool method built a response Map with
+      # `contentMap.put(...)` calls). Trade-off: only RestTemplate is
+      # constrained; WebClient / OkHttp / Apache HttpClient destructive
+      # verbs in @Tool bodies are now a coverage gap (acceptable — adding
+      # those needs separate metavariable-type filters).
+      - patterns:
+          - pattern: |
+              @Tool
+              $RT $METHOD(...) {
+                  ...
+                  $REST.delete(...);
+                  ...
+              }
+          - metavariable-type:
+              metavariable: $REST
+              type: RestTemplate
+      - patterns:
+          - pattern: |
+              @Tool(...)
+              $RT $METHOD(...) {
+                  ...
+                  $REST.delete(...);
+                  ...
+              }
+          - metavariable-type:
+              metavariable: $REST
+              type: RestTemplate
+      - patterns:
+          - pattern: |
+              @Tool
+              $RT $METHOD(...) {
+                  ...
+                  $REST.put(...);
+                  ...
+              }
+          - metavariable-type:
+              metavariable: $REST
+              type: RestTemplate
+      - patterns:
+          - pattern: |
+              @Tool(...)
+              $RT $METHOD(...) {
+                  ...
+                  $REST.put(...);
+                  ...
+              }
+          - metavariable-type:
+              metavariable: $REST
+              type: RestTemplate
+    metadata:
+      category: detect
+      agentshield_id: AS-D-006
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM06"]
+        owasp_agentic: ["T2", "T3"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0053"]
+        cwe: ["CWE-732"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Narrow the agent's tool surface. (1) For filesystem tools, validate
+        the target path against an allowlist before any Files.* mutation,
+        and confine to a sandbox directory; replace with a custom tool that
+        adds a human-approval step for delete / write / move. (2) For HTTP,
+        do not expose RestTemplate.delete / RestTemplate.put as a tool
+        directly — wrap with a custom tool that enforces a host allowlist
+        and rejects state-changing verbs unless explicitly required. (3)
+        Where possible, prefer read-only tool variants and require a
+        secondary tool (with HITL approval) for mutation.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"

@@ -1,0 +1,21 @@
+{
+  "fixture": "java/d008_untrusted_system_prompt.java",
+  "expected_findings": [
+    {
+      "rule_id": "untrusted-system-prompt-java",
+      "line": 27
+    },
+    {
+      "rule_id": "untrusted-system-prompt-java",
+      "line": 33
+    },
+    {
+      "rule_id": "untrusted-system-prompt-java",
+      "line": 39
+    },
+    {
+      "rule_id": "untrusted-system-prompt-java",
+      "line": 44
+    }
+  ]
+}

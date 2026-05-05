@@ -1,0 +1,77 @@
+rules:
+  - id: agentshield.defend.destructive-tool-without-human-approval-java
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Java method annotated `@Tool` (langchain4j / Spring AI) is named with
+      a destructive verb (delete / remove / destroy / drop / send / transfer
+      / charge / email / publish / deploy / shutdown / kill / terminate /
+      wipe / purge / revoke / cancel / refund), and the body contains no
+      explicit confirmation gate. The agent can invoke the tool
+      autonomously to perform an irreversible action. Java port of
+      agentshield.defend.destructive-tool-without-human-approval (AS-DF-004).
+      OWASP LLM06, OWASP Agentic T10.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @Tool
+              $RT $METHOD(...) { ... }
+          - pattern: |
+              @Tool($DESC)
+              $RT $METHOD(...) { ... }
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: "^(delete|remove|destroy|drop|send|transfer|charge|email|notify|publish|deploy|shutdown|kill|terminate|wipe|purge|forget|revoke|cancel|refund)([A-Z].*)?$"
+      # Suppressor: explicit confirmation method invoked inside the tool body.
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              $X.confirm(...);
+              ...
+          }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(...) {
+              ...
+              $X.confirm(...);
+              ...
+          }
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(...) {
+              ...
+              $X.requireApproval(...);
+              ...
+          }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(...) {
+              ...
+              $X.requireApproval(...);
+              ...
+          }
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-004
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM06"]
+        owasp_agentic: ["T10"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: []
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Add a human-in-the-loop gate before any irreversible tool action.
+        (1) Inject a confirmation service into the tool class and call
+        `$X.confirm(...)` / `$X.requireApproval(...)` before executing the
+        destructive operation. (2) For Spring AI 1.0+ tool callbacks, wire
+        a `ToolCallback` interceptor that pauses on a configured allowlist
+        of destructive method names and resumes only on operator approval.
+        (3) Take a `confirmToken` argument that the caller must explicitly
+        pass — reject the call when absent. (4) For high-risk operations
+        (payments, mass-deletes, deploys), require multi-party approval
+        through your existing change-management system.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"

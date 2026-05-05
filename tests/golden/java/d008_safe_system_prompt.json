@@ -1,0 +1,4 @@
+{
+  "fixture": "java/d008_safe_system_prompt.java",
+  "expected_findings": []
+}

@@ -1,0 +1,70 @@
+rules:
+  - id: agentshield.defend.tool-without-args-schema-java
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Java tool method (langchain4j @Tool / Spring AI @Tool) takes a String
+      parameter without an @P or @ToolParam annotation. Without a parameter
+      annotation, the LLM gets no description / no value constraints and can
+      pass arbitrary unvalidated input — classic excessive-agency / tool-misuse
+      vector. Java port of agentshield.defend.tool-without-args-schema.
+      OWASP LLM06, OWASP Agentic T2.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @Tool
+              $RT $METHOD(String $X) { ... }
+          - pattern: |
+              @Tool($DESC)
+              $RT $METHOD(String $X) { ... }
+          - pattern: |
+              @Tool
+              $RT $METHOD(String $X, String $Y) { ... }
+          - pattern: |
+              @Tool($DESC)
+              $RT $METHOD(String $X, String $Y) { ... }
+      # langchain4j @P annotation on the parameter
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(@P(...) String $X) { ... }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(@P(...) String $X) { ... }
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(@P(...) String $X, @P(...) String $Y) { ... }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(@P(...) String $X, @P(...) String $Y) { ... }
+      # Spring AI @ToolParam annotation on the parameter
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(@ToolParam(...) String $X) { ... }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(@ToolParam(...) String $X) { ... }
+      - pattern-not: |
+          @Tool
+          $RT $METHOD(@ToolParam(...) String $X, @ToolParam(...) String $Y) { ... }
+      - pattern-not: |
+          @Tool($DESC)
+          $RT $METHOD(@ToolParam(...) String $X, @ToolParam(...) String $Y) { ... }
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-002
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM06", "LLM08"]
+        owasp_agentic: ["T2"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0053"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Annotate every tool parameter so the LLM (and the validator) knows what
+        each value means. langchain4j: `@P("description of the value")` —
+        optionally with a regex / range constraint. Spring AI: `@ToolParam(description = "...")`.
+        For high-risk tools (file I/O, network, code-exec) add explicit value
+        validation inside the tool method body before performing the action.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"

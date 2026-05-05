@@ -1,0 +1,9 @@
+{
+  "fixture": "java/df002_tool_with_schema.java",
+  "expected_findings": [
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 16
+    }
+  ]
+}

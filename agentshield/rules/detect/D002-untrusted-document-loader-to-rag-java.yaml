@@ -1,0 +1,49 @@
+rules:
+  - id: agentshield.detect.untrusted-document-loader-to-rag-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A Java document/web loader fetches content from a URL and feeds it into
+      a vector store / retriever without URL allowlisting. Indirect prompt
+      injection / RAG poisoning surface — anyone who controls the fetched
+      page can plant instructions in your RAG index. OWASP LLM01 indirect,
+      LLM08 vector weakness. Java port of agentshield.detect.untrusted-document-loader-to-rag
+      (AS-D-002).
+    pattern-either:
+      # langchain4j URL document loaders
+      - pattern: dev.langchain4j.data.document.loader.UrlDocumentLoader.load(...)
+      - pattern: UrlDocumentLoader.load(...)
+      # Spring AI Tika reader pointed at a URL resource
+      - pattern: new TikaDocumentReader(new UrlResource(...))
+      - pattern: new TikaDocumentReader(new org.springframework.core.io.UrlResource(...))
+      - pattern: new org.springframework.ai.reader.tika.TikaDocumentReader(new UrlResource(...))
+      # Spring AI JSoup reader pointed at a URL
+      - pattern: new JsoupDocumentReader(new UrlResource(...))
+      # Apache Tika direct
+      - pattern: new Tika().parseToString(new java.net.URL(...))
+      - pattern: new Tika().parseToString(new URL(...))
+      - pattern: $T.parseToString(new URL(...))
+      # Generic HTTP fetch fed straight into a document constructor / RAG ingest
+      # — taint-free version, just structural recognition
+      - pattern: new Document(java.net.URL.openStream(...))
+    metadata:
+      category: detect
+      agentshield_id: AS-D-002
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM08"]
+        owasp_agentic: ["T1", "T6"]
+        nist_ai_rmf: ["MAP-2.3"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Implement a URL allowlist before fetching: validate the host / scheme
+        against a fixed list before constructing the loader. Sanitize fetched
+        HTML / PDF content to strip instruction-like markup before chunking.
+        Apply prompt-injection filtering on both the insertion path
+        (vector ingest) and the retrieval path (post-search). Treat all
+        externally-loaded documents as untrusted input.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://genai.owasp.org/llmrisk/llm08-vector-and-embedding-weaknesses/"

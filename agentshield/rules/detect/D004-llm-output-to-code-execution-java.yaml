@@ -1,0 +1,107 @@
+rules:
+  - id: agentshield.detect.llm-output-to-code-execution-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Output from a Java LLM call (Spring AI / langchain4j / SMARTSDK / Bedrock /
+      Azure OpenAI) flows into a dangerous code-execution sink (Runtime.exec,
+      ProcessBuilder, ScriptEngine.eval, JDBC Statement.execute*). LLM output
+      is attacker-controllable via prompt injection — feeding it to a code
+      executor or unparameterized SQL is arbitrary code execution / SQL
+      injection on the host. Java port of agentshield.detect.llm-output-to-code-execution
+      (AS-D-004). OWASP LLM05, OWASP Agentic T11.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # SMARTSDK Java (wraps Google ADK)
+              - pattern: $RUNNER.run($AGENT, ...)
+              - pattern: $RUNNER.runStream($AGENT, ...)
+              - pattern: $RUNNER.runAsync($AGENT, ...)
+              # langchain4j
+              - pattern: $MODEL.generate(...)
+              - pattern: $MODEL.chat(...)
+              - pattern: $CHAIN.execute(...)
+              - pattern: $ASSISTANT.chat(...)
+              # Spring AI (fluent ChatClient + ChatModel)
+              - pattern: $CLIENT.prompt().user(...).call(...)
+              - pattern: $CLIENT.prompt(...).call(...)
+              - pattern: $MODEL.call(new Prompt(...))
+              - pattern: $MODEL.call(new UserMessage(...))
+              - pattern: $MODEL.stream(new Prompt(...))
+              # AWS Bedrock Runtime (Java SDK v2)
+              - pattern: $CLIENT.invokeModel(...)
+              - pattern: $CLIENT.invokeModelWithResponseStream(...)
+              - pattern: $CLIENT.converse(...)
+              - pattern: $CLIENT.converseStream(...)
+              # Azure OpenAI Java SDK
+              - pattern: $CLIENT.getChatCompletions(...)
+              - pattern: $CLIENT.getChatCompletionsStream(...)
+              - pattern: $CLIENT.getCompletions(...)
+              # Google ADK Java (direct, not via SMARTSDK)
+              - pattern: $AGENT.invoke(...)
+              - pattern: $AGENT.run(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # Process spawning
+              - pattern: Runtime.getRuntime().exec($X)
+              - pattern: Runtime.getRuntime().exec($X, ...)
+              - pattern: new ProcessBuilder($X)
+              - pattern: new ProcessBuilder($X, ...)
+              # Script-engine eval (Nashorn / Rhino / GraalJS)
+              - pattern: $ENGINE.eval($X)
+              - pattern: $ENGINE.eval($X, ...)
+              # JDBC Statement (unparameterized — PreparedStatement is the safe path).
+              # The bare `$STMT.execute($X)` pattern was REMOVED after Phase B
+              # validation against langchain4j surfaced 34 false positives:
+              # `httpClient.execute(httpRequest)`, `executor.execute(Runnable)`,
+              # `engine.execute(code)` (script engines), and chat-executor wrappers
+              # all matched. Restricting to executeQuery / executeUpdate /
+              # executeLargeUpdate keeps the pattern unambiguously JDBC at the
+              # cost of missing `statement.execute("DDL …")` — acceptable since
+              # DDL is rarely the LLM-output-to-SQL-injection target this rule
+              # is meant to catch. Documented in PHASE_B_TRIAGE.md.
+              - pattern: $STMT.executeQuery($X)
+              - pattern: $STMT.executeUpdate($X)
+              - pattern: $STMT.executeLargeUpdate($X)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # OWASP Java Encoder
+              - pattern: org.owasp.encoder.Encode.forJava(...)
+              - pattern: Encode.forJava(...)
+              # Apache Commons Text escaping
+              - pattern: StringEscapeUtils.escapeJava(...)
+              # JDBC parameterized binding makes the query body trusted
+              - pattern: $PS.setString(...)
+              - pattern: $PS.setInt(...)
+              - pattern: $PS.setLong(...)
+              # Lakera Guard (input/output sanitization for LLM data)
+              - pattern: $G.detect(...)
+              - pattern: $G.scan(...)
+              - pattern: $G.guard(...)
+              - pattern: $G.isSafe(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-004
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM05", "LLM06"]
+        owasp_agentic: ["T2", "T11"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        cwe: ["CWE-89", "CWE-94"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Never pass raw LLM output to Runtime.exec, ProcessBuilder, ScriptEngine.eval,
+        or unparameterized JDBC Statement. For shell commands, validate against
+        an allowlist and pass argv as a String[] to ProcessBuilder rather than a
+        single shell string. For SQL, use PreparedStatement with bound parameters
+        (?-placeholders) — never concatenate or format LLM output into the SQL
+        body. For arbitrary code execution, run in a hardened sandbox (Docker,
+        Firecracker, or a SecurityManager-restricted classloader).
+      references:
+        - "https://genai.owasp.org/llmrisk/llm05-improper-output-handling/"
+        - "https://owasp.org/www-community/attacks/SQL_Injection"

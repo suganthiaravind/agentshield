@@ -1,0 +1,25 @@
+{
+  "fixture": "java/d005_hardcoded_keys.java",
+  "expected_findings": [
+    {
+      "rule_id": "hardcoded-llm-credentials-java",
+      "line": 15
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials-java",
+      "line": 22
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials-java",
+      "line": 29
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials-java",
+      "line": 33
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials-java",
+      "line": 41
+    }
+  ]
+}

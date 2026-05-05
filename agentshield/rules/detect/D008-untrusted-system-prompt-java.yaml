@@ -1,0 +1,86 @@
+rules:
+  - id: agentshield.detect.untrusted-system-prompt-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Content from a network read flows into a Java LLM system message
+      (Spring AI `SystemMessage` / `SystemPromptTemplate`, langchain4j
+      `SystemMessage`, AWS Bedrock Converse `SystemContentBlock`). System
+      prompts dictate the agent's role, tools, and constraints — an
+      attacker who controls the system-prompt source can inject hidden
+      instructions that override the developer's intent. Java port of
+      agentshield.detect.untrusted-system-prompt (AS-D-008). OWASP LLM07.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # Spring RestTemplate
+              - pattern: $REST.getForObject(...)
+              - pattern: $REST.getForEntity(...).getBody()
+              - pattern: $REST.exchange(...).getBody()
+              # Spring WebClient (synchronous block)
+              - pattern: $WC.get().uri(...).retrieve().bodyToMono($T).block()
+              - pattern: $WC.get().uri(...).retrieve().toEntity($T).block().getBody()
+              # OkHttp
+              - pattern: $CLIENT.newCall($REQ).execute().body().string()
+              # AWS Java SDK v2 — S3 GetObject (where prompts get stashed)
+              - pattern: $S3.getObject($REQ).asUtf8String()
+              - pattern: $S3.getObjectAsBytes($REQ).asUtf8String()
+              # AWS SSM parameter store
+              - pattern: $SSM.getParameter($REQ).parameter().value()
+              # Apache HttpClient
+              - pattern: EntityUtils.toString($RESP.getEntity())
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # langchain4j SystemMessage construction
+              - pattern: SystemMessage.from($X)
+              - pattern: new SystemMessage($X)
+              - pattern: dev.langchain4j.data.message.SystemMessage.from($X)
+              - pattern: new dev.langchain4j.data.message.SystemMessage($X)
+              # Spring AI SystemMessage
+              - pattern: new org.springframework.ai.chat.messages.SystemMessage($X)
+              # Spring AI SystemPromptTemplate.create(...)
+              - pattern: $TPL.createMessage($X)
+              # AWS Bedrock Converse — SystemContentBlock builder
+              - pattern: SystemContentBlock.builder().text($X).build()
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # OWASP Java Encoder (input/output sanitization)
+              - pattern: org.owasp.encoder.Encode.forJava(...)
+              - pattern: Encode.forJava(...)
+              # Lakera Guard Java SDK
+              - pattern: $G.detect(...)
+              - pattern: $G.scan(...)
+              - pattern: $G.guard(...)
+              - pattern: $G.isSafe(...)
+              # MAC verification
+              - pattern: MessageDigest.isEqual(...)
+              - pattern: $MAC.doFinal(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-008
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM07"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0051"]
+        cwe: ["CWE-829"]
+        agentshield_v1: []
+      languages: [java]
+      remediation: >-
+        Never load Java LLM system messages from untrusted network sources.
+        Options ranked by safety: (1) bake the system prompt into the JAR
+        as a resource and read with `getResourceAsStream`. (2) If runtime
+        loading is required, fetch from a write-restricted source (signed
+        S3 object with strict IAM, version-pinned parameter store) AND
+        verify a cryptographic signature (`MessageDigest.isEqual`,
+        `Mac.doFinal`) before constructing the `SystemMessage`. (3) Apply
+        Lakera Guard or equivalent to detect injected instructions in the
+        loaded prompt before use. Treat any externally-loaded system prompt
+        as untrusted input — same bar as user input.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm07-system-prompt-leakage/"
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

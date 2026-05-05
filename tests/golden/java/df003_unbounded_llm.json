@@ -1,0 +1,25 @@
+{
+  "fixture": "java/df003_unbounded_llm.java",
+  "expected_findings": [
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm-java",
+      "line": 15
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm-java",
+      "line": 22
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm-java",
+      "line": 29
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm-java",
+      "line": 36
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm-java",
+      "line": 36
+    }
+  ]
+}

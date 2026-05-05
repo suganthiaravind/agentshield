@@ -1,0 +1,21 @@
+{
+  "fixture": "java/df004_no_hitl.java",
+  "expected_findings": [
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 11
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 16
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 21
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval-java",
+      "line": 26
+    }
+  ]
+}

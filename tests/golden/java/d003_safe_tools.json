@@ -1,0 +1,4 @@
+{
+  "fixture": "java/d003_safe_tools.java",
+  "expected_findings": []
+}
