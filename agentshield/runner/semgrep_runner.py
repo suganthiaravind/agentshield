@@ -15,8 +15,12 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
+_STAGE_EXTENSIONS = {".py", ".java"}
+_STAGE_SKIP_DIRS = {"__pycache__", ".venv", ".git", "node_modules"}
 
 
 class SemgrepRunnerError(RuntimeError):
@@ -71,13 +75,25 @@ class SemgrepRunner:
             "Install with: pip install 'agentshield[semgrep]'"
         )
 
-    def run(self, target_path: Path | str | list[Path | str]) -> dict[str, Any]:
+    def run(
+        self,
+        target_path: Path | str | list[Path | str],
+        stage_locally: bool = False,
+    ) -> dict[str, Any]:
         """Scan `target_path` and return parsed SARIF v2.1.0.
 
         `target_path` may be a single path (str or Path) or a list. When a
         list is given, each path is passed explicitly to semgrep — useful
         for tests that need to bypass semgrep's default ignore patterns
         (which exclude `tests/`, `fixtures/`, etc. on directory traversal).
+
+        When `stage_locally=True`, every .py/.java file under the targets is
+        first copied into a temporary directory (mirroring the relative
+        layout so cross-file taint analysis still works), semgrep scans the
+        temp tree, and `artifactLocation.uri` entries in the resulting SARIF
+        are rewritten back to the original source paths before returning.
+        This is a workaround for semgrep's silent failure to read files via
+        Windows UNC / mapped network drives (e.g. H:\\fusion -> \\\\server\\share).
 
         Raises SemgrepRunnerError on subprocess failure, timeout, or
         unparseable output. Returns the SARIF dict on success — including
@@ -93,6 +109,25 @@ class SemgrepRunner:
             if not t.exists():
                 raise SemgrepRunnerError(f"Target path does not exist: {t}")
 
+        stage_root: Path | None = None
+        path_map: dict[str, str] = {}  # staged absolute path -> original absolute path
+        if stage_locally:
+            stage_root, scan_targets, path_map = self._stage_targets(targets)
+        else:
+            scan_targets = targets
+
+        try:
+            sarif = self._invoke_semgrep(scan_targets)
+        finally:
+            if stage_root is not None:
+                shutil.rmtree(stage_root, ignore_errors=True)
+
+        if path_map:
+            self._rewrite_sarif_uris(sarif, path_map)
+
+        return sarif
+
+    def _invoke_semgrep(self, targets: list[Path]) -> dict[str, Any]:
         cmd = [
             self._semgrep_executable(),
             "scan",
@@ -122,7 +157,7 @@ class SemgrepRunner:
             )
         except subprocess.TimeoutExpired as exc:
             raise SemgrepRunnerError(
-                f"semgrep timed out after {self.timeout}s scanning {target}"
+                f"semgrep timed out after {self.timeout}s"
             ) from exc
         except FileNotFoundError as exc:
             raise SemgrepRunnerError(f"semgrep failed to launch: {exc}") from exc
@@ -150,6 +185,93 @@ class SemgrepRunner:
             ) from exc
 
         return sarif
+
+    @staticmethod
+    def _stage_targets(
+        targets: list[Path],
+    ) -> tuple[Path, list[Path], dict[str, str]]:
+        """Copy every .py/.java file under `targets` into a temp tree.
+
+        Returns (stage_root, [stage_root], path_map). path_map keys are the
+        staged absolute file paths (used to match SARIF `artifactLocation.uri`)
+        and values are the original absolute source paths.
+
+        Each top-level target is mirrored under stage_root/<index>/ so that
+        relative module layout is preserved (cross-file taint depends on it)
+        and multiple targets can't collide on the same relative subpath.
+        """
+        stage_root = Path(tempfile.mkdtemp(prefix="agentshield-stage-"))
+        path_map: dict[str, str] = {}
+
+        for idx, t in enumerate(targets):
+            t_abs = t.resolve()
+            slot = stage_root / str(idx)
+            slot.mkdir(parents=True, exist_ok=True)
+
+            if t_abs.is_file():
+                if t_abs.suffix not in _STAGE_EXTENSIONS:
+                    continue
+                dst = slot / t_abs.name
+                shutil.copy2(t_abs, dst)
+                path_map[str(dst.resolve())] = str(t_abs)
+                continue
+
+            for src in t_abs.rglob("*"):
+                if not src.is_file() or src.suffix not in _STAGE_EXTENSIONS:
+                    continue
+                if any(part in _STAGE_SKIP_DIRS for part in src.parts):
+                    continue
+                rel = src.relative_to(t_abs)
+                dst = slot / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                path_map[str(dst.resolve())] = str(src)
+
+        if not path_map:
+            shutil.rmtree(stage_root, ignore_errors=True)
+            raise SemgrepRunnerError(
+                "stage_locally: no .py/.java files found under target(s); "
+                "nothing to scan"
+            )
+
+        return stage_root, [stage_root], path_map
+
+    @staticmethod
+    def _rewrite_sarif_uris(sarif: dict[str, Any], path_map: dict[str, str]) -> None:
+        """Rewrite SARIF artifactLocation.uri entries staged -> original.
+
+        Mutates `sarif` in place. Both keys and SARIF URIs are normalised via
+        Path.resolve() so the lookup is robust to '/' vs '\\' and absolute
+        vs relative forms produced by semgrep on different platforms.
+        """
+        normalized = {str(Path(k).resolve()): v for k, v in path_map.items()}
+
+        for run in sarif.get("runs", []) or []:
+            for r in run.get("results", []) or []:
+                for loc in r.get("locations", []) or []:
+                    art = (loc.get("physicalLocation") or {}).get("artifactLocation")
+                    if not art:
+                        continue
+                    uri = art.get("uri")
+                    if not uri:
+                        continue
+                    try:
+                        key = str(Path(uri).resolve())
+                    except OSError:
+                        key = uri
+                    if key in normalized:
+                        art["uri"] = normalized[key]
+            for art in run.get("artifacts", []) or []:
+                loc = art.get("location") or {}
+                uri = loc.get("uri")
+                if not uri:
+                    continue
+                try:
+                    key = str(Path(uri).resolve())
+                except OSError:
+                    key = uri
+                if key in normalized:
+                    loc["uri"] = normalized[key]
 
     @staticmethod
     def count_raw_findings(sarif: dict[str, Any]) -> int:

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Sequence
 
 from agentshield import __version__
-from agentshield.judge import Boto3BedrockBackend, JudgeOrchestrator
+from agentshield.judge import Boto3BedrockBackend, JudgeOrchestrator, MockJudgeBackend
 from agentshield.normalize import Normalizer, NormalizerError
 from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
@@ -44,9 +44,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan.add_argument(
         "--llm-backend",
-        choices=["boto3-bedrock", "smartsdk", "copilot", "none"],
+        choices=["boto3-bedrock", "smartsdk", "copilot", "mock", "none"],
         default=None,
-        help="LLM backend for the judge tier (default: from config or boto3-bedrock)",
+        help=(
+            "LLM backend for the judge tier (default: from config or "
+            "boto3-bedrock). `mock` uses a deterministic placeholder backend "
+            "that returns a fixed `needs_review` verdict — useful for "
+            "smoke-testing the orchestrator pipeline without AWS Bedrock "
+            "access. See VDI_TESTING.md Stage 4.5."
+        ),
     )
     scan.add_argument("--output-sarif", help="Write SARIF v2.1.0 report to this path")
     scan.add_argument("--output-json", help="Write JSON report to this path")
@@ -85,6 +91,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     scan.add_argument(
+        "--stage-locally",
+        action="store_true",
+        help=(
+            "Copy every .py/.java file under the target into a local temp "
+            "directory before scanning, then rewrite SARIF paths back to the "
+            "originals. Workaround for semgrep silently returning 'Scanning 0 "
+            "files' on Windows UNC / mapped network drives (e.g. H:\\fusion\\...)."
+        ),
+    )
+    scan.add_argument(
         "--debug",
         action="store_true",
         help=(
@@ -98,6 +114,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 _SAMPLE_FILE_LIMIT = 5
+
+
+def _looks_like_network_path(path: Path) -> bool:
+    """Heuristic: True if the path is a UNC share or a Windows mapped network drive.
+
+    Used only to decide whether to surface a `--stage-locally` hint after a
+    zero-finding scan. Conservative — misses are fine (no hint), false positives
+    are mostly fine too (extra hint costs nothing).
+    """
+    s = str(path)
+    if s.startswith("\\\\") or s.startswith("//"):
+        return True
+    if sys.platform == "win32" and len(s) >= 2 and s[1] == ":":
+        try:
+            import ctypes
+
+            drive_type = ctypes.windll.kernel32.GetDriveTypeW(f"{s[0]}:\\")
+            # 4 = DRIVE_REMOTE
+            return drive_type == 4
+        except Exception:
+            return False
+    return False
 
 
 def _enumerate_candidate_files(path: Path) -> list[Path]:
@@ -169,16 +207,36 @@ def cmd_scan(args: argparse.Namespace) -> int:
         runner = SemgrepRunner()
         print(f"[agentshield] --debug: rules path = {runner.rules_path}")
         print(f"[agentshield] --debug: semgrep binary = {runner._semgrep_executable()}")
+    if args.stage_locally:
+        print(
+            "[agentshield] --stage-locally: copying source files to a local temp "
+            "tree before scan (UNC / network-drive workaround)"
+        )
     print("[agentshield] Tier 1+2: invoking semgrep on bundled rule pack...")
     try:
         runner = SemgrepRunner()
-        sarif = runner.run(target)
+        sarif = runner.run(target, stage_locally=args.stage_locally)
     except SemgrepRunnerError as exc:
         print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        if args.stage_locally:
+            print(
+                "[agentshield] HINT: --stage-locally failed. Copy the repo "
+                "to a local path with `robocopy <src> <dst> /E` and rerun "
+                "agentshield against the local copy.",
+                file=sys.stderr,
+            )
         return 2
 
     raw_count = SemgrepRunner.count_raw_findings(sarif)
     print(f"[agentshield] Tier 1+2: {raw_count} raw finding(s)")
+    if raw_count == 0 and not args.stage_locally and _looks_like_network_path(Path(args.path)):
+        print(
+            "[agentshield] HINT: target looks like a UNC / mapped network "
+            "drive and the scan returned 0 findings. Semgrep can fail "
+            "silently on such paths — retry with `--stage-locally`, or "
+            "copy the repo to a local path (e.g. `robocopy <src> <dst> /E`) "
+            "and scan that copy."
+        )
     if args.debug:
         for run in sarif.get("runs", []):
             for r in run.get("results", []):
@@ -246,6 +304,20 @@ def cmd_scan(args: argparse.Namespace) -> int:
             print(
                 f"[agentshield] Tier 3 judge: backend={backend_choice} not yet implemented "
                 f"(Track B2/B3) — skipped; {fallback_count} fallback finding(s) untriaged"
+            )
+        elif backend_choice == "mock":
+            backend = MockJudgeBackend()
+            orchestrator = JudgeOrchestrator(backend)
+            print(
+                f"[agentshield] Tier 3 judge: triaging {fallback_count} fallback "
+                f"finding(s) via mock backend (no LLM is called — verdicts are "
+                f"placeholders for VDI / smoke-test use)"
+            )
+            findings = orchestrator.triage(findings)
+            print(
+                f"[agentshield] Tier 3 judge: {fallback_count} mock verdict(s) "
+                f"attached as `needs_review`. Re-run with --llm-backend "
+                f"boto3-bedrock for real triage."
             )
         elif backend_choice == "none":
             print(f"[agentshield] Tier 3 judge: backend=none — skipped")
