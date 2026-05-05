@@ -49,6 +49,33 @@ pip install -e ".[semgrep,judge,dev]"     # ~1-2 min; semgrep is the bulk
 
 ---
 
+## Stage 1b — refreshing an existing clone (alternative to Stage 1)
+
+If you've already done Stage 1 once and just want to pull the latest changes (e.g. switching to a feature branch like `phase-b-c-d-polish`, or pulling new commits to `main`):
+
+```bash
+cd /path/to/your/agentshield/clone
+source .venv/bin/activate          # re-enter the existing venv
+
+git fetch origin
+git checkout <branch-name>          # e.g. phase-b-c-d-polish or main
+git pull                            # fast-forward to remote tip
+
+pip install -e ".[semgrep,judge,dev]"   # re-install in case dependencies changed
+pytest tests/ -v                        # confirm green on your VDI Python before scanning
+```
+
+**Why re-run `pip install -e`** — even though `-e` (editable) installs source-mirror by default, if the schema changed (e.g. a new field on `FrameworkMappings` like the `cwe` field added in the polish pass), the package metadata needs to be refreshed. Skipping this can cause silent import errors or pydantic-validation failures on first run.
+
+**Why re-run pytest** — the Stage 3 invocation. Even on a known-green branch, your VDI Python version + installed semgrep version interact with the rule patterns, so confirming green on YOUR machine is the only valid signal that the install transferred cleanly.
+
+**Common issues:**
+- `error: detected dubious ownership` (Windows / shared filesystem): `git config --global --add safe.directory /path/to/clone`
+- `pip` says "Already satisfied" but pytest fails on missing field — try `pip install --force-reinstall -e ".[semgrep,judge,dev]"`
+- pytest fails with rule-golden mismatches — most likely the rule pack on the branch diverges from your local cache; run `pytest tests/test_rules_golden.py --update-golden` only if you're SURE the divergence is intentional, otherwise `git status` to check for accidental local edits.
+
+---
+
 ## Stage 2 — `--version`
 
 Trivial sanity check. If this fails, the install is broken — fix Stage 1 before continuing.
