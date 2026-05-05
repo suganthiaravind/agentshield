@@ -6,14 +6,6 @@
       "line": 34
     },
     {
-      "rule_id": "llm-call-without-audit-logging",
-      "line": 34
-    },
-    {
-      "rule_id": "no-guardrails-import-in-llm-module",
-      "line": 34
-    },
-    {
       "rule_id": "no-guardrails-import-in-llm-module",
       "line": 34
     }

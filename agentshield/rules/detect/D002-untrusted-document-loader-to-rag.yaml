@@ -17,7 +17,23 @@ rules:
               - pattern: AsyncHtmlLoader(...)
               - pattern: RecursiveUrlLoader(...)
               - pattern: SitemapLoader(...)
-              - pattern: $LOADER_CLASS(url=$URL, ...)
+              # Generic: any class instantiation with url= kwarg whose
+              # class name suggests it's a document loader / web reader /
+              # scraper. The metavariable-regex constraint was added in
+              # Phase B after the bare `$LOADER_CLASS(url=$URL, ...)` form
+              # surfaced 140 false positives on llama-index — it matched
+              # `Confluence(url=...)` (API client), `AnyUrl(url=...)` (Pydantic
+              # model), `ImageBlock(url=...)` (data class), `client.post(url=...)`
+              # (HTTP method call), and many similar same-kwarg constructors
+              # that have nothing to do with RAG document loading. Requiring
+              # the class name to end with Loader / Reader / Scraper keeps
+              # coverage on llama-index's BeautifulSoupWebReader-style
+              # readers while eliminating the broad-kwarg FPs.
+              - patterns:
+                  - pattern: $LOADER_CLASS(url=$URL, ...)
+                  - metavariable-regex:
+                      metavariable: $LOADER_CLASS
+                      regex: '^[A-Z][A-Za-z0-9_]*(Loader|Reader|Scraper)$'
           - pattern-not-inside: |
               if $URL in $ALLOWLIST:
                   ...

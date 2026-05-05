@@ -38,6 +38,11 @@ rules:
           - pattern: $MODEL.embed(...)
           - pattern: $EMBEDDING.embedAll(...)
           - pattern: $CLIENT.getEmbeddings(...)
+      # Common false-positive suppressors — `$AGENT.run(...)` collides
+      # with Spring Boot's SpringApplication.run(Class, String[]) entry
+      # point. Phase D triage of spring-ai-examples surfaced this.
+      - pattern-not: SpringApplication.run(...)
+      - pattern-not: org.springframework.boot.SpringApplication.run(...)
       - pattern-not-inside: |
           import org.slf4j.Logger;
           ...
@@ -59,9 +64,9 @@ rules:
       severity_normalized: medium
       framework_mappings:
         owasp_llm: ["LLM10"]
-        owasp_agentic: []
+        owasp_agentic: ["T8"]
         nist_ai_rmf: ["MEASURE-2.7", "MANAGE-3.1"]
-        mitre_atlas: []
+        mitre_atlas: ["AML.T0024"]
         agentshield_v1: ["AS-R-001"]
       languages: [java]
       remediation: >-

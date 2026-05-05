@@ -1,12 +1,12 @@
-"""Fixture: SMARTSDK with awaited runner — matches the JPMC
-moip-cost-anomaly-probe-lambda extract_anomaly.py shape.
+"""Fixture: SMARTSDK with awaited runner — matches the
+testbed/smartsdk-lambda extract_anomaly.py shape.
 
-Diagnosed against real prod code: the SMARTSDK runner is invoked via
-`await runner.run(agent, prompt)` (or async-for over run_stream).
-Semgrep treats `await expr` as a distinct AST node, so without
-explicit `await` patterns in the rules, these calls silently don't
-match. Without these fixtures, scans of real SMARTSDK code returned
-0 findings — see commit message for the diagnosis trail.
+The SMARTSDK runner is typically invoked via `await runner.run(agent,
+prompt)` (or async-for over run_stream). semgrep matches sub-expressions,
+so the unawaited `$X.run(...)` patterns in DF001 / R001 also match
+inside `await ...` wrappers — this fixture pins that behaviour so any
+future regression where awaited SMARTSDK calls stop matching is caught
+in CI.
 
 Expected goldens (after the await-pattern fix):
   - DF001 fires on the awaited runner.run line — file imports

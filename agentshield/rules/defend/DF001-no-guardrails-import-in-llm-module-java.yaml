@@ -38,6 +38,12 @@ rules:
           - pattern: $MODEL.embed(...)
           - pattern: $EMBEDDING.embedAll(...)
           - pattern: $CLIENT.getEmbeddings(...)
+      # Common false-positive suppressors — $AGENT.run(...) and $AGENT.invoke(...)
+      # collide with Spring Boot's SpringApplication.run(Class, String[])
+      # entry point and similar standard Java APIs. Phase D triage of
+      # spring-ai-examples surfaced 5+ FPs from this single shape.
+      - pattern-not: SpringApplication.run(...)
+      - pattern-not: org.springframework.boot.SpringApplication.run(...)
       - pattern-not-inside: |
           import com.lakera.$X;
           ...

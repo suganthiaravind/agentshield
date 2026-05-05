@@ -9,27 +9,28 @@ rules:
       filter. Absence-detection — calibrate severity per repo.
     patterns:
       - pattern-either:
+          # Generic LLM/agent/chain verbs — these match SMARTSDK
+          # (runner.run/run_stream/run_async), LangChain (chain.invoke),
+          # LlamaIndex (qe.query), Bedrock (client.converse), etc.
+          #
+          # Note on awaited calls: semgrep matches sub-expressions, so
+          # `$X.run(...)` ALSO matches `await $X.run(...)` — the inner
+          # call expression is reachable inside the await wrapper. Earlier
+          # versions of these rules added explicit `await $X.<verb>(...)`
+          # patterns; those were removed because they produced DUPLICATE
+          # findings (one for the inner match, one for the outer await
+          # match) at the same call site. The unawaited generics alone
+          # cover both sync and awaited code. Validated against the
+          # SMARTSDK Lambda regression testbed (testbed/smartsdk-lambda).
           - pattern: $X.invoke(...)
           - pattern: $X.ainvoke(...)
           - pattern: $X.run(...)
+          - pattern: $X.run_stream(...)
+          - pattern: $X.run_async(...)
           - pattern: $X.predict(...)
           - pattern: $X.generate(...)
           - pattern: $X.query(...)
           - pattern: $X.chat(...)
-          # SMARTSDK (wraps Google ADK)
-          - pattern: $RUNNER.run_stream($AGENT, ...)
-          - pattern: $RUNNER.run_async($AGENT, ...)
-          - pattern: $RUNNER.run($AGENT, ...)
-          - pattern: Console($RUNNER.run_stream($AGENT, ...))
-          - pattern: Console($RUNNER.run_async($AGENT, ...))
-          # SMARTSDK awaited variants — semgrep treats `await expr` as a
-          # distinct AST node, so the unawaited patterns above don't match
-          # `await runner.run(agent, prompt)`. Diagnosed against the JPMC
-          # moip-cost-anomaly-probe-lambda extract_anomaly.py — without
-          # these patterns the scan produced 0 findings on real prod code.
-          - pattern: await $RUNNER.run($AGENT, ...)
-          - pattern: await $RUNNER.run_stream($AGENT, ...)
-          - pattern: await $RUNNER.run_async($AGENT, ...)
           # SMARTSDK / RADSDK embedding invocations
           - pattern: $MODEL.embed(...)
           - pattern: $MODEL.aembed(...)

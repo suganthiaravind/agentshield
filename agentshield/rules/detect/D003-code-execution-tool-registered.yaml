@@ -7,15 +7,19 @@ rules:
       input or LLM output reaches the tool's input, this is arbitrary code execution
       on the host. OWASP LLM05/LLM06, OWASP Agentic T11.
     pattern-either:
+      # Instantiation of dangerous tool classes — the real security concern.
+      # The bare `from … import ShellTool` / `import PythonREPLTool` patterns
+      # were REMOVED after Phase B triage surfaced 2 false positives on
+      # langchain's own re-export shim files (TYPE_CHECKING-block imports
+      # in deprecated-path forwarders that never instantiate the class).
+      # The import alone isn't the security concern — instantiation is. See
+      # PHASE_B_TRIAGE.md for the triage details.
       - pattern: PythonREPL(...)
       - pattern: PythonAstREPLTool(...)
       - pattern: PythonREPLTool(...)
       - pattern: ShellTool(...)
       - pattern: BashProcess(...)
       - pattern: SessionsPythonREPLTool(...)
-      - pattern: from langchain_experimental.tools import PythonREPLTool
-      - pattern: from langchain_community.tools import ShellTool
-      - pattern: from langchain.tools.python.tool import PythonREPLTool
       - pattern: |
           $T = Tool(
               ...,
@@ -54,7 +58,8 @@ rules:
         owasp_llm: ["LLM05", "LLM06"]
         owasp_agentic: ["T2", "T11"]
         nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
-        mitre_atlas: ["AML.T0050"]
+        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        cwe: ["CWE-78", "CWE-94"]
         agentshield_v1: []
       languages: [python]
       remediation: >-

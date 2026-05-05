@@ -40,7 +40,7 @@ rules:
         owasp_llm: ["LLM06", "LLM08"]
         owasp_agentic: ["T2"]
         nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
-        mitre_atlas: []
+        mitre_atlas: ["AML.T0053"]
         agentshield_v1: []
       languages: [python]
       remediation: >-

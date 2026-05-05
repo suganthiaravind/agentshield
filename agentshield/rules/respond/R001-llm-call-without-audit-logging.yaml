@@ -9,25 +9,28 @@ rules:
       analysis. AgentShield Framework v1 (AS-R-001).
     patterns:
       - pattern-either:
+          # Generic LLM/agent/chain verbs — these match SMARTSDK
+          # (runner.run/run_stream/run_async), LangChain (chain.invoke),
+          # LlamaIndex (qe.query), etc.
+          #
+          # Note on awaited calls: semgrep matches sub-expressions, so
+          # `$X.run(...)` ALSO matches `await $X.run(...)` — the inner
+          # call expression is reachable inside the await wrapper. Earlier
+          # versions added explicit `await $X.<verb>(...)` patterns; those
+          # were removed because they produced DUPLICATE findings (one for
+          # the inner match, one for the outer await match) at the same
+          # call site. The unawaited generics alone cover both sync and
+          # awaited code. Validated against the SMARTSDK Lambda
+          # regression testbed (testbed/smartsdk-lambda).
           - pattern: $X.invoke(...)
           - pattern: $X.ainvoke(...)
           - pattern: $X.run(...)
+          - pattern: $X.run_stream(...)
+          - pattern: $X.run_async(...)
           - pattern: $X.predict(...)
           - pattern: $X.generate(...)
           - pattern: $X.query(...)
           - pattern: $X.chat(...)
-          # SMARTSDK (wraps Google ADK)
-          - pattern: $RUNNER.run_stream($AGENT, ...)
-          - pattern: $RUNNER.run_async($AGENT, ...)
-          - pattern: $RUNNER.run($AGENT, ...)
-          - pattern: Console($RUNNER.run_stream($AGENT, ...))
-          - pattern: Console($RUNNER.run_async($AGENT, ...))
-          # SMARTSDK awaited variants — semgrep treats `await expr` as a
-          # distinct AST node. Without these, awaited runner calls (the
-          # standard SMARTSDK shape) silently don't match.
-          - pattern: await $RUNNER.run($AGENT, ...)
-          - pattern: await $RUNNER.run_stream($AGENT, ...)
-          - pattern: await $RUNNER.run_async($AGENT, ...)
           # SMARTSDK / RADSDK embedding invocations
           - pattern: $MODEL.embed(...)
           - pattern: $MODEL.aembed(...)
@@ -65,9 +68,9 @@ rules:
       severity_normalized: medium
       framework_mappings:
         owasp_llm: ["LLM10"]
-        owasp_agentic: []
+        owasp_agentic: ["T8"]
         nist_ai_rmf: ["MEASURE-2.7", "MANAGE-3.1"]
-        mitre_atlas: []
+        mitre_atlas: ["AML.T0024"]
         agentshield_v1: ["AS-R-001"]
       languages: [python]
       remediation: >-
