@@ -34,6 +34,7 @@ This document is the **single canonical source of truth for AgentShield's state*
 | [PHASE_D_TRIAGE.md](./PHASE_D_TRIAGE.md) | Detailed log of Phase D's polish pass (CWE / ATLAS / SpringApplication fix / synth-vuln-py / heatmap). |
 | [TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md) | Testbed methodology + heatmap of findings across 11 projects. |
 | [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule detects, language by language. |
+| [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for fixing each rule's finding (Python + Java). |
 | [VDI_TESTING.md](./VDI_TESTING.md) | Operational playbook for running AgentShield in a JPMC VDI. |
 
 **Anyone picking up the project should read this file first**, then dive into the linked specifics only when they need historical context.

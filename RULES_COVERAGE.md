@@ -1,7 +1,9 @@
 # Rules Coverage
 
 Status: 2026-05-04
-Companion to: [ARCHITECTURE.md](./ARCHITECTURE.md), [GLOSSARY.md](./GLOSSARY.md), [TIER_FLOWS.md](./TIER_FLOWS.md), [README.md](./README.md)
+Companion to: [ARCHITECTURE.md](./ARCHITECTURE.md), [GLOSSARY.md](./GLOSSARY.md), [TIER_FLOWS.md](./TIER_FLOWS.md), [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md), [README.md](./README.md)
+
+> **Need to fix a finding?** [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) shows worked BAD / GOOD code examples for every rule in this doc, in both Python and Java.
 
 This document lists every bundled AgentShield rule and the LLM frameworks, SDKs, and libraries it knows how to recognize. Use it to answer: *"if my repo uses framework X, will AgentShield catch the things it should?"*
 
