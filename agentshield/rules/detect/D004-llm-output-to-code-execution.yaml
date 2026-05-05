@@ -1,0 +1,98 @@
+rules:
+  - id: agentshield.detect.llm-output-to-code-execution
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Output from an LLM call flows into a dangerous code-execution sink
+      (eval / exec / os.system / subprocess with shell=True). LLM output is
+      attacker-controllable via prompt injection — feeding it to a code
+      executor is arbitrary code execution on the host. OWASP LLM05
+      Improper Output Handling, OWASP Agentic T11.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # Generic LLM/agent/chain verbs (LangChain, LlamaIndex, generic SDKs).
+              # The return value of the call is the tainted source. semgrep
+              # matches sub-expressions, so these also match awaited calls
+              # like `await chain.ainvoke(...)` via the inner expression —
+              # explicit `await $LLM.<verb>(...)` patterns were removed
+              # because they double-fired at the same call site.
+              - pattern: $LLM.invoke(...)
+              - pattern: $LLM.ainvoke(...)
+              - pattern: $LLM.run(...)
+              - pattern: $LLM.arun(...)
+              - pattern: $LLM.run_stream(...)
+              - pattern: $LLM.run_async(...)
+              - pattern: $LLM.predict(...)
+              - pattern: $LLM.apredict(...)
+              - pattern: $LLM.generate(...)
+              - pattern: $LLM.agenerate(...)
+              - pattern: $LLM.chat(...)
+              - pattern: $LLM.achat(...)
+              - pattern: $LLM.query(...)
+              - pattern: $LLM.aquery(...)
+              - pattern: $LLM.complete(...)
+              - pattern: $LLM.acomplete(...)
+              # OpenAI SDK call shapes
+              - pattern: $CLIENT.chat.completions.create(...)
+              - pattern: $CLIENT.completions.create(...)
+              - pattern: $CLIENT.responses.create(...)
+              # Anthropic SDK
+              - pattern: $CLIENT.messages.create(...)
+              # AWS Bedrock Runtime (boto3 direct)
+              - pattern: $CLIENT.invoke_model(...)
+              - pattern: $CLIENT.invoke_model_with_response_stream(...)
+              - pattern: $CLIENT.converse(...)
+              - pattern: $CLIENT.converse_stream(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # Direct evaluators — always dangerous on attacker input.
+              - pattern: eval($X)
+              - pattern: exec($X)
+              # Shell command execution.
+              - pattern: os.system($X)
+              # subprocess.* with shell=True is shell-interpreted, so a
+              # tainted string is command injection. The list form (without
+              # shell=True) is intentionally NOT a sink — argv is passed
+              # verbatim, no shell interpretation.
+              - pattern: subprocess.run($X, ..., shell=True, ...)
+              - pattern: subprocess.call($X, ..., shell=True, ...)
+              - pattern: subprocess.check_call($X, ..., shell=True, ...)
+              - pattern: subprocess.check_output($X, ..., shell=True, ...)
+              - pattern: subprocess.Popen($X, ..., shell=True, ...)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # shlex.split returns a token list, defeating shell injection
+              # when passed to subprocess without shell=True.
+              - pattern: shlex.split(...)
+              # shlex.quote escapes shell metacharacters.
+              - pattern: shlex.quote(...)
+              # ast.literal_eval only evaluates literals — no arbitrary code.
+              - pattern: ast.literal_eval(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-004
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM05", "LLM06"]
+        owasp_agentic: ["T2", "T11"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        cwe: ["CWE-94"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Never pass raw LLM output to eval / exec / os.system or
+        shell=True subprocess. If you must execute generated code, run it
+        in an isolated sandbox (Docker, Firecracker, gVisor,
+        SessionsPythonREPLTool, restricted-python) with no host access. For
+        shell commands, parse with shlex.split and pass argv to subprocess
+        without shell=True. For arithmetic / config evaluation, prefer
+        ast.literal_eval. For SQL, use parameterized queries — never
+        format LLM output into a query string.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm05-improper-output-handling/"
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"

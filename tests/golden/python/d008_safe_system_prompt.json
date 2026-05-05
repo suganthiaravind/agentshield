@@ -1,0 +1,4 @@
+{
+  "fixture": "python/d008_safe_system_prompt.py",
+  "expected_findings": []
+}

@@ -1,0 +1,33 @@
+{
+  "fixture": "python/d006_broad_tools.py",
+  "expected_findings": [
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 30
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 33
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 34
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 35
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 39
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 40
+    },
+    {
+      "rule_id": "broad-tool-permissions",
+      "line": 41
+    }
+  ]
+}

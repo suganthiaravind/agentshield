@@ -1,0 +1,29 @@
+{
+  "fixture": "python/r002_log_without_redaction.py",
+  "expected_findings": [
+    {
+      "rule_id": "llm-io-logged-without-redaction",
+      "line": 25
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 27
+    },
+    {
+      "rule_id": "llm-io-logged-without-redaction",
+      "line": 28
+    },
+    {
+      "rule_id": "llm-io-logged-without-redaction",
+      "line": 30
+    },
+    {
+      "rule_id": "llm-io-logged-without-redaction",
+      "line": 32
+    },
+    {
+      "rule_id": "llm-io-logged-without-redaction",
+      "line": 34
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "fixture": "python/d007_unpinned_model_load.py",
+  "expected_findings": [
+    {
+      "rule_id": "untrusted-model-loading",
+      "line": 16
+    },
+    {
+      "rule_id": "untrusted-model-loading",
+      "line": 17
+    },
+    {
+      "rule_id": "untrusted-model-loading",
+      "line": 20
+    },
+    {
+      "rule_id": "untrusted-model-loading",
+      "line": 23
+    },
+    {
+      "rule_id": "untrusted-model-loading",
+      "line": 24
+    }
+  ]
+}

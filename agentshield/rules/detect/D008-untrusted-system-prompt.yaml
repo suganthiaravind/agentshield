@@ -1,0 +1,91 @@
+rules:
+  - id: agentshield.detect.untrusted-system-prompt
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Content from a network read flows into an LLM system prompt
+      (Anthropic `system=`, OpenAI Responses `instructions=`, LangChain
+      `SystemMessage`, etc.). System prompts dictate the agent's role,
+      tools, and constraints — an attacker who controls the system
+      prompt source can inject hidden instructions that override the
+      developer's intent. OWASP LLM07 System Prompt Leakage / injection.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # requests / httpx network reads
+              - pattern: requests.get(...).text
+              - pattern: requests.get(...).json()
+              - pattern: requests.post(...).text
+              - pattern: requests.post(...).json()
+              - pattern: requests.request(...).text
+              - pattern: httpx.get(...).text
+              - pattern: httpx.get(...).json()
+              - pattern: httpx.post(...).text
+              # urllib raw reads
+              - pattern: urllib.request.urlopen(...).read()
+              - pattern: urllib.request.urlopen(...).read().decode(...)
+              # boto3 S3 / config-store reads (often used for prompt storage)
+              - pattern: $S3.get_object(...)["Body"].read()
+              - pattern: $S3.get_object(...)["Body"].read().decode(...)
+              # AWS Systems Manager parameter store (tempting prompt store
+              # but parameters can be modified by anyone with PutParameter)
+              - pattern: $SSM.get_parameter(...)["Parameter"]["Value"]
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # Anthropic SDK
+              - pattern: $CLIENT.messages.create(..., system=$X, ...)
+              # OpenAI Responses API
+              - pattern: $CLIENT.responses.create(..., instructions=$X, ...)
+              # LangChain SystemMessage construction
+              - pattern: SystemMessage($X)
+              - pattern: SystemMessage($X, ...)
+              - pattern: SystemMessage(content=$X)
+              - pattern: SystemMessage(content=$X, ...)
+              # langchain_core.messages namespace forms
+              - pattern: langchain_core.messages.SystemMessage($X, ...)
+              - pattern: langchain_core.messages.SystemMessage(content=$X, ...)
+              # ChatPromptTemplate.from_messages with explicit system tuple
+              - pattern: ChatPromptTemplate.from_messages([("system", $X), ...])
+              - pattern: ChatPromptTemplate.from_messages([..., ("system", $X), ...])
+              # Bedrock Converse API (system is a list of dicts)
+              - pattern: '$CLIENT.converse(..., system=[{"text": $X}], ...)'
+              - pattern: '$CLIENT.converse(..., system=[{"text": $X, ...}], ...)'
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # Strip-and-validate via a guardrails library before use
+              - pattern: nemoguardrails.LLMRails(...).generate(...)
+              - pattern: $G.guard(...)
+              - pattern: $G.scan(...)
+              - pattern: $G.is_safe(...)
+              # Cryptographic verification (signed-system-prompt pattern)
+              - pattern: $V.verify(...)
+              - pattern: hmac.compare_digest(...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-008
+      severity_normalized: critical
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM07"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0051"]
+        cwe: ["CWE-829"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Never load system prompts from untrusted network sources at runtime.
+        Options, ranked by safety: (1) bake system prompts into the deployed
+        artifact (read from a constant string, a packaged file, or a build-
+        time-resolved config). (2) If runtime loading is required, fetch
+        from a write-restricted source (signed S3 object, parameter store
+        with strict IAM, version-pinned config server) AND verify a
+        cryptographic signature before use. (3) Apply a guardrail
+        (NeMo Guardrails / Lakera / Rebuff) on the loaded prompt to detect
+        injected instructions. Treat any externally-loaded system prompt as
+        untrusted input — same bar as user input.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm07-system-prompt-leakage/"
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

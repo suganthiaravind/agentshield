@@ -1,0 +1,4 @@
+{
+  "fixture": "python/d007_pinned_model_load.py",
+  "expected_findings": []
+}

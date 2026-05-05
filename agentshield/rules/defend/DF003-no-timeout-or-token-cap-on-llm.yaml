@@ -1,0 +1,75 @@
+rules:
+  - id: agentshield.defend.no-timeout-or-token-cap-on-llm
+    languages: [python]
+    severity: WARNING
+    message: >-
+      LLM client / call constructed with an explicitly disabled timeout
+      (`timeout=None`) or output cap (`max_tokens=None` / `max_output_tokens=None`).
+      Without bounds, a single request can hang a worker indefinitely or
+      generate runaway output — a DoS / cost-blowup vector. OWASP LLM10
+      Unbounded Consumption, OWASP Agentic T4 Resource Overload.
+    pattern-either:
+      # Explicit timeout=None on direct SDK clients
+      - pattern: openai.OpenAI(..., timeout=None, ...)
+      - pattern: openai.AsyncOpenAI(..., timeout=None, ...)
+      - pattern: OpenAI(..., timeout=None, ...)
+      - pattern: AsyncOpenAI(..., timeout=None, ...)
+      - pattern: anthropic.Anthropic(..., timeout=None, ...)
+      - pattern: anthropic.AsyncAnthropic(..., timeout=None, ...)
+      - pattern: Anthropic(..., timeout=None, ...)
+      - pattern: AsyncAnthropic(..., timeout=None, ...)
+      - pattern: AzureOpenAI(..., timeout=None, ...)
+      - pattern: AsyncAzureOpenAI(..., timeout=None, ...)
+      - pattern: cohere.Client(..., timeout=None, ...)
+      - pattern: cohere.ClientV2(..., timeout=None, ...)
+      - pattern: MistralClient(..., timeout=None, ...)
+      - pattern: Mistral(..., timeout=None, ...)
+      - pattern: Groq(..., timeout=None, ...)
+      - pattern: AsyncGroq(..., timeout=None, ...)
+      - pattern: Together(..., timeout=None, ...)
+      # LangChain wrappers — explicit timeout=None
+      - pattern: ChatOpenAI(..., timeout=None, ...)
+      - pattern: ChatAnthropic(..., timeout=None, ...)
+      - pattern: ChatCohere(..., timeout=None, ...)
+      - pattern: ChatBedrock(..., timeout=None, ...)
+      - pattern: ChatVertexAI(..., timeout=None, ...)
+      - pattern: ChatGoogleGenerativeAI(..., timeout=None, ...)
+      # LangChain wrappers — explicit max_tokens=None (uncapped output)
+      - pattern: ChatOpenAI(..., max_tokens=None, ...)
+      - pattern: ChatAnthropic(..., max_tokens=None, ...)
+      - pattern: ChatCohere(..., max_tokens=None, ...)
+      - pattern: ChatBedrock(..., max_tokens=None, ...)
+      - pattern: ChatVertexAI(..., max_tokens=None, ...)
+      - pattern: ChatGoogleGenerativeAI(..., max_tokens=None, ...)
+      # Direct SDK calls — explicit max_tokens=None
+      - pattern: $CLIENT.chat.completions.create(..., max_tokens=None, ...)
+      - pattern: $CLIENT.completions.create(..., max_tokens=None, ...)
+      - pattern: $CLIENT.responses.create(..., max_output_tokens=None, ...)
+      - pattern: $CLIENT.messages.create(..., max_tokens=None, ...)
+      # httpx.Client(timeout=None) is the most common indirect way to
+      # disable timeout on an SDK that accepts an http_client= kwarg.
+      - pattern: httpx.Client(..., timeout=None, ...)
+      - pattern: httpx.AsyncClient(..., timeout=None, ...)
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-003
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM10"]
+        owasp_agentic: ["T4"]
+        nist_ai_rmf: ["MEASURE-2.6", "MANAGE-2.4"]
+        mitre_atlas: []
+        cwe: ["CWE-400"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Set explicit upper bounds on every LLM call. (1) `timeout=` should be a
+        finite number of seconds matched to your worker SLA — typically 30-60s
+        for interactive paths, longer for batch. (2) `max_tokens=` (or
+        `max_output_tokens=` for Google / OpenAI Responses API) should be set
+        to the smallest value that satisfies your prompt — never None or
+        unbounded. (3) Combine with retry budgets (`max_retries=2-3`) and
+        per-tenant rate limiting upstream of the call. For Bedrock direct
+        boto3, set `Config(read_timeout=N, retries={"max_attempts": 3})`.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"

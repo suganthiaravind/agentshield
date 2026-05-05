@@ -1,0 +1,60 @@
+rules:
+  - id: agentshield.detect.untrusted-model-loading
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Model loaded from HuggingFace Hub (or compatible) without a pinned
+      `revision=` argument. The default `main` branch can be force-pushed
+      by anyone with write access to the repo — including a compromised
+      account or a malicious maintainer. Without a revision pin, your
+      next download silently switches to whatever's on `main` at fetch
+      time. This is the supply-chain side of OWASP LLM04 (Data and Model
+      Poisoning) and OWASP LLM03 (Supply Chain).
+    pattern-either:
+      # transformers / diffusers / sentence-transformers — `from_pretrained`
+      # is the standard hub-loading entry point. The pattern-not requires
+      # an explicit `revision=` kwarg; without it, the load follows whatever
+      # tag/branch resolves to `main` at fetch time.
+      - patterns:
+          - pattern: $X.from_pretrained($MODEL, ...)
+          - pattern-not: $X.from_pretrained($MODEL, ..., revision=$REV, ...)
+      # Direct huggingface_hub downloads
+      - patterns:
+          - pattern: hf_hub_download(...)
+          - pattern-not: hf_hub_download(..., revision=$REV, ...)
+      - patterns:
+          - pattern: huggingface_hub.hf_hub_download(...)
+          - pattern-not: huggingface_hub.hf_hub_download(..., revision=$REV, ...)
+      - patterns:
+          - pattern: snapshot_download(...)
+          - pattern-not: snapshot_download(..., revision=$REV, ...)
+      - patterns:
+          - pattern: huggingface_hub.snapshot_download(...)
+          - pattern-not: huggingface_hub.snapshot_download(..., revision=$REV, ...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-007
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM03", "LLM04"]
+        owasp_agentic: ["T3"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.6", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0010", "AML.T0019"]
+        cwe: ["CWE-494", "CWE-829"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Pin every HuggingFace model load to a specific commit SHA via the
+        `revision=` argument: e.g. `AutoModel.from_pretrained("org/model",
+        revision="abc123def456")`. Use the full commit SHA from
+        https://huggingface.co/<org>/<model>/commits/main rather than a tag
+        name (tags can be re-pointed). For air-gapped or high-trust
+        environments, mirror the model to your private artifact store and
+        load from there. Never rely on `main` for production model loads.
+        For `hf_hub_download` / `snapshot_download`, also consider passing
+        an integrity-verified `cache_dir` and validating the downloaded
+        file against an expected hash before loading.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm04-data-and-model-poisoning/"
+        - "https://genai.owasp.org/llmrisk/llm03-supply-chain/"
+        - "https://huggingface.co/docs/huggingface_hub/guides/download#download-from-the-hub"

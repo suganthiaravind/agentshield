@@ -1,0 +1,4 @@
+{
+  "fixture": "python/d005_keys_from_env.py",
+  "expected_findings": []
+}

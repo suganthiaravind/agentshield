@@ -1,0 +1,57 @@
+rules:
+  - id: agentshield.detect.broad-tool-permissions
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Agent has access to a broad-permission tool — file mutation
+      (FileManagementToolkit / WriteFileTool / DeleteFileTool / MoveFileTool /
+      CopyFileTool) or unrestricted HTTP (Requests*Tool with
+      allow_dangerous_requests=True). The agent can mutate the host
+      filesystem or send arbitrary HTTP traffic with no per-call human
+      approval — classic privilege-compromise vector. OWASP LLM06 Excessive
+      Agency, OWASP Agentic T3 Privilege Compromise.
+    pattern-either:
+      # LangChain FileManagementToolkit — instantiated without a
+      # `selected_tools=` filter exposes the entire toolset (read, write,
+      # delete, copy, move, list) to the LLM.
+      - patterns:
+          - pattern: FileManagementToolkit(...)
+          - pattern-not: FileManagementToolkit(..., selected_tools=$T, ...)
+      # File-mutation tool classes registered directly.
+      - pattern: WriteFileTool(...)
+      - pattern: DeleteFileTool(...)
+      - pattern: MoveFileTool(...)
+      - pattern: CopyFileTool(...)
+      # HTTP tools explicitly opting into dangerous (state-changing) requests.
+      - pattern: RequestsGetTool(..., allow_dangerous_requests=True, ...)
+      - pattern: RequestsPostTool(..., allow_dangerous_requests=True, ...)
+      - pattern: RequestsPutTool(..., allow_dangerous_requests=True, ...)
+      - pattern: RequestsDeleteTool(..., allow_dangerous_requests=True, ...)
+      - pattern: RequestsPatchTool(..., allow_dangerous_requests=True, ...)
+    metadata:
+      category: detect
+      agentshield_id: AS-D-006
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM06"]
+        owasp_agentic: ["T2", "T3"]
+        nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0053"]
+        cwe: ["CWE-732"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Narrow the agent's tool registry. (1) `FileManagementToolkit`: pass
+        `selected_tools=["read_file", "list_directory"]` to expose only
+        read-only operations, and confine the toolkit to a `root_dir=`
+        sandbox. (2) Replace `WriteFileTool` / `DeleteFileTool` / `MoveFileTool`
+        with a custom tool that validates the target path against an
+        allowlist and adds a human-approval step before mutation. (3) For
+        HTTP, do not pass `allow_dangerous_requests=True` — instead build a
+        custom tool with a host allowlist (`allowed_hosts=`) and disable
+        state-changing verbs (POST/PUT/PATCH/DELETE) unless explicitly
+        required.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"
+        - "https://python.langchain.com/docs/integrations/tools/filesystem/"
+        - "https://python.langchain.com/docs/integrations/tools/requests/"

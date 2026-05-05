@@ -1,0 +1,29 @@
+{
+  "fixture": "python/df003_unbounded_llm.py",
+  "expected_findings": [
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 24
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 25
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 28
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 29
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 32
+    },
+    {
+      "rule_id": "no-timeout-or-token-cap-on-llm",
+      "line": 36
+    }
+  ]
+}

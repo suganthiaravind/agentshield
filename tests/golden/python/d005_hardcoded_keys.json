@@ -1,0 +1,29 @@
+{
+  "fixture": "python/d005_hardcoded_keys.py",
+  "expected_findings": [
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 19
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 20
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 21
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 22
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 28
+    },
+    {
+      "rule_id": "hardcoded-llm-credentials",
+      "line": 29
+    }
+  ]
+}

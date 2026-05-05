@@ -1,0 +1,144 @@
+rules:
+  - id: agentshield.respond.llm-io-logged-without-redaction
+    languages: [python]
+    severity: INFO
+    message: >-
+      REVIEW-PER-DEPLOYMENT — LLM input or output flows into a log statement
+      with no redactor / hasher / length-only projection between source and
+      sink. R001 encourages logging LLM calls for audit, but the most natural
+      implementation (`logger.info(prompt)` / `logger.info(completion)`) puts
+      raw user-supplied content into the log stream. Logs are a high-value
+      target and often replicated to less-protected destinations (SIEM, dev
+      consoles, support tools, CI artifacts). OWASP LLM02 Sensitive
+      Information Disclosure + LLM10 audit-logging side. Verify your log
+      destination's PII policy and the sensitivity of the LLM I/O before
+      treating this as actionable.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # User input that typically becomes the LLM prompt (logged
+              # directly OR after passing through the LLM and back).
+              - pattern: request.json[$KEY]
+              - pattern: request.json.get(...)
+              - pattern: request.form[$KEY]
+              - pattern: request.form.get(...)
+              - pattern: request.args.get(...)
+              - pattern: request.args[$KEY]
+              - pattern: request.values.get(...)
+              - pattern: request.data
+              - pattern: $REQ.json()
+              - pattern: $REQ.body
+              - pattern: await $REQ.json()
+              - pattern: await $REQ.body()
+              - pattern: input(...)
+              - pattern: sys.argv[$I]
+              - pattern: $EVENT[$KEY]
+              - pattern: $EVENT.get(...)
+              - pattern: $EVENT.get($KEY, ...)
+              # LLM call return values — generic verbs match SMARTSDK,
+              # LangChain, LlamaIndex, OpenAI/Anthropic/Bedrock-style clients.
+              - pattern: $LLM.invoke(...)
+              - pattern: $LLM.ainvoke(...)
+              - pattern: $LLM.run(...)
+              - pattern: $LLM.run_stream(...)
+              - pattern: $LLM.run_async(...)
+              - pattern: $LLM.predict(...)
+              - pattern: $LLM.generate(...)
+              - pattern: $LLM.chat(...)
+              - pattern: $LLM.query(...)
+              - pattern: $LLM.complete(...)
+              # OpenAI / Anthropic / Bedrock direct
+              - pattern: $CLIENT.chat.completions.create(...)
+              - pattern: $CLIENT.completions.create(...)
+              - pattern: $CLIENT.responses.create(...)
+              - pattern: $CLIENT.messages.create(...)
+              - pattern: $CLIENT.invoke_model(...)
+              - pattern: $CLIENT.converse(...)
+              - pattern: $CLIENT.converse_stream(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # stdlib / common loggers — info / debug / warning / error /
+              # critical / exception. Matches both module-level and
+              # logger-instance forms.
+              - pattern: logging.info(...)
+              - pattern: logging.debug(...)
+              - pattern: logging.warning(...)
+              - pattern: logging.warn(...)
+              - pattern: logging.error(...)
+              - pattern: logging.critical(...)
+              - pattern: logging.exception(...)
+              - pattern: $LOGGER.info(...)
+              - pattern: $LOGGER.debug(...)
+              - pattern: $LOGGER.warning(...)
+              - pattern: $LOGGER.warn(...)
+              - pattern: $LOGGER.error(...)
+              - pattern: $LOGGER.critical(...)
+              - pattern: $LOGGER.exception(...)
+              - pattern: $LOGGER.log($LEVEL, ...)
+              # ad-hoc print logging
+              - pattern: print(...)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # Microsoft Presidio
+              - pattern: $ANON.anonymize(...)
+              - pattern: presidio_anonymizer.AnonymizerEngine().anonymize(...)
+              # In-house redactors / scrubbers (heuristic — any method named
+              # redact / anonymize / mask / scrub / sanitize / sanitise / strip_pii)
+              - pattern: $X.redact(...)
+              - pattern: $X.anonymize(...)
+              - pattern: $X.mask(...)
+              - pattern: $X.scrub(...)
+              - pattern: $X.sanitize(...)
+              - pattern: $X.sanitise(...)
+              - pattern: $X.strip_pii(...)
+              - pattern: redact(...)
+              - pattern: anonymize(...)
+              - pattern: mask(...)
+              - pattern: scrub(...)
+              - pattern: sanitize(...)
+              - pattern: sanitise(...)
+              - pattern: strip_pii(...)
+              # One-way hashing — log the hash, not the value
+              - pattern: hashlib.sha256(...).hexdigest()
+              - pattern: hashlib.sha256(...).digest()
+              - pattern: hashlib.sha512(...).hexdigest()
+              - pattern: hashlib.blake2b(...).hexdigest()
+              - pattern: hashlib.blake2s(...).hexdigest()
+              - pattern: hashlib.md5(...).hexdigest()  # weak but redacts content
+              # Length-only projection — the int loses content
+              - pattern: len(...)
+              # Repr-style summaries that are explicitly scoped (rare)
+              - pattern: $X.summary()
+    metadata:
+      category: respond
+      agentshield_id: AS-R-002
+      severity_normalized: info
+      framework_mappings:
+        owasp_llm: ["LLM02", "LLM10"]
+        owasp_agentic: ["T8"]
+        nist_ai_rmf: ["MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: ["AML.T0024"]
+        cwe: ["CWE-532", "CWE-200"]
+        agentshield_v1: ["AS-R-002"]
+      languages: [python]
+      remediation: >-
+        REVIEW-PER-DEPLOYMENT. The right action depends on (a) the sensitivity
+        of the LLM I/O in your domain and (b) the access policy of your log
+        destination. Options, ranked by safety: (1) log a one-way hash of the
+        prompt / completion if you only need to correlate
+        (`hashlib.sha256(prompt.encode()).hexdigest()`) — searchable but
+        unreadable. (2) Run the value through Presidio or an in-house redactor
+        (`anonymizer.anonymize(text=prompt, ...)`) before logging. (3) Log only
+        a length-or-token-count projection (`len(prompt)`, token counts) —
+        zero content leak. (4) Log structured fields you control
+        (`{"role": "user", "msg_id": id, "model": ...}`) instead of raw
+        message content. (5) Treat dev / debug-level logging as a separate
+        decision from production logs — many teams only redact at production
+        log levels, accepting raw prompts in local dev.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm02-sensitive-information-disclosure/"
+        - "https://cwe.mitre.org/data/definitions/532.html"
+        - "https://microsoft.github.io/presidio/"

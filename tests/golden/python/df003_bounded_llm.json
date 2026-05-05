@@ -1,0 +1,4 @@
+{
+  "fixture": "python/df003_bounded_llm.py",
+  "expected_findings": []
+}

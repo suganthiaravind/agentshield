@@ -1,0 +1,33 @@
+{
+  "fixture": "python/df004_no_hitl.py",
+  "expected_findings": [
+    {
+      "rule_id": "destructive-tool-without-human-approval",
+      "line": 17
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 17
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval",
+      "line": 22
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 22
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval",
+      "line": 27
+    },
+    {
+      "rule_id": "destructive-tool-without-human-approval",
+      "line": 32
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 32
+    }
+  ]
+}

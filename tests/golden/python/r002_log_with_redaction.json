@@ -1,0 +1,21 @@
+{
+  "fixture": "python/r002_log_with_redaction.py",
+  "expected_findings": [
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 33
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 44
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 54
+    },
+    {
+      "rule_id": "unsanitized-user-input-to-llm",
+      "line": 62
+    }
+  ]
+}

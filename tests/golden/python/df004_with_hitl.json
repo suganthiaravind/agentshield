@@ -1,0 +1,21 @@
+{
+  "fixture": "python/df004_with_hitl.py",
+  "expected_findings": [
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 18
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 25
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 32
+    },
+    {
+      "rule_id": "tool-without-args-schema",
+      "line": 38
+    }
+  ]
+}

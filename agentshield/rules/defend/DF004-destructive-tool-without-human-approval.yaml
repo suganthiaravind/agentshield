@@ -1,0 +1,82 @@
+rules:
+  - id: agentshield.defend.destructive-tool-without-human-approval
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Function decorated with `@tool` is named with a destructive verb
+      (delete / remove / destroy / drop / send / transfer / charge / email /
+      publish / post / deploy / shutdown / kill / terminate / wipe / purge),
+      but the file contains no human-approval mechanism (LangChain
+      HumanApprovalCallbackHandler, LangGraph `interrupt_before=`, or an
+      `input(...)` confirmation prompt inside the tool). The agent can
+      invoke the tool autonomously to perform an irreversible action.
+      OWASP LLM06 Excessive Agency, OWASP Agentic T10 Overwhelming HITL.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @tool
+              def $F(...):
+                  ...
+          - pattern: |
+              @tool(...)
+              def $F(...):
+                  ...
+      - metavariable-regex:
+          metavariable: $F
+          regex: "^(delete|remove|destroy|drop|send|transfer|charge|email|notify|publish|deploy|shutdown|kill|terminate|wipe|purge|forget|revoke|cancel|refund)(_.*)?$"
+      # Suppressor: tool body explicitly prompts for human confirmation.
+      - pattern-not: |
+          @tool
+          def $F(...):
+              ...
+              input(...)
+              ...
+      - pattern-not: |
+          @tool(...)
+          def $F(...):
+              ...
+              input(...)
+              ...
+      # Suppressor: file imports a LangChain human-approval callback.
+      - pattern-not-inside: |
+          from langchain.callbacks.human import HumanApprovalCallbackHandler
+          ...
+      - pattern-not-inside: |
+          from langchain_community.callbacks.human import HumanApprovalCallbackHandler
+          ...
+      - pattern-not-inside: |
+          from langchain_core.callbacks import HumanApprovalCallbackHandler
+          ...
+      # Suppressor: file uses LangGraph framework-level approval gating
+      # (interrupt_before / interrupt_after on a node before the tool).
+      - pattern-not-inside: |
+          interrupt_before=$X
+          ...
+      - pattern-not-inside: |
+          interrupt_after=$X
+          ...
+    metadata:
+      category: defend
+      agentshield_id: AS-DF-004
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM06"]
+        owasp_agentic: ["T10"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
+        mitre_atlas: []
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Add a human-in-the-loop gate before any irreversible tool action.
+        Options: (1) LangChain — register `HumanApprovalCallbackHandler` in
+        the agent's `callbacks=` so each tool call requires confirmation.
+        (2) LangGraph — use `compile(interrupt_before=["my_tool"])` so the
+        graph pauses on the destructive node and waits for human resume.
+        (3) Inside the tool function itself, take a `dry_run` or `confirm_token`
+        argument that the caller must set explicitly. (4) For high-risk tools
+        (payments, mass-deletes, deploys), require multi-party approval —
+        e.g. a Slack thread acknowledgement before the action runs.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm06-excessive-agency/"
+        - "https://python.langchain.com/docs/how_to/tools_human/"
+        - "https://langchain-ai.github.io/langgraph/how-tos/human_in_the_loop/breakpoints/"

@@ -1,0 +1,4 @@
+{
+  "fixture": "python/d004_llm_output_sanitized.py",
+  "expected_findings": []
+}

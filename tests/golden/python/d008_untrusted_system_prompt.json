@@ -1,0 +1,21 @@
+{
+  "fixture": "python/d008_untrusted_system_prompt.py",
+  "expected_findings": [
+    {
+      "rule_id": "untrusted-system-prompt",
+      "line": 27
+    },
+    {
+      "rule_id": "untrusted-system-prompt",
+      "line": 36
+    },
+    {
+      "rule_id": "untrusted-system-prompt",
+      "line": 44
+    },
+    {
+      "rule_id": "untrusted-system-prompt",
+      "line": 48
+    }
+  ]
+}
