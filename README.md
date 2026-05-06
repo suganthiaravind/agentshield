@@ -1,118 +1,108 @@
 # AgentShield
 
-Pre-production security evaluator for AI agents. Static analysis only (Phase I); runtime red-teaming deferred to Phase II.
+Pre-production security evaluator for AI agents. Two-tier static analysis (semgrep) + LLM-as-scanner (Copilot).
 
-**Status:** A1 scaffolding (Phase I, v0.1.0). CLI runs and prints planned pipeline; tier execution lands in Tracks A2/A3/A4/B/C/D/E.
+**Status:** v2 architecture shipped (2026-05-06, branch `architecture-v2`). See [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) for the design and [ROADMAP.md §3.9](./ROADMAP.md#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner) for what landed in each phase.
 
-## What it does (when complete)
+## What it does
 
-- Scans Python and Java repos for AI-agent-specific security issues using semgrep rules organized as **Detect / Defend / Respond** controls.
-- Maps every finding to OWASP LLM Top 10, OWASP Agentic Top 10, NIST AI RMF, MITRE ATLAS, and the AgentShield Framework v1.
-- Recognizes JPMC's wrapper SDKs: **SMARTSDK** (wraps Google ADK) and **RAD SDK** (wraps LlamaIndex), in addition to LangChain, LangGraph, langchain4j, Spring AI, AWS Bedrock direct, and Azure OpenAI.
-- Emits findings as SARIF v2.1.0 (primary) plus JSON and Markdown.
-- Optional LLM-judge tier (boto3-Bedrock / SMARTSDK / Copilot) triages low-confidence fallback findings.
+- **Tier 1** — semgrep with a 6-family high-precision rule pack (D001-fw, D003, D004, D005, D008, DF003) covering hardcoded LLM credentials, code-execution tools, LLM-output-to-eval sinks, untrusted system prompts, unsanitised user input → LLM, and unbounded LLM call timeouts. Python + Java parity.
+- **Tier 2** — LLM-as-scanner via GitHub Copilot in your IDE. AgentShield emits a comprehensive 56-check skill file (OWASP LLM Top 10 v2 + OWASP Agentic AI Top 10 + MITRE ATLAS + 10 CWE first-class + 5 Phase E codebase-validated gaps) into `<repo>/.agentshield/`. Copilot reads it, walks every source file, writes findings to `tier2-findings.json`. No AWS dep.
+- **Unified report** — `agentshield merge` combines both tiers into Markdown / JSON / SARIF, with stale-detection via fingerprint hash and Tier 2's TP/CD/FP cross-check on Tier 1 findings.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and [ARCHITECTURE_RATIONALE.md](./ARCHITECTURE_RATIONALE.md) for why-this-not-that for each major decision.
+Recognises JPMC's wrapper SDKs (SMARTSDK wrapping Google ADK, RAD SDK wrapping LlamaIndex) plus LangChain, LangGraph, langchain4j, Spring AI, AWS Bedrock direct, Azure OpenAI Java SDK.
 
 ## Install
 
 ```bash
-# clone
 git clone git@github.com:suganthiaravind/agentshield.git
 cd agentshield
+git checkout architecture-v2          # until v2 merges to main
 
-# create a venv
-python3 -m venv .venv
+python3.11 -m venv .venv               # need Python 3.10+
 source .venv/bin/activate
 
-# install — three flavors
-pip install -e .                    # core only (no semgrep, no judge)
-pip install -e ".[semgrep]"         # + semgrep for Tier 1/2 scanning
-pip install -e ".[semgrep,judge]"   # + boto3 for Tier 3 judge backend
-pip install -e ".[all,dev]"         # everything + dev tools (pytest, ruff, mypy)
+pip install --upgrade pip
+pip install -e ".[semgrep,dev]"        # semgrep is mandatory; dev = pytest + ruff + mypy
 ```
 
-## Quickstart
+## Quickstart (5 minutes)
+
+See [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) for the focused cheat sheet. Full v2 flow:
 
 ```bash
-# show version
-agentshield --version
+# 1. Tier 1 scan + emit Tier 2 skill files
+agentshield scan /path/to/your-agent-repo \
+  --scan-all-files \
+  --exclude '**/src/test/**' \
+  --exclude '**/tests/**'
 
-# stub scan (A1: prints planned pipeline as TODOs)
-agentshield scan ./path/to/target/repo
+# 2. Tier 2 — open the repo in VS Code with Copilot Chat, paste the prompt
+#    the CLI just printed. Copilot writes .agentshield/tier2-findings.json.
 
-# scan with LLM judge backend selected
-agentshield scan ./path/to/target/repo --llm-backend boto3-bedrock
-
-# offline mode (Tiers 1+2 only, skip judge)
-agentshield scan ./path/to/target/repo --no-judge
-
-# enable discovery pass (Tier 4)
-agentshield scan ./path/to/target/repo --discovery
-
-# write reports
-agentshield scan ./path/to/target/repo \
-  --output-sarif report.sarif \
-  --output-json report.json \
-  --output-markdown report.md
+# 3. Unified Tier 1 + Tier 2 report
+agentshield merge /path/to/your-agent-repo --output-markdown report.md
 ```
 
-## VDI setup notes
+For the Copilot Tier 2 step in detail (exact prompt, sample output, trouble cases), see [TIER2_USAGE.md](./TIER2_USAGE.md).
 
-AgentShield's *scanner side* (this CLI) runs in your dev VDI. It can reach AWS Bedrock (default judge backend) via `boto3` if your VDI has IAM-role or STS credentials configured. It does not require outbound public internet.
+## CLI reference
 
-The *scanned side* (production target agents) typically runs in AWS — that constraint is independent. See [ARCHITECTURE_RATIONALE.md §11](./ARCHITECTURE_RATIONALE.md#11-why-scanner-vs-scanned-constraint-split).
+| Command | Purpose |
+|---|---|
+| `agentshield scan <path>` | Run Tier 1 (semgrep) and emit Tier 2 skill files into `<path>/.agentshield/` |
+| `agentshield merge <path>` | Combine `tier1-results.json` + `tier2-findings.json` into a unified report |
+| `agentshield --version` | Print version |
 
-```bash
-# verify AWS credentials reachable from your VDI
-aws sts get-caller-identity
+**`scan` flags:**
+- `--scan-all-files` — bypass semgrep's `.semgrepignore` (recommended for production scans)
+- `--exclude PATTERN` — drop files matching glob (repeatable). `'**/src/test/**'`, `'**/tests/**'`
+- `--stage-locally` — copy source to local temp before scan; workaround for Windows UNC / mapped network drives (`H:\fusion\…`)
+- `--no-emit` — Tier-1-only mode for diagnostics; skips skill-file emission
+- `--output-{sarif,json,markdown}` — Tier-1-only report (the unified report is `agentshield merge --output-*`)
+- `--debug` — verbose: rules path, files passed to semgrep, raw rule_ids of every finding
 
-# select a Bedrock model (record the inference-profile ARN)
-aws bedrock list-inference-profiles --region us-east-1
-```
-
-Set `bedrock_model_id` in your `agentshield.yaml` (or pass via CLI) once known.
-
-## Configuration
-
-`agentshield.yaml` (per-repo or per-org default; CLI flags override):
-
-```yaml
-llm_backend: boto3-bedrock     # boto3-bedrock | smartsdk | copilot | none
-bedrock_model_id: <arn>        # required when llm_backend = boto3-bedrock
-tiers:
-  framework_rules: true
-  fallback_rules: true
-  judge: true
-  discovery: false
-ignore:
-  - "**/test/**"
-  - "**/vendor/**"
-output:
-  sarif: report.sarif
-  json: report.json
-  markdown: report.md
-```
+**`merge` flags:**
+- `--output-{markdown,json,sarif}` — write unified report (Markdown is the primary deliverable)
+- `--print` — also print the Markdown report to stdout
 
 ## Project layout
 
 ```
 agentshield/
-├── rules/         # semgrep YAML rule packs (detect / defend / respond)
-├── frameworks/    # OWASP / NIST / MITRE / AgentShield-v1 mapping tables
-├── runner/        # Track A2: semgrep subprocess wrapper
-├── normalize/     # Track A3: SARIF → Finding schema
-├── judge/         # Track B: pluggable LLM-judge backends
-├── discovery/     # Track D: Tier 4 discovery pass
-├── report/        # Track A4: SARIF / JSON / Markdown writers
-└── cli.py         # entry point
+├── rules/                # 6 active semgrep rule families (Python + Java)
+├── _retired_v2/          # 8 archived rule families (moved to Tier 2 checklist in F.2)
+│   ├── README.md         #   why each was retired
+│   └── rules/            #   YAML kept readable for reference
+├── skills/               # bundled Tier 2 skill templates (the v2 product)
+│   ├── tier2_bootstrap.md.tmpl
+│   ├── tier2_checklist.md.tmpl       # 56 checks, 964 lines
+│   └── tier2_output_schema.md.tmpl
+├── emitter/              # F.4: copies skills into target, writes tier1-results.json
+├── merger/               # F.5: combines tier1 + tier2, validates schema, detects stale
+├── runner/               # semgrep subprocess wrapper
+├── normalize/            # SARIF → Finding schema
+├── report/               # SARIF / JSON / Markdown writers
+└── cli.py                # entry point
 ```
 
-See [ARCHITECTURE.md §5 Parallel development tracks](./ARCHITECTURE.md#5-parallel-development-tracks) for the dev plan and dependency edges.
+## Documentation map
+
+| Doc | When to read |
+|---|---|
+| [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | First time running v2 in a JPMC VDI — 5-minute cheat sheet |
+| [TIER2_USAGE.md](./TIER2_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations |
+| [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting per stage |
+| [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
+| [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
+| [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule (active or retired) detects, framework by framework |
+| [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for each finding |
+| [F8_VALIDATION.md](./F8_VALIDATION.md) | v1 → v2 precision delta projection on three real codebases |
+| [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs |
 
 ## Phase I scope
 
-Static analysis only. No runtime probing of live agents. Languages: Python and Java. See [ARCHITECTURE.md §10](./ARCHITECTURE.md#10-whats-not-in-scope-for-phase-i) for the explicit out-of-scope list.
+Static analysis + LLM-as-scanner. No runtime probing of live agents. Tier 1 languages: Python and Java. Tier 2 (Copilot): any language Copilot can read.
 
 ## License
 

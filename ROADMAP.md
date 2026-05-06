@@ -19,6 +19,7 @@ This document is the **single canonical source of truth for AgentShield's state*
   - [3.7 Post-Phase-D — roadmap consolidation + mock judge backend](#37-post-phase-d--roadmap-consolidation--mock-judge-backend)
   - [3.8 Phase E — judge-driven FP elimination + R002 retirement](#38-phase-e--judge-driven-fp-elimination--r002-retirement)
   - [3.9 Phase F — architecture v2 (2 tiers, Copilot-as-scanner)](#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner)
+    - F.1 design doc · F.2 rule archival · F.3 skill templates · F.4 emitter · F.5 merger · F.6 CLI rewire · F.7 docs refresh · F.8 v2 projection — see [F8_VALIDATION.md](./F8_VALIDATION.md)
 - [4. Strategic options — the big bets](#4-strategic-options--the-big-bets)
 - [5. Specific tracks from the original plan](#5-specific-tracks-from-the-original-plan)
 - [6. Quality improvements](#6-quality-improvements)
@@ -245,7 +246,17 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
 
-**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md).
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [F8_VALIDATION.md](./F8_VALIDATION.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
+
+**F.8 — projected v2 deltas on Phase E codebases.** Tier-1-only projection (the actual Tier 2 numbers need a VDI run with Copilot — captured as the §4 user-side validation step in [F8_VALIDATION.md](./F8_VALIDATION.md)):
+
+| Codebase | v1 findings | v1 FP rate | v2 Tier 1 projection | What Tier 2 should pick up |
+|---|---|---|---|---|
+| `moip-cost-anomaly-probe-lambda` (Python SMARTSDK) | 59 | 86% | 0 (all 59 fired from rules retired in F.2 / Phase E) | 2 TPs via TIER2-LLM10-03 (extract_anomaly + email_formatter) |
+| `moip-thematic` (Java Spring AI) | 31 | 94% | 0 (all 31 fired from retired rules; +17 test-file FPs eliminable via `--exclude`) | 2 TPs via TIER2-GAP-01 + TIER2-GAP-03 |
+| `JpmcTriage` (Java Spring AI, first run) | n/a | 62% | ~0 (every FP shape called out by judge maps to a retired rule) | 1 confirmed TP via TIER2-GAP-01 |
+
+The v2 hypothesis holds in projection: shrinking Tier 1 to 6 narrow rules eliminates ~95%+ of v1 FPs across all three codebases; the lost TPs map to specific Tier 2 check IDs designed for them. **Whether the actual Tier 2 numbers match the projection requires a real Copilot run in your VDI** — see [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
 
 ## 4. Strategic options — the big bets
 

@@ -3,6 +3,8 @@
 Status: 2026-05-06 (Phase F architecture v2)
 Use after any pull from `origin/main` (or `architecture-v2` until v2 merges) to validate AgentShield in your VDI before touching real target repos.
 
+> **Just want the 5-minute version?** See [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) for the minimum command sequence to scan a real repo end-to-end. This file is the comprehensive staged validation playbook with troubleshooting per stage.
+
 This playbook is staged so you can verify each layer independently — if Stage N fails, Stages 1..N-1 are still trustworthy.
 
 > **v2 architecture quick reference.** AgentShield runs in 2 tiers:
