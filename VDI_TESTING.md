@@ -305,6 +305,10 @@ The Markdown groups findings by Detect / Defend / Respond. SARIF can feed GitHub
 
 **Useful flags:**
 - `--scan-all-files` — bypasses semgrep's default `.semgrepignore` (which skips `tests/`, `examples/`, `vendor/`, `fixtures/`, etc.). Recommended for any production scan; without it, you may miss findings in subdirectories that follow common ignore patterns.
+- `--exclude PATTERN` — repeatable. Drop files matching a glob pattern. Most useful when combined with `--scan-all-files` to re-add targeted exclusions. Phase E.3 added this after the third VDI judge run showed 55% of findings on a Spring AI codebase were test-file FPs. Recommended patterns:
+  - Maven / Gradle: `--exclude '**/src/test/**'`
+  - Python: `--exclude '**/tests/**'`
+  - Both at once: `--exclude '**/src/test/**' --exclude '**/tests/**'`
 - `--stage-locally` — copies source files to a local temp tree before scanning, then rewrites SARIF paths back. Use this when scanning code from a Windows UNC path / mapped network drive (`H:\fusion\…`, `\\server\share\…`); semgrep silently fails on UNC paths without this flag.
 - `--no-judge` — skips Tier 3 (Bedrock judge). Use when you don't have AWS credentials configured or you want a faster Tier 1+2-only scan.
 
@@ -419,6 +423,7 @@ Don't try to debug deeply — surface the failure quickly so we can decide wheth
 | Testbed validation (10 OSS projects + 2 synthetic vuln apps) | ✅ shipped | See [TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md) |
 | Phase B triage (291 FPs eliminated, 0 TPs lost) | ✅ shipped | See [PHASE_B_TRIAGE.md](./PHASE_B_TRIAGE.md) |
 | `--stage-locally` flag for Windows UNC paths | ✅ shipped | Workaround for semgrep silently failing on `H:\fusion\…` style mapped drives |
+| `--exclude PATTERN` glob filter | ✅ shipped | Phase E.3. Drop files matching a glob (`**/src/test/**`, `**/tests/**`). Repeatable. Most useful with `--scan-all-files`. |
 | Audit log to `judge_audit.jsonl` | ⏳ planned | B5 |
 | SMARTSDK judge backend | ⏳ planned | B2 |
 | GitHub Copilot judge backend | ⏳ planned | B3 |

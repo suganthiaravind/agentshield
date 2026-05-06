@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import fnmatch
+import re
 from pathlib import Path
 from typing import Sequence
 
@@ -101,6 +103,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     scan.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Exclude files matching this glob pattern (repeatable). Common "
+            "patterns: '**/test/**' or '**/src/test/**' (Maven/Gradle), "
+            "'**/tests/**' (Python). Phase E.3 added this after the third VDI "
+            "judge run showed 55%% of findings on a Spring AI codebase were "
+            "test-file FPs when --scan-all-files was used. Without "
+            "--scan-all-files, semgrep's built-in .semgrepignore already "
+            "excludes test directories; --exclude is most useful in "
+            "--scan-all-files mode."
+        ),
+    )
+    scan.add_argument(
         "--debug",
         action="store_true",
         help=(
@@ -138,15 +156,78 @@ def _looks_like_network_path(path: Path) -> bool:
     return False
 
 
-def _enumerate_candidate_files(path: Path) -> list[Path]:
+def _glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """Translate a glob pattern with `**` support into a compiled regex.
+
+    Semantics match gitignore-style globs:
+      `**/` at the start matches zero or more leading directory components
+      (so `**/src/test/**` matches `src/test/...` even with no prefix).
+      `/**` at the end matches zero or more trailing components.
+      `**` elsewhere matches any sequence of characters.
+      `*` matches anything except `/`.
+      `?` matches a single non-`/` character.
+
+    We use sentinels so `fnmatch.translate` can't collapse `**` into `*`
+    or escape our directory separators.
+    """
+    leading = "\x00LEADING\x00"
+    trailing = "\x00TRAILING\x00"
+    star2 = "\x00STAR2\x00"
+    star1 = "\x00STAR1\x00"
+
+    p = pattern
+    if p.startswith("**/"):
+        p = leading + p[len("**/"):]
+    if p.endswith("/**"):
+        p = p[: -len("/**")] + trailing
+    p = p.replace("**", star2)
+    p = p.replace("*", star1)
+
+    regex = fnmatch.translate(p)
+    regex = regex.replace(re.escape(leading), "(?:.*/)?")
+    regex = regex.replace(re.escape(trailing), "(?:/.*)?")
+    regex = regex.replace(re.escape(star2), ".*")
+    regex = regex.replace(re.escape(star1), "[^/]*")
+    return re.compile(regex)
+
+
+def _matches_any_pattern(path: Path, root: Path, patterns: list[str]) -> bool:
+    """True if `path` (relative to `root`) matches any of the glob patterns.
+
+    Used by --exclude. Patterns are matched against the POSIX-style relative
+    path so '**/test/**' works the same on Windows and Unix. The basename
+    is also tried so a bare 'test_*.py' pattern matches files anywhere.
+    """
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        rel = path
+    rel_posix = rel.as_posix()
+    base = path.name
+    for pat in patterns:
+        rx = _glob_to_regex(pat)
+        if rx.match(rel_posix) or rx.match(base):
+            return True
+    return False
+
+
+def _enumerate_candidate_files(path: Path, exclude: list[str] | None = None) -> list[Path]:
     """Walk the target tree and return scannable .py / .java files.
 
     Skips common noise directories (__pycache__, .venv, .git, node_modules).
+    If `exclude` is provided, additionally drops files matching any of the
+    glob patterns (Phase E.3, for filtering out test directories under
+    --scan-all-files where semgrep's built-in .semgrepignore is bypassed).
     Returns the path itself wrapped in a list when given a single file.
     """
+    exclude = exclude or []
     if path.is_file():
-        return [path] if path.suffix in {".py", ".java"} else []
-    return sorted(
+        if path.suffix not in {".py", ".java"}:
+            return []
+        if exclude and _matches_any_pattern(path, path.parent, exclude):
+            return []
+        return [path]
+    files = (
         p
         for p in path.rglob("*")
         if p.is_file()
@@ -156,6 +237,9 @@ def _enumerate_candidate_files(path: Path) -> list[Path]:
         and ".git" not in p.parts
         and "node_modules" not in p.parts
     )
+    if exclude:
+        files = (p for p in files if not _matches_any_pattern(p, path, exclude))
+    return sorted(files)
 
 
 def _print_file_summary(files: list[Path], debug: bool) -> None:
@@ -180,7 +264,10 @@ def cmd_scan(args: argparse.Namespace) -> int:
     # Always enumerate candidate files for visibility — even when not using
     # --scan-all-files. Lets users immediately see "did we find any source
     # files at all?" which is the first thing to check on a 0-findings scan.
-    candidate_files = _enumerate_candidate_files(Path(args.path))
+    exclude_patterns = list(args.exclude or [])
+    candidate_files = _enumerate_candidate_files(Path(args.path), exclude=exclude_patterns)
+    if exclude_patterns:
+        print(f"[agentshield] --exclude patterns applied: {exclude_patterns}")
     _print_file_summary(candidate_files, args.debug)
     if not args.scan_all_files and candidate_files and Path(args.path).is_dir():
         # When semgrep walks a directory, it further filters via its built-in

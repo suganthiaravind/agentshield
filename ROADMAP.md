@@ -186,6 +186,18 @@ Second judge protocol on `moip-cost-anomaly-probe-lambda` (Python SMART SDK Lamb
 
 Validation: smartsdk-lambda testbed now produces 5 DF001 fires (all TPs — real "no guardrails" concerns) and 0 R001 fires (correctly silent — files have `logger = logging.getLogger(__name__)`). Cross-checks the judge's recommended behaviour. **Effective FP rate on the real Lambda would have dropped from 75% → 25% (2 TP / 0 FP for medium findings; only DF001 remains and both fires are TP).**
 
+#### Phase E.3 follow-on — third judge run + `--exclude` CLI flag + R002 TP-loss documentation
+
+Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI thematic-search agent, 2026-05-05). 31 findings on the pre-Phase-E rules: 2 TP / 3 CD / 26 FP (~6% precision). Phase E + E.2 fixes already applied to the rules eliminate roughly 14 of the 31 findings (R002 retirement + CompletableFuture + the dropped `$CHAIN.execute` catch-all that was matching `taskExecutor.execute`).
+
+**Two distinct new signals from this run:**
+
+1. **17 of 31 findings (55%) were `src/test/` test code** — All test-file fires are FPs by definition (test code intentionally exercises LLM classes without production guardrails; `ScrubberServiceTest.java` IS the test suite for the guardrail itself). The user invoked `--scan-all-files` which bypasses semgrep's built-in `.semgrepignore` (the default Maven/Gradle `src/test/**` exclusion). **Fix: added `--exclude PATTERN` repeatable CLI flag.** `agentshield scan ... --scan-all-files --exclude '**/src/test/**' --exclude '**/tests/**'` would have eliminated all 17 test-file FPs in one pass. Glob translator handles `**` semantics correctly (gitignore-style: `**/` at start matches zero-or-more leading components). 7 new pytest tests in `test_cli_exclude.py`; suite 89 → 96 passing.
+
+2. **R002 retirement lost 2 TPs on this codebase** — `SplunkSAMLController:40` (raw SAML assertion logged, CWE-532) and `TriageController:28` (raw user message logged before scrubbing). The first is generic CWE-532 (out of LLM-SAST scope — handled by other security tooling). The second is exactly the LLM02+LLM10 audit-without-redaction pattern R002 was designed for; this is a **real signal loss** from the Phase E retirement. R002's overall FP rate across three codebases (62% Java JpmcTriage / 100% Python SMART SDK Lambda / 22% Java thematic) still justifies retirement, but the gap is documented for the §4.4 audit candidates.
+
+**Net post-Phase-E.3 projection on the thematic codebase:** 31 raw findings → after R002 retirement (~9 gone), CompletableFuture/taskExecutor suppression (~3 gone), and `--exclude '**/src/test/**'` (17 gone) → roughly **2 findings** (both production DF001 fires that are CD because the custom advisor exists in another file). Practical precision after Phase E + E.2 + E.3 + appropriate `--exclude`: meaningfully usable on real Spring AI codebases.
+
 ## 4. Strategic options — the big bets
 
 The strategic question after Phase D is: **what's actually limiting users?** Without user data, the three options below are equal-weight bets. Pick based on the real bottleneck, not on speculation.
@@ -226,9 +238,14 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 **Hypothesis:** Phase E's R002 retirement is the first instance of "fewer high-precision rules over many noisy ones." Other rules in the pack may also be net-negative on real codebases — we won't know until we run more user-side validation.
 
 **Concrete approach:**
-- **Repeat the LLM-as-judge protocol** on 2-3 additional real production codebases (Python SMARTSDK / langchain / Spring AI / langchain4j). Phase E ran it once on a Spring AI app and surfaced 5 distinct FP shapes — more codebases will surface more.
+- **Repeat the LLM-as-judge protocol** on 2-3 additional real production codebases (Python SMARTSDK / langchain / Spring AI / langchain4j). Phase E + E.2 + E.3 have now run it three times — keep going; each round surfaces 2-5 new FP shapes plus surfaces real signal loss (e.g. R002 lost 2 TPs on the thematic codebase, see §3.8 Phase E.3).
 - **For each rule, score per-deployment:** does the rule produce ≥ 70% TP-rate on real code? If not, candidates: (a) refine pattern + add suppressors (preferred); (b) downgrade severity from medium → info; (c) retire entirely (R002 precedent).
 - **Likely audit candidates** based on synthetic-only validation today: D001-fb (fallback rule, intentionally low-confidence — should it gate behind judge tier mandatorily?); DF002 (`@Tool` arg schema — may FP on framework-internal tools); DF004 (destructive-verb naming — pure heuristic, no taint).
+
+**Specific narrow-rule candidates surfaced by Phase E.3:**
+- **R003 — "user input logged before sanitizer" (Java, narrow scope)** — Replace the retired R002's most valuable TP with a narrower rule: source = `@RequestBody` / `@RequestParam` / Spring web request inputs only; sink = SLF4J `log.*()` calls; suppressor = `scrubberService.scrubPii(...)` / `redact(...)` / similar in same flow before the log call. Catches `TriageController:28`-style "log raw user message before scrubbing" without re-firing on the SessionController UUID-logging FPs. Java first; Python equivalent if validated.
+- **Data-flow rule for SNS / email sinks** — LLM output flowing to `SnsClient.publish()`, JavaMail `send()`, AWS SES, etc., without a scrubber on the same flow. Surfaced as a "missed real issue" by the thematic-codebase judge — current rule pack doesn't cover sensitive-data egress sinks beyond logs.
+- **Scrubber-bypass detection** — Detect the anti-pattern of `if length > MAX: return original_input` in scrubber/sanitizer methods (silently passes oversized inputs through unchanged). Specific to in-house scrubber implementations; narrow but high-precision.
 
 **Effort:** M (per codebase: ~1 hour scan + ~2 hours judge protocol + ~2 hours rule fixes).
 **Impact:** Each round shrinks the trust gap between "what the rule pack says" and "what reviewers should act on." Compounding effect — every retired/refined rule reduces noise on every future scan.
