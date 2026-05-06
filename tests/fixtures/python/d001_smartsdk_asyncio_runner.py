@@ -8,17 +8,17 @@ inside `await ...` wrappers — this fixture pins that behaviour so any
 future regression where awaited SMARTSDK calls stop matching is caught
 in CI.
 
-Expected goldens (after the await-pattern fix):
+Expected goldens:
   - DF001 fires on the awaited runner.run line — file imports
     smart_sdk and has no guardrails library
-  - R001 fires on the same line — file imports stdlib `logging`
-    for error handling but has no structured LLM audit trail
-    (structlog / langsmith / opentelemetry / langchain.callbacks).
-    The R001 rule was tightened: plain `import logging` no longer
-    silences it
-  - D001 may also fire if user_prompt taints to the sink, but
-    cross-procedural taint isn't supported, so realistically only
-    DF001 + R001 fire here
+  - R001 stays silent — file has `logger = logging.getLogger(__name__)`
+    setup which Phase E.2 recognises as audit-logging intent. The
+    earlier R001 design required structured logging (structlog /
+    langsmith / opentelemetry / langchain.callbacks); a real-world
+    SMART SDK Lambda judge run showed that was over-strict, FP-ing on
+    every Lambda that uses stdlib logging for audit. Relaxed in Phase E.2.
+  - D001 does NOT fire because cross-procedural taint isn't tracked
+    (user_prompt is in a separate function from the runner.run call).
 """
 import asyncio
 import logging

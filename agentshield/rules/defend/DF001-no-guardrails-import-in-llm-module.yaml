@@ -41,6 +41,13 @@ rules:
       - pattern-not: threading.Thread(...).run(...)
       - pattern-not: subprocess.run(...)
       - pattern-not: re.compile(...).run(...)
+      # boto3 Lambda invocation — `$CLIENT.invoke(FunctionName=..., ...)` is
+      # the canonical boto3.client("lambda").invoke shape, NOT an LLM call.
+      # Phase E judge surfaced this on a SMART SDK Lambda doing async
+      # self-invocation. The required FunctionName= keyword is a strong
+      # disambiguator from the LLM SDK invoke() shape.
+      - pattern-not: $X.invoke(FunctionName=$FN, ...)
+      - pattern-not: boto3.client("lambda").invoke(...)
       - pattern-not-inside: |
           import nemoguardrails
           ...

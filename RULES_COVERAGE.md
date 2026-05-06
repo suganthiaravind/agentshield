@@ -81,7 +81,7 @@ Each row scopes to one language — semgrep filters rules by `languages:`, so a 
 | D007 | Python | framework | HuggingFace `from_pretrained(...)` / `hf_hub_download(...)` / `snapshot_download(...)` without `revision=` pin (transformers, diffusers, sentence-transformers, raw huggingface_hub) |
 | D008 | Python | framework | Network reads (`requests.get(...).text`, `httpx.get(...).text`, `urlopen(...).read()`, `S3.get_object(...)["Body"].read()`, `SSM.get_parameter(...)["Parameter"]["Value"]`) flowing into Anthropic `system=`, OpenAI Responses `instructions=`, LangChain `SystemMessage(...)`, ChatPromptTemplate `("system", $X)`, Bedrock Converse `system=[{"text": $X}]` |
 | D008 | Java | framework | RestTemplate / WebClient / OkHttp / S3 / SSM reads flowing into langchain4j `SystemMessage.from(...)`, Spring AI `SystemMessage(...)`, Bedrock `SystemContentBlock.builder().text(...).build()` |
-| DF001 | Python | framework | LangChain, LangChain async, LlamaIndex, OpenAI / Anthropic / Bedrock-style clients (generic verbs), SMARTSDK / Google ADK (sync + awaited), generic embeddings |
+| DF001 | Python | framework | LangChain, LangChain async, LlamaIndex, OpenAI / Anthropic / Bedrock-style clients (generic verbs), SMARTSDK / Google ADK (sync + awaited), generic embeddings; boto3 `client.invoke(FunctionName=...)` Lambda calls excluded (Phase E.2) |
 | DF001 | Java | framework | SMARTSDK Java, langchain4j, Spring AI, AWS Bedrock Runtime (Java SDK v2), Azure OpenAI Java SDK, Google ADK Java, embeddings |
 | DF002 | Python | framework | LangChain `Tool(...)` / `StructuredTool(...)` / `@tool` decorator without `args_schema=` Pydantic model |
 | DF002 | Java | framework | langchain4j / Spring AI `@Tool` methods with bare `String` parameters (no `@P` / `@ToolParam` annotation) |
@@ -89,7 +89,7 @@ Each row scopes to one language — semgrep filters rules by `languages:`, so a 
 | DF003 | Java | framework | langchain4j / Spring AI builders with `.timeout(null)` / `.maxTokens(null)` / `Duration.ZERO`; OkHttp transports with 0-second `connectTimeout` / `readTimeout` / `writeTimeout` / `callTimeout`; AWS Bedrock `apiCallTimeout(Duration.ZERO)` |
 | DF004 | Python | framework | LangChain `@tool` decorated functions named with destructive verbs (delete / send / charge / deploy / …) without HumanApprovalCallbackHandler / LangGraph `interrupt_before=` / inline `input(...)` confirmation |
 | DF004 | Java | framework | langchain4j / Spring AI `@Tool` methods named with destructive verbs without an injected `confirm()` / `requireApproval()` call |
-| R001 | Python | framework | Same coverage as DF001 (Python) |
+| R001 | Python | framework | Same coverage as DF001 (Python) — `logger = logging.getLogger(...)` recognised as audit-logging intent (Phase E.2); boto3 `client.invoke(FunctionName=...)` Lambda calls excluded |
 | R001 | Java | framework | Same coverage as DF001 (Java) — Lombok `@Slf4j` recognised as logger (Phase E) |
 
 ## 3. Detect rules
@@ -430,7 +430,7 @@ Source: [agentshield/rules/defend/DF001-no-guardrails-import-in-llm-module.yaml]
 - Presidio — `import presidio_analyzer`, `from presidio_analyzer import …`.
 - Llama Guard — `from llama_guard import …`.
 
-**False-positive filters (always suppressed):** `asyncio.run(...)`, `threading.Thread(...).run(...)`, `subprocess.run(...)`, `re.compile(...).run(...)`.
+**False-positive filters (always suppressed):** `asyncio.run(...)`, `threading.Thread(...).run(...)`, `subprocess.run(...)`, `re.compile(...).run(...)`. **Phase E.2 added** `$X.invoke(FunctionName=$FN, ...)` and `boto3.client("lambda").invoke(...)` — boto3 Lambda self-invocation is not an LLM call and was the largest single FP source on a real SMART SDK Lambda codebase.
 
 ### DF001 (Java) — LLM call with no guardrails import
 
@@ -559,8 +559,10 @@ Source: [agentshield/rules/respond/R001-llm-call-without-audit-logging.yaml](./a
 - LangSmith — `from langsmith import …`.
 - OpenTelemetry — `from opentelemetry import …`.
 - A `callbacks=` keyword on any call in scope — `callbacks=$CB`.
+- **stdlib logger setup (Phase E.2)** — `$LOGGER = logging.getLogger(...)` or `$LOGGER = getLogger(...)`. The standard Python idiom for an instance-level audit logger; counts as audit-logging intent.
+- **boto3 Lambda invocation excluded (Phase E.2)** — `$X.invoke(FunctionName=...)` and `boto3.client("lambda").invoke(...)` are not LLM calls and don't trigger this rule.
 
-**Important:** plain `import logging` and `from logging import …` deliberately do **not** suppress this rule. Most production code has stdlib logging for error handling but no structured LLM audit trail; suppressing on bare `logging` would silence the rule on essentially every real codebase.
+**Important:** plain `import logging` and `from logging import …` still deliberately do **not** suppress this rule on their own. The bar is *instance-level setup* (`logger = logging.getLogger(__name__)`) — the bare module import alone is too weak a signal because it's used everywhere for error handling.
 
 ### R001 (Java) — LLM call without audit logging
 

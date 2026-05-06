@@ -157,7 +157,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 - **ROADMAP.md** (this file) — consolidates the scattered "what's left" sections from PHASE_B / C / D into a single canonical pending-work list, plus this phase-by-phase shipped record.
 - **`MockJudgeBackend` + `--llm-backend mock` flag** ([agentshield/judge/mock_backend.py](./agentshield/judge/mock_backend.py)) — deterministic placeholder backend for VDI / dev smoke-testing the orchestrator pipeline without AWS. Returns a fixed `needs_review` verdict on every call with reasoning that explicitly says "no real LLM was called" so a leaked finding can never be mistaken for a real triage. **Stage 4.5** added to [VDI_TESTING.md](./VDI_TESTING.md) showing the full `agentshield scan ... --llm-backend mock` end-to-end test path. 6 new unit tests in [tests/test_judge_mock.py](./tests/test_judge_mock.py); pytest 86 → 92 passing.
 
-### 3.8 Phase E — judge-driven FP elimination + R002 retirement
+### 3.8 Phase E — judge-driven FP elimination + R002 retirement (Java + Python)
 
 First real-world validation: ran AgentShield against a production Spring AI codebase inside the JPMC VDI, then asked an LLM-as-judge to grade every finding against the source. Result: **62% false-positive rate on Java**, driven by patterns that synthetic fixtures never exercised.
 
@@ -174,6 +174,17 @@ First real-world validation: ran AgentShield against a production Spring AI code
 - **Coverage preservation verified** — synthetic-vuln-java-app fires identically before/after edits (45 findings across 9 files, no regressions).
 
 **Net:** 1 rule family removed (R002), 5 specific FP shapes eliminated, 0 TPs lost. Coverage is narrower but more trustworthy — the strategic basis for further rule-pack audit (see §4.4).
+
+#### Phase E.2 follow-on — Python rule fixes from second judge run
+
+Second judge protocol on `moip-cost-anomaly-probe-lambda` (Python SMART SDK Lambda, 2026-05-05). Effective post-Phase-E run was 8 medium findings: 2 TP / 6 FP (75% FP). Two FP shapes drove all 6:
+
+- **`$CLIENT.invoke(FunctionName=..., ...)` matched boto3 Lambda self-invocation** (4 FPs in `extract.py`, `handler2.py`). DF001 + R001 catch-all `$X.invoke(...)` was the same root cause as the Java `$AGENT.invoke` issue. Added `pattern-not: $X.invoke(FunctionName=$FN, ...)` and `pattern-not: boto3.client("lambda").invoke(...)` to both Python rules. The `FunctionName=` keyword is a strong disambiguator — LangChain's `chain.invoke(input)` uses a positional first arg.
+- **R001 didn't recognise `logger = logging.getLogger(__name__)` setup** (2 FPs on files that DO have audit logging). Original R001 design required *structured* logging (structlog / langsmith / opentelemetry / langchain.callbacks); judge surfaced that this is over-strict on real Lambda code. Relaxed: `$LOGGER = logging.getLogger(...)` and `$LOGGER = getLogger(...)` patterns now suppress R001. Plain `import logging` still does NOT suppress (too weak — used everywhere for error handling).
+- **Fixture `d001_smartsdk_asyncio_runner.py` docstring updated** — previously asserted "stdlib logging does NOT silence R001" as design intent; Phase E.2 reverses this. Goldens for `d001_smartsdk_runner.py` + `d001_smartsdk_asyncio_runner.py` updated to drop the now-suppressed R001 fire.
+- **New regression fixture `df001_lambda_self_invoke.py`** — pins the boto3 Lambda suppressor; expects zero findings.
+
+Validation: smartsdk-lambda testbed now produces 5 DF001 fires (all TPs — real "no guardrails" concerns) and 0 R001 fires (correctly silent — files have `logger = logging.getLogger(__name__)`). Cross-checks the judge's recommended behaviour. **Effective FP rate on the real Lambda would have dropped from 75% → 25% (2 TP / 0 FP for medium findings; only DF001 remains and both fires are TP).**
 
 ## 4. Strategic options — the big bets
 

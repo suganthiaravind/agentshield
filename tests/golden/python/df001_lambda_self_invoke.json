@@ -1,0 +1,4 @@
+{
+  "fixture": "python/df001_lambda_self_invoke.py",
+  "expected_findings": []
+}
