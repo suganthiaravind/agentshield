@@ -340,4 +340,4 @@ For more, see [`TIER2_USAGE.md` "Trouble cases"](./TIER2_USAGE.md#trouble-cases-
 
 See [`VDI_TESTING.md` "What's in this build" + "What's been retired in v2"](./VDI_TESTING.md#whats-in-this-build) for the up-to-date status tables. Short version: Tier 1 (6-family rule pack) + Tier 2 (Copilot LLM-as-scanner) + 3 unified-report formats are shipped; headless-CI Tier 2 backend, additional language Tier 1 rules (TS/Go/Rust), and Trivy supply-chain are roadmap items. The v1 LLM judge tier (`--llm-backend`, Bedrock backend) was deleted in F.6; the v1 Tier 4 discovery flag was deleted in F.6.
 
-For architectural context: [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`ARCHITECTURE_RATIONALE.md` (v1 archived)](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md).
+For architectural context: [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md).

@@ -1,7 +1,7 @@
 # Rules Coverage
 
 Status: 2026-05-06 (Phase F architecture v2 shipped)
-Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md), [TIER_FLOWS.md (v1 archived)](./docs/_v1_archive/TIER_FLOWS.md), [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [README.md](./README.md)
+Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md), [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [README.md](./README.md)
 
 > ## ⚠ v2 architecture note
 >
@@ -668,7 +668,7 @@ Rules that recognise each LLM SDK or framework. The "via" column notes whether c
 | `java.nio.file.Files` (used inside agent tools) | D006 | direct (`Files.delete` / `Files.deleteIfExists` / `Files.write` / `Files.move` inside `@Tool` methods) |
 | Spring `RestTemplate` (used inside agent tools) | D006 | direct (`RestTemplate.delete` / `RestTemplate.put` inside `@Tool` methods) |
 
-`fw` = framework rule (high confidence). `fb` = fallback rule (low confidence; routed to the LLM-judge tier per [TIER_FLOWS.md (v1 archived)](./docs/_v1_archive/TIER_FLOWS.md)).
+`fw` = framework rule (high confidence). `fb` = fallback rule (low confidence) — both v1 concepts. The v1 LLM-judge tier was retired in Phase F.6; v2 has only framework rules at Tier 1.
 
 ## 9. Known gaps
 

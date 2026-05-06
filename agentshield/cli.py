@@ -438,15 +438,23 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     _print_merge_summary(result)
 
+    # Force UTF-8 — the merger renders ⚠ / ✓ / ❌ / 🟡 banners that don't
+    # encode in Windows' default cp1252 (Phase F.10 fix from VDI run).
     written: list[str] = []
     if args.output_markdown:
-        Path(args.output_markdown).write_text(render_combined_markdown(result))
+        Path(args.output_markdown).write_text(
+            render_combined_markdown(result), encoding="utf-8"
+        )
         written.append(args.output_markdown)
     if args.output_json:
-        Path(args.output_json).write_text(render_combined_json(result))
+        Path(args.output_json).write_text(
+            render_combined_json(result), encoding="utf-8"
+        )
         written.append(args.output_json)
     if args.output_sarif:
-        Path(args.output_sarif).write_text(render_combined_sarif(result))
+        Path(args.output_sarif).write_text(
+            render_combined_sarif(result), encoding="utf-8"
+        )
         written.append(args.output_sarif)
     if written:
         print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")

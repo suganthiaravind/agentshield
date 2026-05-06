@@ -167,3 +167,72 @@ After capturing on all three codebases, F.8 closes with a final commit appending
 2. **The CD findings from v1 might convert to clean dismissals under v2.** The custom-advisor cross-method cases on `moip-thematic` were CDs because v1 couldn't reason about them; Tier 2 with full file context should produce clean "not a finding" outcomes.
 
 The projection above (0 Tier 1 findings + 2-3 actionable Tier 2 findings per codebase) is the realistic mid-range. Actual VDI runs will narrow the band.
+
+---
+
+## 6. Actual VDI results — `moip-cost-anomaly-probe-lambda`
+
+**Run date:** 2026-05-06. **Runner:** Suganthi Aravind in JPMC VDI. **Branch:** `architecture-v2`.
+
+### Headline numbers
+
+| Metric | Projected (§2.1) | Actual | Delta |
+|---|---|---|---|
+| Tier 1 (semgrep) findings | 0 | **0** | ✅ exact match |
+| Tier 2 (Copilot) net-new findings | 2 (TIER2-LLM10-03 only) | **10** | **+8 vs projection** (Tier 2 caught significantly more than the §2.1 floor) |
+| Tier 1 marked TP / CD / FP by Tier 2 | 0 / 0 / 0 (no Tier 1 to triage) | 0 / 0 / 0 | ✅ |
+| Net actionable | ~2 | **10** | Copilot expanded the surface |
+
+### Tier 2 findings by check ID (10 total)
+
+| # | Check ID | File:line | Severity | What Copilot caught |
+|---|---|---|---|---|
+| 1 | **TIER2-LLM10-03** | `extract_anomaly.py:228` | medium | LLM invocation via SMART SDK with no guardrail / advisor — the §2.1 projected TP, exact match |
+| 2 | **TIER2-LLM10-03** | `email_formatter.py:46` | medium | Same pattern in the second SMART SDK call site — the second §2.1 projected TP, exact match |
+| 3 | **TIER2-LLM02-04** | `email_formatter.py:126` | high | LLM output (Bedrock response formatted as email body) flows directly to `sns_client.publish` without any PII scrubbing — Phase E gap §5.1, projected new coverage, confirmed |
+| 4 | **TIER2-AGENTIC-T5-01** | `extract_anomaly.py:1035` | medium | 12-step LLM pipeline with 7+ LLM calls where each output feeds the next without intermediate typed-schema validation — pure Tier 2 territory (T5 Cascading Hallucinations, out of static-rule scope by design) |
+| 5 | **TIER2-GAP-04** | `extract_anomaly.py:224` | medium | No explicit timeout on SMART SDK Agent / LocalRunner — relies on default which may be unbounded. Phase E gap §5.4, projected new coverage, confirmed |
+| 6 | **TIER2-LLM10-02** | `extract.py:673` | medium | Lambda self-invocation logic uses `print()` throughout instead of structured logging (no structlog / OpenTelemetry / langsmith callbacks) |
+| 7 | **TIER2-CWE-200-01** | `handler2.py:174` | medium | Exception details (`str(e)`) returned in HTTP 500 response body — leaks internal info to callers |
+| 8 | **TIER2-LLM02-03** | `handler.py:89` | medium | Full Lambda event payload logged at INFO level — may contain query params / request bodies / caller-supplied data |
+| 9 | **TIER2-LLM02-03** | `extract.py:185` | medium | SSM parameter values fetched with `WithDecryption=True` printed to stdout — decrypted secrets reach CloudWatch Logs |
+| 10 | **TIER2-LLM02-03** | `extract.py:481` | low | AWS Account ID and caller ARN printed to stdout — internal infrastructure identifiers in production logs |
+
+### Coverage matrix achieved
+
+| Framework | Items touched (actual) |
+|---|---|
+| OWASP LLM Top 10 v2 | LLM01, LLM02, LLM05, LLM09, LLM10 (5 of 10) |
+| OWASP Agentic AI Top 10 | T4, T5, T6, T8 (4 of 11) |
+| MITRE ATLAS | AML.T0024 |
+| CWE first-class | CWE-200, CWE-400, CWE-532 |
+
+This is **broader than v1 ever achieved on this codebase** — v1 surfaced the LLM02 surface only (and noisily, via R002). v2 hit 5 LLM categories, 4 Agentic categories, plus generic CWE concerns the rule pack never expressed.
+
+### Validation: did the projection hold?
+
+**Tier 1 projection (0 findings):** ✅ exact match. No survived rule fires on this codebase, as predicted in §2.1.
+
+**Tier 2 projection (2 expected TPs via TIER2-LLM10-03 on `extract_anomaly.py` + `email_formatter.py`):** ✅ both surfaced exactly as predicted, at the exact file:line locations the Phase E.2 judge run had labeled as TPs.
+
+**Tier 2 over-delivered by 8 findings beyond the projection.** This matches the §5 "risks that could make the actual numbers BETTER than projected" prediction — Phase E's judge protocol used the v1 rule pack and added LLM judgment on top; it never ran a comprehensive 56-check independent scan. Tier 2's whole-repo walk catches:
+
+- The 3 Phase E "named gap" patterns the rule pack never had (SNS sink leak ✓, no LLM timeout ✓, multi-step pipeline cascading hallucination ✓ for the first time on a real codebase)
+- 4 generic CWE-tier issues the rule pack didn't target at all (Lambda print logging, exception leak in HTTP body, full event at INFO, SSM secrets in stdout, AWS internal IDs in stdout) — these are correct, actionable security findings that no v1 rule could have surfaced
+
+### Encoding fix surfaced during the run (Phase F.10)
+
+Copilot's edit-and-fix cycle uncovered a Windows-specific issue: `cp1252` couldn't encode the merger's banner glyphs (`⚠`, `✓`, `❌`, `🟡`) when `Path.write_text(...)` defaulted to system encoding. The user fix in their VDI session — adding `encoding="utf-8"` to the three `Path.write_text` calls in `cli.py`'s `cmd_merge` — has been backported to this branch in F.10. The existing report writer classes (`SarifWriter`, `JsonWriter`, `MarkdownWriter`) already used UTF-8 explicitly, so only the merge command's direct writes needed the fix.
+
+### What this validates
+
+1. **The v2 hypothesis holds.** Shrinking Tier 1 to 6 narrow rules eliminated 100% of v1's noise on this codebase (59 → 0 Tier 1 findings), and Tier 2 (Copilot) surfaces the lost TPs with the exact projected check IDs PLUS net-new findings the rule pack could never have caught.
+2. **The skill checklist is comprehensive enough to drive Copilot's behaviour predictably.** All 5 framework dimensions hit on the first run; check IDs match the bundled checklist's enumeration.
+3. **The merger's stale-detection contract works.** Fingerprint matched → merge proceeded; UTF-8 encoding bug surfaced cleanly via the Python traceback rather than a silent corruption.
+
+### What still needs validation
+
+1. **`moip-thematic` (Java Spring AI)** — projected §2.2 to surface 2 TPs via TIER2-GAP-01 + TIER2-GAP-03. Pending VDI run.
+2. **`JpmcTriage` (first Phase E codebase, Java Spring AI)** — projected §2.3 to surface 1 TP via TIER2-GAP-01. Pending VDI run.
+
+When those two runs come in, this section gets two more sub-sections; aggregate validation table at the top of §6 expands.

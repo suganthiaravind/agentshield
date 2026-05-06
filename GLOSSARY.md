@@ -1,7 +1,7 @@
 # Security Glossary
 
 Status: 2026-05-03
-Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [ARCHITECTURE_RATIONALE.md](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md), [README.md](./README.md)
+Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [README.md](./README.md)
 
 Definitions for the security terminology used across AgentShield's docs, rules, and reports. Read top-to-bottom on first encounter; afterwards use the table of contents to jump to a specific term.
 
@@ -51,7 +51,7 @@ Definitions for the security terminology used across AgentShield's docs, rules, 
 
 ## 1. The Detect / Defend / Respond taxonomy
 
-AgentShield's organizing spine — every finding belongs to exactly one of these three buckets. This taxonomy is locked in [PHASE_I_PLAN.md §3](./PHASE_I_PLAN.md) and rationalized in [ARCHITECTURE_RATIONALE.md §4](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md#4-why-detect--defend--respond-taxonomy-with-dual-mapping-to-security-frameworks).
+AgentShield's organizing spine — every finding belongs to exactly one of these three buckets. This taxonomy is locked in [PHASE_I_PLAN.md §3](./PHASE_I_PLAN.md) and the dual-mapping pattern is documented in [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md).
 
 ### Detect
 
@@ -169,7 +169,7 @@ Applied to AI agents:
 - Verify every memory read / write (don't trust your own state from the previous turn).
 - Validate every output before acting on it (don't let the LLM write to the database directly).
 
-**In AgentShield:** the [Zero-Trust Coverage Matrix in ARCHITECTURE.md §11](./docs/_v1_archive/ARCHITECTURE.md#11-zero-trust-coverage-matrix) maps each zero-trust principle to the static signature AgentShield can detect. Track E rules implement the gaps.
+**In AgentShield:** the v1 architecture doc had a Zero-Trust Coverage Matrix mapping each zero-trust principle to the static signature AgentShield can detect; in v2 these checks live in the Tier 2 skill checklist alongside the rest of OWASP Agentic Top 10.
 
 ### Guardrails
 
@@ -225,7 +225,7 @@ What to log per LLM call: the prompt that was sent (with retrieved documents), t
 
 ## 4. Static vs dynamic security analysis
 
-The Phase I / Phase II split, rationalized in [ARCHITECTURE_RATIONALE.md §12](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md#12-static-vs-dynamic-security-boundary).
+The Phase I / Phase II split is documented in [ROADMAP.md](./ROADMAP.md).
 
 ### Static analysis (SAST)
 
@@ -273,7 +273,7 @@ For AI agents, "pentest" usually means a one-time engagement combining static re
 
 ## 5. Security framework references
 
-Standards AgentShield maps every finding to. Each finding's `framework_mappings` block carries pointers into multiple of these — see [ARCHITECTURE_RATIONALE.md §4](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md#4-why-detect--defend--respond-taxonomy-with-dual-mapping-to-security-frameworks) for the dual-mapping pattern.
+Standards AgentShield maps every finding to. Each finding's `framework_mappings` block carries pointers into multiple of these.
 
 ### OWASP LLM Top 10
 
@@ -348,7 +348,7 @@ The two-tier scanning architecture — see [`ARCHITECTURE_V2.md`](./ARCHITECTURE
 
 ### Tier 1, 2, 3, 4 _[v1, retired]_
 
-The original four-tier model where Tier 3 was an in-process LLM judge triaging Tier 2 fallback findings, and Tier 4 was a planned discovery pass. Phase F.6 (2026-05-06) deleted the judge tier code and the discovery stub. The v1 design lives in [`docs/_v1_archive/ARCHITECTURE.md`](./docs/_v1_archive/ARCHITECTURE.md) for historical reference.
+The original four-tier model where Tier 3 was an in-process LLM judge triaging Tier 2 fallback findings, and Tier 4 was a planned discovery pass. Phase F.6 (2026-05-06) deleted the judge tier code and the discovery stub; v2 is a 2-tier model. Historical context is preserved in the project's git history.
 
 ### Framework rule vs fallback rule _[v1, retired]_
 
@@ -368,7 +368,7 @@ Reference: https://docs.oasis-open.org/sarif/sarif/v2.1.0/
 
 ### Finding / dual mapping
 
-A normalized AgentShield Finding (Pydantic model in [agentshield/normalize/schema.py](./agentshield/normalize/schema.py)) carries **two coexisting mappings** — see [ARCHITECTURE_RATIONALE.md §4](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md#4-why-detect--defend--respond-taxonomy-with-dual-mapping-to-security-frameworks).
+A normalized AgentShield Finding (Pydantic model in [agentshield/normalize/schema.py](./agentshield/normalize/schema.py)) carries **two coexisting mappings**.
 
 - **`category`** — exactly one of `detect`, `defend`, `respond`. AgentShield's own organizing spine.
 - **`framework_mappings`** — many, across multiple external standards (OWASP LLM, OWASP Agentic, NIST AI RMF, MITRE ATLAS, AgentShield Framework v1).
