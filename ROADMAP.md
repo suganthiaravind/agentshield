@@ -19,7 +19,7 @@ This document is the **single canonical source of truth for AgentShield's state*
   - [3.7 Post-Phase-D — roadmap consolidation + mock judge backend](#37-post-phase-d--roadmap-consolidation--mock-judge-backend)
   - [3.8 Phase E — judge-driven FP elimination + R002 retirement](#38-phase-e--judge-driven-fp-elimination--r002-retirement)
   - [3.9 Phase F — architecture v2 (2 tiers, Copilot-as-scanner)](#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner)
-    - F.1 design doc · F.2 rule archival · F.3 skill templates · F.4 emitter · F.5 merger · F.6 CLI rewire · F.7 docs refresh · F.8 v2 projection — see [F8_VALIDATION.md](./F8_VALIDATION.md)
+    - F.1 design doc · F.2 rule archival · F.3 skill templates · F.4 emitter · F.5 merger · F.6 CLI rewire · F.7 docs refresh · F.8 v2 validation
 - [4. Strategic options — the big bets](#4-strategic-options--the-big-bets)
 - [5. Specific tracks from the original plan](#5-specific-tracks-from-the-original-plan)
 - [6. Quality improvements](#6-quality-improvements)
@@ -37,7 +37,6 @@ This document is the **single canonical source of truth for AgentShield's state*
 | [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
 | [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule detects, language by language. |
 | [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for fixing each rule's finding (Python + Java). |
-| [F8_VALIDATION.md](./F8_VALIDATION.md) | v1 → v2 precision delta projection + actual VDI results. |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
 | [REQUIREMENTS.md](./REQUIREMENTS.md) | What you need installed + how to run AgentShield in a VDI. |
 
@@ -227,7 +226,8 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 | F.5 | Merger — combines tier1 + tier2, validates schema, detects stale runs | `9fd2c49` |
 | F.6 | CLI rewire (drop 5 judge flags, add `merge` subcommand) + delete `agentshield/judge/` (-1242 LOC) | `14e4292` |
 | F.7 | Docs refresh (this commit + downstream) | (current) |
-| F.8 | Validate v2 by re-running on the three Phase E codebases | pending |
+| F.8 | Validate v2 — projection + actual VDI run on `moip-cost-anomaly-probe-lambda` | `2c81938` + `b2f5831` |
+| F.9–F.14 | Cleanup: v1 doc archive removed, code-side strays cleaned, phase docs deleted, F8_VALIDATION folded here, DDR added to combined report | `d2e4c95` → `47fef7c` |
 
 **Tier 1 surviving rules (6):** D001-fw, D003, D004, D005, D008, DF003. All narrow taint or narrow regex; no absence-detection or pure heuristics.
 
@@ -249,17 +249,35 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
 
-**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [F8_VALIDATION.md](./F8_VALIDATION.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
 
-**F.8 — projected v2 deltas on Phase E codebases.** Tier-1-only projection (the actual Tier 2 numbers need a VDI run with Copilot — captured as the §4 user-side validation step in [F8_VALIDATION.md](./F8_VALIDATION.md)):
+**F.8 — v2 validation: projection vs actual VDI runs.**
 
-| Codebase | v1 findings | v1 FP rate | v2 Tier 1 projection | What Tier 2 should pick up |
+**Projected** (deterministic from the Phase E judge data; arithmetic only):
+
+| Codebase | v1 findings | v1 FP rate | v2 Tier 1 projection | Tier 2 expected to surface |
 |---|---|---|---|---|
-| `moip-cost-anomaly-probe-lambda` (Python SMARTSDK) | 59 | 86% | 0 (all 59 fired from rules retired in F.2 / Phase E) | 2 TPs via TIER2-LLM10-03 (extract_anomaly + email_formatter) |
-| `moip-thematic` (Java Spring AI) | 31 | 94% | 0 (all 31 fired from retired rules; +17 test-file FPs eliminable via `--exclude`) | 2 TPs via TIER2-GAP-01 + TIER2-GAP-03 |
-| `JpmcTriage` (Java Spring AI, first run) | n/a | 62% | ~0 (every FP shape called out by judge maps to a retired rule) | 1 confirmed TP via TIER2-GAP-01 |
+| `moip-cost-anomaly-probe-lambda` (Python SMARTSDK) | 59 | 86% | 0 | 2 TPs via TIER2-LLM10-03 |
+| `moip-thematic` (Java Spring AI) | 31 | 94% | 0 (+17 test-file FPs via `--exclude`) | 2 TPs via TIER2-GAP-01 + GAP-03 |
+| `JpmcTriage` (Java Spring AI, first run) | n/a | 62% | ~0 | 1 TP via TIER2-GAP-01 |
 
-The v2 hypothesis holds in projection: shrinking Tier 1 to 6 narrow rules eliminates ~95%+ of v1 FPs across all three codebases; the lost TPs map to specific Tier 2 check IDs designed for them. **Whether the actual Tier 2 numbers match the projection requires a real Copilot run in your VDI** — see [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
+The v2 hypothesis holds in projection: shrinking Tier 1 to 6 narrow rules eliminates ~95%+ of v1 FPs across all three codebases; the lost TPs map to specific Tier 2 check IDs designed for them.
+
+**Actual VDI runs:**
+
+*`moip-cost-anomaly-probe-lambda` (Python SMARTSDK Lambda) — 2026-05-06, run by Suganthi Aravind in JPMC VDI:*
+
+- **Tier 1: 0 findings** (matches projection ✓)
+- **Tier 2: 10 net-new findings** (vs ≥2 projected — over-delivered)
+- Both projected TPs surfaced exactly: TIER2-LLM10-03 on `extract_anomaly.py:228` + `email_formatter.py:46`
+- 8 over-deliveries: 3 Phase E "named gap" patterns (SNS sink leak via TIER2-LLM02-04, no LLM timeout via TIER2-GAP-04, T5 cascading hallucination on the 12-step pipeline via TIER2-AGENTIC-T5-01) + 5 generic CWE issues (Lambda `print()` logging, exception leak in HTTP 500, full event payload at INFO, SSM-decrypted secrets to stdout, AWS account/ARN in stdout)
+- Coverage hit: OWASP LLM 5/10 (LLM01/02/05/09/10) + Agentic 4/11 (T4/5/6/8) + ATLAS T0024 + CWE-200/400/532 — broader than v1 ever achieved on this codebase
+- Encoding fix surfaced and applied (cli.py UTF-8 — F.10)
+
+*`moip-thematic` (Java Spring AI) — pending VDI run.*
+*`JpmcTriage` (Java Spring AI, first Phase E codebase) — pending VDI run.*
+
+**Whether the actual Tier 2 numbers match the projection on the remaining 2 codebases requires real Copilot runs in your VDI** — see [QUICKSTART_VDI.md](./QUICKSTART_VDI.md). Update this section with the actual numbers when those runs come back.
 
 ## 4. Strategic options — the big bets
 
