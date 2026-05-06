@@ -18,6 +18,7 @@ This document is the **single canonical source of truth for AgentShield's state*
   - [3.6 Phase D — polish pass](#36-phase-d--polish-pass)
   - [3.7 Post-Phase-D — roadmap consolidation + mock judge backend](#37-post-phase-d--roadmap-consolidation--mock-judge-backend)
   - [3.8 Phase E — judge-driven FP elimination + R002 retirement](#38-phase-e--judge-driven-fp-elimination--r002-retirement)
+  - [3.9 Phase F — architecture v2 (2 tiers, Copilot-as-scanner)](#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner)
 - [4. Strategic options — the big bets](#4-strategic-options--the-big-bets)
 - [5. Specific tracks from the original plan](#5-specific-tracks-from-the-original-plan)
 - [6. Quality improvements](#6-quality-improvements)
@@ -44,22 +45,21 @@ This document is the **single canonical source of truth for AgentShield's state*
 
 | Dimension | State |
 |---|---|
-| **Rule families** | 14 distinct (D001 fw + fb, D002, D003, D004, D005, D006, D007, D008, DF001, DF002, DF003, DF004, R001) — R002 retired in Phase E after real-world FP analysis |
-| **Rule files** | 28 (Python + Java parity for most rules; D007 Python-only; D001 has framework + fallback variants) |
-| **Languages supported** | Python, Java |
-| **OWASP LLM Top 10 coverage** | **9 / 10** (LLM09 Misinformation out of SAST scope) |
-| **OWASP Agentic AI Top 10 coverage** | **8 / 11** (T5 / T7 / T9 out of SAST scope: cascading hallucinations, misaligned behaviours, identity spoofing) |
-| **MITRE ATLAS techniques mapped** | 6 (T0010, T0011, T0012, T0019, T0024, T0050, T0051, T0053) |
-| **CWE first-class mappings** | 8 distinct CWEs (78, 89, 94, 200, 400, 494, 532, 732, 798, 829) across 10 rules |
-| **NIST AI RMF subcategories** | 5 (MAP-2.3, MEASURE-2.6, MEASURE-2.7, MANAGE-2.4, MANAGE-3.1) |
-| **pytest tests** | 92 passing (rule golden + judge backend + mock judge + orchestrator + normalizer + writer) |
+| **Architecture** | **v2** (Phase F shipped 2026-05-06) — 2 tiers: Tier 1 semgrep + Tier 2 LLM-as-scanner via Copilot |
+| **Tier 1 rule families** | **6** narrow high-precision (D001-fw, D003, D004, D005, D008, DF003) — pruned from 14 in F.2 |
+| **Tier 2 checks** | **56** comprehensive (covers OWASP LLM v2 + Agentic AI Top 10 + ATLAS + CWE + Phase E gaps + retired-rule parity) — runs via Copilot using bundled skill files |
+| **Rule files in `agentshield/rules/`** | 12 (Python + Java parity for all 6 surviving families) |
+| **Archived rules in `agentshield/_retired_v2/`** | 15 (8 families retired into Tier 2 checklist) |
+| **Languages supported** | Tier 1: Python, Java. Tier 2: any language Copilot can read |
+| **OWASP LLM Top 10 coverage** | **10 / 10** (LLM09 Misinformation now covered by Tier 2 checklist as a reviewer-judgment item) |
+| **OWASP Agentic AI Top 10 coverage** | **11 / 11** (T5 / T7 / T9 added to Tier 2 checklist as reviewer-judgment items — out of static-rule scope but in scope for LLM-as-scanner) |
+| **MITRE ATLAS techniques mapped** | 6 (in Tier 2 checklist) |
+| **CWE first-class mappings** | 10 distinct CWEs (78, 89, 94, 200, 400, 494, 532, 732, 798, 829) — covered across Tier 1 + Tier 2 |
+| **pytest tests** | **123 passing** (rule golden + emitter + merger + skill-template invariants + normalizer + writers + CLI exclude) |
 | **Testbed projects** | 11 (10 OSS frameworks + 2 synthetic vuln apps) |
-| **Cumulative testbed findings** | ~3,131 (post-all-phases breadth scan) |
-| **False positives eliminated through triage** | **291** (Phase B + Phase D Spring fix) |
-| **True positives lost during fixes** | **0** |
-| **Tier 3 LLM judge** | boto3-Bedrock backend ✅ shipped; mock backend ✅ shipped (`--llm-backend mock` for AWS-free smoke testing — see [VDI_TESTING.md Stage 4.5](./VDI_TESTING.md#stage-45--mock-test-the-judge-tier-no-aws-required)); SMARTSDK + Copilot backends planned |
-| **Output formats** | SARIF v2.1.0, JSON, Markdown |
-| **CI integration** | None shipped yet (planned in §4.3 Adoption-layer polish) |
+| **Tier 2 LLM execution** | **Copilot** in user's IDE (default) via `.agentshield/tier2-bootstrap.md` skill file. No AWS dep. |
+| **Output formats** | SARIF v2.1.0, JSON, Markdown — both Tier-1-only (`agentshield scan --output-*`) and unified (`agentshield merge --output-*`) |
+| **CI integration** | Tier 1 only (Tier 2 needs an IDE with Copilot). Headless CI Tier 2 backend = future work. |
 | **Network-share scanning workaround** | `--stage-locally` flag for Windows UNC / mapped-drive paths |
 
 ## 3. What's shipped — phase-by-phase
@@ -198,6 +198,55 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Net post-Phase-E.3 projection on the thematic codebase:** 31 raw findings → after R002 retirement (~9 gone), CompletableFuture/taskExecutor suppression (~3 gone), and `--exclude '**/src/test/**'` (17 gone) → roughly **2 findings** (both production DF001 fires that are CD because the custom advisor exists in another file). Practical precision after Phase E + E.2 + E.3 + appropriate `--exclude`: meaningfully usable on real Spring AI codebases.
 
+### 3.9 Phase F — architecture v2 (2 tiers, Copilot-as-scanner)
+
+**Shipped:** 2026-05-06. Branch: `architecture-v2` (commits `527d89b` → `14e4292`). The architectural reset documented in [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md).
+
+**The diagnosis** (from three Phase E judge runs):
+- Rule-only architecture had a precision ceiling — 4 rule families (R001, DF001, DF002, DF004) were absence-detection or pure heuristics, FP-prone on real codebases regardless of further tightening.
+- The Tier 3 LLM-as-triage model was in the wrong slot. It triaged cherry-picked low-confidence findings from the rule pack but couldn't catch what rules missed (SNS data leak, scrubber bypass, no LLM timeout) and couldn't downgrade FPs from framework rules.
+- The LLM was actually most useful when it scanned the **whole repo against a comprehensive checklist** — which is what the manual judge runs were already doing.
+
+**The pivot:** flip the orchestrator's role.
+- **Tier 1** stays semgrep with a pruned high-precision rule pack.
+- **Tier 2** becomes whole-repo LLM-as-scanner, executed by **Copilot in the user's IDE** using bundled skill files. No AWS / Bedrock dep.
+- Both tiers mandatory; soft-warn if Tier 2 hasn't been run.
+
+**Phased rollout (8 commits on `architecture-v2`):**
+
+| Phase | What | Commit |
+|---|---|---|
+| F.1 | ARCHITECTURE_V2.md design doc + sign-off | `527d89b` |
+| F.2 | Rule archival — 14 → 6 families. 8 retired into `agentshield/_retired_v2/` | `8481bf0` |
+| F.3 | Bundled skill templates — 56 checks, 964 lines, 7 sections | `8aea906` |
+| F.4 | Emitter — copies templates + writes tier1-results.json with fingerprint hash | `bd290c4` |
+| F.5 | Merger — combines tier1 + tier2, validates schema, detects stale runs | `9fd2c49` |
+| F.6 | CLI rewire (drop 5 judge flags, add `merge` subcommand) + delete `agentshield/judge/` (-1242 LOC) | `14e4292` |
+| F.7 | Docs refresh (this commit + downstream) | (current) |
+| F.8 | Validate v2 by re-running on the three Phase E codebases | pending |
+
+**Tier 1 surviving rules (6):** D001-fw, D003, D004, D005, D008, DF003. All narrow taint or narrow regex; no absence-detection or pure heuristics.
+
+**Tier 2 checklist coverage:** OWASP LLM Top 10 v2 (22 checks) + OWASP Agentic AI Top 10 (13 checks) + MITRE ATLAS (6) + CWE first-class (10) + Phase E gaps (5) + retired-rule parity references. **56 total checks.** Comprehensive by design — the user explicitly required "all key points from the security frameworks like OWASP Top 10 Agentic AI."
+
+**Stale-detection contract:** `compute_tier1_fingerprint` produces SHA-256 over sorted `(file, line, rule_id)` tuples. Copilot copies the fingerprint from `tier1-results.json` into `tier2-findings.json`. The merger compares — mismatch = stale Tier 2 = banner in the report.
+
+**What we lost:**
+- Tier 1 standalone CI gating reaches fewer findings (8 rule families gone). Mitigation: the warning banner makes Tier 2 absence visible; teams should treat unmerged Tier 1 as preliminary, not authoritative.
+- No automated Tier 2 in CI today (Copilot Chat needs an IDE). Mitigation: a future Bedrock-based Tier 2 backend is documented as F.x follow-on; the merger architecture is backend-agnostic — anything that produces a schema-valid `tier2-findings.json` works.
+
+**What we gained:**
+- LLM-as-scanner catches what rules miss (Phase E surfaced 5 such patterns; the Tier 2 checklist's §5 explicitly names them).
+- LLM cross-checks Tier 1 with full file/repo context — every Tier 1 finding can be marked TP/CD/FP by Tier 2 with reasoning. FP-marked findings are dropped from CI gating count.
+- Comprehensive framework coverage extends to LLM09, T5/T7/T9 — categories static rules couldn't reach (alignment / misinformation / identity threats).
+- Zero AWS dependency for the default execution path.
+
+**Net code delta across F.2–F.6:** −974 LOC. Smaller, sharper rule pack + the v2 product (the comprehensive Tier 2 checklist) replacing the Tier 3 triage stack.
+
+**Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
+
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md).
+
 ## 4. Strategic options — the big bets
 
 The strategic question after Phase D is: **what's actually limiting users?** Without user data, the three options below are equal-weight bets. Pick based on the real bottleneck, not on speculation.
@@ -254,29 +303,23 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 These come from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md)'s sequenced work plan and are referenced in the [VDI_TESTING.md](./VDI_TESTING.md) "What's NOT in this build" table.
 
-### 5.1 Track B2 — SMARTSDK judge backend
+> **Phase F supersedes the original Track B (judge backends) and Track D (Tier 4 discovery) entirely.** v2's Tier 2 architecture (LLM-as-scanner via Copilot) replaces the v1 "Tier 3 LLM judge" model. Tracks B2/B3/B5/D below are kept here as historical context but are **not on the roadmap as planned work** — the v2 architecture either obsoletes them or replaces them with different work (e.g. a future Bedrock-based Tier 2 backend would be a new module, not a revival of Track B2).
 
-**What:** A second `JudgeBackend` implementation that calls SMARTSDK rather than boto3-Bedrock for fallback-finding triage. Architectural pattern is already in place — see [agentshield/judge/](./agentshield/judge/) for the `JudgeBackend` ABC and the existing `Boto3BedrockBackend`.
-**Effort:** M.
-**Status:** Planned. CLI flag `--llm-backend smartsdk` already exists but currently logs "not yet implemented".
+### 5.1 Track B2 — SMARTSDK judge backend [OBSOLETE]
 
-### 5.2 Track B3 — GitHub Copilot judge backend
+**Superseded by:** v2 Tier 2 architecture. `agentshield/judge/` deleted in F.6. If a SMARTSDK-based Tier 2 backend is ever needed for headless CI, it would be a new module producing schema-valid `tier2-findings.json`, not a revival of the v1 `JudgeBackend` ABC.
 
-**What:** Third `JudgeBackend` that uses GitHub Copilot's IDE / API surface for triage. Useful when Bedrock isn't available but a Copilot license is.
-**Effort:** M.
-**Status:** Planned. CLI flag `--llm-backend copilot` already exists but currently logs "not yet implemented".
+### 5.2 Track B3 — GitHub Copilot judge backend [SHIPPED in F.6, different shape]
 
-### 5.3 Track B5 — Audit log to `judge_audit.jsonl`
+**What it became:** v2 Tier 2 uses Copilot via skill-file handoff (in-IDE), not via a programmatic backend. The user pastes the prompt from `.agentshield/tier2-bootstrap.md` into Copilot Chat; Copilot writes `tier2-findings.json`; `agentshield merge` consumes it. No API-level Copilot integration — that surface isn't openly available for arbitrary code-scanning prompts.
 
-**What:** Persist every judge call (request, response, model id, latency, verdict) to `judge_audit.jsonl` for compliance / debugging. Aligns with our own R001 principle (audit logging) + the redaction guidance in REMEDIATION_PATTERNS.md §R001 (the agent shouldn't tell developers to log without redacting and then itself log unsanitised).
-**Effort:** S.
-**Status:** Planned.
+### 5.3 Track B5 — Audit log to `judge_audit.jsonl` [OBSOLETE]
 
-### 5.4 Track D — Tier 4 discovery pass
+**Superseded by:** v2 has no in-process LLM call orchestrator to audit. Copilot's interactions live in the user's IDE history, outside AgentShield's control. If a future headless Tier 2 backend is built, it can persist its own audit log there.
 
-**What:** Detect LLM usage in repos that don't expect to have it (shadow-LLM adoption). CLI flag `--discovery` already exists but currently prints a TODO stub. Spec exists in [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) §4 ("Tier 4 — discovery channel").
-**Effort:** M-L.
-**Status:** Planned.
+### 5.4 Track D — Tier 4 discovery pass [OBSOLETE in v1 form]
+
+**Superseded by:** v2's Tier 2 inherently does shadow-LLM discovery. The Tier 2 checklist (Section §1: TIER2-LLM01-01) has Copilot scan every source file for LLM call shapes regardless of whether the repo "expects" to have LLM code. The dedicated `--discovery` flag is gone (deleted in F.6); the capability is folded into the comprehensive Tier 2 walk.
 
 ### 5.5 Track F — Trivy supply-chain scan
 

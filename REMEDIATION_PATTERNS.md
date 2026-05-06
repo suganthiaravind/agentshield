@@ -1,35 +1,43 @@
 # Remediation Patterns
 
-Status: 2026-05-05
-Companion to: [RULES_COVERAGE.md](./RULES_COVERAGE.md), [ROADMAP.md](./ROADMAP.md), [README.md](./README.md)
+Status: 2026-05-06 (Phase F architecture v2 shipped)
+Companion to: [RULES_COVERAGE.md](./RULES_COVERAGE.md), [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [README.md](./README.md)
 
-Worked code examples for fixing each AgentShield finding. For every rule that fires, this doc shows:
+> ## ⚠ v2 architecture note
+>
+> Phase F (2026-05-06) pruned the Tier 1 rule pack to **6 high-precision families**. The patterns from the 8 retired families now live in the **Tier 2 LLM-as-scanner checklist** ([`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl)).
+>
+> **The remediation guidance below is still correct for retired-rule patterns** — the anti-pattern hasn't changed, just the detection mechanism. If Tier 2 surfaces a `TIER2-LLM06-01` finding (destructive tool without approval), the GOOD pattern in the DF004 section here is still the fix.
+>
+> Each section below is tagged: 🟢 **[ACTIVE]** if a Tier 1 rule still fires on the BAD pattern, 🔴 **[RETIRED, Tier 2 covers it]** otherwise.
+
+Worked code examples for fixing each AgentShield finding. For every rule (active or retired), this doc shows:
 
 - **BAD** — the pattern AgentShield flags.
 - **GOOD** — one or more concrete fixes that suppress the finding (and address the underlying security concern).
 - Brief context on *why* the GOOD pattern is the fix.
 
-The BAD / GOOD snippets are extracted from the project's own test fixtures ([`tests/fixtures/python/`](./tests/fixtures/python/), [`tests/fixtures/java/`](./tests/fixtures/java/)) plus the synthetic regression apps ([`testbed/synthetic-vuln-python-app/`](./testbed/synthetic-vuln-python-app/), [`testbed/synthetic-vuln-java-app/`](./testbed/synthetic-vuln-java-app/)) — every pattern shown here is one AgentShield's test suite continuously verifies.
+The BAD / GOOD snippets are extracted from the project's own test fixtures plus the synthetic regression apps — every active-rule pattern shown here is one AgentShield's test suite continuously verifies.
 
 ## Contents
 
 - [How to use this document](#how-to-use-this-document)
 - [Detect rules](#detect-rules)
-  - [D001 — unsanitized user input → LLM](#d001--unsanitized-user-input--llm)
-  - [D002 — untrusted document loader → RAG](#d002--untrusted-document-loader--rag)
-  - [D003 — code-execution tool registered](#d003--code-execution-tool-registered)
-  - [D004 — LLM output → code execution](#d004--llm-output--code-execution)
-  - [D005 — hardcoded LLM credentials](#d005--hardcoded-llm-credentials)
-  - [D006 — broad tool permissions](#d006--broad-tool-permissions)
-  - [D007 — untrusted model loading (Python only)](#d007--untrusted-model-loading-python-only)
-  - [D008 — untrusted system prompt](#d008--untrusted-system-prompt)
+  - 🟢 [D001 — unsanitized user input → LLM](#d001--unsanitized-user-input--llm)
+  - 🔴 [D002 — untrusted document loader → RAG](#d002--untrusted-document-loader--rag) (Tier 2: TIER2-LLM01-02)
+  - 🟢 [D003 — code-execution tool registered](#d003--code-execution-tool-registered)
+  - 🟢 [D004 — LLM output → code execution](#d004--llm-output--code-execution)
+  - 🟢 [D005 — hardcoded LLM credentials](#d005--hardcoded-llm-credentials)
+  - 🔴 [D006 — broad tool permissions](#d006--broad-tool-permissions) (Tier 2: TIER2-LLM06-02)
+  - 🔴 [D007 — untrusted model loading](#d007--untrusted-model-loading-python-only) (Tier 2: TIER2-LLM03-01)
+  - 🟢 [D008 — untrusted system prompt](#d008--untrusted-system-prompt)
 - [Defend rules](#defend-rules)
-  - [DF001 — LLM call without guardrails](#df001--llm-call-without-guardrails)
-  - [DF002 — tool without args schema](#df002--tool-without-args-schema)
-  - [DF003 — no timeout / max_tokens cap](#df003--no-timeout--max_tokens-cap)
-  - [DF004 — destructive tool without human approval](#df004--destructive-tool-without-human-approval)
+  - 🔴 [DF001 — LLM call without guardrails](#df001--llm-call-without-guardrails) (Tier 2: TIER2-LLM10-03)
+  - 🔴 [DF002 — tool without args schema](#df002--tool-without-args-schema) (Tier 2: TIER2-LLM06-03)
+  - 🟢 [DF003 — no timeout / max_tokens cap](#df003--no-timeout--max_tokens-cap)
+  - 🔴 [DF004 — destructive tool without human approval](#df004--destructive-tool-without-human-approval) (Tier 2: TIER2-LLM06-01)
 - [Respond rules](#respond-rules)
-  - [R001 — LLM call without audit logging](#r001--llm-call-without-audit-logging)
+  - 🔴 [R001 — LLM call without audit logging](#r001--llm-call-without-audit-logging) (Tier 2: TIER2-LLM10-02)
 - [How to verify the fix](#how-to-verify-the-fix)
 
 ## How to use this document

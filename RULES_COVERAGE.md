@@ -1,51 +1,58 @@
 # Rules Coverage
 
-Status: 2026-05-04
-Companion to: [ARCHITECTURE.md](./ARCHITECTURE.md), [GLOSSARY.md](./GLOSSARY.md), [TIER_FLOWS.md](./TIER_FLOWS.md), [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md), [README.md](./README.md)
+Status: 2026-05-06 (Phase F architecture v2 shipped)
+Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md), [TIER_FLOWS.md](./TIER_FLOWS.md), [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [README.md](./README.md)
+
+> ## ⚠ v2 architecture note
+>
+> Phase F (2026-05-06) collapsed the rule pack from **14 → 6 high-precision families** and moved the rest into the **Tier 2 LLM-as-scanner checklist** at [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl).
+>
+> This doc still describes the patterns each rule looked for — useful as historical reference and for understanding the v2 Tier 2 checks (which inherit each retired rule's anti-pattern). Sections below are tagged:
+>
+> - 🟢 **[ACTIVE]** — Tier 1 semgrep rule, loaded by `agentshield scan`
+> - 🔴 **[RETIRED in F.2]** — moved to `agentshield/_retired_v2/` + folded into Tier 2 checklist (see [ARCHITECTURE_V2.md §3](./ARCHITECTURE_V2.md#3-tier-1--pruned-rule-pack) for retirement reasoning)
+>
+> **Want to know what Tier 2 covers?** See the bundled checklist for OWASP LLM v2 (10 items) + OWASP Agentic AI Top 10 (11 items) + MITRE ATLAS + CWE first-class — 56 checks total. The cross-reference table in §6 of this doc maps retired rules to their Tier 2 successor IDs.
 
 > **Need to fix a finding?** [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) shows worked BAD / GOOD code examples for every rule in this doc, in both Python and Java.
 
 This document lists every bundled AgentShield rule and the LLM frameworks, SDKs, and libraries it knows how to recognize. Use it to answer: *"if my repo uses framework X, will AgentShield catch the things it should?"*
 
-Source of truth is the YAML under [agentshield/rules/](./agentshield/rules/) — this doc summarizes the patterns; if a rule is updated and this doc isn't, the rule wins.
+Source of truth is the YAML under [agentshield/rules/](./agentshield/rules/) for active rules and [agentshield/_retired_v2/rules/](./agentshield/_retired_v2/rules/) for archived ones — this doc summarizes the patterns; if a rule is updated and this doc isn't, the rule wins.
 
 ## Contents
 
 - [1. How to read this doc](#1-how-to-read-this-doc)
 - [2. Coverage at a glance](#2-coverage-at-a-glance)
 - [3. Detect rules](#3-detect-rules)
-  - [D001 (Python, framework) — unsanitized user input → LLM](#d001-python-framework--unsanitized-user-input--llm)
-  - [D001 (Python, fallback) — LLM-shaped verb in an LLM-importing file](#d001-python-fallback--llm-shaped-verb-in-an-llm-importing-file)
-  - [D001 (Java, framework) — unsanitized user input → LLM](#d001-java-framework--unsanitized-user-input--llm)
-  - [D001 (Java, fallback) — LLM-shaped verb in an LLM-importing file](#d001-java-fallback--llm-shaped-verb-in-an-llm-importing-file)
-  - [D002 (Python) — untrusted document loader → RAG](#d002-python--untrusted-document-loader--rag)
-  - [D002 (Java) — untrusted document loader → RAG](#d002-java--untrusted-document-loader--rag)
-  - [D003 (Python) — code-execution tool registered](#d003-python--code-execution-tool-registered)
-  - [D003 (Java) — code-execution tool registered](#d003-java--code-execution-tool-registered)
-  - [D004 (Python) — LLM output → code execution](#d004-python--llm-output--code-execution)
-  - [D004 (Java) — LLM output → code execution / SQL](#d004-java--llm-output--code-execution--sql)
-  - [D005 (Python) — hardcoded LLM credentials](#d005-python--hardcoded-llm-credentials)
-  - [D005 (Java) — hardcoded LLM credentials](#d005-java--hardcoded-llm-credentials)
-  - [D006 (Python) — broad tool permissions](#d006-python--broad-tool-permissions)
-  - [D006 (Java) — broad tool permissions](#d006-java--broad-tool-permissions)
-  - [D007 (Python) — untrusted model loading](#d007-python--untrusted-model-loading)
-  - [D008 (Python) — untrusted system prompt](#d008-python--untrusted-system-prompt)
-  - [D008 (Java) — untrusted system prompt](#d008-java--untrusted-system-prompt)
+  - 🟢 [D001 (Python, framework) — unsanitized user input → LLM](#d001-python-framework--unsanitized-user-input--llm)
+  - 🔴 [D001 (Python, fallback)](#d001-python-fallback--llm-shaped-verb-in-an-llm-importing-file) — retired in F.2
+  - 🟢 [D001 (Java, framework) — unsanitized user input → LLM](#d001-java-framework--unsanitized-user-input--llm)
+  - 🔴 [D001 (Java, fallback)](#d001-java-fallback--llm-shaped-verb-in-an-llm-importing-file) — retired in F.2
+  - 🔴 [D002](#d002-python--untrusted-document-loader--rag) — retired in F.2 (Tier 2: TIER2-LLM01-02)
+  - 🟢 [D003 (Python) — code-execution tool registered](#d003-python--code-execution-tool-registered)
+  - 🟢 [D003 (Java) — code-execution tool registered](#d003-java--code-execution-tool-registered)
+  - 🟢 [D004 (Python) — LLM output → code execution](#d004-python--llm-output--code-execution)
+  - 🟢 [D004 (Java) — LLM output → code execution / SQL](#d004-java--llm-output--code-execution--sql)
+  - 🟢 [D005 (Python) — hardcoded LLM credentials](#d005-python--hardcoded-llm-credentials)
+  - 🟢 [D005 (Java) — hardcoded LLM credentials](#d005-java--hardcoded-llm-credentials)
+  - 🔴 [D006](#d006-python--broad-tool-permissions) — retired in F.2 (Tier 2: TIER2-LLM06-02)
+  - 🔴 [D007](#d007-python--untrusted-model-loading) — retired in F.2 (Tier 2: TIER2-LLM03-01)
+  - 🟢 [D008 (Python) — untrusted system prompt](#d008-python--untrusted-system-prompt)
+  - 🟢 [D008 (Java) — untrusted system prompt](#d008-java--untrusted-system-prompt)
 - [4. Defend rules](#4-defend-rules)
-  - [DF001 (Python) — LLM call with no guardrails import](#df001-python--llm-call-with-no-guardrails-import)
-  - [DF001 (Java) — LLM call with no guardrails import](#df001-java--llm-call-with-no-guardrails-import)
-  - [DF002 (Python) — tool without args schema](#df002-python--tool-without-args-schema)
-  - [DF002 (Java) — tool without args schema](#df002-java--tool-without-args-schema)
-  - [DF003 (Python) — no timeout / max_tokens cap](#df003-python--no-timeout--max_tokens-cap)
-  - [DF003 (Java) — no timeout / max_tokens cap](#df003-java--no-timeout--max_tokens-cap)
-  - [DF004 (Python) — destructive tool without human approval](#df004-python--destructive-tool-without-human-approval)
-  - [DF004 (Java) — destructive tool without human approval](#df004-java--destructive-tool-without-human-approval)
+  - 🔴 [DF001](#df001-python--llm-call-with-no-guardrails-import) — retired in F.2 (Tier 2: TIER2-LLM10-03)
+  - 🔴 [DF002](#df002-python--tool-without-args-schema) — retired in F.2 (Tier 2: TIER2-LLM06-03)
+  - 🟢 [DF003 (Python) — no timeout / max_tokens cap](#df003-python--no-timeout--max_tokens-cap)
+  - 🟢 [DF003 (Java) — no timeout / max_tokens cap](#df003-java--no-timeout--max_tokens-cap)
+  - 🔴 [DF004](#df004-python--destructive-tool-without-human-approval) — retired in F.2 (Tier 2: TIER2-LLM06-01)
 - [5. Respond rules](#5-respond-rules)
-  - [R001 (Python) — LLM call without audit logging](#r001-python--llm-call-without-audit-logging)
-  - [R001 (Java) — LLM call without audit logging](#r001-java--llm-call-without-audit-logging)
-- [6. OWASP Agentic AI Top 10 coverage](#6-owasp-agentic-ai-top-10-coverage)
-- [7. Library cross-reference](#7-library-cross-reference)
-- [8. Known gaps](#8-known-gaps)
+  - 🔴 [R001](#r001-python--llm-call-without-audit-logging) — retired in F.2 (Tier 2: TIER2-LLM10-02)
+  - 🔴 R002 — retired in Phase E (predates v2; superseded by Tier 2 TIER2-LLM02-03 + the Phase E gap checks)
+- [6. Retired-rule → Tier 2 cross-reference](#6-retired-rule--tier-2-cross-reference)
+- [7. OWASP Agentic AI Top 10 coverage](#7-owasp-agentic-ai-top-10-coverage)
+- [8. Library cross-reference](#8-library-cross-reference)
+- [9. Known gaps](#9-known-gaps)
 
 ## 1. How to read this doc
 
@@ -579,7 +586,25 @@ Source: [agentshield/rules/respond/R001-llm-call-without-audit-logging-java.yaml
 
 > **R002 removed in Phase E (2026-05-04).** The taint-mode rule for "LLM I/O logged without redaction" was retired after a real Spring AI codebase scan produced a 62% FP rate driven largely by R002 firing on non-LLM logging surfaces (session UUIDs, SAML auth params). The replacement guidance lives in [REMEDIATION_PATTERNS.md §R001](./REMEDIATION_PATTERNS.md#r001--llm-call-without-audit-logging) — when implementing R001's audit logging recommendation, use a redactor / hash / length-projection rather than logging raw I/O. Strategic shift: fewer high-precision rules over many noisy ones.
 
-## 6. OWASP Agentic AI Top 10 coverage
+## 6. Retired-rule → Tier 2 cross-reference
+
+Phase F.2 retired 8 rule families into the Tier 2 LLM-as-scanner checklist. Each entry below maps the retired rule to the Tier 2 check ID(s) that now cover its anti-pattern. The full Tier 2 check definitions live in [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl).
+
+| Retired rule | Tier 2 successor | Why retired (one-line) |
+|---|---|---|
+| **D001-fb** (Python + Java fallback) | TIER2-LLM01-01 | Designed for triage by Tier 3; with Tier 3 retired, fallback rules have no consumer |
+| **D002** (untrusted document loader) | TIER2-LLM01-02 | Narrow but 0 TPs across 5 phases of OSS testbed |
+| **D006** (broad tool permissions) | TIER2-LLM06-02 | Heuristic on tool-permission breadth; FP-prone on framework-internal tools |
+| **D007** (unpinned model loading) | TIER2-LLM03-01 | Version-string check; can't tell app's model from vendored test fixture |
+| **DF001** (no guardrails import) | TIER2-LLM10-03 | Absence-detection; Phase E needed 5 rounds of fixes and still missed cross-method advisor wiring |
+| **DF002** (`@Tool` args schema) | TIER2-LLM06-03 | Heuristic on `@Tool` + bare `String` parameters; FPs on framework tools |
+| **DF004** (destructive verb naming) | TIER2-LLM06-01 | Pure name-based heuristic; no taint, high FP |
+| **R001** (no audit logging) | TIER2-LLM10-02 | Absence-detection; Phase E.2 had to relax twice (Lombok @Slf4j, stdlib `logger = logging.getLogger(...)`); judge runs showed ~50% FP |
+| **R002** (PII-in-logs, retired earlier in Phase E) | TIER2-LLM02-03 + TIER2-GAP-01 + TIER2-GAP-03 | 62%/100%/22% FP rates across three real codebases |
+
+Tier 2 successor IDs are stable; if you want to pin a CI gate to "what Tier 1 used to catch," gate on those Tier 2 rule IDs after `agentshield merge`.
+
+## 7. OWASP Agentic AI Top 10 coverage
 
 | OWASP Agentic | Threat | Rules covering it (Python + Java) | Status |
 |---|---|---|---|
@@ -597,7 +622,7 @@ Source: [agentshield/rules/respond/R001-llm-call-without-audit-logging-java.yaml
 
 Each row covers both Python and Java where the rule has a Java port (every rule listed above does). T5 / T7 / T9 are runtime-alignment / identity-infrastructure concerns that AgentShield's static-analysis scope does not reach — they need DAST / red-teaming / IAM review respectively.
 
-## 7. Library cross-reference
+## 8. Library cross-reference
 
 Rules that recognise each LLM SDK or framework. The "via" column notes whether coverage is direct (the SDK has dedicated patterns) or indirect (caught by generic verb shapes / fallback verb regex).
 
@@ -645,7 +670,7 @@ Rules that recognise each LLM SDK or framework. The "via" column notes whether c
 
 `fw` = framework rule (high confidence). `fb` = fallback rule (low confidence; routed to the LLM-judge tier per [TIER_FLOWS.md](./TIER_FLOWS.md)).
 
-## 8. Known gaps
+## 9. Known gaps
 
 - **Python — no async embedding source patterns yet.** Embeddings are matched as sinks for D001 but `await $MODEL.embed(...)` is not separately covered by DF001 / R001 (would need `await $X.embed(...)` / `await $X.aembed(...)` patterns).
 - **Python fallback rule — no `await $X.$VERB(...)` form.** The fallback sink pattern is `$X.$VERB($Y, ...)` only; awaited LLM-shaped calls in fallback-only code paths can be missed.
