@@ -1,9 +1,12 @@
-"""Unit tests for the report writers (Track A4).
+"""Unit tests for the Tier-1-only report writers (SarifWriter, JsonWriter,
+MarkdownWriter).
 
 Covers SARIF v2.1.0 schema shape, JSON summary block, Markdown
-section structure. Uses real Findings produced by A2+A3 against
-the in-repo fixtures so the tests exercise the full upstream
-pipeline at the same time.
+section structure. Uses real Findings produced by the SemgrepRunner +
+Normalizer against the in-repo fixtures so the tests exercise the
+full upstream pipeline at the same time.
+
+For the unified Tier 1 + Tier 2 report writers, see test_merger.py.
 """
 
 from __future__ import annotations

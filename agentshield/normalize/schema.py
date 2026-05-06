@@ -1,9 +1,9 @@
 """Internal Finding schema. The single source of truth that downstream
-report writers (Track A4) and the merger (F.5) consume.
+report writers and the merger (F.5) consume.
 
 Designed to outlive any one input format — currently fed by SARIF
-from semgrep, but a future runtime tier (Phase II) can produce
-Finding objects too.
+from semgrep, but a future runtime-analysis component (e.g. dynamic
+red-teaming) could produce Finding objects too.
 
 Phase F.9 cleanup (2026-05-06):
 - `Tier` narrowed to "framework" only. v1's "fallback"/"judge"/"discovery"

@@ -277,9 +277,9 @@ class SemgrepRunner:
     def count_raw_findings(sarif: dict[str, Any]) -> int:
         """Convenience: total result count across all SARIF runs.
 
-        Pre-normalization view. Track A3 will partition findings by tier
-        and attach framework mappings; this is just a sanity counter for
-        the CLI smoke output.
+        Pre-normalization view. The Normalizer attaches framework mappings
+        and produces typed Finding objects; this is just a sanity counter
+        for the CLI smoke output.
         """
         runs = sarif.get("runs") or []
         return sum(len(run.get("results") or []) for run in runs)

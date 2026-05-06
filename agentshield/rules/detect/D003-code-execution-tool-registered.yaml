@@ -12,8 +12,8 @@ rules:
       # were REMOVED after Phase B triage surfaced 2 false positives on
       # langchain's own re-export shim files (TYPE_CHECKING-block imports
       # in deprecated-path forwarders that never instantiate the class).
-      # The import alone isn't the security concern — instantiation is. See
-      # PHASE_B_TRIAGE.md for the triage details.
+      # The import alone isn't the security concern — instantiation is.
+      # Phase B triage; details in git history.
       - pattern: PythonREPL(...)
       - pattern: PythonAstREPLTool(...)
       - pattern: PythonREPLTool(...)

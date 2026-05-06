@@ -61,7 +61,7 @@ rules:
               # executeLargeUpdate keeps the pattern unambiguously JDBC at the
               # cost of missing `statement.execute("DDL …")` — acceptable since
               # DDL is rarely the LLM-output-to-SQL-injection target this rule
-              # is meant to catch. Documented in PHASE_B_TRIAGE.md.
+              # is meant to catch. Phase B triage; details in git history.
               - pattern: $STMT.executeQuery($X)
               - pattern: $STMT.executeUpdate($X)
               - pattern: $STMT.executeLargeUpdate($X)

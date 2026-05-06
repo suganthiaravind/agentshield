@@ -1,4 +1,4 @@
-"""Tier 1 + Tier 2 semgrep subprocess runner. Track A2."""
+"""Tier 1 semgrep subprocess runner."""
 
 from agentshield.runner.semgrep_runner import SemgrepRunner, SemgrepRunnerError
 
