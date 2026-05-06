@@ -1,9 +1,4 @@
 {
   "fixture": "java/d004_llm_output_sanitized.java",
-  "expected_findings": [
-    {
-      "rule_id": "llm-io-logged-without-redaction-java",
-      "line": 48
-    }
-  ]
+  "expected_findings": []
 }
