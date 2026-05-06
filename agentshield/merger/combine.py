@@ -284,12 +284,54 @@ def _build_coverage(
 # ---------- renderers ----------
 
 _DDR_LABELS = {
-    "detect": ("🔴 Detect", "vulnerability surfaces", "Where the agent is exploitable"),
-    "defend": ("🟡 Defend", "missing controls", "What active defences are missing"),
-    "respond": ("🔵 Respond", "observability gaps", "Whether incidents can be detected and recovered"),
+    # (emoji_label, subtitle, section_desc, hero_question)
+    "detect": (
+        "🔴 Detect",
+        "vulnerability surfaces",
+        "Where the agent is exploitable",
+        "Where is the agent exploitable?",
+    ),
+    "defend": (
+        "🟡 Defend",
+        "missing controls",
+        "What active defences are missing",
+        "What defenses are missing?",
+    ),
+    "respond": (
+        "🔵 Respond",
+        "observability gaps",
+        "Whether incidents can be detected and recovered",
+        "If the agent misbehaves, will you see it — and stop it?",
+    ),
 }
 
 _DDR_ORDER = ("detect", "defend", "respond")
+
+# Inline SVG icons for the D/D/R hero cards (Lucide MIT-licensed paths,
+# embedded so the report renders fully offline — no external network or
+# font dependencies). 16×16 viewBox; CSS sizes them.
+_DDR_ICON_SVG = {
+    "detect": (
+        '<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round">'
+        '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>'
+    ),
+    "defend": (
+        '<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round">'
+        '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'
+        '</svg>'
+    ),
+    "respond": (
+        '<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round">'
+        '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>'
+        '</svg>'
+    ),
+}
 
 _VERDICT_BADGE = {
     "TP": "✅ TP",
@@ -403,7 +445,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     headers = []
     bodies = []
     for cat in _DDR_ORDER:
-        emoji_label, subtitle, _desc = _DDR_LABELS[cat]
+        emoji_label, subtitle, _desc, _question = _DDR_LABELS[cat]
         total = len(grouped[cat])
         sev_counts: dict[str, int] = {}
         for f in grouped[cat]:
@@ -468,7 +510,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 6. FINDINGS — D/D/R-LED. Each section is one D/D/R bucket; per-finding
     #    [Tier 1] / [Tier 2] badge replaces the old "Tier 1 vs Tier 2" split.
     for cat in _DDR_ORDER:
-        emoji_label, subtitle, desc = _DDR_LABELS[cat]
+        emoji_label, subtitle, desc, _question = _DDR_LABELS[cat]
         bucket = grouped[cat]
         lines.append(f"## {emoji_label} — {subtitle}  ({len(bucket)} finding{'s' if len(bucket) != 1 else ''})")
         lines.append("")
@@ -682,15 +724,35 @@ h3 { font-size: 15px; }
 .ddr-card.defend  { border-top-color: var(--defend); }
 .ddr-card.respond { border-top-color: var(--respond); }
 
+.ddr-card .ddr-label-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+}
+.ddr-card .ddr-icon {
+  width: 14px; height: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 .ddr-card .ddr-label {
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--text-muted); margin-bottom: 8px; font-weight: 600;
+  color: var(--text-muted); font-weight: 600;
 }
-.ddr-card.detect  .ddr-label { color: var(--detect); }
-.ddr-card.defend  .ddr-label { color: var(--defend); }
-.ddr-card.respond .ddr-label { color: var(--respond); }
-.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+.ddr-card.detect  .ddr-icon, .ddr-card.detect  .ddr-label { color: var(--detect); }
+.ddr-card.defend  .ddr-icon, .ddr-card.defend  .ddr-label { color: var(--defend); }
+.ddr-card.respond .ddr-icon, .ddr-card.respond .ddr-label { color: var(--respond); }
+.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; }
+.ddr-card .ddr-question {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+  border-left: 3px solid;
+  padding: 2px 0 2px 12px;
+  margin: 0 0 18px 12px;
+  line-height: 1.45;
+}
+.ddr-card.detect  .ddr-question { border-left-color: var(--detect); }
+.ddr-card.defend  .ddr-question { border-left-color: var(--defend); }
+.ddr-card.respond .ddr-question { border-left-color: var(--respond); }
 .ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 12px; }
 .ddr-card .sev-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -911,17 +973,27 @@ def render_combined_html(result: MergeResult) -> str:
     # 3. D/D/R HERO ROW
     parts.append('<div class="ddr-row">')
     for cat in _DDR_ORDER:
-        emoji_label, subtitle, _desc = _DDR_LABELS[cat]
+        emoji_label, subtitle, _desc, question = _DDR_LABELS[cat]
         bucket = grouped[cat]
         sev_counts: dict[str, int] = {}
         for f in bucket:
             s = f.get("severity", "info")
             sev_counts[s] = sev_counts.get(s, 0) + 1
+        category_label = emoji_label.split(" ", 1)[1]  # strip leading colored circle
         parts.append(f'<div class="ddr-card {cat}">')
-        parts.append(f'<div class="ddr-label">{_html_escape(emoji_label.split(" ", 1)[1])}</div>')
-        parts.append(f'<div class="ddr-title">{_html_escape(cat.capitalize())}</div>')
+        # Icon + uppercase category label row
+        parts.append('<div class="ddr-label-row">')
+        parts.append(_DDR_ICON_SVG[cat])
+        parts.append(f'<span class="ddr-label">{_html_escape(category_label)}</span>')
+        parts.append("</div>")
+        # Title + subtitle
+        parts.append(f'<div class="ddr-title">{_html_escape(category_label)}</div>')
         parts.append(f'<div class="ddr-subtitle">{_html_escape(subtitle)}</div>')
+        # Orienting question (block-quote with colored vertical bar)
+        parts.append(f'<div class="ddr-question">"{_html_escape(question)}"</div>')
+        # Big finding count
         parts.append(f'<div class="ddr-count">{len(bucket)}</div>')
+        # Severity pills
         parts.append('<div class="sev-pills">')
         if not bucket:
             parts.append('<span style="color:var(--text-muted);font-size:12px;">No findings</span>')
@@ -980,7 +1052,7 @@ def render_combined_html(result: MergeResult) -> str:
 
     # 7. Findings — D/D/R-led
     for cat in _DDR_ORDER:
-        emoji_label, subtitle, desc = _DDR_LABELS[cat]
+        emoji_label, subtitle, desc, _question = _DDR_LABELS[cat]
         bucket = grouped[cat]
         parts.append(f'<div class="findings-section {cat}">')
         parts.append('<div class="section-header">')

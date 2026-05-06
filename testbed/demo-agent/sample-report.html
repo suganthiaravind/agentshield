@@ -80,15 +80,35 @@ h3 { font-size: 15px; }
 .ddr-card.defend  { border-top-color: var(--defend); }
 .ddr-card.respond { border-top-color: var(--respond); }
 
+.ddr-card .ddr-label-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+}
+.ddr-card .ddr-icon {
+  width: 14px; height: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 .ddr-card .ddr-label {
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--text-muted); margin-bottom: 8px; font-weight: 600;
+  color: var(--text-muted); font-weight: 600;
 }
-.ddr-card.detect  .ddr-label { color: var(--detect); }
-.ddr-card.defend  .ddr-label { color: var(--defend); }
-.ddr-card.respond .ddr-label { color: var(--respond); }
-.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+.ddr-card.detect  .ddr-icon, .ddr-card.detect  .ddr-label { color: var(--detect); }
+.ddr-card.defend  .ddr-icon, .ddr-card.defend  .ddr-label { color: var(--defend); }
+.ddr-card.respond .ddr-icon, .ddr-card.respond .ddr-label { color: var(--respond); }
+.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; }
+.ddr-card .ddr-question {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+  border-left: 3px solid;
+  padding: 2px 0 2px 12px;
+  margin: 0 0 18px 12px;
+  line-height: 1.45;
+}
+.ddr-card.detect  .ddr-question { border-left-color: var(--detect); }
+.ddr-card.defend  .ddr-question { border-left-color: var(--defend); }
+.ddr-card.respond .ddr-question { border-left-color: var(--respond); }
 .ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 12px; }
 .ddr-card .sev-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -231,9 +251,13 @@ footer {
 </div>
 <div class="ddr-row">
 <div class="ddr-card detect">
-<div class="ddr-label">Detect</div>
+<div class="ddr-label-row">
+<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+<span class="ddr-label">Detect</span>
+</div>
 <div class="ddr-title">Detect</div>
 <div class="ddr-subtitle">vulnerability surfaces</div>
+<div class="ddr-question">"Where is the agent exploitable?"</div>
 <div class="ddr-count">6</div>
 <div class="sev-pills">
 <span class="pill critical">critical 2</span>
@@ -242,9 +266,13 @@ footer {
 </div>
 </div>
 <div class="ddr-card defend">
-<div class="ddr-label">Defend</div>
+<div class="ddr-label-row">
+<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+<span class="ddr-label">Defend</span>
+</div>
 <div class="ddr-title">Defend</div>
 <div class="ddr-subtitle">missing controls</div>
+<div class="ddr-question">"What defenses are missing?"</div>
 <div class="ddr-count">2</div>
 <div class="sev-pills">
 <span class="pill high">high 1</span>
@@ -252,9 +280,13 @@ footer {
 </div>
 </div>
 <div class="ddr-card respond">
-<div class="ddr-label">Respond</div>
+<div class="ddr-label-row">
+<svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+<span class="ddr-label">Respond</span>
+</div>
 <div class="ddr-title">Respond</div>
 <div class="ddr-subtitle">observability gaps</div>
+<div class="ddr-question">"If the agent misbehaves, will you see it — and stop it?"</div>
 <div class="ddr-count">2</div>
 <div class="sev-pills">
 <span class="pill high">high 1</span>
