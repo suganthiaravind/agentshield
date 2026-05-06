@@ -1,4 +1,4 @@
-# AgentShield combined report
+# AgentShield Detection Report
 
 _Semgrep Rules-engine Scan + Copilot AI Scan · scanned 2026-05-06T14:00:00Z_
 

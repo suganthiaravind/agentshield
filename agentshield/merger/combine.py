@@ -353,7 +353,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines: list[str] = []
 
     # 1. Title
-    lines.append("# AgentShield combined report")
+    lines.append("# AgentShield Detection Report")
     lines.append("")
     lines.append(f"_Semgrep Rules-engine Scan + Copilot AI Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot AI Scan not run)'}_")
     lines.append("")
@@ -871,13 +871,13 @@ def render_combined_html(result: MergeResult) -> str:
     parts: list[str] = []
     parts.append("<!doctype html>")
     parts.append('<html lang="en"><head><meta charset="utf-8">')
-    parts.append("<title>AgentShield combined report</title>")
+    parts.append("<title>AgentShield Detection Report</title>")
     parts.append(f"<style>{_HTML_CSS}</style>")
     parts.append("</head><body>")
 
     # 1. Header
     parts.append('<div class="report-header">')
-    parts.append("<h1>AgentShield combined report</h1>")
+    parts.append("<h1>AgentShield Detection Report</h1>")
     parts.append(
         '<div class="subtitle">Semgrep Rules-engine Scan + Copilot AI Scan'
         + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot AI Scan not run")
