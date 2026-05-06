@@ -479,9 +479,9 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append(f"| Semgrep Rules-engine Scan findings | {tier1_total} |")
     lines.append(f"| Copilot AI Scan net-new findings | {tier2_total} |")
     if result.tier2_present and not result.schema_errors:
-        lines.append(f"| Semgrep findings marked TP by Copilot | {tp_marked} |")
-        lines.append(f"| Semgrep findings marked CD by Copilot | {cd_marked} |")
-        lines.append(f"| Semgrep findings marked FP by Copilot | {fp_marked} |")
+        lines.append(f"| Semgrep findings marked True Positive by Copilot | {tp_marked} |")
+        lines.append(f"| Semgrep findings marked Context-Dependent by Copilot | {cd_marked} |")
+        lines.append(f"| Semgrep findings marked False Positive by Copilot | {fp_marked} |")
     lines.append(f"| **Net actionable** | **{result.actionable_finding_count}** |")
     lines.append("")
 
@@ -1013,7 +1013,7 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append('<div class="metrics-row">')
     parts.append(f'<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">{tier1_total}</div></div>')
     parts.append(f'<div class="metric"><div class="metric-label">Copilot AI Scan</div><div class="metric-value">{tier2_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Marked FP by Copilot</div><div class="metric-value">{fp_marked}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Marked False Positive by Copilot</div><div class="metric-value">{fp_marked}</div></div>')
     parts.append(f'<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">{result.actionable_finding_count}</div></div>')
     parts.append("</div>")
 

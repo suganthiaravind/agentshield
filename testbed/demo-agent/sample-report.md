@@ -18,9 +18,9 @@ AgentShield's organising spine. Every finding belongs to exactly one category.
 |---|---|
 | Semgrep Rules-engine Scan findings | 4 |
 | Copilot AI Scan net-new findings | 6 |
-| Semgrep findings marked TP by Copilot | 1 |
-| Semgrep findings marked CD by Copilot | 0 |
-| Semgrep findings marked FP by Copilot | 0 |
+| Semgrep findings marked True Positive by Copilot | 1 |
+| Semgrep findings marked Context-Dependent by Copilot | 0 |
+| Semgrep findings marked False Positive by Copilot | 0 |
 | **Net actionable** | **10** |
 
 ## JPMC SAIGE Agent Tier classification
