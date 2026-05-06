@@ -1,7 +1,7 @@
 # Roadmap
 
 Status: 2026-05-05
-Companion to: [README.md](./README.md), [PHASE_I_PLAN.md](./PHASE_I_PLAN.md), [PHASE_B_TRIAGE.md](./PHASE_B_TRIAGE.md), [PHASE_C_TRIAGE.md](./PHASE_C_TRIAGE.md), [PHASE_D_TRIAGE.md](./PHASE_D_TRIAGE.md), [VDI_TESTING.md](./VDI_TESTING.md)
+Companion to: [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [VDI_TESTING.md](./VDI_TESTING.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md)
 
 This document is the **single canonical source of truth for AgentShield's state** — both what's been delivered and what's still pending. The phase-triage docs (PHASE_B / C / D) are historical records of what each phase did; this file reads top-down so anyone picking up the project sees the current state, the trajectory, and the open questions in one place.
 
@@ -31,14 +31,17 @@ This document is the **single canonical source of truth for AgentShield's state*
 | Doc | Role |
 |---|---|
 | **ROADMAP.md** (this file) | Canonical state of project — what's done + what's pending. Maintained continuously. |
-| [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) | The original v0.1 / v0.2 plan from 2026-05-02. Strategic context for *why* the project exists. Historical. |
-| [PHASE_B_TRIAGE.md](./PHASE_B_TRIAGE.md) | Detailed log of Phase B's 8 triage targets — what was reviewed, classified, fixed. |
-| [PHASE_C_TRIAGE.md](./PHASE_C_TRIAGE.md) | Detailed log of Phase C's coverage gap work (D007 / D008 rules added). |
-| [PHASE_D_TRIAGE.md](./PHASE_D_TRIAGE.md) | Detailed log of Phase D's polish pass (CWE / ATLAS / SpringApplication fix / synth-vuln-py / heatmap). |
-| [TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md) | Testbed methodology + heatmap of findings across 11 projects. |
+| [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — system layout, why the architecture is what it is. |
+| [TIER2_USAGE.md](./TIER2_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
+| [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | 5-minute cheat sheet for running v2 in a JPMC VDI. |
+| [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
 | [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule detects, language by language. |
 | [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for fixing each rule's finding (Python + Java). |
-| [VDI_TESTING.md](./VDI_TESTING.md) | Operational playbook for running AgentShield in a JPMC VDI. |
+| [F8_VALIDATION.md](./F8_VALIDATION.md) | v1 → v2 precision delta projection + actual VDI results. |
+| [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
+| [REQUIREMENTS.md](./REQUIREMENTS.md) | What you need installed + how to run AgentShield in a VDI. |
+
+> Phase B/C/D triage logs and PHASE_I_PLAN.md / TESTBED_VALIDATION.md were deleted in F.12 — their content is summarised in §3 below; full detail is in git history.
 
 **Anyone picking up the project should read this file first**, then dive into the linked specifics only when they need historical context.
 
@@ -67,7 +70,7 @@ This document is the **single canonical source of truth for AgentShield's state*
 
 ### 3.1 v0.1 foundation
 
-The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (decided 2026-05-02) — landed across the project's first development sprint.
+The original sequenced one-week plan (decided 2026-05-02) — landed across the project's first development sprint.
 
 **Delivered:**
 - **Tier 1+2 semgrep scan pipeline** — `agentshield scan <path>` invokes semgrep with the bundled rule pack, captures SARIF, normalises to typed `Finding` objects (`agentshield/normalize/`).
@@ -84,7 +87,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 **Delivered:**
 - **`testbed/`** directory established (gitignored — each developer clones locally) with 6 OSS projects: langchain, langchain4j, llama-index, langgraph, google-adk-python, plus the synthetic `smartsdk-lambda` (rebuilt from PDF descriptions of a real JPMC Lambda).
 - **First breadth-scan heatmap** — finding count per rule × project across all 6 projects (~10K source files, ~5 min compute). 2,417 findings baseline.
-- **[TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md)** — the methodology doc. Heatmap, framework-vs-app interpretation (§3.1), Phase B priority targets list.
+- Testbed validation methodology doc — heatmap, framework-vs-app interpretation, Phase B priority targets list. Deleted in F.12; content lives in git history.
 - **`--scan-all-files` and `--stage-locally` CLI flags** — operational fixes for real-world scanning (semgrep's default ignore behaviour and Windows UNC path silent failure).
 - **Discovered + fixed redundant `await` pattern bug** in DF001 / R001 / D004 / D001 (Python). Earlier rule additions had double-fired on awaited LLM calls; semgrep's sub-expression matching meant the explicit `await $X.run(...)` patterns were redundant with the unawaited `$X.run(...)` patterns.
 
@@ -96,7 +99,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 - **3 real Java apps cloned to testbed** — `langchain4j-examples`, `spring-ai-examples`, `aws-bedrock-java-examples` (sparse-cloned subset). 297 + 138 + 59 = 494 Java files added.
 - **`synthetic-vuln-java-app`** — 9 hand-written Java files containing every Java anti-pattern (D001-D006 / DF001-DF004 / R001 Java) intentionally. Now a pinned regression target.
 - **Coverage status flipped** from 4 / 12 → **11 / 12 Java rules firing** on at least one project.
-- **Updated TESTBED_VALIDATION.md heatmap** — 10 projects, 3,281 findings.
+- **Updated testbed heatmap** — 10 projects, 3,281 findings.
 
 ### 3.4 Phase B — precision (FP elimination)
 
@@ -119,7 +122,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 
 **Reusable patterns surfaced:** `metavariable-type` constraints work for Java; `metavariable-regex` constraints work for class-name disambiguation; semgrep auto-taints method parameters in framework code (creates predictable noise on framework scans, invisible to user-app scans).
 
-**Doc:** [PHASE_B_TRIAGE.md](./PHASE_B_TRIAGE.md) — 9 sections including methodology + cumulative numbers + reusable lessons.
+**Detail:** see git history. Originally documented in PHASE_B_TRIAGE.md (deleted F.12).
 
 ### 3.5 Phase C — OWASP LLM coverage gap closure
 
@@ -133,7 +136,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 
 **OWASP LLM Top 10 coverage: 7 / 10 → 9 / 10** (LLM09 Misinformation remains out of SAST scope as a content-quality concern).
 
-**Doc:** [PHASE_C_TRIAGE.md](./PHASE_C_TRIAGE.md).
+**Detail:** see git history. Originally documented in PHASE_C_TRIAGE.md (deleted F.12).
 
 ### 3.6 Phase D — polish pass
 
@@ -149,7 +152,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 
 **Cumulative across A→D: 291 FPs eliminated, 141 new TPs added, 0 TPs lost, 0 test regressions.**
 
-**Doc:** [PHASE_D_TRIAGE.md](./PHASE_D_TRIAGE.md).
+**Detail:** see git history. Originally documented in PHASE_D_TRIAGE.md (deleted F.12).
 
 ### 3.7 Post-Phase-D — roadmap consolidation + mock judge backend
 
@@ -275,7 +278,7 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 **Hypothesis:** "users get too many fallback-rule findings to triage" is the bottleneck. The fallback rule (D001-fb) emits low-confidence findings that flow through the v1 Tier 3 judge (retired in F.6). Phase B + C + D produced **24+ confirmed-TP and ~291 known-FP examples** that could become labeled few-shot examples in the judge prompt.
 
-**Scope:** Update [agentshield/judge/](./agentshield/judge/) prompts with labeled examples drawn from PHASE_B_TRIAGE.md, plus calibration sweep against the testbed to confirm FPR drops. Existing boto3-Bedrock backend stays the same.
+**Scope:** OBSOLETE in v2 — `agentshield/judge/` was deleted in F.6 along with the in-process Tier 3 judge. The Phase E judge runs (E/E.2/E.3) demonstrated the calibration approach via Copilot-as-judge instead.
 
 **Effort:** M (~3-5 hours focused work).
 **Impact:** Force-multiplier on every fallback finding produced going forward — improves the rule pack's safe-applicability range without writing new rules.
@@ -312,7 +315,7 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 ## 5. Specific tracks from the original plan
 
-These come from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md)'s sequenced work plan and are referenced in the [VDI_TESTING.md](./VDI_TESTING.md) "What's NOT in this build" table.
+These come from the original v0.1 sequenced work plan and are referenced in the [VDI_TESTING.md](./VDI_TESTING.md) "What's NOT in this build" table.
 
 > **Phase F supersedes the original Track B (judge backends) and Track D (Tier 4 discovery) entirely.** v2's Tier 2 architecture (LLM-as-scanner via Copilot) replaces the v1 "Tier 3 LLM judge" model. Tracks B2/B3/B5/D below are kept here as historical context but are **not on the roadmap as planned work** — the v2 architecture either obsoletes them or replaces them with different work (e.g. a future Bedrock-based Tier 2 backend would be a new module, not a revival of Track B2).
 
@@ -344,9 +347,9 @@ Smaller targeted enhancements surfaced by Phase B / C / D triage:
 
 ### 6.1 Generic `.run()` collisions in Java
 
-DF001-Java / R001-Java's `$AGENT.run(...)` pattern still collides with non-LLM `.run()` shapes — `scenario.run(state)` (demo runners), `runnable.run()`, `testRunner.run(state)`. The SpringApplication.run case was suppressed in Phase D ([PHASE_D_TRIAGE.md §2](./PHASE_D_TRIAGE.md#2-springapplicationrun-fp-fix--64-fps-eliminated)) but the broader collision class remains.
+DF001-Java / R001-Java's `$AGENT.run(...)` pattern still collides with non-LLM `.run()` shapes — `scenario.run(state)` (demo runners), `runnable.run()`, `testRunner.run(state)`. The SpringApplication.run case was suppressed in Phase D (64 FPs eliminated; see git history) but the broader collision class remains.
 
-**Fix shape:** Add `metavariable-type` constraints to require the receiver to be of a known agent type (Google ADK `LlmAgent`, langchain4j `Assistant`, SMARTSDK `Runner`, etc.). Same technique used for D006 Java's `metavariable-type: RestTemplate` ([PHASE_B_TRIAGE.md §3](./PHASE_B_TRIAGE.md#3-d006-singletons-python--java--1-tp-1-fp-java-rule-fixed)).
+**Fix shape:** Add `metavariable-type` constraints to require the receiver to be of a known agent type (Google ADK `LlmAgent`, langchain4j `Assistant`, SMARTSDK `Runner`, etc.). Same technique used for D006 Java's `metavariable-type: RestTemplate` (Phase B fix; see git history).
 **Effort:** S.
 
 ### 6.2 Triage real-app DF001 / R001 long tails
@@ -375,17 +378,17 @@ Recurring work that doesn't fit a phase boundary:
 
 ### 7.1 Periodic testbed re-clones
 
-The OSS frameworks in [`testbed/`](./testbed/) (langchain, llama-index, langchain4j, etc.) evolve fast. A quarterly or major-release-aligned re-clone keeps the [TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md) heatmap meaningful.
+The OSS frameworks in [`testbed/`](./testbed/) (langchain, llama-index, langchain4j, etc.) evolve fast. A quarterly or major-release-aligned re-clone keeps the testbed heatmap meaningful (the heatmap doc itself, TESTBED_VALIDATION.md, was deleted in F.12; see git history for prior numbers).
 **Cadence:** quarterly.
 
-### 7.2 TESTBED_VALIDATION.md heatmap re-publish
+### 7.2 Re-run testbed breadth scan after rule changes
 
-When new rules ship or fixes land, re-run the breadth scan and update [TESTBED_VALIDATION.md](./TESTBED_VALIDATION.md) §2 heatmap. Phase D demonstrated this; ~30 min compute + ~10 min docs.
+When new rules ship or fixes land, re-run the breadth scan against `testbed/` and capture deltas in this file's §3.X phase log (the standalone heatmap doc TESTBED_VALIDATION.md was deleted in F.12). Phase D demonstrated this; ~30 min compute + ~10 min docs.
 **Cadence:** after every batch of rule changes.
 
-### 7.3 Phase doc cross-references
+### 7.3 Roadmap maintenance
 
-When a future phase ships, audit the previous phase's "What's left" section and add a one-line note pointing forward (e.g. "see PHASE_E_TRIAGE.md / ROADMAP.md for the current state"). Prevents the "5-file chase" problem this very document was created to solve.
+When a future phase ships, summarise it in §3.X here and don't create a new top-level PHASE_X.md doc — that's the lesson from F.12 (multiple cross-referenced phase logs are harder to maintain than one canonical roadmap with phase-by-phase sections).
 
 ## 8. How to update this doc
 

@@ -2,7 +2,7 @@
 
 Date: 2026-05-02
 Author: weekend prep pass — informs Day 1 of the 5-day plan
-Companion to: [PHASE_I_PLAN.md](../PHASE_I_PLAN.md)
+Historical research notes from the project's design phase; the phase plans they referenced were superseded by [ROADMAP.md](../ROADMAP.md) and the v2 architecture (see [../ARCHITECTURE_V2.md](../ARCHITECTURE_V2.md)).
 
 ---
 

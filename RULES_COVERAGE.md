@@ -355,7 +355,7 @@ Source: [agentshield/rules/detect/D006-broad-tool-permissions-java.yaml](./agent
 **Tool shapes recognised:**
 
 - `@Tool` annotated method whose body calls `Files.delete(...)`, `Files.deleteIfExists(...)`, `Files.write(...)`, or `Files.move(...)` (`java.nio.file.Files`).
-- `@Tool` annotated method whose body calls `$REST.delete(...)` or `$REST.put(...)` constrained via `metavariable-type: RestTemplate` (the type filter was added in Phase B to prevent `Map.put(...)` collisions — see [PHASE_B_TRIAGE.md §3](./PHASE_B_TRIAGE.md#3-d006-singletons-python--java--1-tp-1-fp-java-rule-fixed)).
+- `@Tool` annotated method whose body calls `$REST.delete(...)` or `$REST.put(...)` constrained via `metavariable-type: RestTemplate` (the type filter was added in Phase B to prevent `Map.put(...)` collisions; details in git history).
 - Both `@Tool` and `@Tool("description")` forms are matched.
 
 ### D007 (Python) — untrusted model loading

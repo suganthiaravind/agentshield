@@ -51,7 +51,7 @@ Definitions for the security terminology used across AgentShield's docs, rules, 
 
 ## 1. The Detect / Defend / Respond taxonomy
 
-AgentShield's organizing spine — every finding belongs to exactly one of these three buckets. This taxonomy is locked in [PHASE_I_PLAN.md §3](./PHASE_I_PLAN.md) and the dual-mapping pattern is documented in [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md).
+AgentShield's organizing spine — every finding belongs to exactly one of these three buckets. The taxonomy and the dual-mapping pattern are documented in [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md).
 
 ### Detect
 
