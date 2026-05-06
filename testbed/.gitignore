@@ -14,3 +14,5 @@
 !synthetic-vuln-java-app/**
 !synthetic-vuln-python-app/
 !synthetic-vuln-python-app/**
+!demo-agent/
+!demo-agent/**

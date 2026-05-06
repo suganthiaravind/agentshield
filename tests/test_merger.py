@@ -29,6 +29,7 @@ from agentshield.merger import (
     MergeResult,
     SchemaError,
     merge,
+    render_combined_html,
     render_combined_json,
     render_combined_markdown,
     render_combined_sarif,
@@ -352,19 +353,31 @@ def test_markdown_includes_summary_and_coverage(repo: Path) -> None:
     assert "LLM01" in md or "LLM02" in md
 
 
-def test_markdown_has_ddr_breakdown_section(repo: Path) -> None:
-    """Detect / Defend / Respond is AgentShield's organising spine — every
-    finding has a category. The combined report must surface it both as
-    a summary table and per-finding."""
+def test_markdown_is_ddr_led(repo: Path) -> None:
+    """F.17 redesign: D/D/R is the organising spine. Three top-level sections
+    in order — Detect, Defend, Respond — each finding rendered under its
+    category with a [Tier 1]/[Tier 2] origin badge."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     md = render_combined_markdown(merge(repo))
-    # Category breakdown table
-    assert "Findings by Detect / Defend / Respond category" in md
-    assert "| Category | Tier 1 | Tier 2 | Total |" in md
-    # Per-finding category lines
-    assert "**Category:** detect" in md  # Tier 1 sample finding is detect
-    assert "**Category:** respond" in md  # Tier 2 sample finding is respond
+
+    # Top D/D/R section header
+    assert "## Detect / Defend / Respond" in md
+
+    # Three D/D/R top-level finding sections (with severity-led emojis)
+    assert "## 🔴 Detect" in md
+    assert "## 🟡 Defend" in md
+    assert "## 🔵 Respond" in md
+
+    # Detect section appears before Defend, Defend before Respond
+    detect_pos = md.index("## 🔴 Detect")
+    defend_pos = md.index("## 🟡 Defend")
+    respond_pos = md.index("## 🔵 Respond")
+    assert detect_pos < defend_pos < respond_pos
+
+    # Each finding shows a Tier 1 or Tier 2 origin badge
+    assert "[Tier 1]" in md  # the d001 fixture finding
+    assert "[Tier 2]" in md  # the TIER2-LLM02-04 fixture finding
 
 
 def test_json_render_mirrors_merge_state(repo: Path) -> None:
@@ -531,3 +544,118 @@ def test_json_includes_saige_fields(repo: Path) -> None:
     j = json.loads(render_combined_json(result))
     assert j["saige_tier"] == "1"
     assert j["saige_tier_reasoning"] == "Read-only autonomous agent."
+
+
+# ---------- HTML renderer (F.17) ----------
+
+def test_html_is_well_formed_document(repo: Path) -> None:
+    """Sanity: opens with doctype, closes the body+html, has a <title>."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert html.startswith("<!doctype html>")
+    assert "<title>AgentShield combined report</title>" in html
+    assert html.rstrip().endswith("</html>")
+
+
+def test_html_has_ddr_hero_row(repo: Path) -> None:
+    """Three D/D/R cards at the top — the lead element of the F.17 design."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert '<div class="ddr-row">' in html
+    assert 'class="ddr-card detect"' in html
+    assert 'class="ddr-card defend"' in html
+    assert 'class="ddr-card respond"' in html
+    # Order matters: Detect → Defend → Respond
+    detect_pos = html.index('class="ddr-card detect"')
+    defend_pos = html.index('class="ddr-card defend"')
+    respond_pos = html.index('class="ddr-card respond"')
+    assert detect_pos < defend_pos < respond_pos
+
+
+def test_html_findings_are_grouped_under_ddr_sections(repo: Path) -> None:
+    """Each finding rendered inside a `<div class="findings-section {cat}">`."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'class="findings-section detect"' in html
+    assert 'class="findings-section defend"' in html
+    assert 'class="findings-section respond"' in html
+
+
+def test_html_finding_renders_origin_pill(repo: Path) -> None:
+    """Each finding shows a Tier 1 or Tier 2 origin pill."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert '<span class="pill tier1">Tier 1</span>' in html
+    assert '<span class="pill tier2">Tier 2</span>' in html
+
+
+def test_html_renders_severity_pills(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    # Tier 1 fixture is severity=high; Tier 2 fixture is severity=high.
+    assert 'class="pill high"' in html
+
+
+def test_html_renders_saige_card_when_classified(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    payload["saige_tier_reasoning"] = "Autonomous + state-changing internal calls only."
+    _write_tier2(repo, payload)
+    html = render_combined_html(merge(repo))
+    assert 'class="saige-card"' in html
+    assert "Tier 2" in html
+    assert "Autonomous + state-changing internal calls only." in html
+
+
+def test_html_omits_saige_when_unclassified(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())  # no saige
+    html = render_combined_html(merge(repo))
+    assert 'class="saige-card"' not in html
+
+
+def test_html_shows_incomplete_banner_when_tier2_missing(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    html = render_combined_html(merge(repo))
+    assert "INCOMPLETE — Tier 2 not run." in html
+    assert 'class="banner warn"' in html
+
+
+def test_html_shows_stale_banner_on_fingerprint_mismatch(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
+    _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
+    html = render_combined_html(merge(repo))
+    assert "STALE Tier 2." in html
+    assert 'class="banner stale"' in html
+
+
+def test_html_escapes_user_supplied_strings(repo: Path) -> None:
+    """No XSS via finding messages or rule_ids — raw HTML must be escaped."""
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["findings"][0]["message"] = "<script>alert('xss')</script>"
+    _write_tier2(repo, payload)
+    html = render_combined_html(merge(repo))
+    assert "<script>alert('xss')</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_html_renders_severity_distribution_bar(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'class="severity-bar"' in html
+
+
+def test_html_renders_coverage_matrix(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'class="coverage-grid"' in html
+    assert "OWASP LLM" in html

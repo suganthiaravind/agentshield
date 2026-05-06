@@ -34,6 +34,7 @@ from agentshield.merger import (
     merge,
     render_combined_json,
     render_combined_markdown,
+    render_combined_html,
     render_combined_sarif,
 )
 from agentshield.normalize import Finding, Normalizer, NormalizerError
@@ -137,6 +138,13 @@ def build_parser() -> argparse.ArgumentParser:
     mrg.add_argument("--output-sarif", help="Write unified SARIF v2.1.0 report")
     mrg.add_argument("--output-json", help="Write unified JSON report")
     mrg.add_argument("--output-markdown", help="Write unified Markdown report")
+    mrg.add_argument(
+        "--output-html",
+        help=(
+            "Write unified HTML report (single file, embedded CSS, no external "
+            "deps; renders cleanly offline). D/D/R-led dashboard layout."
+        ),
+    )
     mrg.add_argument(
         "--print",
         dest="print_md",
@@ -456,6 +464,11 @@ def cmd_merge(args: argparse.Namespace) -> int:
             render_combined_sarif(result), encoding="utf-8"
         )
         written.append(args.output_sarif)
+    if args.output_html:
+        Path(args.output_html).write_text(
+            render_combined_html(result), encoding="utf-8"
+        )
+        written.append(args.output_html)
     if written:
         print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")
 

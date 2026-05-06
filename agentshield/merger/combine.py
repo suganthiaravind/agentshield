@@ -283,49 +283,172 @@ def _build_coverage(
 
 # ---------- renderers ----------
 
-def render_combined_markdown(result: MergeResult) -> str:
-    """Human-readable unified report. The primary v2 deliverable."""
-    r = result.report
-    lines: list[str] = ["# AgentShield combined report (Tier 1 + Tier 2)\n"]
+_DDR_LABELS = {
+    "detect": ("🔴 Detect", "vulnerability surfaces", "Where the agent is exploitable"),
+    "defend": ("🟡 Defend", "missing controls", "What active defences are missing"),
+    "respond": ("🔵 Respond", "observability gaps", "Whether incidents can be detected and recovered"),
+}
 
-    # Banner section
+_DDR_ORDER = ("detect", "defend", "respond")
+
+_VERDICT_BADGE = {
+    "TP": "✅ TP",
+    "CD": "🟡 CD",
+    "FP": "⚠ FP",
+}
+
+
+def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
+    """Group Tier 1 + Tier 2 findings by D/D/R category.
+
+    Each finding gets a `_origin` field ("tier1" or "tier2") so the renderer
+    can show a tier badge per finding without losing the D/D/R-led grouping.
+    Tier 1 findings additionally carry `_tier2_verdict` + `_tier2_reasoning`
+    when Tier 2 cross-checked them.
+    """
+    grouped: dict[str, list[dict]] = {"detect": [], "defend": [], "respond": []}
+    for ann in report.tier1_findings:
+        f = dict(ann.finding)
+        f["_origin"] = "tier1"
+        f["_tier2_verdict"] = ann.tier2_verdict
+        f["_tier2_reasoning"] = ann.tier2_reasoning
+        cat = f.get("category")
+        if cat in grouped:
+            grouped[cat].append(f)
+    for f in report.tier2_findings:
+        ff = dict(f)
+        ff["_origin"] = "tier2"
+        cat = ff.get("category")
+        if cat in grouped:
+            grouped[cat].append(ff)
+    # Sort each bucket by severity (critical → info), then by file path
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    for bucket in grouped.values():
+        bucket.sort(key=lambda f: (
+            sev_order.get(f.get("severity", "info"), 99),
+            f.get("file", ""),
+            f.get("line", 0),
+        ))
+    return grouped
+
+
+def render_combined_markdown(result: MergeResult) -> str:
+    """Human-readable unified report. The primary v2 deliverable.
+
+    Layout (F.17 — D/D/R-led, professional dashboard shape):
+      1. Title + scan metadata
+      2. Status banner (only if Tier 2 missing / schema-invalid / stale)
+      3. **D/D/R hero strip** — 3 columns, one per category, with severity counts
+      4. Summary + severity-distribution
+      5. SAIGE classification (if present)
+      6. **Findings sections led by D/D/R** (🔴 Detect → 🟡 Defend → 🔵 Respond),
+         with [Tier 1] / [Tier 2] badges on each finding
+      7. Coverage matrix
+      8. Tier 2 skipped files (if any)
+    """
+    r = result.report
+    ddr_counts = _ddr_counts(r)
+    grouped = _findings_grouped_by_ddr(r)
+
+    lines: list[str] = []
+
+    # 1. Title
+    lines.append("# AgentShield combined report")
+    lines.append("")
+    lines.append(f"_Tier 1 (semgrep) + Tier 2 (Copilot LLM-as-scanner) · scanned {r.tier2_scanned_at or '(Tier 1 only — Tier 2 not run)'}_")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    # 2. Status banners
     if not result.tier2_present:
         lines.append(
-            "> ⚠ **INCOMPLETE: Tier 2 not run.** This report contains Tier 1\n"
-            "> (semgrep) findings only. Run Copilot Tier 2 against this repo\n"
-            "> and re-merge for full coverage. See\n"
-            "> `.agentshield/tier2-bootstrap.md` for the prompt.\n"
+            "> ⚠ **INCOMPLETE: Tier 2 not run.** This report contains Tier 1 "
+            "(semgrep) findings only. Run Copilot Tier 2 against this repo and "
+            "re-merge for full coverage. See `.agentshield/tier2-bootstrap.md` "
+            "for the prompt."
         )
+        lines.append("")
     elif result.schema_errors:
         lines.append(
-            "> ❌ **Tier 2 output failed schema validation.** Showing Tier 1\n"
-            "> only. Validation errors below — re-prompt Copilot to fix and\n"
-            "> re-merge.\n"
+            "> ❌ **Tier 2 output failed schema validation.** Showing Tier 1 "
+            "only. Validation errors below — re-prompt Copilot to fix and re-merge."
         )
-        lines.append("### Schema errors\n")
+        lines.append("")
+        lines.append("### Schema errors")
+        lines.append("")
         for err in result.schema_errors:
             lines.append(f"- `{err.field_path}` — {err.message}")
         lines.append("")
     elif result.stale:
         lines.append(
-            "> ⚠ **STALE Tier 2.** The Tier 1 fingerprint changed since\n"
-            "> Tier 2 was run, meaning the code (or Tier 1 rule pack)\n"
-            "> changed in between. Re-run Tier 2 in Copilot Chat for fresh\n"
-            "> results.\n>\n"
-            f"> - Tier 1 fingerprint (current):  `{r.tier1_fingerprint[:16]}...`\n"
-            f"> - Tier 2 fingerprint (recorded): `{(r.tier2_fingerprint or '')[:16]}...`\n"
+            "> ⚠ **STALE Tier 2.** The Tier 1 fingerprint changed since Tier 2 "
+            "was run; the code (or rule pack) changed in between. Re-run Tier 2 "
+            "in Copilot Chat for fresh results."
         )
+        lines.append(f"> - Tier 1 (current):  `{r.tier1_fingerprint[:16]}...`")
+        lines.append(f"> - Tier 2 (recorded): `{(r.tier2_fingerprint or '')[:16]}...`")
+        lines.append("")
 
-    # F.16: JPMC SAIGE Agent Tier classification (informational only — no
-    # findings are filtered or weighted by tier). Surfaced from Tier 2
-    # output if Copilot classified the agent. See research.md §5 for the
-    # 5 categories and the §8 decision tree in the bundled checklist.
+    # 3. D/D/R HERO STRIP — 3 columns, severity counts per category.
+    #    The lead element of the report (per F.17 design). Renders as a
+    #    Markdown table because that's the closest text equivalent of
+    #    side-by-side cards while staying readable in plain Markdown.
+    lines.append("## Detect / Defend / Respond")
+    lines.append("")
+    lines.append("AgentShield's organising spine. Every finding belongs to exactly one category.")
+    lines.append("")
+    headers = []
+    bodies = []
+    for cat in _DDR_ORDER:
+        emoji_label, subtitle, _desc = _DDR_LABELS[cat]
+        total = len(grouped[cat])
+        sev_counts: dict[str, int] = {}
+        for f in grouped[cat]:
+            s = f.get("severity", "info")
+            sev_counts[s] = sev_counts.get(s, 0) + 1
+        headers.append(f"**{emoji_label}** _{subtitle}_")
+        body_lines = [f"**{total} finding{'s' if total != 1 else ''}**"]
+        for sev in ("critical", "high", "medium", "low", "info"):
+            n = sev_counts.get(sev, 0)
+            if n:
+                body_lines.append(f"{_severity_badge(sev)} &times; {n}")
+        if total == 0:
+            body_lines.append("_(no findings)_")
+        bodies.append("<br>".join(body_lines))
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("|" + "|".join("---" for _ in headers) + "|")
+    lines.append("| " + " | ".join(bodies) + " |")
+    lines.append("")
+
+    # 4. Summary + severity distribution
+    tier1_total = len(r.tier1_findings)
+    tier2_total = len(r.tier2_findings)
+    fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
+    cd_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "CD")
+    tp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "TP")
+
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| Metric | Count |")
+    lines.append("|---|---|")
+    lines.append(f"| Tier 1 (semgrep) findings | {tier1_total} |")
+    lines.append(f"| Tier 2 (Copilot) net-new findings | {tier2_total} |")
+    if result.tier2_present and not result.schema_errors:
+        lines.append(f"| Tier 1 marked TP by Tier 2 | {tp_marked} |")
+        lines.append(f"| Tier 1 marked CD by Tier 2 | {cd_marked} |")
+        lines.append(f"| Tier 1 marked FP by Tier 2 | {fp_marked} |")
+    lines.append(f"| **Net actionable** | **{result.actionable_finding_count}** |")
+    lines.append("")
+
+    # 5. SAIGE classification (if present)
     if r.saige_tier:
         tier_label = (
             "Non-Agent" if r.saige_tier == "non-agent"
             else f"Tier {r.saige_tier}"
         )
-        lines.append("## JPMC SAIGE Agent Tier classification\n")
+        lines.append("## JPMC SAIGE Agent Tier classification")
+        lines.append("")
         lines.append(f"**Classified as:** {tier_label}")
         lines.append("")
         lines.append("**Rationale:**")
@@ -340,103 +463,65 @@ def render_combined_markdown(result: MergeResult) -> str:
         )
         lines.append("")
 
-    # Summary
-    tier1_total = len(r.tier1_findings)
-    tier2_total = len(r.tier2_findings)
-    fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
-    cd_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "CD")
-    tp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "TP")
-
-    # DDR (Detect / Defend / Respond) breakdown — AgentShield's organising
-    # spine. Tier 1 findings carry `category` from rule metadata; Tier 2
-    # findings carry it from the schema's `category` enum field.
-    ddr_counts = _ddr_counts(r)
-
-    lines.append("## Summary\n")
-    lines.append("| Metric | Count |")
-    lines.append("|---|---|")
-    lines.append(f"| Tier 1 (semgrep) findings | {tier1_total} |")
-    lines.append(f"| Tier 2 (Copilot) net-new findings | {tier2_total} |")
-    if result.tier2_present and not result.schema_errors:
-        lines.append(f"| Tier 1 marked TP by Tier 2 | {tp_marked} |")
-        lines.append(f"| Tier 1 marked CD by Tier 2 | {cd_marked} |")
-        lines.append(f"| Tier 1 marked FP by Tier 2 | {fp_marked} |")
-    lines.append(f"| **Net actionable** | **{result.actionable_finding_count}** |")
-    lines.append("")
-
-    lines.append("### Findings by Detect / Defend / Respond category\n")
-    lines.append("| Category | Tier 1 | Tier 2 | Total |")
-    lines.append("|---|---|---|---|")
-    for cat in ("detect", "defend", "respond"):
-        t1 = ddr_counts["tier1"][cat]
-        t2 = ddr_counts["tier2"][cat]
-        lines.append(f"| {cat} | {t1} | {t2} | {t1 + t2} |")
-    lines.append("")
-
-    # Tier 1 section
-    lines.append("## Tier 1 findings (semgrep)\n")
-    if not r.tier1_findings:
-        lines.append("_No Tier 1 findings._\n")
-    else:
-        for i, ann in enumerate(r.tier1_findings):
-            f = ann.finding
-            verdict_tag = ""
-            if ann.tier2_verdict == "FP":
-                verdict_tag = " ⚠ **Tier 2 verdict: FP**"
-            elif ann.tier2_verdict == "CD":
-                verdict_tag = " 🟡 **Tier 2 verdict: CD**"
-            elif ann.tier2_verdict == "TP":
-                verdict_tag = " ✅ **Tier 2 verdict: TP**"
-            severity = f.get("severity") or f.get("severity_normalized") or "n/a"
-            rule = f.get("rule_id") or f.get("rule_id_short") or "?"
+    # 6. FINDINGS — D/D/R-LED. Each section is one D/D/R bucket; per-finding
+    #    [Tier 1] / [Tier 2] badge replaces the old "Tier 1 vs Tier 2" split.
+    for cat in _DDR_ORDER:
+        emoji_label, subtitle, desc = _DDR_LABELS[cat]
+        bucket = grouped[cat]
+        lines.append(f"## {emoji_label} — {subtitle}  ({len(bucket)} finding{'s' if len(bucket) != 1 else ''})")
+        lines.append("")
+        lines.append(f"_{desc}._")
+        lines.append("")
+        if not bucket:
+            lines.append(f"_No {cat} findings._")
+            lines.append("")
+            continue
+        for f in bucket:
+            origin = f["_origin"]
+            origin_badge = "**[Tier 1]**" if origin == "tier1" else "**[Tier 2]**"
+            sev = f.get("severity", "n/a")
+            sev_badge = _severity_badge(sev)
+            rule = (
+                f.get("rule_id_short")
+                or f.get("rule_id")
+                or "?"
+            )
             file_ = f.get("file") or "?"
             line_ = f.get("line") or "?"
-            category = f.get("category") or "n/a"
-            lines.append(f"### [{i}] {rule}{verdict_tag}")
-            lines.append(f"- **Category:** {category} (D/D/R)")
-            lines.append(f"- **Severity:** {severity}")
-            lines.append(f"- **Location:** `{file_}:{line_}`")
-            if f.get("message"):
-                lines.append(f"- **Message:** {f['message']}")
-            if ann.tier2_reasoning:
-                lines.append(f"- **Tier 2 reasoning:** {ann.tier2_reasoning}")
+            verdict_tag = ""
+            if origin == "tier1" and f.get("_tier2_verdict"):
+                v = f["_tier2_verdict"]
+                verdict_tag = f"  ·  Tier 2 verdict: {_VERDICT_BADGE.get(v, v)}"
+            lines.append(f"### {origin_badge} {sev_badge} `{rule}`{verdict_tag}")
             lines.append("")
-
-    # Tier 2 net-new section
-    lines.append("## Tier 2 net-new findings (Copilot)\n")
-    if not result.tier2_present:
-        lines.append("_Tier 2 not run._\n")
-    elif result.schema_errors:
-        lines.append("_Tier 2 output invalid — see schema errors above._\n")
-    elif not r.tier2_findings:
-        lines.append("_No Tier 2 net-new findings._\n")
-    else:
-        for f in r.tier2_findings:
-            sev = f.get("severity", "n/a")
-            rid = f.get("rule_id", "?")
-            file_ = f.get("file", "?")
-            line_ = f.get("line", "?")
-            category = f.get("category", "n/a")
-            lines.append(f"### {rid}")
-            lines.append(f"- **Category:** {category} (D/D/R)")
-            lines.append(f"- **Severity:** {sev}")
             lines.append(f"- **Location:** `{file_}:{line_}`")
             if f.get("message"):
                 lines.append(f"- **Message:** {f['message']}")
             mappings = []
-            for k in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe"):
-                if f.get(k):
-                    mappings.append(f"{k}={','.join(f[k])}")
+            # Tier 2 findings have flat keys; Tier 1 findings have framework_mappings nested.
+            fm = f.get("framework_mappings") or f
+            for k_label, k_field in (
+                ("OWASP LLM", "owasp_llm"),
+                ("OWASP Agentic", "owasp_agentic"),
+                ("MITRE ATLAS", "mitre_atlas"),
+                ("CWE", "cwe"),
+            ):
+                vals = fm.get(k_field) or []
+                if vals:
+                    mappings.append(f"{k_label} {', '.join(vals)}")
             if mappings:
                 lines.append(f"- **Frameworks:** {' · '.join(mappings)}")
             if f.get("snippet"):
                 lines.append(f"- **Snippet:** `{f['snippet']}`")
             if f.get("remediation"):
                 lines.append(f"- **Remediation:** {f['remediation']}")
+            if origin == "tier1" and f.get("_tier2_reasoning"):
+                lines.append(f"- **Tier 2 reasoning:** {f['_tier2_reasoning']}")
             lines.append("")
 
-    # Coverage matrix
-    lines.append("## Coverage matrix\n")
+    # 7. Coverage matrix
+    lines.append("## Coverage matrix")
+    lines.append("")
     cov = r.coverage.to_dict()
     lines.append("| Framework | Items touched |")
     lines.append("|---|---|")
@@ -444,14 +529,30 @@ def render_combined_markdown(result: MergeResult) -> str:
         lines.append(f"| {k} | {', '.join(vs) if vs else '_(none)_'} |")
     lines.append("")
 
-    # Skipped files (transparency)
+    # 8. Skipped files (transparency)
     if r.tier2_skipped_files:
-        lines.append("## Tier 2 skipped files\n")
+        lines.append("## Tier 2 skipped files")
+        lines.append("")
         for s in r.tier2_skipped_files:
             lines.append(f"- `{s.get('path', '?')}` — {s.get('reason', 'no reason given')}")
         lines.append("")
 
     return "\n".join(lines) + "\n"
+
+
+_SEVERITY_ICON = {
+    "critical": "🟥",
+    "high": "🟧",
+    "medium": "🟨",
+    "low": "🟩",
+    "info": "🟦",
+}
+
+
+def _severity_badge(severity: str) -> str:
+    """Coloured square + label, used inline in finding headers + D/D/R hero."""
+    icon = _SEVERITY_ICON.get(severity.lower(), "⬜")
+    return f"{icon} {severity.upper()}"
 
 
 def render_combined_json(result: MergeResult) -> str:
@@ -496,6 +597,463 @@ def render_combined_json(result: MergeResult) -> str:
         "tier2_scanned_files": r.tier2_scanned_files,
     }
     return json.dumps(payload, indent=2) + "\n"
+
+
+# ---------- HTML renderer (F.17) ----------
+
+_HTML_CSS = """
+:root {
+  --bg: #fafaf7;
+  --panel: #ffffff;
+  --border: #e5e3dc;
+  --text: #1f2933;
+  --text-muted: #6b7280;
+  --accent: #2c5f7e;
+
+  --detect: #c54040;
+  --detect-bg: #fdecea;
+  --defend: #b8830f;
+  --defend-bg: #fbf3dc;
+  --respond: #2c5f7e;
+  --respond-bg: #e3eef4;
+
+  --critical: #b3261e;
+  --high: #d27800;
+  --medium: #b8830f;
+  --low: #4f7a4f;
+  --info: #5a7a8c;
+
+  --critical-bg: #fdecea;
+  --high-bg: #fdf0e0;
+  --medium-bg: #fbf3dc;
+  --low-bg: #e9f1e7;
+  --info-bg: #e8eef2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 32px 40px 80px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+h1, h2, h3 { color: var(--text); margin: 0; font-weight: 600; }
+h1 { font-size: 22px; letter-spacing: -0.01em; }
+h2 { font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase;
+     color: var(--text-muted); margin: 32px 0 12px; }
+h3 { font-size: 15px; }
+
+.report-header { padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.report-header .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+
+.banner {
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 13px;
+  border-left: 4px solid;
+}
+.banner.warn  { background: #fbf3dc; border-color: var(--defend); color: #5a3f00; }
+.banner.error { background: var(--critical-bg); border-color: var(--critical); color: #5e1a16; }
+.banner.stale { background: var(--info-bg); border-color: var(--info); color: #2c4250; }
+
+.ddr-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.ddr-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  border-top: 4px solid;
+}
+.ddr-card.detect  { border-top-color: var(--detect); }
+.ddr-card.defend  { border-top-color: var(--defend); }
+.ddr-card.respond { border-top-color: var(--respond); }
+
+.ddr-card .ddr-label {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 8px; font-weight: 600;
+}
+.ddr-card.detect  .ddr-label { color: var(--detect); }
+.ddr-card.defend  .ddr-label { color: var(--defend); }
+.ddr-card.respond .ddr-label { color: var(--respond); }
+.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+.ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 12px; }
+.ddr-card .sev-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pill.critical { background: var(--critical-bg); color: var(--critical); }
+.pill.high     { background: var(--high-bg);     color: var(--high); }
+.pill.medium   { background: var(--medium-bg);   color: var(--medium); }
+.pill.low      { background: var(--low-bg);      color: var(--low); }
+.pill.info     { background: var(--info-bg);     color: var(--info); }
+.pill.tier1    { background: #efe7d7; color: #5a4413; }
+.pill.tier2    { background: #d8e5ed; color: #1f4a63; }
+.pill.tp       { background: #d6e7d6; color: #2f5a2f; }
+.pill.cd       { background: #fbf3dc; color: var(--defend); }
+.pill.fp       { background: var(--high-bg); color: var(--high); }
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.metric .metric-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                        color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+.metric .metric-value { font-size: 28px; font-weight: 700; line-height: 1; }
+.metric .metric-value.actionable { color: var(--accent); }
+
+.severity-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+  margin-top: 4px;
+}
+.severity-bar > div { height: 100%; }
+.severity-bar .critical { background: var(--critical); }
+.severity-bar .high     { background: var(--high); }
+.severity-bar .medium   { background: var(--medium); }
+.severity-bar .low      { background: var(--low); }
+.severity-bar .info     { background: var(--info); }
+
+.saige-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+.saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                           color: var(--text-muted); font-weight: 600; }
+.saige-card .saige-tier { font-size: 22px; font-weight: 700; margin: 4px 0 12px; color: var(--accent); }
+.saige-card .saige-rationale { color: var(--text); font-size: 13px; line-height: 1.6; }
+.saige-card .saige-footer { font-size: 11px; color: var(--text-muted); margin-top: 12px; font-style: italic; }
+
+.section { margin-bottom: 28px; }
+
+.findings-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.findings-section .section-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.findings-section.detect  .section-header { background: var(--detect-bg); }
+.findings-section.defend  .section-header { background: var(--defend-bg); }
+.findings-section.respond .section-header { background: var(--respond-bg); }
+.findings-section .section-title { font-size: 16px; font-weight: 600; }
+.findings-section .section-subtitle { font-size: 12px; color: var(--text-muted); flex: 1; }
+.findings-section .section-count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+.finding {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.finding:last-child { border-bottom: none; }
+.finding-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.finding-rule { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px; color: var(--text); font-weight: 600; }
+.finding-meta { color: var(--text-muted); font-size: 12px; margin-bottom: 6px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.finding-message { color: var(--text); font-size: 13px; margin-bottom: 8px; }
+.finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.finding-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+               background: #f1eee5; color: #5a5547; letter-spacing: 0.02em; }
+.finding-snippet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                   font-size: 12px; background: #f5f3ec; padding: 6px 10px;
+                   border-radius: 4px; margin: 6px 0; color: #2a2620; overflow-x: auto; }
+.finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
+                       padding-left: 12px; border-left: 2px solid var(--border); }
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 20px;
+  align-items: baseline;
+}
+.coverage-label { font-size: 12px; color: var(--text-muted);
+                  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.coverage-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.coverage-item { font-size: 11px; padding: 2px 8px; border-radius: 4px;
+                 background: #ebe7d8; color: #5a4413; font-weight: 600; }
+.coverage-empty { font-style: italic; color: var(--text-muted); font-size: 12px; }
+
+footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+"""
+
+
+def _html_escape(s: str) -> str:
+    """Minimal HTML escape. We don't import html.escape at module level
+    just for one tiny call site — keep dep surface small."""
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def render_combined_html(result: MergeResult) -> str:
+    """Standalone HTML report — single file, embedded CSS, no external deps.
+
+    Layout (F.17):
+      1. Report header (title + scan timestamp)
+      2. Status banner if applicable (incomplete / schema-error / stale)
+      3. **D/D/R hero row** — three cards, one per category, with severity pills
+      4. Metrics row — Tier 1 / Tier 2 / FP-marked / Net actionable
+      5. Stacked severity bar
+      6. SAIGE classification card (if Tier 2 classified)
+      7. Findings — three sections led by 🔴 Detect / 🟡 Defend / 🔵 Respond,
+         each finding showing a [Tier 1]/[Tier 2] pill + severity pill +
+         file:line + framework chips + remediation
+      8. Coverage matrix
+      9. Footer with version
+
+    Designed to render cleanly in any modern browser without internet
+    access (matches AgentShield's offline-first stance — runs from H:\\
+    mapped drives just as well as locally).
+    """
+    r = result.report
+    grouped = _findings_grouped_by_ddr(r)
+    sev_total: dict[str, int] = {}
+    for bucket in grouped.values():
+        for f in bucket:
+            s = f.get("severity", "info")
+            sev_total[s] = sev_total.get(s, 0) + 1
+
+    parts: list[str] = []
+    parts.append("<!doctype html>")
+    parts.append('<html lang="en"><head><meta charset="utf-8">')
+    parts.append("<title>AgentShield combined report</title>")
+    parts.append(f"<style>{_HTML_CSS}</style>")
+    parts.append("</head><body>")
+
+    # 1. Header
+    parts.append('<div class="report-header">')
+    parts.append("<h1>AgentShield combined report</h1>")
+    parts.append(
+        '<div class="subtitle">Tier 1 (semgrep) + Tier 2 (Copilot LLM-as-scanner)'
+        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Tier 2 not run")
+        + "</div>"
+    )
+    parts.append("</div>")
+
+    # 2. Status banners
+    if not result.tier2_present:
+        parts.append(
+            '<div class="banner warn"><strong>INCOMPLETE — Tier 2 not run.</strong> '
+            "This report shows Tier 1 (semgrep) findings only. Run Copilot Tier 2 "
+            "and re-merge for full coverage.</div>"
+        )
+    elif result.schema_errors:
+        parts.append(
+            '<div class="banner error"><strong>Tier 2 output failed schema validation.</strong> '
+            "Showing Tier 1 only. Re-prompt Copilot to fix the validation errors below.</div>"
+        )
+        parts.append('<div class="section"><h2>Schema errors</h2><ul>')
+        for err in result.schema_errors:
+            parts.append(f"<li><code>{_html_escape(err.field_path)}</code> &mdash; {_html_escape(err.message)}</li>")
+        parts.append("</ul></div>")
+    elif result.stale:
+        parts.append(
+            '<div class="banner stale"><strong>STALE Tier 2.</strong> '
+            "The Tier 1 fingerprint changed since Tier 2 was run; results may be inconsistent. "
+            "Re-run Tier 2 in Copilot for fresh results.</div>"
+        )
+
+    # 3. D/D/R HERO ROW
+    parts.append('<div class="ddr-row">')
+    for cat in _DDR_ORDER:
+        emoji_label, subtitle, _desc = _DDR_LABELS[cat]
+        bucket = grouped[cat]
+        sev_counts: dict[str, int] = {}
+        for f in bucket:
+            s = f.get("severity", "info")
+            sev_counts[s] = sev_counts.get(s, 0) + 1
+        parts.append(f'<div class="ddr-card {cat}">')
+        parts.append(f'<div class="ddr-label">{_html_escape(emoji_label.split(" ", 1)[1])}</div>')
+        parts.append(f'<div class="ddr-title">{_html_escape(cat.capitalize())}</div>')
+        parts.append(f'<div class="ddr-subtitle">{_html_escape(subtitle)}</div>')
+        parts.append(f'<div class="ddr-count">{len(bucket)}</div>')
+        parts.append('<div class="sev-pills">')
+        if not bucket:
+            parts.append('<span style="color:var(--text-muted);font-size:12px;">No findings</span>')
+        else:
+            for sev in ("critical", "high", "medium", "low", "info"):
+                n = sev_counts.get(sev, 0)
+                if n:
+                    parts.append(f'<span class="pill {sev}">{sev} {n}</span>')
+        parts.append("</div>")
+        parts.append("</div>")
+    parts.append("</div>")
+
+    # 4. Metrics row
+    tier1_total = len(r.tier1_findings)
+    tier2_total = len(r.tier2_findings)
+    fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
+    parts.append('<div class="metrics-row">')
+    parts.append(f'<div class="metric"><div class="metric-label">Tier 1 (semgrep)</div><div class="metric-value">{tier1_total}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Tier 2 (Copilot)</div><div class="metric-value">{tier2_total}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Marked FP by Tier 2</div><div class="metric-value">{fp_marked}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">{result.actionable_finding_count}</div></div>')
+    parts.append("</div>")
+
+    # 5. Stacked severity bar
+    total_findings = sum(sev_total.values())
+    if total_findings:
+        parts.append('<div class="section">')
+        parts.append('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">')
+        parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
+        sev_text = " &middot; ".join(
+            f'<span class="pill {sev}">{sev_total.get(sev, 0)} {sev}</span>'
+            for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
+        )
+        parts.append(f"<span>{sev_text}</span>")
+        parts.append("</div>")
+        parts.append('<div class="severity-bar">')
+        for sev in ("critical", "high", "medium", "low", "info"):
+            n = sev_total.get(sev, 0)
+            if n:
+                pct = (n / total_findings) * 100
+                parts.append(f'<div class="{sev}" style="width:{pct:.1f}%"></div>')
+        parts.append("</div></div>")
+
+    # 6. SAIGE classification
+    if r.saige_tier:
+        tier_label = "Non-Agent" if r.saige_tier == "non-agent" else f"Tier {r.saige_tier}"
+        parts.append('<div class="saige-card">')
+        parts.append('<div class="saige-label">JPMC SAIGE Agent Tier classification</div>')
+        parts.append(f'<div class="saige-tier">{_html_escape(tier_label)}</div>')
+        parts.append(f'<div class="saige-rationale">{_html_escape(r.saige_tier_reasoning or "(no reasoning provided)")}</div>')
+        parts.append(
+            '<div class="saige-footer">Informational only — AgentShield does not '
+            "filter or prioritise findings based on this classification.</div>"
+        )
+        parts.append("</div>")
+
+    # 7. Findings — D/D/R-led
+    for cat in _DDR_ORDER:
+        emoji_label, subtitle, desc = _DDR_LABELS[cat]
+        bucket = grouped[cat]
+        parts.append(f'<div class="findings-section {cat}">')
+        parts.append('<div class="section-header">')
+        parts.append(f'<span class="section-title">{_html_escape(emoji_label)} &mdash; {_html_escape(subtitle)}</span>')
+        parts.append(f'<span class="section-subtitle">{_html_escape(desc)}</span>')
+        parts.append(f'<span class="section-count">{len(bucket)} finding{"s" if len(bucket) != 1 else ""}</span>')
+        parts.append("</div>")
+        if not bucket:
+            parts.append(f'<div class="finding"><span style="color:var(--text-muted);font-style:italic;">No {cat} findings.</span></div>')
+        else:
+            for f in bucket:
+                origin = f["_origin"]
+                sev = f.get("severity", "info")
+                rule = f.get("rule_id_short") or f.get("rule_id") or "?"
+                file_ = f.get("file") or "?"
+                line_ = f.get("line") or "?"
+                parts.append('<div class="finding">')
+                parts.append('<div class="finding-header">')
+                parts.append(f'<span class="pill {origin}">{"Tier 1" if origin == "tier1" else "Tier 2"}</span>')
+                parts.append(f'<span class="pill {sev}">{sev}</span>')
+                parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
+                if origin == "tier1" and f.get("_tier2_verdict"):
+                    v = f["_tier2_verdict"].lower()
+                    parts.append(f'<span class="pill {v}">Tier 2: {f["_tier2_verdict"]}</span>')
+                parts.append("</div>")
+                parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
+                if f.get("message"):
+                    parts.append(f'<div class="finding-message">{_html_escape(f["message"])}</div>')
+                fm = f.get("framework_mappings") or f
+                tags: list[str] = []
+                for k_label, k_field in (
+                    ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
+                    ("ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+                ):
+                    for v in (fm.get(k_field) or []):
+                        tags.append(f"{k_label} {v}")
+                if tags:
+                    parts.append('<div class="finding-tags">')
+                    for t in tags:
+                        parts.append(f'<span class="finding-tag">{_html_escape(t)}</span>')
+                    parts.append("</div>")
+                if f.get("snippet"):
+                    parts.append(f'<div class="finding-snippet">{_html_escape(f["snippet"])}</div>')
+                if f.get("remediation"):
+                    parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
+                if origin == "tier1" and f.get("_tier2_reasoning"):
+                    parts.append(f'<div class="finding-remediation"><strong>Tier 2 reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                parts.append("</div>")
+        parts.append("</div>")
+
+    # 8. Coverage matrix
+    parts.append('<h2>Coverage matrix</h2>')
+    parts.append('<div class="coverage-grid">')
+    for k_label, k_key in (
+        ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
+        ("MITRE ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+    ):
+        items = sorted(getattr(r.coverage, k_key))
+        parts.append(f'<div class="coverage-label">{_html_escape(k_label)}</div>')
+        if items:
+            chips = "".join(f'<span class="coverage-item">{_html_escape(i)}</span>' for i in items)
+            parts.append(f'<div class="coverage-items">{chips}</div>')
+        else:
+            parts.append('<div class="coverage-empty">(none touched)</div>')
+    parts.append("</div>")
+
+    # 9. Footer
+    parts.append("<footer>")
+    parts.append("AgentShield v2 &middot; ")
+    if r.tier1_fingerprint:
+        parts.append(f'Tier 1 fingerprint <code>{_html_escape(r.tier1_fingerprint[:16])}…</code>')
+    parts.append("</footer>")
+
+    parts.append("</body></html>")
+    return "\n".join(parts) + "\n"
 
 
 def render_combined_sarif(result: MergeResult) -> str:
