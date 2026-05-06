@@ -48,6 +48,7 @@ def _tier1_payload(findings: list[dict] | None = None, fingerprint: str = "abc12
             {
                 "rule_id": "agentshield.detect.unsanitized-user-input-to-llm",
                 "rule_id_short": "unsanitized-user-input-to-llm",
+                "category": "detect",
                 "file": "src/foo.py",
                 "line": 42,
                 "severity": "high",
@@ -351,6 +352,21 @@ def test_markdown_includes_summary_and_coverage(repo: Path) -> None:
     assert "LLM01" in md or "LLM02" in md
 
 
+def test_markdown_has_ddr_breakdown_section(repo: Path) -> None:
+    """Detect / Defend / Respond is AgentShield's organising spine — every
+    finding has a category. The combined report must surface it both as
+    a summary table and per-finding."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    md = render_combined_markdown(merge(repo))
+    # Category breakdown table
+    assert "Findings by Detect / Defend / Respond category" in md
+    assert "| Category | Tier 1 | Tier 2 | Total |" in md
+    # Per-finding category lines
+    assert "**Category:** detect" in md  # Tier 1 sample finding is detect
+    assert "**Category:** respond" in md  # Tier 2 sample finding is respond
+
+
 def test_json_render_mirrors_merge_state(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
@@ -363,6 +379,16 @@ def test_json_render_mirrors_merge_state(repo: Path) -> None:
     assert payload["actionable_finding_count"] == 2
     assert "coverage" in payload
     assert payload["coverage"]["owasp_llm"]
+
+
+def test_json_summary_includes_by_category(repo: Path) -> None:
+    """summary.by_category must split detect/defend/respond per tier."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    payload = json.loads(render_combined_json(merge(repo)))
+    by_cat = payload["summary"]["by_category"]
+    assert by_cat["tier1"] == {"detect": 1, "defend": 0, "respond": 0}
+    assert by_cat["tier2"] == {"detect": 0, "defend": 0, "respond": 1}
 
 
 def test_sarif_emits_two_runs_when_both_tiers_present(repo: Path) -> None:

@@ -207,6 +207,30 @@ def merge(target_root: Path) -> MergeResult:
     )
 
 
+def _ddr_counts(report: CombinedReport) -> dict[str, dict[str, int]]:
+    """Count findings per Detect/Defend/Respond category, broken out by tier.
+
+    Tier 1 findings carry `category` from the rule's YAML metadata (always
+    one of detect/defend/respond — Pydantic-enforced upstream). Tier 2
+    findings carry `category` from the schema's required enum field.
+    Unknowns get bucketed under 'detect' as a safe default since the
+    schema validator should already have caught invalid values.
+    """
+    out = {
+        "tier1": {"detect": 0, "defend": 0, "respond": 0},
+        "tier2": {"detect": 0, "defend": 0, "respond": 0},
+    }
+    for ann in report.tier1_findings:
+        cat = ann.finding.get("category")
+        if cat in out["tier1"]:
+            out["tier1"][cat] += 1
+    for f in report.tier2_findings:
+        cat = f.get("category")
+        if cat in out["tier2"]:
+            out["tier2"][cat] += 1
+    return out
+
+
 def _build_coverage(
     tier1_findings: list[dict], tier2_findings: list[dict]
 ) -> CoverageMatrix:
@@ -282,6 +306,11 @@ def render_combined_markdown(result: MergeResult) -> str:
     cd_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "CD")
     tp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "TP")
 
+    # DDR (Detect / Defend / Respond) breakdown — AgentShield's organising
+    # spine. Tier 1 findings carry `category` from rule metadata; Tier 2
+    # findings carry it from the schema's `category` enum field.
+    ddr_counts = _ddr_counts(r)
+
     lines.append("## Summary\n")
     lines.append("| Metric | Count |")
     lines.append("|---|---|")
@@ -292,6 +321,15 @@ def render_combined_markdown(result: MergeResult) -> str:
         lines.append(f"| Tier 1 marked CD by Tier 2 | {cd_marked} |")
         lines.append(f"| Tier 1 marked FP by Tier 2 | {fp_marked} |")
     lines.append(f"| **Net actionable** | **{result.actionable_finding_count}** |")
+    lines.append("")
+
+    lines.append("### Findings by Detect / Defend / Respond category\n")
+    lines.append("| Category | Tier 1 | Tier 2 | Total |")
+    lines.append("|---|---|---|---|")
+    for cat in ("detect", "defend", "respond"):
+        t1 = ddr_counts["tier1"][cat]
+        t2 = ddr_counts["tier2"][cat]
+        lines.append(f"| {cat} | {t1} | {t2} | {t1 + t2} |")
     lines.append("")
 
     # Tier 1 section
@@ -312,7 +350,9 @@ def render_combined_markdown(result: MergeResult) -> str:
             rule = f.get("rule_id") or f.get("rule_id_short") or "?"
             file_ = f.get("file") or "?"
             line_ = f.get("line") or "?"
+            category = f.get("category") or "n/a"
             lines.append(f"### [{i}] {rule}{verdict_tag}")
+            lines.append(f"- **Category:** {category} (D/D/R)")
             lines.append(f"- **Severity:** {severity}")
             lines.append(f"- **Location:** `{file_}:{line_}`")
             if f.get("message"):
@@ -335,7 +375,9 @@ def render_combined_markdown(result: MergeResult) -> str:
             rid = f.get("rule_id", "?")
             file_ = f.get("file", "?")
             line_ = f.get("line", "?")
+            category = f.get("category", "n/a")
             lines.append(f"### {rid}")
+            lines.append(f"- **Category:** {category} (D/D/R)")
             lines.append(f"- **Severity:** {sev}")
             lines.append(f"- **Location:** `{file_}:{line_}`")
             if f.get("message"):
@@ -391,6 +433,7 @@ def render_combined_json(result: MergeResult) -> str:
             "tier1_marked_tp": sum(1 for f in r.tier1_findings if f.tier2_verdict == "TP"),
             "tier1_marked_cd": sum(1 for f in r.tier1_findings if f.tier2_verdict == "CD"),
             "tier1_marked_fp": sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP"),
+            "by_category": _ddr_counts(r),
         },
         "tier1_fingerprint": r.tier1_fingerprint,
         "tier2_fingerprint": r.tier2_fingerprint,
