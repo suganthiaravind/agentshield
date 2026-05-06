@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>AgentShield combined report</title>
+<style>
+:root {
+  --bg: #fafaf7;
+  --panel: #ffffff;
+  --border: #e5e3dc;
+  --text: #1f2933;
+  --text-muted: #6b7280;
+  --accent: #2c5f7e;
+
+  --detect: #c54040;
+  --detect-bg: #fdecea;
+  --defend: #b8830f;
+  --defend-bg: #fbf3dc;
+  --respond: #2c5f7e;
+  --respond-bg: #e3eef4;
+
+  --critical: #b3261e;
+  --high: #d27800;
+  --medium: #b8830f;
+  --low: #4f7a4f;
+  --info: #5a7a8c;
+
+  --critical-bg: #fdecea;
+  --high-bg: #fdf0e0;
+  --medium-bg: #fbf3dc;
+  --low-bg: #e9f1e7;
+  --info-bg: #e8eef2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 32px 40px 80px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+h1, h2, h3 { color: var(--text); margin: 0; font-weight: 600; }
+h1 { font-size: 22px; letter-spacing: -0.01em; }
+h2 { font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase;
+     color: var(--text-muted); margin: 32px 0 12px; }
+h3 { font-size: 15px; }
+
+.report-header { padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.report-header .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+
+.banner {
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 13px;
+  border-left: 4px solid;
+}
+.banner.warn  { background: #fbf3dc; border-color: var(--defend); color: #5a3f00; }
+.banner.error { background: var(--critical-bg); border-color: var(--critical); color: #5e1a16; }
+.banner.stale { background: var(--info-bg); border-color: var(--info); color: #2c4250; }
+
+.ddr-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.ddr-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  border-top: 4px solid;
+}
+.ddr-card.detect  { border-top-color: var(--detect); }
+.ddr-card.defend  { border-top-color: var(--defend); }
+.ddr-card.respond { border-top-color: var(--respond); }
+
+.ddr-card .ddr-label {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 8px; font-weight: 600;
+}
+.ddr-card.detect  .ddr-label { color: var(--detect); }
+.ddr-card.defend  .ddr-label { color: var(--defend); }
+.ddr-card.respond .ddr-label { color: var(--respond); }
+.ddr-card .ddr-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.ddr-card .ddr-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+.ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 12px; }
+.ddr-card .sev-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pill.critical { background: var(--critical-bg); color: var(--critical); }
+.pill.high     { background: var(--high-bg);     color: var(--high); }
+.pill.medium   { background: var(--medium-bg);   color: var(--medium); }
+.pill.low      { background: var(--low-bg);      color: var(--low); }
+.pill.info     { background: var(--info-bg);     color: var(--info); }
+.pill.tier1    { background: #efe7d7; color: #5a4413; }
+.pill.tier2    { background: #d8e5ed; color: #1f4a63; }
+.pill.tp       { background: #d6e7d6; color: #2f5a2f; }
+.pill.cd       { background: #fbf3dc; color: var(--defend); }
+.pill.fp       { background: var(--high-bg); color: var(--high); }
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.metric .metric-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                        color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+.metric .metric-value { font-size: 28px; font-weight: 700; line-height: 1; }
+.metric .metric-value.actionable { color: var(--accent); }
+
+.severity-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+  margin-top: 4px;
+}
+.severity-bar > div { height: 100%; }
+.severity-bar .critical { background: var(--critical); }
+.severity-bar .high     { background: var(--high); }
+.severity-bar .medium   { background: var(--medium); }
+.severity-bar .low      { background: var(--low); }
+.severity-bar .info     { background: var(--info); }
+
+.saige-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+.saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                           color: var(--text-muted); font-weight: 600; }
+.saige-card .saige-tier { font-size: 22px; font-weight: 700; margin: 4px 0 12px; color: var(--accent); }
+.saige-card .saige-rationale { color: var(--text); font-size: 13px; line-height: 1.6; }
+.saige-card .saige-footer { font-size: 11px; color: var(--text-muted); margin-top: 12px; font-style: italic; }
+
+.section { margin-bottom: 28px; }
+
+.findings-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.findings-section .section-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.findings-section.detect  .section-header { background: var(--detect-bg); }
+.findings-section.defend  .section-header { background: var(--defend-bg); }
+.findings-section.respond .section-header { background: var(--respond-bg); }
+.findings-section .section-title { font-size: 16px; font-weight: 600; }
+.findings-section .section-subtitle { font-size: 12px; color: var(--text-muted); flex: 1; }
+.findings-section .section-count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+.finding {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.finding:last-child { border-bottom: none; }
+.finding-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.finding-rule { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px; color: var(--text); font-weight: 600; }
+.finding-meta { color: var(--text-muted); font-size: 12px; margin-bottom: 6px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.finding-message { color: var(--text); font-size: 13px; margin-bottom: 8px; }
+.finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.finding-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+               background: #f1eee5; color: #5a5547; letter-spacing: 0.02em; }
+.finding-snippet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                   font-size: 12px; background: #f5f3ec; padding: 6px 10px;
+                   border-radius: 4px; margin: 6px 0; color: #2a2620; overflow-x: auto; }
+.finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
+                       padding-left: 12px; border-left: 2px solid var(--border); }
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 20px;
+  align-items: baseline;
+}
+.coverage-label { font-size: 12px; color: var(--text-muted);
+                  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.coverage-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.coverage-item { font-size: 11px; padding: 2px 8px; border-radius: 4px;
+                 background: #ebe7d8; color: #5a4413; font-weight: 600; }
+.coverage-empty { font-style: italic; color: var(--text-muted); font-size: 12px; }
+
+footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+</style>
+</head><body>
+<div class="report-header">
+<h1>AgentShield combined report</h1>
+<div class="subtitle">Semgrep Rules-engine Scan + Copilot AI Scan &middot; scanned 2026-05-06T14:00:00Z</div>
+</div>
+<div class="ddr-row">
+<div class="ddr-card detect">
+<div class="ddr-label">Detect</div>
+<div class="ddr-title">Detect</div>
+<div class="ddr-subtitle">vulnerability surfaces</div>
+<div class="ddr-count">6</div>
+<div class="sev-pills">
+<span class="pill critical">critical 2</span>
+<span class="pill high">high 3</span>
+<span class="pill medium">medium 1</span>
+</div>
+</div>
+<div class="ddr-card defend">
+<div class="ddr-label">Defend</div>
+<div class="ddr-title">Defend</div>
+<div class="ddr-subtitle">missing controls</div>
+<div class="ddr-count">2</div>
+<div class="sev-pills">
+<span class="pill high">high 1</span>
+<span class="pill medium">medium 1</span>
+</div>
+</div>
+<div class="ddr-card respond">
+<div class="ddr-label">Respond</div>
+<div class="ddr-title">Respond</div>
+<div class="ddr-subtitle">observability gaps</div>
+<div class="ddr-count">2</div>
+<div class="sev-pills">
+<span class="pill high">high 1</span>
+<span class="pill medium">medium 1</span>
+</div>
+</div>
+</div>
+<div class="metrics-row">
+<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">4</div></div>
+<div class="metric"><div class="metric-label">Copilot AI Scan</div><div class="metric-value">6</div></div>
+<div class="metric"><div class="metric-label">Marked FP by Copilot</div><div class="metric-value">0</div></div>
+<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">10</div></div>
+</div>
+<div class="section">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>
+<span><span class="pill critical">2 critical</span> &middot; <span class="pill high">5 high</span> &middot; <span class="pill medium">3 medium</span></span>
+</div>
+<div class="severity-bar">
+<div class="critical" style="width:20.0%"></div>
+<div class="high" style="width:50.0%"></div>
+<div class="medium" style="width:30.0%"></div>
+</div></div>
+<div class="saige-card">
+<div class="saige-label">JPMC SAIGE Agent Tier classification</div>
+<div class="saige-tier">Tier 2</div>
+<div class="saige-rationale">Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish — outbound notification) and tools.py:32 (POST to billing-api cancel endpoint — modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.</div>
+<div class="saige-footer">Informational only — AgentShield does not filter or prioritise findings based on this classification.</div>
+</div>
+<div class="findings-section detect">
+<div class="section-header">
+<span class="section-title">🔴 Detect &mdash; vulnerability surfaces</span>
+<span class="section-subtitle">Where the agent is exploitable</span>
+<span class="section-count">6 findings</span>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier1">Semgrep</span>
+<span class="pill critical">critical</span>
+<span class="finding-rule">hardcoded-llm-credentials</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/config.py:7</div>
+<div class="finding-message">Hardcoded credential string passed to an LLM client constructor (OpenAI, Anthropic, Cohere, Mistral, Together, Groq, HuggingFace, Google generative AI, AWS Bedrock). Secrets in source code are CWE-798 (Use of Hard-coded Credentials) — they end up in git history, container images, and CI logs. Use environment variables, a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), or the SDK's default credential resolver instead.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+<span class="finding-tag">OWASP Agentic T3</span>
+<span class="finding-tag">ATLAS AML.T0012</span>
+<span class="finding-tag">CWE CWE-798</span>
+</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier1">Semgrep</span>
+<span class="pill critical">critical</span>
+<span class="finding-rule">llm-output-to-code-execution</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/tools.py:21</div>
+<div class="finding-message">Output from an LLM call flows into a dangerous code-execution sink (eval / exec / os.system / subprocess with shell=True). LLM output is attacker-controllable via prompt injection — feeding it to a code executor is arbitrary code execution on the host. OWASP LLM05 Improper Output Handling, OWASP Agentic T11.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM05</span>
+<span class="finding-tag">OWASP LLM LLM06</span>
+<span class="finding-tag">OWASP Agentic T2</span>
+<span class="finding-tag">OWASP Agentic T11</span>
+<span class="finding-tag">ATLAS AML.T0011</span>
+<span class="finding-tag">ATLAS AML.T0050</span>
+<span class="finding-tag">CWE CWE-94</span>
+</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier1">Semgrep</span>
+<span class="pill high">high</span>
+<span class="finding-rule">unsanitized-user-input-to-llm</span>
+<span class="pill tp">Copilot: TP</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/controller.py:21</div>
+<div class="finding-message">User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM01</span>
+<span class="finding-tag">OWASP Agentic T6</span>
+<span class="finding-tag">ATLAS AML.T0051</span>
+</div>
+<div class="finding-remediation"><strong>Copilot reasoning:</strong> request.json[&quot;message&quot;] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill high">high</span>
+<span class="finding-rule">TIER2-LLM01-02</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/controller.py:30</div>
+<div class="finding-message">Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface — attacker-controlled webpage content flows into the LLM via the summarise prompt.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM01</span>
+<span class="finding-tag">OWASP Agentic T1</span>
+<span class="finding-tag">OWASP Agentic T6</span>
+<span class="finding-tag">CWE CWE-94</span>
+</div>
+<div class="finding-snippet">docs = WebBaseLoader(article_url).load()</div>
+<div class="finding-remediation"><strong>Fix:</strong> Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted user input — pass through a guardrail layer before the LLM call.</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier1">Semgrep</span>
+<span class="pill high">high</span>
+<span class="finding-rule">unsanitized-user-input-to-llm</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/controller.py:34</div>
+<div class="finding-message">User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM01</span>
+<span class="finding-tag">OWASP Agentic T6</span>
+<span class="finding-tag">ATLAS AML.T0051</span>
+</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill medium">medium</span>
+<span class="finding-rule">TIER2-AGENTIC-T1-01</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/memory.py:17</div>
+<div class="finding-message">Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM04</span>
+<span class="finding-tag">OWASP Agentic T1</span>
+</div>
+<div class="finding-snippet">memory.setdefault(session_id, []).append({&quot;user&quot;: user_message, &quot;assistant&quot;: llm_response})</div>
+<div class="finding-remediation"><strong>Fix:</strong> Validate memory writes the same way you'd validate database writes — schema-check or pass through a content moderation classifier on persistence.</div>
+</div>
+</div>
+<div class="findings-section defend">
+<div class="section-header">
+<span class="section-title">🟡 Defend &mdash; missing controls</span>
+<span class="section-subtitle">What active defences are missing</span>
+<span class="section-count">2 findings</span>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill high">high</span>
+<span class="finding-rule">TIER2-LLM06-01</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/tools.py:26</div>
+<div class="finding-message">Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM06</span>
+<span class="finding-tag">OWASP Agentic T2</span>
+<span class="finding-tag">OWASP Agentic T10</span>
+</div>
+<div class="finding-snippet">@tool def cancel_subscription(customer_id: str)</div>
+<div class="finding-remediation"><strong>Fix:</strong> Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation.</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill medium">medium</span>
+<span class="finding-rule">TIER2-LLM10-01</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/controller.py:14</div>
+<div class="finding-message">ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound — DoS / cost exposure.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">OWASP Agentic T4</span>
+<span class="finding-tag">CWE CWE-400</span>
+</div>
+<div class="finding-snippet">chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)</div>
+<div class="finding-remediation"><strong>Fix:</strong> Pass timeout=30 (or whatever per-call ceiling fits your latency budget) and max_tokens=2000 to the ChatOpenAI constructor.</div>
+</div>
+</div>
+<div class="findings-section respond">
+<div class="section-header">
+<span class="section-title">🔵 Respond &mdash; observability gaps</span>
+<span class="section-subtitle">Whether incidents can be detected and recovered</span>
+<span class="section-count">2 findings</span>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill high">high</span>
+<span class="finding-rule">TIER2-LLM02-04</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/notifications.py:24</div>
+<div class="finding-message">LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">CWE CWE-200</span>
+</div>
+<div class="finding-snippet">sns.publish(TopicArn=&quot;...&quot;, Message=reply_body, ...)</div>
+<div class="finding-remediation"><strong>Fix:</strong> Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient.</div>
+</div>
+<div class="finding">
+<div class="finding-header">
+<span class="pill tier2">Copilot</span>
+<span class="pill medium">medium</span>
+<span class="finding-rule">TIER2-LLM10-02</span>
+</div>
+<div class="finding-meta">testbed/demo-agent/notifications.py:14</div>
+<div class="finding-message">LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.</div>
+<div class="finding-tags">
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">ATLAS AML.T0024</span>
+</div>
+<div class="finding-snippet">response = client.chat.completions.create(...)</div>
+<div class="finding-remediation"><strong>Fix:</strong> Add structured logging around every LLM invocation. Capture: input prompt (hashed), model id, latency, token counts, output (hashed). Recommended: LangSmith or OpenTelemetry traces.</div>
+</div>
+</div>
+<h2>Coverage matrix</h2>
+<div class="coverage-grid">
+<div class="coverage-label">OWASP LLM</div>
+<div class="coverage-items"><span class="coverage-item">LLM01</span><span class="coverage-item">LLM02</span><span class="coverage-item">LLM03</span><span class="coverage-item">LLM04</span><span class="coverage-item">LLM05</span><span class="coverage-item">LLM06</span><span class="coverage-item">LLM10</span></div>
+<div class="coverage-label">OWASP Agentic</div>
+<div class="coverage-items"><span class="coverage-item">T1</span><span class="coverage-item">T10</span><span class="coverage-item">T11</span><span class="coverage-item">T2</span><span class="coverage-item">T3</span><span class="coverage-item">T4</span><span class="coverage-item">T6</span><span class="coverage-item">T8</span></div>
+<div class="coverage-label">MITRE ATLAS</div>
+<div class="coverage-items"><span class="coverage-item">AML.T0011</span><span class="coverage-item">AML.T0012</span><span class="coverage-item">AML.T0024</span><span class="coverage-item">AML.T0050</span><span class="coverage-item">AML.T0051</span></div>
+<div class="coverage-label">CWE</div>
+<div class="coverage-items"><span class="coverage-item">CWE-200</span><span class="coverage-item">CWE-400</span><span class="coverage-item">CWE-798</span><span class="coverage-item">CWE-94</span></div>
+</div>
+<footer>
+AgentShield v2 &middot; 
+Tier 1 fingerprint <code>fc9897035fd993a2…</code>
+</footer>
+</body></html>

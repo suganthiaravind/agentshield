@@ -355,7 +355,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 1. Title
     lines.append("# AgentShield combined report")
     lines.append("")
-    lines.append(f"_Tier 1 (semgrep) + Tier 2 (Copilot LLM-as-scanner) · scanned {r.tier2_scanned_at or '(Tier 1 only — Tier 2 not run)'}_")
+    lines.append(f"_Semgrep Rules-engine Scan + Copilot AI Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot AI Scan not run)'}_")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -363,16 +363,17 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 2. Status banners
     if not result.tier2_present:
         lines.append(
-            "> ⚠ **INCOMPLETE: Tier 2 not run.** This report contains Tier 1 "
-            "(semgrep) findings only. Run Copilot Tier 2 against this repo and "
-            "re-merge for full coverage. See `.agentshield/tier2-bootstrap.md` "
-            "for the prompt."
+            "> ⚠ **INCOMPLETE: Copilot AI Scan not run.** This report contains "
+            "Semgrep Rules-engine Scan findings only. Run the Copilot AI Scan "
+            "against this repo and re-merge for full coverage. See "
+            "`.agentshield/tier2-bootstrap.md` for the prompt."
         )
         lines.append("")
     elif result.schema_errors:
         lines.append(
-            "> ❌ **Tier 2 output failed schema validation.** Showing Tier 1 "
-            "only. Validation errors below — re-prompt Copilot to fix and re-merge."
+            "> ❌ **Copilot AI Scan output failed schema validation.** Showing "
+            "Semgrep Rules-engine Scan only. Validation errors below — "
+            "re-prompt Copilot to fix and re-merge."
         )
         lines.append("")
         lines.append("### Schema errors")
@@ -382,12 +383,13 @@ def render_combined_markdown(result: MergeResult) -> str:
         lines.append("")
     elif result.stale:
         lines.append(
-            "> ⚠ **STALE Tier 2.** The Tier 1 fingerprint changed since Tier 2 "
-            "was run; the code (or rule pack) changed in between. Re-run Tier 2 "
-            "in Copilot Chat for fresh results."
+            "> ⚠ **STALE Copilot AI Scan.** The Semgrep fingerprint changed "
+            "since the Copilot AI Scan was run; the code (or rule pack) changed "
+            "in between. Re-run the Copilot AI Scan in Copilot Chat for fresh "
+            "results."
         )
-        lines.append(f"> - Tier 1 (current):  `{r.tier1_fingerprint[:16]}...`")
-        lines.append(f"> - Tier 2 (recorded): `{(r.tier2_fingerprint or '')[:16]}...`")
+        lines.append(f"> - Semgrep fingerprint (current):  `{r.tier1_fingerprint[:16]}...`")
+        lines.append(f"> - Copilot fingerprint (recorded): `{(r.tier2_fingerprint or '')[:16]}...`")
         lines.append("")
 
     # 3. D/D/R HERO STRIP — 3 columns, severity counts per category.
@@ -432,12 +434,12 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append("")
     lines.append("| Metric | Count |")
     lines.append("|---|---|")
-    lines.append(f"| Tier 1 (semgrep) findings | {tier1_total} |")
-    lines.append(f"| Tier 2 (Copilot) net-new findings | {tier2_total} |")
+    lines.append(f"| Semgrep Rules-engine Scan findings | {tier1_total} |")
+    lines.append(f"| Copilot AI Scan net-new findings | {tier2_total} |")
     if result.tier2_present and not result.schema_errors:
-        lines.append(f"| Tier 1 marked TP by Tier 2 | {tp_marked} |")
-        lines.append(f"| Tier 1 marked CD by Tier 2 | {cd_marked} |")
-        lines.append(f"| Tier 1 marked FP by Tier 2 | {fp_marked} |")
+        lines.append(f"| Semgrep findings marked TP by Copilot | {tp_marked} |")
+        lines.append(f"| Semgrep findings marked CD by Copilot | {cd_marked} |")
+        lines.append(f"| Semgrep findings marked FP by Copilot | {fp_marked} |")
     lines.append(f"| **Net actionable** | **{result.actionable_finding_count}** |")
     lines.append("")
 
@@ -478,7 +480,7 @@ def render_combined_markdown(result: MergeResult) -> str:
             continue
         for f in bucket:
             origin = f["_origin"]
-            origin_badge = "**[Tier 1]**" if origin == "tier1" else "**[Tier 2]**"
+            origin_badge = "**[Semgrep]**" if origin == "tier1" else "**[Copilot]**"
             sev = f.get("severity", "n/a")
             sev_badge = _severity_badge(sev)
             rule = (
@@ -491,7 +493,7 @@ def render_combined_markdown(result: MergeResult) -> str:
             verdict_tag = ""
             if origin == "tier1" and f.get("_tier2_verdict"):
                 v = f["_tier2_verdict"]
-                verdict_tag = f"  ·  Tier 2 verdict: {_VERDICT_BADGE.get(v, v)}"
+                verdict_tag = f"  ·  Copilot verdict: {_VERDICT_BADGE.get(v, v)}"
             lines.append(f"### {origin_badge} {sev_badge} `{rule}`{verdict_tag}")
             lines.append("")
             lines.append(f"- **Location:** `{file_}:{line_}`")
@@ -516,7 +518,7 @@ def render_combined_markdown(result: MergeResult) -> str:
             if f.get("remediation"):
                 lines.append(f"- **Remediation:** {f['remediation']}")
             if origin == "tier1" and f.get("_tier2_reasoning"):
-                lines.append(f"- **Tier 2 reasoning:** {f['_tier2_reasoning']}")
+                lines.append(f"- **Copilot reasoning:** {f['_tier2_reasoning']}")
             lines.append("")
 
     # 7. Coverage matrix
@@ -877,8 +879,8 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield combined report</h1>")
     parts.append(
-        '<div class="subtitle">Tier 1 (semgrep) + Tier 2 (Copilot LLM-as-scanner)'
-        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Tier 2 not run")
+        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot AI Scan'
+        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot AI Scan not run")
         + "</div>"
     )
     parts.append("</div>")
@@ -886,14 +888,14 @@ def render_combined_html(result: MergeResult) -> str:
     # 2. Status banners
     if not result.tier2_present:
         parts.append(
-            '<div class="banner warn"><strong>INCOMPLETE — Tier 2 not run.</strong> '
-            "This report shows Tier 1 (semgrep) findings only. Run Copilot Tier 2 "
-            "and re-merge for full coverage.</div>"
+            '<div class="banner warn"><strong>INCOMPLETE — Copilot AI Scan not run.</strong> '
+            "This report shows Semgrep Rules-engine Scan findings only. Run the "
+            "Copilot AI Scan and re-merge for full coverage.</div>"
         )
     elif result.schema_errors:
         parts.append(
-            '<div class="banner error"><strong>Tier 2 output failed schema validation.</strong> '
-            "Showing Tier 1 only. Re-prompt Copilot to fix the validation errors below.</div>"
+            '<div class="banner error"><strong>Copilot AI Scan output failed schema validation.</strong> '
+            "Showing Semgrep Rules-engine Scan only. Re-prompt Copilot to fix the validation errors below.</div>"
         )
         parts.append('<div class="section"><h2>Schema errors</h2><ul>')
         for err in result.schema_errors:
@@ -901,9 +903,9 @@ def render_combined_html(result: MergeResult) -> str:
         parts.append("</ul></div>")
     elif result.stale:
         parts.append(
-            '<div class="banner stale"><strong>STALE Tier 2.</strong> '
-            "The Tier 1 fingerprint changed since Tier 2 was run; results may be inconsistent. "
-            "Re-run Tier 2 in Copilot for fresh results.</div>"
+            '<div class="banner stale"><strong>STALE Copilot AI Scan.</strong> '
+            "The Semgrep fingerprint changed since the Copilot AI Scan was run; results may be inconsistent. "
+            "Re-run the Copilot AI Scan for fresh results.</div>"
         )
 
     # 3. D/D/R HERO ROW
@@ -937,9 +939,9 @@ def render_combined_html(result: MergeResult) -> str:
     tier2_total = len(r.tier2_findings)
     fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
     parts.append('<div class="metrics-row">')
-    parts.append(f'<div class="metric"><div class="metric-label">Tier 1 (semgrep)</div><div class="metric-value">{tier1_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Tier 2 (Copilot)</div><div class="metric-value">{tier2_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Marked FP by Tier 2</div><div class="metric-value">{fp_marked}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">{tier1_total}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Copilot AI Scan</div><div class="metric-value">{tier2_total}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Marked FP by Copilot</div><div class="metric-value">{fp_marked}</div></div>')
     parts.append(f'<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">{result.actionable_finding_count}</div></div>')
     parts.append("</div>")
 
@@ -997,12 +999,12 @@ def render_combined_html(result: MergeResult) -> str:
                 line_ = f.get("line") or "?"
                 parts.append('<div class="finding">')
                 parts.append('<div class="finding-header">')
-                parts.append(f'<span class="pill {origin}">{"Tier 1" if origin == "tier1" else "Tier 2"}</span>')
+                parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
                 parts.append(f'<span class="pill {sev}">{sev}</span>')
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
                 if origin == "tier1" and f.get("_tier2_verdict"):
                     v = f["_tier2_verdict"].lower()
-                    parts.append(f'<span class="pill {v}">Tier 2: {f["_tier2_verdict"]}</span>')
+                    parts.append(f'<span class="pill {v}">Copilot: {f["_tier2_verdict"]}</span>')
                 parts.append("</div>")
                 parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
                 if f.get("message"):
@@ -1025,7 +1027,7 @@ def render_combined_html(result: MergeResult) -> str:
                 if f.get("remediation"):
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
-                    parts.append(f'<div class="finding-remediation"><strong>Tier 2 reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                    parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
                 parts.append("</div>")
         parts.append("</div>")
 

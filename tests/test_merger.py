@@ -324,14 +324,14 @@ def test_markdown_has_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     result = merge(repo)
     md = render_combined_markdown(result)
-    assert "INCOMPLETE: Tier 2 not run" in md
+    assert "INCOMPLETE: Copilot AI Scan not run" in md
 
 
 def test_markdown_has_stale_banner_when_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     md = render_combined_markdown(merge(repo))
-    assert "STALE Tier 2" in md
+    assert "STALE Copilot AI Scan" in md
 
 
 def test_markdown_has_schema_error_banner(repo: Path) -> None:
@@ -375,9 +375,10 @@ def test_markdown_is_ddr_led(repo: Path) -> None:
     respond_pos = md.index("## 🔵 Respond")
     assert detect_pos < defend_pos < respond_pos
 
-    # Each finding shows a Tier 1 or Tier 2 origin badge
-    assert "[Tier 1]" in md  # the d001 fixture finding
-    assert "[Tier 2]" in md  # the TIER2-LLM02-04 fixture finding
+    # F.18: each finding shows a Semgrep or Copilot origin badge.
+    # CSS class names stay as tier1/tier2 internally; visible label changed.
+    assert "[Semgrep]" in md  # the d001 fixture finding
+    assert "[Copilot]" in md  # the TIER2-LLM02-04 fixture finding
 
 
 def test_json_render_mirrors_merge_state(repo: Path) -> None:
@@ -585,12 +586,14 @@ def test_html_findings_are_grouped_under_ddr_sections(repo: Path) -> None:
 
 
 def test_html_finding_renders_origin_pill(repo: Path) -> None:
-    """Each finding shows a Tier 1 or Tier 2 origin pill."""
+    """Each finding shows a Semgrep or Copilot origin pill (F.18 — CSS class
+    names stay tier1/tier2 internally to keep CSS overrides stable; only
+    the visible pill text changed)."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
-    assert '<span class="pill tier1">Tier 1</span>' in html
-    assert '<span class="pill tier2">Tier 2</span>' in html
+    assert '<span class="pill tier1">Semgrep</span>' in html
+    assert '<span class="pill tier2">Copilot</span>' in html
 
 
 def test_html_renders_severity_pills(repo: Path) -> None:
@@ -623,7 +626,7 @@ def test_html_omits_saige_when_unclassified(repo: Path) -> None:
 def test_html_shows_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     html = render_combined_html(merge(repo))
-    assert "INCOMPLETE — Tier 2 not run." in html
+    assert "INCOMPLETE — Copilot AI Scan not run." in html
     assert 'class="banner warn"' in html
 
 
@@ -631,7 +634,7 @@ def test_html_shows_stale_banner_on_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     html = render_combined_html(merge(repo))
-    assert "STALE Tier 2." in html
+    assert "STALE Copilot AI Scan." in html
     assert 'class="banner stale"' in html
 
 
@@ -659,3 +662,48 @@ def test_html_renders_coverage_matrix(repo: Path) -> None:
     html = render_combined_html(merge(repo))
     assert 'class="coverage-grid"' in html
     assert "OWASP LLM" in html
+
+
+def test_no_tier_label_collision_with_saige(repo: Path) -> None:
+    """F.18 — JPMC SAIGE uses 'Tier 0/1/2/3' for agent classification;
+    AgentShield's two scan phases must NOT also call themselves 'Tier 1'
+    or 'Tier 2' in user-visible labels (collision is confusing in reports).
+
+    SAIGE classification (e.g. 'Classified as: Tier 2') is the only place
+    'Tier' may appear in user-visible text. AgentShield's phases show as
+    'Semgrep Rules-engine Scan' / 'Copilot AI Scan' (long form in headers)
+    or 'Semgrep' / 'Copilot' (short form in pills)."""
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    payload["saige_tier_reasoning"] = "Autonomous + state-changing internal."
+    _write_tier2(repo, payload)
+
+    md = render_combined_markdown(merge(repo))
+    # AgentShield phase labels (the v1-vintage strings): all gone.
+    assert "Tier 1 (semgrep)" not in md
+    assert "Tier 2 (Copilot)" not in md
+    assert "[Tier 1]" not in md
+    assert "[Tier 2]" not in md
+    assert "Tier 2 verdict" not in md
+    assert "Tier 2 reasoning" not in md
+    # SAIGE classification still uses 'Tier 2' (its naming, unchanged).
+    assert "**Classified as:** Tier 2" in md
+    # New labels present.
+    assert "Semgrep Rules-engine Scan" in md
+    assert "Copilot AI Scan" in md
+    assert "[Semgrep]" in md
+    assert "[Copilot]" in md
+
+    html = render_combined_html(merge(repo))
+    # No AgentShield-phase pills with the old labels.
+    assert '>Tier 1</span>' not in html
+    assert '>Tier 2</span>' not in html
+    # SAIGE display tier is allowed to say 'Tier 2' inside its dedicated
+    # saige-tier element — verify the SAIGE classification rendered correctly.
+    assert 'class="saige-tier">Tier 2</div>' in html
+    # New labels present.
+    assert "Semgrep Rules-engine Scan" in html
+    assert "Copilot AI Scan" in html
+    assert '<span class="pill tier1">Semgrep</span>' in html
+    assert '<span class="pill tier2">Copilot</span>' in html
