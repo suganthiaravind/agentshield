@@ -197,3 +197,32 @@ def test_schema_documents_fp_verdict_enum() -> None:
     content = SCHEMA.read_text()
     for v in ['"FP"', '"CD"', '"TP"']:
         assert v in content, f"Schema missing FP-callout verdict: {v}"
+
+
+# ---------- SAIGE classification (F.16) ----------
+
+def test_checklist_has_saige_section() -> None:
+    """§8 of the bundled checklist must instruct Copilot to classify the
+    agent into one of the 5 JPMC SAIGE tiers."""
+    content = CHECKLIST.read_text()
+    assert "§8" in content
+    assert "JPMC SAIGE" in content
+    # Decision-tree references — autonomy / state-changing / external-facing
+    assert "Autonomy" in content
+    assert "State-changing" in content
+    assert "External" in content or "external" in content
+
+
+def test_checklist_documents_saige_enum_values() -> None:
+    content = CHECKLIST.read_text()
+    for value in ["non-agent", "`0`", "`1`", "`2`", "`3`"]:
+        assert value in content, f"SAIGE enum value missing from checklist: {value}"
+
+
+def test_schema_documents_saige_fields() -> None:
+    content = SCHEMA.read_text()
+    assert "saige_tier" in content
+    assert "saige_tier_reasoning" in content
+    # Enum values must appear so Copilot has the contract
+    for value in ["non-agent", '"0"', '"1"', '"2"', '"3"']:
+        assert value in content, f"SAIGE enum missing in schema doc: {value}"

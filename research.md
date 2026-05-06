@@ -21,7 +21,8 @@ For per-rule detail (what each Tier 1 rule pattern matches, what suppresses it),
   - [4.1 Static / pre-runtime](#41-static--pre-runtime)
   - [4.2 Runtime red-teaming](#42-runtime-red-teaming)
   - [4.3 How they fit together — the suggested stack](#43-how-they-fit-together--the-suggested-stack)
-- [5. Further reading & awesome lists](#5-further-reading--awesome-lists)
+- [5. JPMC SAIGE Agent Tier classification](#5-jpmc-saige-agent-tier-classification)
+- [6. Further reading & awesome lists](#6-further-reading--awesome-lists)
 
 ---
 
@@ -253,7 +254,39 @@ The four tools that are unambiguously worth installing today even before you hav
 
 ---
 
-## 5. Further reading & awesome lists
+## 5. JPMC SAIGE Agent Tier classification
+
+> **Scope note (F.16, 2026-05-06):** AgentShield reports the JPMC Strategic AI Governance and Enablement (SAIGE) agent tier as an **informational classification only** — no findings are filtered, prioritised, or weighted by tier. The tier appears in the unified report header so reviewers know which governance regime the codebase falls under; that's it.
+
+[SAIGE](https://confluence.prod.aws.jpmchase.net/confluence/spaces/ACIC/pages/5109695741/Agent+Tiers+WIP) (Confluence — internal) is JPMC's governance framework for AI agent use cases. It classifies every agentic workload into one of five categories along two axes: **autonomy** (deterministic vs non-deterministic decision-making) and **interaction breadth** (read-only vs write-modify; internal vs external/customer-facing).
+
+### The five categories
+
+| Category | Definition |
+|---|---|
+| **Non-Agent** | A system where the workflow plan is fixed at runtime and does **not** call any systems, tools, or databases. No autonomy, no agentic characteristics. |
+| **Tier 0 — Deterministic Agentic Workflow** | A non-agentic use case where the workflow plan is fixed at runtime. The agent can call pre-defined systems, tools, or databases, but follows a predetermined non-autonomous workflow without dynamic decision-making capabilities. |
+| **Tier 1 — Autonomous Workflow with Low Interaction** | An agentic use case with non-deterministic, autonomous workflow where AI uses quantitative methods to determine next steps dynamically, including calls to the next agent. The agent has only **read-only** access with no modification or state-changing capabilities across tools, systems, and databases. |
+| **Tier 2 — Autonomous Workflow with Moderate Interaction** | Tier 1 PLUS **write/modify/state-changing access** to tools, systems, and databases. |
+| **Tier 3 — Autonomous Workflow with High Interaction** | Tier 2 PLUS state-changing access to **external or customer-facing** tools, systems, and databases. |
+
+### How AgentShield classifies the agent
+
+Tier 2 (Copilot LLM-as-scanner) reads the entire repo and walks a three-question decision tree:
+
+1. **Autonomy.** Is the workflow plan fixed at runtime, or does the agent use non-deterministic autonomous decision-making (LLM-driven control flow)? → distinguishes Non-Agent / Tier 0 from Tier 1+.
+2. **State-changing access.** Does the agent perform write/modify/delete operations on tools, systems, or databases (file writes, SQL `INSERT`/`UPDATE`/`DELETE`, HTTP `POST`/`PUT`/`DELETE`/`PATCH`, message queue publishes)? → distinguishes Tier 1 from Tier 2+.
+3. **External/customer-facing reach.** Do those state-changing operations touch external systems or customer-facing data? → distinguishes Tier 2 from Tier 3.
+
+The classification + supporting evidence (file:line citations) is emitted as `saige_tier` + `saige_tier_reasoning` in `tier2-findings.json` per the [output schema](./agentshield/skills/tier2_output_schema.md.tmpl). The `agentshield merge` report surfaces it in a header line; nothing else in AgentShield's behaviour is conditional on the tier.
+
+### Why classification is Tier 2's job, not Tier 1's
+
+Semgrep can detect specific code shapes ("this method calls `chain.invoke`") but can't reason about **intent** — whether a workflow is genuinely deterministic, whether write operations target customer-facing or internal systems, whether the agent has discretion or is just dispatching a fixed plan. SAIGE classification fundamentally requires that judgment, so it sits in Tier 2 alongside the other code-comprehension checks.
+
+---
+
+## 6. Further reading & awesome lists
 
 - **TalEliyahu/Awesome-AI-Security** — https://github.com/TalEliyahu/Awesome-AI-Security — the most regularly updated curated index of tools, frameworks, and research across the whole AI security space. Bookmark this.
 - **OWASP GenAI Security Project** — https://genai.owasp.org/ — primary source for the LLM Top 10 v2 + the Agentic AI Top 10 + supporting docs (the LLM Security & Governance Checklist is a good companion to AgentShield's Tier 2 checklist).

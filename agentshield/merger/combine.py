@@ -88,6 +88,8 @@ class CombinedReport:
     tier2_scanned_at: str | None
     tier2_skipped_files: list[dict]
     tier2_scanned_files: list[str]
+    saige_tier: str | None = None  # F.16: optional JPMC SAIGE classification
+    saige_tier_reasoning: str | None = None
 
 
 @dataclass
@@ -185,6 +187,19 @@ def merge(target_root: Path) -> MergeResult:
         tier1_findings_raw, tier2.get("findings", []) if tier2_present else []
     )
 
+    # F.16: SAIGE classification — only surface if Tier 2 ran AND schema-valid.
+    # Both fields are optional; if Copilot didn't classify, they stay None.
+    saige_tier = (
+        tier2.get("saige_tier")
+        if tier2_present and not schema_errors
+        else None
+    )
+    saige_tier_reasoning = (
+        tier2.get("saige_tier_reasoning")
+        if tier2_present and not schema_errors
+        else None
+    )
+
     report = CombinedReport(
         tier1_path=tier1_path,
         tier2_path=tier2_path if tier2_present else None,
@@ -197,6 +212,8 @@ def merge(target_root: Path) -> MergeResult:
         tier2_scanned_at=tier2.get("scanned_at") if tier2_present else None,
         tier2_skipped_files=tier2.get("skipped_files", []) if tier2_present else [],
         tier2_scanned_files=tier2.get("scanned_files", []) if tier2_present else [],
+        saige_tier=saige_tier,
+        saige_tier_reasoning=saige_tier_reasoning,
     )
 
     return MergeResult(
@@ -298,6 +315,30 @@ def render_combined_markdown(result: MergeResult) -> str:
             f"> - Tier 1 fingerprint (current):  `{r.tier1_fingerprint[:16]}...`\n"
             f"> - Tier 2 fingerprint (recorded): `{(r.tier2_fingerprint or '')[:16]}...`\n"
         )
+
+    # F.16: JPMC SAIGE Agent Tier classification (informational only — no
+    # findings are filtered or weighted by tier). Surfaced from Tier 2
+    # output if Copilot classified the agent. See research.md §5 for the
+    # 5 categories and the §8 decision tree in the bundled checklist.
+    if r.saige_tier:
+        tier_label = (
+            "Non-Agent" if r.saige_tier == "non-agent"
+            else f"Tier {r.saige_tier}"
+        )
+        lines.append("## JPMC SAIGE Agent Tier classification\n")
+        lines.append(f"**Classified as:** {tier_label}")
+        lines.append("")
+        lines.append("**Rationale:**")
+        lines.append("")
+        lines.append(f"> {r.saige_tier_reasoning or '_(no reasoning provided)_'}")
+        lines.append("")
+        lines.append(
+            "_Informational only — AgentShield does not filter or prioritise "
+            "findings based on this classification. See [research.md §5]"
+            "(./research.md#5-jpmc-saige-agent-tier-classification) for the "
+            "category definitions._"
+        )
+        lines.append("")
 
     # Summary
     tier1_total = len(r.tier1_findings)
@@ -438,6 +479,8 @@ def render_combined_json(result: MergeResult) -> str:
         "tier1_fingerprint": r.tier1_fingerprint,
         "tier2_fingerprint": r.tier2_fingerprint,
         "tier2_scanned_at": r.tier2_scanned_at,
+        "saige_tier": r.saige_tier,
+        "saige_tier_reasoning": r.saige_tier_reasoning,
         "tier1_findings": [
             {
                 **ann.finding,

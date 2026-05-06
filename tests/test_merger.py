@@ -432,3 +432,102 @@ def test_sarif_severity_mapping() -> None:
     assert _severity_to_sarif_level("low") == "note"
     assert _severity_to_sarif_level("info") == "note"
     assert _severity_to_sarif_level("unknown") == "warning"  # safe default
+
+
+# ---------- SAIGE classification (F.16) ----------
+
+def test_schema_accepts_optional_saige_tier(repo: Path) -> None:
+    """When Copilot includes saige_tier + saige_tier_reasoning, schema validates."""
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    payload["saige_tier_reasoning"] = "extract.py:228 has runner.run with autonomous control flow; sns_client.publish at email_formatter.py:126 is internal."
+    result = validate_tier2_findings(payload)
+    assert result.ok, [str(e) for e in result.errors]
+
+
+def test_schema_rejects_invalid_saige_tier_value() -> None:
+    payload = _tier2_payload()
+    payload["saige_tier"] = "tier-2"  # wrong format — must be "2" not "tier-2"
+    payload["saige_tier_reasoning"] = "..."
+    result = validate_tier2_findings(payload)
+    assert any("saige_tier" in e.field_path for e in result.errors)
+
+
+def test_schema_rejects_saige_tier_without_reasoning() -> None:
+    """saige_tier_reasoning must accompany saige_tier."""
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    # no saige_tier_reasoning
+    result = validate_tier2_findings(payload)
+    assert any("saige_tier_reasoning" in e.field_path for e in result.errors)
+
+
+def test_schema_accepts_payload_without_saige(repo: Path) -> None:
+    """SAIGE classification is optional — payloads without it must still validate."""
+    payload = _tier2_payload()
+    assert "saige_tier" not in payload
+    result = validate_tier2_findings(payload)
+    assert result.ok, [str(e) for e in result.errors]
+
+
+def test_merge_surfaces_saige_when_tier2_classifies(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    payload["saige_tier_reasoning"] = "Autonomous LLM at extract.py:42; state-changing publish at sns.py:17; internal-only."
+    _write_tier2(repo, payload)
+    result = merge(repo)
+    assert result.report.saige_tier == "2"
+    assert "extract.py:42" in result.report.saige_tier_reasoning
+
+
+def test_merge_saige_none_when_tier2_does_not_classify(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())  # no saige_tier
+    result = merge(repo)
+    assert result.report.saige_tier is None
+    assert result.report.saige_tier_reasoning is None
+
+
+def test_markdown_renders_saige_classification_section(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "3"
+    payload["saige_tier_reasoning"] = "External customer-facing endpoint at api.py:99."
+    _write_tier2(repo, payload)
+    md = render_combined_markdown(merge(repo))
+    assert "## JPMC SAIGE Agent Tier classification" in md
+    assert "**Classified as:** Tier 3" in md
+    assert "External customer-facing endpoint at api.py:99." in md
+    assert "Informational only" in md  # the explanatory footnote
+
+
+def test_markdown_omits_saige_section_when_unclassified(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    md = render_combined_markdown(merge(repo))
+    assert "## JPMC SAIGE Agent Tier classification" not in md
+
+
+def test_markdown_renders_non_agent_label_correctly(repo: Path) -> None:
+    """saige_tier='non-agent' should render as 'Non-Agent', not 'Tier non-agent'."""
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "non-agent"
+    payload["saige_tier_reasoning"] = "No LLM calls; deterministic data pipeline."
+    _write_tier2(repo, payload)
+    md = render_combined_markdown(merge(repo))
+    assert "**Classified as:** Non-Agent" in md
+    assert "Tier non-agent" not in md
+
+
+def test_json_includes_saige_fields(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "1"
+    payload["saige_tier_reasoning"] = "Read-only autonomous agent."
+    _write_tier2(repo, payload)
+    result = merge(repo)
+    j = json.loads(render_combined_json(result))
+    assert j["saige_tier"] == "1"
+    assert j["saige_tier_reasoning"] == "Read-only autonomous agent."

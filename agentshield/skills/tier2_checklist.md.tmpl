@@ -61,6 +61,7 @@ fire — re-read the check definition.
 | §5 Phase E judge-surfaced gaps | 5 patterns rules never had | ~5 |
 | §6 Retired Tier 1 anti-patterns | Coverage moved from rules to LLM checks | ~8 |
 | §7 Tier 1 cross-check | FP review of Tier 1 output | n/a |
+| §8 JPMC SAIGE classification | Agent tier (non-agent / 0 / 1 / 2 / 3) — informational only | n/a |
 
 A single source-line issue may match multiple checks; emit it ONCE under
 the most specific check ID and list all relevant framework mappings on
@@ -957,8 +958,93 @@ your reasoning to the reviewer, so be specific.
 
 ---
 
+# §8. JPMC SAIGE Agent Tier classification
+
+This section is **informational classification only** — no findings are
+filtered or weighted by tier. The classification + rationale appear in
+the unified report header so a reviewer knows which JPMC governance
+regime the codebase falls under.
+
+After scanning every file (so you have full repo context), classify the
+agent into exactly one of five categories defined by JPMC's Strategic AI
+Governance and Enablement (SAIGE) framework:
+
+| Category | When to assign |
+|---|---|
+| `non-agent` | Workflow plan is fixed at runtime AND does not call any systems / tools / databases. No autonomy, no agentic characteristics. (E.g. a pure deterministic data-processing script with no LLM calls.) |
+| `0` | Tier 0 — Deterministic Agentic Workflow. Uses LLM(s) but the workflow plan is fixed at runtime; the LLM is called in a predetermined sequence with no dynamic decision-making. (E.g. a pipeline that always does extract → summarise → email.) |
+| `1` | Tier 1 — Autonomous Workflow with **Low Interaction**. Non-deterministic LLM-driven decision-making, BUT the agent has **read-only** access only — no write/modify/delete on any tool / system / database. |
+| `2` | Tier 2 — Autonomous Workflow with **Moderate Interaction**. Non-deterministic decision-making PLUS write / modify / state-changing operations on **internal** tools / systems / databases only. |
+| `3` | Tier 3 — Autonomous Workflow with **High Interaction**. Non-deterministic decision-making PLUS write / modify / state-changing operations that touch **external** systems OR **customer-facing** data. |
+
+### Decision tree to walk
+
+1. **Autonomy.** Does the codebase contain non-deterministic LLM-driven
+   control flow — e.g. `agent.run(...)`, `runner.run_stream(...)`,
+   `chain.invoke(...)`, planner agents, ReAct loops, AutoGen-style
+   multi-agent coordination, or any LLM call whose output decides the
+   next step?
+   - **No** + no LLM calls at all → `non-agent`. Stop here.
+   - **No** + has LLM calls but they're called in a fixed predetermined
+     sequence (no LLM-driven branching) → `0`. Stop here.
+   - **Yes** → continue to Q2.
+
+2. **State-changing access.** Does the agent perform any write / modify
+   / delete operations? Look for:
+   - File system: `Files.write`, `Files.delete`, `open(..., "w")`,
+     `Path.write_text`
+   - Database: SQL `INSERT` / `UPDATE` / `DELETE` / `MERGE`, ORM
+     `.save()` / `.delete()` / `.update()`
+   - HTTP: `POST` / `PUT` / `DELETE` / `PATCH` outbound calls
+   - Message queues / streaming: `publish()`, `send()`, `produce()`
+   - Cloud APIs: `s3.put_object`, `dynamodb.put_item`, `sns.publish`,
+     `sqs.send_message`
+   - **No** (read-only only) → `1`. Stop here.
+   - **Yes** → continue to Q3.
+
+3. **External / customer-facing reach.** Of the state-changing
+   operations identified in Q2, do any of them target:
+   - External (third-party) systems — partner APIs, public-facing
+     services, third-party SaaS endpoints
+   - Customer-facing data — customer accounts, customer-owned records,
+     externally-published notifications (customer email / SMS / push)
+   - **No** (all internal-only — internal microservices, internal
+     databases, internal queues) → `2`.
+   - **Yes** → `3`.
+
+### Output
+
+Emit the classification at the top level of `tier2-findings.json`:
+
+```json
+{
+  "tier": 2,
+  "scanned_at": "...",
+  "agentshield_tier1_fingerprint": "...",
+  "saige_tier": "2",
+  "saige_tier_reasoning": "Autonomous LLM decision-making confirmed at extract_anomaly.py:228 (`runner.run` with non-deterministic agent). State-changing operations confirmed at email_formatter.py:126 (`sns_client.publish`). All operations target internal MOIP systems (no customer-facing endpoints found in scanned files). Tier 2 because internal-only state changes — would be Tier 3 if external/customer-facing.",
+  "scanned_files": [...],
+  ...
+}
+```
+
+**`saige_tier`** must be one of `"non-agent"`, `"0"`, `"1"`, `"2"`, `"3"`.
+
+**`saige_tier_reasoning`** must cite specific file:line evidence for each
+question in the decision tree that the answer depended on. A reviewer
+should be able to verify the classification by looking at exactly the
+files/lines you cite.
+
+If you genuinely cannot determine the tier from the available code (e.g.
+the file Copilot couldn't load was the one that decides), set
+`saige_tier_reasoning` to `"INSUFFICIENT_EVIDENCE: <what was missing>"`
+and pick the **most conservative tier** (highest tier consistent with
+what evidence you do have) for `saige_tier`.
+
+---
+
 ## End of checklist
 
-Once you've walked every file and completed §7, finalise
-`.agentshield/tier2-findings.json` and notify the developer to run
-`agentshield merge .` for the unified report.
+Once you've walked every file, completed §7, and classified the agent
+per §8, finalise `.agentshield/tier2-findings.json` and notify the
+developer to run `agentshield merge .` for the unified report.

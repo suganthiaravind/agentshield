@@ -24,6 +24,7 @@ SEVERITY_ENUM = {"critical", "high", "medium", "low", "info"}
 CATEGORY_ENUM = {"detect", "defend", "respond"}
 VERDICT_ENUM = {"FP", "CD", "TP"}
 CONFIDENCE_ENUM = {"high", "medium", "low"}  # optional field
+SAIGE_TIER_ENUM = {"non-agent", "0", "1", "2", "3"}  # optional top-level field
 
 # Required top-level fields.
 TOP_LEVEL_REQUIRED = {
@@ -262,6 +263,23 @@ def validate_tier2_findings(payload: Any) -> ValidationResult:
                     "tier",
                     f"must be 2 for Tier 2 output, got {payload['tier']}",
                 )
+            )
+
+    # Optional SAIGE classification (F.16). If saige_tier is present, the value
+    # must be a valid enum member AND saige_tier_reasoning must also be a string.
+    if "saige_tier" in payload:
+        _check_enum(payload["saige_tier"], SAIGE_TIER_ENUM, "saige_tier", errors)
+        if "saige_tier_reasoning" not in payload:
+            errors.append(
+                SchemaError(
+                    "saige_tier_reasoning",
+                    "missing required field — saige_tier_reasoning must be present "
+                    "whenever saige_tier is present",
+                )
+            )
+        else:
+            _check_type(
+                payload["saige_tier_reasoning"], str, "saige_tier_reasoning", errors
             )
 
     # Per-finding validation

@@ -12,6 +12,8 @@ unrecognised.
   "tier": 2,
   "scanned_at": "ISO-8601 UTC timestamp",
   "agentshield_tier1_fingerprint": "string (copy verbatim from tier1-results.json)",
+  "saige_tier": "non-agent | 0 | 1 | 2 | 3",
+  "saige_tier_reasoning": "string — file:line evidence for the classification",
   "scanned_files": ["array of relative paths actually scanned"],
   "skipped_files": [
     {"path": "src/huge.py", "reason": "exceeds context window"}
@@ -32,6 +34,13 @@ unrecognised.
 | `skipped_files` | array[object] | Files Copilot couldn't process; each has `path` + `reason`. Empty array if none. |
 | `findings` | array[Finding] | See "Finding object" below. Empty array is valid. |
 | `tier1_fp_callouts` | array[Tier1FPCallout] | See "Tier1FPCallout object" below. Empty array is valid. |
+
+### Optional top-level fields (SAIGE classification)
+
+| Field | Type | Notes |
+|---|---|---|
+| `saige_tier` | enum string | One of `"non-agent"`, `"0"`, `"1"`, `"2"`, `"3"`. JPMC SAIGE Agent Tier classification. Determined per the §8 SAIGE decision tree in the checklist. Optional — emit only when classification is performed. |
+| `saige_tier_reasoning` | string | File:line evidence supporting the classification. Required when `saige_tier` is present. May be `"INSUFFICIENT_EVIDENCE: <description>"` if the codebase doesn't give enough signal — in that case, pick the most conservative (highest) tier consistent with the partial evidence. |
 
 ## Finding object
 
