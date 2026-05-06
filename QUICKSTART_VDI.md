@@ -14,8 +14,10 @@ This is the 5-minute cheat sheet — the minimum commands to scan a real agent c
 # 1. install (once per VDI)
 git clone git@github.com:suganthiaravind/agentshield.git
 cd agentshield && git checkout architecture-v2
+
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip && pip install -e ".[semgrep,dev]"
+pytest tests/                              # confirm 123 passed
 
 # 2. Tier 1 scan + emit Tier 2 skill files
 agentshield scan /path/to/your-agent-repo \
@@ -50,29 +52,44 @@ For Tier 2: an IDE with GitHub Copilot Chat enabled — VS Code or JetBrains. (N
 
 ## Step 1 — install (once per VDI)
 
+The complete install + verify sequence:
+
 ```bash
+# Pull the architecture-v2 branch
 git clone git@github.com:suganthiaravind/agentshield.git
-cd agentshield
-git checkout architecture-v2          # until v2 merges to main
+cd agentshield && git checkout architecture-v2
 
-python3.11 -m venv .venv               # use whichever 3.10+ you have
-source .venv/bin/activate
-
-pip install --upgrade pip
-pip install -e ".[semgrep,dev]"        # ~1-2 min; semgrep is the bulk
+# Install
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip && pip install -e ".[semgrep,dev]"
+pytest tests/                              # confirm 123 passed
 ```
 
-**Verify:**
+**What each line does:**
+
+- `git clone … && git checkout architecture-v2` — pulls v2 (until it merges to `main`).
+- `python3.11 -m venv .venv` — uses Python 3.11 specifically; substitute `python3.10` / `python3.12` if that's what your VDI has. **3.10+ is required.**
+- `source .venv/bin/activate` — every subsequent command in this terminal session uses the venv's Python and `agentshield` CLI.
+- `pip install -e ".[semgrep,dev]"` — installs AgentShield in editable mode plus semgrep (mandatory for Tier 1) plus dev tools (pytest). ~1-2 min; semgrep is the bulk.
+- `pytest tests/` — runs the full test suite. **Must show 123 passed.** If anything fails, stop and report — the install is broken on your VDI; nothing later will work right.
+
+**Additional sanity checks:**
 
 ```bash
 agentshield --version                  # → agentshield 0.1.0
 which agentshield                      # → <repo>/.venv/bin/agentshield
-pytest tests/ --tb=short               # → 123 passed in ~25s
+which semgrep                          # → <repo>/.venv/bin/semgrep
 ```
 
-If pytest doesn't show 123 passed, stop and report — the install is broken on your VDI.
+**Refreshing later:** when new commits land on `architecture-v2` (or v2 merges to `main`):
 
-**Refreshing later:** `git pull && pip install -e ".[semgrep,dev]" && pytest tests/` from the same repo dir, with the venv activated.
+```bash
+cd /path/to/your/agentshield/clone
+source .venv/bin/activate
+git fetch origin && git pull
+pip install -e ".[semgrep,dev]"        # in case dependencies changed
+pytest tests/                          # confirm green on your VDI Python
+```
 
 ---
 
@@ -251,6 +268,13 @@ For every codebase you scan, share these 4 things:
 ## One-pager for terminal cheat sheet
 
 ```bash
+# Install (once per VDI)
+git clone git@github.com:suganthiaravind/agentshield.git
+cd agentshield && git checkout architecture-v2
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip && pip install -e ".[semgrep,dev]"
+pytest tests/                              # confirm 123 passed
+
 # Scan
 agentshield scan <repo> --scan-all-files \
   --exclude '**/src/test/**' --exclude '**/tests/**'
