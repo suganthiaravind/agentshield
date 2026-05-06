@@ -18,7 +18,6 @@ from agentshield.normalize import (
     Finding,
     FrameworkMappings,
     Normalizer,
-    TriageVerdict,
 )
 from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner
@@ -73,31 +72,6 @@ def test_sarif_writes_to_disk(tmp_path: Path, real_findings: list[Finding]) -> N
     assert out.exists()
     sarif = json.loads(out.read_text())
     assert sarif["version"] == "2.1.0"
-
-
-def test_sarif_includes_triage_when_present(tmp_path: Path) -> None:
-    """When the judge attaches a TriageVerdict, SARIF must surface it."""
-    f = Finding(
-        rule_id="x.y",
-        rule_id_short="y",
-        agentshield_id="AS-X-001",
-        category="detect",
-        tier="fallback",
-        severity="medium",
-        confidence="low",
-        location=CodeLocation(file_path="/tmp/a.py", start_line=1),
-        message="m",
-        framework_mappings=FrameworkMappings(),
-        triage=TriageVerdict(
-            verdict="confirmed",
-            confidence=0.85,
-            reasoning="r",
-            backend="boto3-bedrock",
-            model_id="anthropic.claude-3-7-sonnet",
-        ),
-    )
-    sarif = json.loads(SarifWriter().write([f]))
-    assert sarif["runs"][0]["results"][0]["properties"]["triage"]["verdict"] == "confirmed"
 
 
 # --- JSON ---------------------------------------------------------------

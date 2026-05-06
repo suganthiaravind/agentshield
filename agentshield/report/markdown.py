@@ -68,14 +68,18 @@ class MarkdownWriter:
             cat_count[f.category] = cat_count.get(f.category, 0) + 1
             tier_count[f.tier] = tier_count.get(f.tier, 0) + 1
             sev_count[f.severity] = sev_count.get(f.severity, 0) + 1
+        # Phase F.9: collapsed v1 4-tier counts (framework/fallback/judge/discovery)
+        # to just framework — v2's active rule pack is framework-only.
         return [
             f"**{len(findings)} finding(s)**",
             "",
-            "| Category | Count | | Tier | Count | | Severity | Count |",
-            "|---|---|---|---|---|---|---|---|",
-            f"| detect | {cat_count.get('detect', 0)} | | framework | {tier_count.get('framework', 0)} | | high | {sev_count.get('high', 0)} |",
-            f"| defend | {cat_count.get('defend', 0)} | | fallback | {tier_count.get('fallback', 0)} | | medium | {sev_count.get('medium', 0)} |",
-            f"| respond | {cat_count.get('respond', 0)} | | judge | {tier_count.get('judge', 0)} | | low | {sev_count.get('low', 0)} |",
+            "| Category | Count | | Severity | Count |",
+            "|---|---|---|---|---|",
+            f"| detect | {cat_count.get('detect', 0)} | | critical | {sev_count.get('critical', 0)} |",
+            f"| defend | {cat_count.get('defend', 0)} | | high | {sev_count.get('high', 0)} |",
+            f"| respond | {cat_count.get('respond', 0)} | | medium | {sev_count.get('medium', 0)} |",
+            f"| | | | low | {sev_count.get('low', 0)} |",
+            f"| | | | info | {sev_count.get('info', 0)} |",
         ]
 
     @staticmethod
@@ -86,7 +90,7 @@ class MarkdownWriter:
             f"### {f.agentshield_id} — `{f.rule_id_short}`",
             "",
             f"- **Severity:** {badge}",
-            f"- **Tier:** {f.tier} | **Confidence:** {f.confidence}",
+            f"- **Confidence:** {f.confidence}",
             f"- **Location:** [`{loc}`]({loc})",
             f"- **Mappings:** {MarkdownWriter._render_mappings(f.framework_mappings)}",
             "",

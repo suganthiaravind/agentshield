@@ -1,3 +1,9 @@
+> # ⚠ ARCHIVED — v1 doc (kept for historical reference)
+>
+> v1 spec for the Tier 3 LLM judge that triaged fallback findings. **The judge code was deleted in Phase F.6** ([commit `14e4292`](https://github.com/suganthiaravind/agentshield/commit/14e4292)). v2's Tier 2 LLM-as-scanner runs out-of-process via Copilot in the user's IDE and is documented in [`TIER2_USAGE.md`](../../TIER2_USAGE.md) — different model, different prompt, different file format. This doc is kept only as historical reference for what the deleted system looked like.
+
+---
+
 # LLM Judge — Design Sketch
 
 Status: Draft 2026-05-02

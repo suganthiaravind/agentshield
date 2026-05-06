@@ -1,8 +1,8 @@
-"""Tier 1 + Tier 2 semgrep subprocess runner.
+"""Tier 1 semgrep subprocess runner.
 
 Invokes the bundled rule pack against a target path and returns raw
-SARIF v2.1.0 as a dict. Tier partitioning (framework vs fallback) is
-handled downstream by the normalizer (Track A3) using rule metadata.
+SARIF v2.1.0 as a dict. Output is consumed downstream by the normalizer
+which produces typed Finding objects.
 
 This module deliberately keeps no domain knowledge of finding shape —
 it just orchestrates the subprocess and returns the JSON payload.

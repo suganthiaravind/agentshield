@@ -1,3 +1,9 @@
+> # ⚠ ARCHIVED — v1 doc (kept for historical reference)
+>
+> v1 per-tier execution flows, including §4 (Tier 3 LLM judge orchestration) and §5 (Tier 4 discovery) — both deleted in Phase F.6. CLI flags shown (`--llm-backend`, `--bedrock-model-id`, `--no-judge`) no longer exist. The v2 flow is `agentshield scan` (Tier 1 + skill-file emit) → Copilot in IDE → `agentshield merge` — see [`QUICKSTART_VDI.md`](../../QUICKSTART_VDI.md).
+
+---
+
 # Per-Tier Execution Flows
 
 Status: 2026-05-03

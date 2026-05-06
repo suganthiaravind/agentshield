@@ -32,8 +32,12 @@ class JsonWriter:
 
     @staticmethod
     def _summary(findings: list[Finding]) -> dict:
+        # Phase F.9: by_tier collapsed to single "framework" bucket — v2's
+        # active rule pack is framework-only. Kept as a dict (not just a
+        # count) to keep the JSON output schema stable for downstream
+        # consumers that already key off `summary.by_tier.framework`.
         by_category: dict[str, int] = {"detect": 0, "defend": 0, "respond": 0}
-        by_tier: dict[str, int] = {"framework": 0, "fallback": 0, "judge": 0, "discovery": 0}
+        by_tier: dict[str, int] = {"framework": 0}
         by_severity: dict[str, int] = {
             "critical": 0,
             "high": 0,

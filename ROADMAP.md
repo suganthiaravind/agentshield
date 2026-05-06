@@ -74,7 +74,7 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 - **Tier 3 LLM judge tier** — boto3-Bedrock backend (`Boto3BedrockBackend`) + `JudgeOrchestrator` that routes fallback findings to the judge for triage. CLI flags `--llm-backend`, `--bedrock-model-id`, `--bedrock-region`.
 - **Three output writers** — SARIF v2.1.0 ([agentshield/report/sarif.py](./agentshield/report/sarif.py)), JSON ([agentshield/report/json_writer.py](./agentshield/report/json_writer.py)), Markdown ([agentshield/report/markdown.py](./agentshield/report/markdown.py)).
 - **Initial rule pack** — D001 (fw + fb), D002, D003, DF001, DF002, R001 — covering OWASP LLM01 (Prompt Injection), LLM06 (Excessive Agency), LLM10 audit logging side. Python only initially.
-- **Documentation** — [README.md](./README.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [ARCHITECTURE_RATIONALE.md](./ARCHITECTURE_RATIONALE.md), [GLOSSARY.md](./GLOSSARY.md), [REQUIREMENTS.md](./REQUIREMENTS.md), [TIER_FLOWS.md](./TIER_FLOWS.md), [LLM_JUDGE_DESIGN.md](./LLM_JUDGE_DESIGN.md), [VDI_TESTING.md](./VDI_TESTING.md).
+- **Documentation** — [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [ARCHITECTURE_RATIONALE.md (v1 archived)](./docs/_v1_archive/ARCHITECTURE_RATIONALE.md), [GLOSSARY.md](./GLOSSARY.md), [REQUIREMENTS.md](./REQUIREMENTS.md), [TIER_FLOWS.md (v1 archived)](./docs/_v1_archive/TIER_FLOWS.md), [LLM_JUDGE_DESIGN.md (v1 archived)](./docs/_v1_archive/LLM_JUDGE_DESIGN.md), [VDI_TESTING.md](./VDI_TESTING.md).
 - **Java rule parity (initial)** — Java versions of D001 / DF001 / R001 for langchain4j + Spring AI + Bedrock direct.
 
 ### 3.2 Phase A — testbed validation methodology
@@ -273,7 +273,7 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 ### 4.2 Tier 3 LLM judge calibration
 
-**Hypothesis:** "users get too many fallback-rule findings to triage" is the bottleneck. The fallback rule (D001-fb) emits low-confidence findings that flow through the [Tier 3 judge](./LLM_JUDGE_DESIGN.md). Phase B + C + D produced **24+ confirmed-TP and ~291 known-FP examples** that could become labeled few-shot examples in the judge prompt.
+**Hypothesis:** "users get too many fallback-rule findings to triage" is the bottleneck. The fallback rule (D001-fb) emits low-confidence findings that flow through the [Tier 3 judge (v1, retired in F.6)](./docs/_v1_archive/LLM_JUDGE_DESIGN.md). Phase B + C + D produced **24+ confirmed-TP and ~291 known-FP examples** that could become labeled few-shot examples in the judge prompt.
 
 **Scope:** Update [agentshield/judge/](./agentshield/judge/) prompts with labeled examples drawn from PHASE_B_TRIAGE.md, plus calibration sweep against the testbed to confirm FPR drops. Existing boto3-Bedrock backend stays the same.
 

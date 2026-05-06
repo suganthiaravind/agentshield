@@ -1,9 +1,20 @@
 """Internal Finding schema. The single source of truth that downstream
-report writers (Track A4) and the LLM judge (Track B) consume.
+report writers (Track A4) and the merger (F.5) consume.
 
 Designed to outlive any one input format — currently fed by SARIF
 from semgrep, but a future runtime tier (Phase II) can produce
 Finding objects too.
+
+Phase F.9 cleanup (2026-05-06):
+- `Tier` narrowed to "framework" only. v1's "fallback"/"judge"/"discovery"
+  values have no producer in v2 (D001-fb retired in F.2; judge/discovery
+  tiers deleted in F.6).
+- `Confidence` field on Finding kept on the type but always "high" in
+  v2 — semgrep rules in the active pack are all narrow taint or narrow
+  regex by construction.
+- `TriageVerdict` class + `triage` field deleted. Tier 2's TP/CD/FP
+  cross-check verdicts on Tier 1 findings live in the merger's
+  separate Tier1FPCallout shape, not on the Finding type.
 """
 
 from __future__ import annotations
@@ -13,7 +24,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Category = Literal["detect", "defend", "respond"]
-Tier = Literal["framework", "fallback", "judge", "discovery"]
+Tier = Literal["framework"]  # narrowed in F.9; v1 had 4 values
 Severity = Literal["critical", "high", "medium", "low", "info"]
 Confidence = Literal["high", "medium", "low"]
 
@@ -40,29 +51,18 @@ class CodeLocation(BaseModel):
     snippet: str | None = None
 
 
-class TriageVerdict(BaseModel):
-    """LLM-judge output, attached to fallback findings by Track B."""
-
-    verdict: Literal["confirmed", "dismissed", "needs_review"]
-    confidence: float
-    reasoning: str
-    llm_framework_guess: str | None = None
-    backend: str  # boto3-bedrock | smartsdk | copilot
-    model_id: str
-
-
 class Finding(BaseModel):
     """A single security finding, normalized from any input source."""
 
-    # Identity — both the canonical AgentShield ID (AS-D-001) and the rule id.
+    # Identity.
     rule_id: str  # full canonical id, e.g. agentshield.detect.unsanitized-user-input-to-llm
-    rule_id_short: str  # last segment, e.g. unsanitized-user-input-to-llm
-    agentshield_id: str  # e.g. AS-D-001 (or AS-D-001-FALLBACK)
+    rule_id_short: str  # last segment
+    agentshield_id: str  # e.g. AS-D-001
 
-    # Categorization — the dual mapping pattern (see ARCHITECTURE_RATIONALE §4):
-    # exactly one D/D/R category, plus many framework_mappings.
+    # Categorization — the dual mapping pattern: exactly one D/D/R category,
+    # plus many framework_mappings.
     category: Category
-    tier: Tier
+    tier: Tier  # always "framework" in v2; field retained for output-schema stability
     severity: Severity
     confidence: Confidence
 
@@ -73,6 +73,3 @@ class Finding(BaseModel):
 
     # External taxonomy mappings.
     framework_mappings: FrameworkMappings = Field(default_factory=FrameworkMappings)
-
-    # Triage verdict from Track B; None until the judge tier runs.
-    triage: TriageVerdict | None = None

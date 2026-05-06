@@ -6,9 +6,9 @@ to keep the dependency footprint minimal — SARIF is a well-defined
 JSON schema and we only need the subset semgrep already taught us.
 
 Custom AgentShield fields (agentshield_id, tier, confidence,
-framework_mappings, triage) live under `properties` on results
-and rule descriptors — supported by the SARIF spec without breaking
-standard consumers.
+framework_mappings) live under `properties` on results and rule
+descriptors — supported by the SARIF spec without breaking standard
+consumers.
 """
 
 from __future__ import annotations
@@ -127,6 +127,4 @@ class SarifWriter:
                 "framework_mappings": f.framework_mappings.model_dump(),
             },
         }
-        if f.triage is not None:
-            result["properties"]["triage"] = f.triage.model_dump()
         return result

@@ -1,3 +1,9 @@
+> # ⚠ ARCHIVED — v1 doc (kept for historical reference)
+>
+> v1 design rationale, organised around the 3-tier semgrep + LLM-judge model. Phase F (2026-05-06) moved AgentShield to a 2-tier model where Tier 2 is comprehensive LLM-as-scanner via Copilot, not in-process triage. The §1 rationale for semgrep as the primary detection engine still stands; the §2 case for the 3-tier judge architecture is the part v2 supersedes. See [`ARCHITECTURE_V2.md` §1-§3](../../ARCHITECTURE_V2.md#1-why-this-exists) for the v2 rationale.
+
+---
+
 # AgentShield — Architecture Rationale
 
 Status: Draft 2026-05-03

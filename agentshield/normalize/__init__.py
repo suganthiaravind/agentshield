@@ -1,4 +1,4 @@
-"""SARIF → AgentShield Finding schema. Track A3."""
+"""SARIF → AgentShield Finding schema."""
 
 from agentshield.normalize.normalizer import Normalizer, NormalizerError
 from agentshield.normalize.schema import (
@@ -8,7 +8,6 @@ from agentshield.normalize.schema import (
     FrameworkMappings,
     Severity,
     Tier,
-    TriageVerdict,
 )
 
 __all__ = [
@@ -20,5 +19,4 @@ __all__ = [
     "NormalizerError",
     "Severity",
     "Tier",
-    "TriageVerdict",
 ]

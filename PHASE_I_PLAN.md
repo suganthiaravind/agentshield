@@ -3,6 +3,8 @@
 Status: Approved 2026-05-02
 Source brief: [project.md](./project.md)
 
+> **⚠ Historical (2026-05-06).** This is the v0.1 plan from project inception. **Phase F (architecture v2) supersedes Tracks B (LLM judge backends) and D (Tier 4 discovery)** — the judge tier code was deleted in F.6 and discovery was folded into Tier 2's whole-repo Copilot scan. See [`ROADMAP.md` §3.9](./ROADMAP.md#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner) for the v2 phased delivery and [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) for the current design. The strategic context below (§1-§3 — why the project exists, what it does, the D/D/R taxonomy) remains valid; the Track B/D implementation specifics are obsolete.
+
 ---
 
 ## 1. Vision

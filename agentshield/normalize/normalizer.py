@@ -90,9 +90,10 @@ class Normalizer:
 
     @staticmethod
     def _resolve_tier(rule: dict[str, Any]) -> Tier:
-        meta_tier = (rule.get("metadata") or {}).get("tier")
-        if meta_tier == "fallback":
-            return "fallback"
+        # Phase F.9: every active v2 rule is framework-tier. The v1
+        # `metadata.tier: fallback` lookup is dead (D001-fb retired in F.2),
+        # so we return the constant. Field retained on the type for
+        # downstream output-schema stability.
         return "framework"
 
     @staticmethod
@@ -100,9 +101,9 @@ class Normalizer:
         confidence = (rule.get("metadata") or {}).get("confidence")
         if confidence in {"high", "medium", "low"}:
             return confidence  # type: ignore[return-value]
-        # Fallback rules default to low; framework rules default to high.
-        if (rule.get("metadata") or {}).get("tier") == "fallback":
-            return "low"
+        # All active v2 rules default to high — narrow taint or narrow regex
+        # by construction. v1's "fallback rules default to low" branch
+        # removed in F.9 (no fallback rules left).
         return "high"
 
     @staticmethod

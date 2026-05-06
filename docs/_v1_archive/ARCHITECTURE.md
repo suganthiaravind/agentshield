@@ -1,3 +1,9 @@
+> # ⚠ ARCHIVED — v1 doc (kept for historical reference)
+>
+> v1 architecture (4-tier model with Tier 3 LLM judge + Tier 4 discovery). Superseded by [`ARCHITECTURE_V2.md`](../../ARCHITECTURE_V2.md) (v2 = 2 tiers: semgrep + Copilot-as-scanner). The judge tier code was deleted in Phase F.6 (see [`ROADMAP.md` §3.9](../../ROADMAP.md#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner)).
+
+---
+
 # AgentShield — Architecture
 
 Status: Draft 2026-05-03
