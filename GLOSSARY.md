@@ -275,6 +275,8 @@ For AI agents, "pentest" usually means a one-time engagement combining static re
 
 Standards AgentShield maps every finding to. Each finding's `framework_mappings` block carries pointers into multiple of these.
 
+> **For per-framework AgentShield coverage tables** (which Tier 1 rule / Tier 2 check covers each OWASP / Agentic / ATLAS / CWE item), see [research.md §2](./research.md#2-security-frameworks-agentshield-maps-findings-to). The definitions below are short reference summaries; research.md has the per-item AgentShield mapping.
+
 ### OWASP LLM Top 10
 
 **Industry consensus list of the ten most critical security risks specific to LLM applications.** Maintained by the OWASP GenAI Security Project. Re-issued annually.
