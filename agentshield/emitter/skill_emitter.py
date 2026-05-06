@@ -1,0 +1,197 @@
+"""Emit Tier 2 skill files into a target repo (Phase F.4).
+
+After Tier 1 (semgrep) completes, the emitter:
+1. Creates `<target>/.agentshield/` if missing.
+2. Copies the 3 bundled skill templates (bootstrap, checklist, output
+   schema) verbatim into `.agentshield/`.
+3. Writes `<target>/.agentshield/tier1-results.json` with the Tier 1
+   findings + a fingerprint hash for stale-detection.
+4. Idempotently appends `.agentshield/` to `<target>/.gitignore` so the
+   generated artifacts don't get accidentally committed.
+
+The CLI (rewired in Phase F.6) calls `emit_skills(...)` once per scan
+and prints `copilot_prompt(...)` so the user knows what to paste into
+Copilot Chat.
+
+Stale-detection: `compute_tier1_fingerprint` produces a SHA-256 over
+sorted `(file, line, rule_id)` tuples. Copilot copies this verbatim
+into `tier2-findings.json`. The merger (F.5) compares the two; mismatch
+means the user re-ran Tier 1 after Tier 2, so the Tier 2 results are
+stale and should be re-generated.
+
+This module has no Tier 1 / Tier 2 / CLI dependencies — it only takes
+already-computed findings as input. That keeps the emitter testable
+without spinning up semgrep.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+SKILLS_DIR = Path(__file__).parent.parent / "skills"
+
+# Source template -> destination filename inside .agentshield/.
+TEMPLATE_FILES = {
+    "tier2_bootstrap.md.tmpl": "tier2-bootstrap.md",
+    "tier2_checklist.md.tmpl": "tier2-checklist.md",
+    "tier2_output_schema.md.tmpl": "tier2-output-schema.md",
+}
+
+GITIGNORE_ENTRY = ".agentshield/"
+GITIGNORE_MARKER = "# AgentShield Tier 2 generated artifacts (do not commit)"
+
+
+@dataclass
+class EmitResult:
+    """What `emit_skills` did. The CLI uses this to print a summary."""
+
+    target_root: Path
+    emitted_files: list[Path]
+    tier1_path: Path
+    fingerprint: str
+    gitignore_updated: bool
+
+
+def compute_tier1_fingerprint(findings: list[dict]) -> str:
+    """SHA-256 over sorted (file, line, rule_id) tuples.
+
+    Stable across re-runs that produce the same findings. Order-independent
+    (shuffled findings produce the same hash). Sensitive to: any change in
+    the set of (file, line, rule_id) triples.
+
+    The merger uses fingerprint match to confirm Tier 2 was run against
+    the same Tier 1 output. Mismatch = stale Tier 2 = warn loudly.
+    """
+    keys = sorted(
+        (
+            str(f.get("file", "")),
+            int(f.get("line", 0) or 0),
+            str(f.get("rule_id", "")),
+        )
+        for f in findings
+    )
+    payload = json.dumps(keys, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def copilot_prompt() -> str:
+    """The exact prompt the user pastes into Copilot Chat to run Tier 2.
+
+    Kept here (not in the bootstrap markdown) so the CLI can print it as
+    its final output, copy-paste-ready.
+    """
+    return (
+        "@workspace Please run AgentShield Tier 2.\n"
+        "\n"
+        "Read the checklist at .agentshield/tier2-checklist.md and the\n"
+        "output schema at .agentshield/tier2-output-schema.md. Walk every\n"
+        "source file in this workspace, apply each check that is in scope\n"
+        "for the file's language, and write your findings to\n"
+        ".agentshield/tier2-findings.json following the schema exactly.\n"
+        "\n"
+        "Also read .agentshield/tier1-results.json and add a\n"
+        "tier1_fp_callouts section noting any Tier 1 finding you believe\n"
+        "is a false positive, with reasoning.\n"
+        "\n"
+        "Important: copy the agentshield_tier1_fingerprint field from\n"
+        "tier1-results.json verbatim into your output. The merger uses it\n"
+        "to detect stale Tier 2 runs."
+    )
+
+
+def ensure_gitignored(target_root: Path) -> bool:
+    """Append `.agentshield/` to `<target>/.gitignore` if not present.
+
+    Returns True if the file was modified (created or appended), False if
+    the entry was already present (idempotent).
+
+    Recognises any of `.agentshield/`, `.agentshield`, `.agentshield/*`
+    as already-present so we don't add duplicate lines on every scan.
+    """
+    gi = target_root / ".gitignore"
+    accepted_forms = {".agentshield/", ".agentshield", ".agentshield/*"}
+
+    if not gi.exists():
+        gi.write_text(f"{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n")
+        return True
+
+    content = gi.read_text()
+    existing_lines = {ln.strip() for ln in content.splitlines()}
+    if accepted_forms & existing_lines:
+        return False
+
+    sep = "" if content.endswith("\n") else "\n"
+    gi.write_text(content + sep + f"\n{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n")
+    return True
+
+
+def emit_skills(
+    target_root: Path,
+    findings: list[dict],
+    scanned_files: list[str],
+    *,
+    now_utc: datetime | None = None,
+) -> EmitResult:
+    """Render all 3 templates + tier1-results.json + update .gitignore.
+
+    Args:
+        target_root: Repository root the user passed to `agentshield scan`.
+        findings: Tier 1 findings as plain dicts (each must have at least
+            `file`, `line`, `rule_id`; the emitter passes the rest through
+            for Copilot to read).
+        scanned_files: List of repo-relative POSIX paths Tier 1 scanned.
+        now_utc: Override for testing — defaults to datetime.now(UTC).
+
+    Returns:
+        EmitResult describing what was written.
+
+    Side effects:
+        Creates `<target>/.agentshield/`, writes 4 files, may modify
+        `<target>/.gitignore`. Always overwrites the 3 template copies +
+        tier1-results.json (they are generated artifacts).
+    """
+    target_root = Path(target_root)
+    out = target_root / ".agentshield"
+    out.mkdir(exist_ok=True)
+
+    emitted: list[Path] = []
+    for src_name, dst_name in TEMPLATE_FILES.items():
+        src = SKILLS_DIR / src_name
+        if not src.exists():
+            raise FileNotFoundError(
+                f"Bundled skill template missing: {src} "
+                "(reinstall agentshield package)"
+            )
+        dst = out / dst_name
+        dst.write_text(src.read_text())
+        emitted.append(dst)
+
+    fingerprint = compute_tier1_fingerprint(findings)
+    ts = (now_utc or datetime.now(timezone.utc)).isoformat()
+    if ts.endswith("+00:00"):
+        ts = ts[:-6] + "Z"
+
+    tier1_payload = {
+        "tier": 1,
+        "scanned_at": ts,
+        "agentshield_tier1_fingerprint": fingerprint,
+        "scanned_files": list(scanned_files),
+        "findings": list(findings),
+    }
+    tier1_path = out / "tier1-results.json"
+    tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n")
+    emitted.append(tier1_path)
+
+    gitignore_updated = ensure_gitignored(target_root)
+
+    return EmitResult(
+        target_root=target_root,
+        emitted_files=emitted,
+        tier1_path=tier1_path,
+        fingerprint=fingerprint,
+        gitignore_updated=gitignore_updated,
+    )
