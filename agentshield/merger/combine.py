@@ -887,6 +887,321 @@ footer {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* F.21: interactive filter bar + expand-collapse */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.filter-bar .filter-group {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+}
+.filter-bar .filter-search-group { flex: 1; min-width: 240px; gap: 8px; }
+.filter-bar .filter-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600; margin-right: 4px;
+}
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  background: #ebe7d8;
+  color: #5a5547;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.filter-chip input[type="checkbox"] { display: none; }
+.filter-chip:not(.active) { opacity: 0.45; text-decoration: line-through; }
+.filter-chip.critical.active { background: var(--critical-bg); color: var(--critical); }
+.filter-chip.high.active     { background: var(--high-bg); color: var(--high); }
+.filter-chip.medium.active   { background: var(--medium-bg); color: var(--medium); }
+.filter-chip.low.active      { background: var(--low-bg); color: var(--low); }
+.filter-chip.info.active     { background: var(--info-bg); color: var(--info); }
+.filter-chip.cat-detect.active  { background: var(--detect-bg); color: var(--detect); }
+.filter-chip.cat-defend.active  { background: var(--defend-bg); color: var(--defend); }
+.filter-chip.cat-respond.active { background: var(--respond-bg); color: var(--respond); }
+.filter-chip.tier1.active    { background: #efe7d7; color: #5a4413; }
+.filter-chip.tier2.active    { background: #d8e5ed; color: #1f4a63; }
+
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fafaf7;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+.filter-search:focus { border-color: var(--accent); }
+.filter-reset {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafaf7;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+.filter-reset:hover { background: var(--border); }
+.filter-status {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  min-height: 16px;
+}
+.filter-status.active { color: var(--accent); font-weight: 600; }
+
+/* expand/collapse mechanics */
+.finding {
+  cursor: default;
+}
+.finding-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 6px 0 0;
+  line-height: 1;
+  transition: transform 0.18s ease, color 0.12s ease;
+  flex-shrink: 0;
+}
+.finding-toggle:hover { color: var(--text); }
+.finding.collapsed .finding-toggle { transform: rotate(-90deg); }
+.finding.collapsed .finding-message,
+.finding.collapsed .finding-body { display: none; }
+
+/* hidden by filter — distinct from collapsed (which only hides the body) */
+.finding.filtered-out,
+.findings-section.empty-by-filter {
+  display: none;
+}
+
+/* framework chips become clickable filter triggers */
+.finding-tag[role="button"] {
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.finding-tag[role="button"]:hover {
+  background: var(--accent);
+  color: white;
+}
+.finding-tag.framework-active {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.18);
+}
+"""
+
+
+_HTML_JS = """
+(function () {
+  // ----- DOM lookup -----
+  var findings = Array.prototype.slice.call(document.querySelectorAll('.finding[data-severity]'));
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.findings-section[data-section]'));
+  var filterCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.filter-chip input[data-filter]'));
+  var searchBox = document.getElementById('finding-search');
+  var resetBtn = document.getElementById('filter-reset');
+  var statusEl = document.getElementById('filter-status');
+
+  // Mark each filter-chip with .active mirroring its checkbox state.
+  function syncChipClass(input) {
+    var chip = input.closest('.filter-chip');
+    if (chip) chip.classList.toggle('active', input.checked);
+  }
+  filterCheckboxes.forEach(syncChipClass);
+
+  // ----- single source of truth: framework filter (set of "field:value") -----
+  var activeFrameworkFilters = new Set();
+
+  // ----- compute visibility for one finding -----
+  function findingMatches(f) {
+    // Severity / category / origin: must be in active set.
+    var sev = f.getAttribute('data-severity');
+    var cat = f.getAttribute('data-category');
+    var origin = f.getAttribute('data-origin');
+    if (!isChecked('severity', sev)) return false;
+    if (!isChecked('category', cat)) return false;
+    if (!isChecked('origin', origin)) return false;
+    // Framework drill-down: if any framework filter is active, the finding
+    // must carry at least one of those framework keys.
+    if (activeFrameworkFilters.size > 0) {
+      var fw = (f.getAttribute('data-frameworks') || '').split(/\\s+/);
+      var hit = false;
+      activeFrameworkFilters.forEach(function (k) { if (fw.indexOf(k) !== -1) hit = true; });
+      if (!hit) return false;
+    }
+    // Search: case-insensitive substring on the prebuilt search blob.
+    var q = (searchBox.value || '').trim().toLowerCase();
+    if (q && (f.getAttribute('data-search') || '').indexOf(q) === -1) return false;
+    return true;
+  }
+
+  function isChecked(filterName, value) {
+    var input = document.querySelector('.filter-chip input[data-filter="' + filterName + '"][value="' + value + '"]');
+    return input ? input.checked : true;
+  }
+
+  // ----- apply filter: hide non-matching findings, hide empty sections,
+  //       update D/D/R hero counts + section counts + status line -----
+  function applyFilter() {
+    var visiblePerCat = { detect: 0, defend: 0, respond: 0 };
+    findings.forEach(function (f) {
+      var visible = findingMatches(f);
+      f.classList.toggle('filtered-out', !visible);
+      if (visible) visiblePerCat[f.getAttribute('data-category')]++;
+    });
+
+    sections.forEach(function (s) {
+      var cat = s.getAttribute('data-section');
+      // Hide section entirely if no visible non-empty findings AND no
+      // .finding-empty placeholder (keep the "No findings" placeholder
+      // visible if every real finding is filtered out — feels less
+      // jarring than the section vanishing).
+      var visible = visiblePerCat[cat];
+      var totalCard = s.querySelector('[data-section-count]');
+      if (totalCard) {
+        var total = parseInt(totalCard.getAttribute('data-section-total'), 10);
+        if (visible === total) {
+          totalCard.textContent = total + ' finding' + (total === 1 ? '' : 's');
+        } else {
+          totalCard.textContent = visible + ' of ' + total + ' finding' + (total === 1 ? '' : 's');
+        }
+      }
+    });
+
+    // Update D/D/R hero cards.
+    Object.keys(visiblePerCat).forEach(function (cat) {
+      var el = document.querySelector('[data-ddr-count="' + cat + '"]');
+      if (!el) return;
+      var total = parseInt(el.getAttribute('data-ddr-total'), 10);
+      el.textContent = visiblePerCat[cat] === total
+        ? total
+        : visiblePerCat[cat] + '/' + total;
+    });
+
+    // Status line.
+    var totalVisible = visiblePerCat.detect + visiblePerCat.defend + visiblePerCat.respond;
+    var grandTotal = findings.length;
+    var anyFilterActive = (
+      filterCheckboxes.some(function (c) { return !c.checked; }) ||
+      (searchBox.value || '').trim().length > 0 ||
+      activeFrameworkFilters.size > 0
+    );
+    if (anyFilterActive) {
+      var bits = ['Showing ' + totalVisible + ' of ' + grandTotal + ' findings'];
+      if (activeFrameworkFilters.size > 0) {
+        bits.push('framework: ' + Array.from(activeFrameworkFilters).join(', '));
+      }
+      statusEl.textContent = bits.join(' · ');
+      statusEl.classList.add('active');
+    } else {
+      statusEl.textContent = '';
+      statusEl.classList.remove('active');
+    }
+  }
+
+  // ----- wire chip clicks -----
+  filterCheckboxes.forEach(function (input) {
+    input.addEventListener('change', function () {
+      syncChipClass(input);
+      applyFilter();
+    });
+  });
+
+  // ----- wire search input -----
+  searchBox.addEventListener('input', applyFilter);
+
+  // ----- wire reset button -----
+  resetBtn.addEventListener('click', function () {
+    filterCheckboxes.forEach(function (c) {
+      c.checked = true;
+      syncChipClass(c);
+    });
+    searchBox.value = '';
+    activeFrameworkFilters.clear();
+    document.querySelectorAll('.finding-tag.framework-active').forEach(function (t) {
+      t.classList.remove('framework-active');
+    });
+    applyFilter();
+  });
+
+  // ----- wire framework-tag click -> drill-down filter -----
+  function toggleFrameworkFilter(key) {
+    if (activeFrameworkFilters.has(key)) {
+      activeFrameworkFilters.delete(key);
+    } else {
+      activeFrameworkFilters.add(key);
+    }
+    document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+      var k = t.getAttribute('data-framework-key');
+      t.classList.toggle('framework-active', activeFrameworkFilters.has(k));
+    });
+    applyFilter();
+  }
+  document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+    t.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleFrameworkFilter(t.getAttribute('data-framework-key'));
+    });
+    t.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleFrameworkFilter(t.getAttribute('data-framework-key'));
+      }
+    });
+  });
+
+  // ----- wire expand/collapse per finding -----
+  findings.forEach(function (f) {
+    var toggle = f.querySelector('.finding-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      f.classList.toggle('collapsed');
+    });
+  });
+
+  // ----- "expand all" / "collapse all" via keyboard shortcut -----
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      findings.forEach(function (f) { f.classList.remove('collapsed'); });
+    }
+    if (e.key === 'c' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      findings.forEach(function (f) { f.classList.add('collapsed'); });
+    }
+  });
+
+  // initial render
+  applyFilter();
+})();
 """
 
 
@@ -980,7 +1295,7 @@ def render_combined_html(result: MergeResult) -> str:
             s = f.get("severity", "info")
             sev_counts[s] = sev_counts.get(s, 0) + 1
         category_label = emoji_label.split(" ", 1)[1]  # strip leading colored circle
-        parts.append(f'<div class="ddr-card {cat}">')
+        parts.append(f'<div class="ddr-card {cat}" data-ddr-card="{cat}">')
         # Icon + uppercase category label row
         parts.append('<div class="ddr-label-row">')
         parts.append(_DDR_ICON_SVG[cat])
@@ -992,7 +1307,7 @@ def render_combined_html(result: MergeResult) -> str:
         # Orienting question (block-quote with colored vertical bar)
         parts.append(f'<div class="ddr-question">"{_html_escape(question)}"</div>')
         # Big finding count
-        parts.append(f'<div class="ddr-count">{len(bucket)}</div>')
+        parts.append(f'<div class="ddr-count" data-ddr-count="{cat}" data-ddr-total="{len(bucket)}">{len(bucket)}</div>')
         # Severity pills
         parts.append('<div class="sev-pills">')
         if not bucket:
@@ -1051,17 +1366,64 @@ def render_combined_html(result: MergeResult) -> str:
         parts.append("</div>")
 
     # 7. Findings — D/D/R-led
+    # F.21: filter bar — sits above the three findings sections, drives the
+    # JS at the bottom of the page. Severity / category / origin checkboxes
+    # default to all-on; search box matches across rule_id + file + message.
+    parts.append('<div class="filter-bar" id="filter-bar">')
+    parts.append('<div class="filter-group">')
+    parts.append('<span class="filter-label">Severity</span>')
+    for sev in ("critical", "high", "medium", "low", "info"):
+        parts.append(
+            f'<label class="filter-chip {sev}"><input type="checkbox" '
+            f'data-filter="severity" value="{sev}" checked>'
+            f'<span>{sev}</span></label>'
+        )
+    parts.append("</div>")
+    parts.append('<div class="filter-group">')
+    parts.append('<span class="filter-label">Category</span>')
+    for cat in _DDR_ORDER:
+        parts.append(
+            f'<label class="filter-chip cat-{cat}"><input type="checkbox" '
+            f'data-filter="category" value="{cat}" checked>'
+            f'<span>{cat}</span></label>'
+        )
+    parts.append("</div>")
+    parts.append('<div class="filter-group">')
+    parts.append('<span class="filter-label">Origin</span>')
+    for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
+        parts.append(
+            f'<label class="filter-chip {origin_key}"><input type="checkbox" '
+            f'data-filter="origin" value="{origin_key}" checked>'
+            f'<span>{origin_label}</span></label>'
+        )
+    parts.append("</div>")
+    parts.append('<div class="filter-group filter-search-group">')
+    parts.append(
+        '<input type="search" id="finding-search" class="filter-search" '
+        'placeholder="Search rule_id / file / message…" autocomplete="off">'
+    )
+    parts.append('<button type="button" id="filter-reset" class="filter-reset">Reset</button>')
+    parts.append("</div>")
+    parts.append('<div id="filter-status" class="filter-status"></div>')
+    parts.append("</div>")
+
     for cat in _DDR_ORDER:
         emoji_label, subtitle, desc, _question = _DDR_LABELS[cat]
         bucket = grouped[cat]
-        parts.append(f'<div class="findings-section {cat}">')
+        parts.append(f'<div class="findings-section {cat}" data-section="{cat}">')
         parts.append('<div class="section-header">')
         parts.append(f'<span class="section-title">{_html_escape(emoji_label)} &mdash; {_html_escape(subtitle)}</span>')
         parts.append(f'<span class="section-subtitle">{_html_escape(desc)}</span>')
-        parts.append(f'<span class="section-count">{len(bucket)} finding{"s" if len(bucket) != 1 else ""}</span>')
+        parts.append(
+            f'<span class="section-count" data-section-count="{cat}" '
+            f'data-section-total="{len(bucket)}">{len(bucket)} finding{"s" if len(bucket) != 1 else ""}</span>'
+        )
         parts.append("</div>")
         if not bucket:
-            parts.append(f'<div class="finding"><span style="color:var(--text-muted);font-style:italic;">No {cat} findings.</span></div>')
+            parts.append(
+                f'<div class="finding finding-empty"><span style="color:var(--text-muted);'
+                f'font-style:italic;">No {cat} findings.</span></div>'
+            )
         else:
             for f in bucket:
                 origin = f["_origin"]
@@ -1069,8 +1431,31 @@ def render_combined_html(result: MergeResult) -> str:
                 rule = f.get("rule_id_short") or f.get("rule_id") or "?"
                 file_ = f.get("file") or "?"
                 line_ = f.get("line") or "?"
-                parts.append('<div class="finding">')
+                fm = f.get("framework_mappings") or f
+                fw_keys: list[str] = []
+                tags: list[str] = []
+                for k_label, k_field in (
+                    ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
+                    ("ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+                ):
+                    for v in (fm.get(k_field) or []):
+                        tags.append(f"{k_label} {v}")
+                        fw_keys.append(f"{k_field}:{v}")
+                # F.21 search index: lowercase concat of searchable fields.
+                search_blob = " ".join(
+                    str(x).lower() for x in [rule, file_, f.get("message", "")]
+                )
+                # Data attributes drive the JS filter — keep them on the
+                # outer .finding so the show/hide logic is one query selector.
+                fw_attr = " ".join(fw_keys)
+                parts.append(
+                    f'<div class="finding" data-severity="{sev}" '
+                    f'data-category="{cat}" data-origin="{origin}" '
+                    f'data-frameworks="{_html_escape(fw_attr)}" '
+                    f'data-search="{_html_escape(search_blob)}">'
+                )
                 parts.append('<div class="finding-header">')
+                parts.append('<button class="finding-toggle" aria-label="Expand finding details">▾</button>')
                 parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
                 parts.append(f'<span class="pill {sev}">{sev}</span>')
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
@@ -1081,18 +1466,26 @@ def render_combined_html(result: MergeResult) -> str:
                 parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
                 if f.get("message"):
                     parts.append(f'<div class="finding-message">{_html_escape(f["message"])}</div>')
-                fm = f.get("framework_mappings") or f
-                tags: list[str] = []
-                for k_label, k_field in (
-                    ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
-                    ("ATLAS", "mitre_atlas"), ("CWE", "cwe"),
-                ):
-                    for v in (fm.get(k_field) or []):
-                        tags.append(f"{k_label} {v}")
+                # Body: collapsible. Frameworks + snippet + remediation +
+                # Copilot reasoning live inside .finding-body so they hide
+                # when the user collapses the card.
+                parts.append('<div class="finding-body">')
                 if tags:
                     parts.append('<div class="finding-tags">')
-                    for t in tags:
-                        parts.append(f'<span class="finding-tag">{_html_escape(t)}</span>')
+                    for k_label, k_field in (
+                        ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
+                        ("ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+                    ):
+                        for v in (fm.get(k_field) or []):
+                            tag_text = f"{k_label} {v}"
+                            tag_key = f"{k_field}:{v}"
+                            parts.append(
+                                f'<span class="finding-tag" '
+                                f'data-framework-key="{_html_escape(tag_key)}" '
+                                f'role="button" tabindex="0" '
+                                f'title="Click to filter by {_html_escape(tag_text)}">'
+                                f'{_html_escape(tag_text)}</span>'
+                            )
                     parts.append("</div>")
                 if f.get("snippet"):
                     parts.append(f'<div class="finding-snippet">{_html_escape(f["snippet"])}</div>')
@@ -1100,7 +1493,8 @@ def render_combined_html(result: MergeResult) -> str:
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
                     parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
-                parts.append("</div>")
+                parts.append("</div>")  # /finding-body
+                parts.append("</div>")  # /finding
         parts.append("</div>")
 
     # 8. Coverage matrix
@@ -1126,6 +1520,14 @@ def render_combined_html(result: MergeResult) -> str:
         parts.append(f'Tier 1 fingerprint <code>{_html_escape(r.tier1_fingerprint[:16])}…</code>')
     parts.append("</footer>")
 
+    # F.21: client-side interactivity. Vanilla JS, no framework, no network
+    # calls. Filters severity / category / origin via checkbox-style chips,
+    # full-text search across rule_id+file+message, click-to-filter on
+    # framework tags, expand-collapse per-finding card, and live-updating
+    # D/D/R hero card + section counts. Initial state is everything visible.
+    parts.append('<script>')
+    parts.append(_HTML_JS)
+    parts.append('</script>')
     parts.append("</body></html>")
     return "\n".join(parts) + "\n"
 

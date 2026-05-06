@@ -243,6 +243,134 @@ footer {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* F.21: interactive filter bar + expand-collapse */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.filter-bar .filter-group {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+}
+.filter-bar .filter-search-group { flex: 1; min-width: 240px; gap: 8px; }
+.filter-bar .filter-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600; margin-right: 4px;
+}
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  background: #ebe7d8;
+  color: #5a5547;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.filter-chip input[type="checkbox"] { display: none; }
+.filter-chip:not(.active) { opacity: 0.45; text-decoration: line-through; }
+.filter-chip.critical.active { background: var(--critical-bg); color: var(--critical); }
+.filter-chip.high.active     { background: var(--high-bg); color: var(--high); }
+.filter-chip.medium.active   { background: var(--medium-bg); color: var(--medium); }
+.filter-chip.low.active      { background: var(--low-bg); color: var(--low); }
+.filter-chip.info.active     { background: var(--info-bg); color: var(--info); }
+.filter-chip.cat-detect.active  { background: var(--detect-bg); color: var(--detect); }
+.filter-chip.cat-defend.active  { background: var(--defend-bg); color: var(--defend); }
+.filter-chip.cat-respond.active { background: var(--respond-bg); color: var(--respond); }
+.filter-chip.tier1.active    { background: #efe7d7; color: #5a4413; }
+.filter-chip.tier2.active    { background: #d8e5ed; color: #1f4a63; }
+
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fafaf7;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+.filter-search:focus { border-color: var(--accent); }
+.filter-reset {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafaf7;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+.filter-reset:hover { background: var(--border); }
+.filter-status {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  min-height: 16px;
+}
+.filter-status.active { color: var(--accent); font-weight: 600; }
+
+/* expand/collapse mechanics */
+.finding {
+  cursor: default;
+}
+.finding-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 6px 0 0;
+  line-height: 1;
+  transition: transform 0.18s ease, color 0.12s ease;
+  flex-shrink: 0;
+}
+.finding-toggle:hover { color: var(--text); }
+.finding.collapsed .finding-toggle { transform: rotate(-90deg); }
+.finding.collapsed .finding-message,
+.finding.collapsed .finding-body { display: none; }
+
+/* hidden by filter — distinct from collapsed (which only hides the body) */
+.finding.filtered-out,
+.findings-section.empty-by-filter {
+  display: none;
+}
+
+/* framework chips become clickable filter triggers */
+.finding-tag[role="button"] {
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.finding-tag[role="button"]:hover {
+  background: var(--accent);
+  color: white;
+}
+.finding-tag.framework-active {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.18);
+}
 </style>
 </head><body>
 <div class="report-header">
@@ -250,7 +378,7 @@ footer {
 <div class="subtitle">Semgrep Rules-engine Scan + Copilot AI Scan &middot; scanned 2026-05-06T14:00:00Z</div>
 </div>
 <div class="ddr-row">
-<div class="ddr-card detect">
+<div class="ddr-card detect" data-ddr-card="detect">
 <div class="ddr-label-row">
 <svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 <span class="ddr-label">Detect</span>
@@ -258,14 +386,14 @@ footer {
 <div class="ddr-title">Detect</div>
 <div class="ddr-subtitle">vulnerability surfaces</div>
 <div class="ddr-question">"Where is the agent exploitable?"</div>
-<div class="ddr-count">6</div>
+<div class="ddr-count" data-ddr-count="detect" data-ddr-total="6">6</div>
 <div class="sev-pills">
 <span class="pill critical">critical 2</span>
 <span class="pill high">high 3</span>
 <span class="pill medium">medium 1</span>
 </div>
 </div>
-<div class="ddr-card defend">
+<div class="ddr-card defend" data-ddr-card="defend">
 <div class="ddr-label-row">
 <svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
 <span class="ddr-label">Defend</span>
@@ -273,13 +401,13 @@ footer {
 <div class="ddr-title">Defend</div>
 <div class="ddr-subtitle">missing controls</div>
 <div class="ddr-question">"What defenses are missing?"</div>
-<div class="ddr-count">2</div>
+<div class="ddr-count" data-ddr-count="defend" data-ddr-total="2">2</div>
 <div class="sev-pills">
 <span class="pill high">high 1</span>
 <span class="pill medium">medium 1</span>
 </div>
 </div>
-<div class="ddr-card respond">
+<div class="ddr-card respond" data-ddr-card="respond">
 <div class="ddr-label-row">
 <svg class="ddr-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
 <span class="ddr-label">Respond</span>
@@ -287,7 +415,7 @@ footer {
 <div class="ddr-title">Respond</div>
 <div class="ddr-subtitle">observability gaps</div>
 <div class="ddr-question">"If the agent misbehaves, will you see it — and stop it?"</div>
-<div class="ddr-count">2</div>
+<div class="ddr-count" data-ddr-count="respond" data-ddr-total="2">2</div>
 <div class="sev-pills">
 <span class="pill high">high 1</span>
 <span class="pill medium">medium 1</span>
@@ -316,48 +444,81 @@ footer {
 <div class="saige-rationale">Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish — outbound notification) and tools.py:32 (POST to billing-api cancel endpoint — modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.</div>
 <div class="saige-footer">Informational only — AgentShield does not filter or prioritise findings based on this classification.</div>
 </div>
-<div class="findings-section detect">
+<div class="filter-bar" id="filter-bar">
+<div class="filter-group">
+<span class="filter-label">Severity</span>
+<label class="filter-chip critical"><input type="checkbox" data-filter="severity" value="critical" checked><span>critical</span></label>
+<label class="filter-chip high"><input type="checkbox" data-filter="severity" value="high" checked><span>high</span></label>
+<label class="filter-chip medium"><input type="checkbox" data-filter="severity" value="medium" checked><span>medium</span></label>
+<label class="filter-chip low"><input type="checkbox" data-filter="severity" value="low" checked><span>low</span></label>
+<label class="filter-chip info"><input type="checkbox" data-filter="severity" value="info" checked><span>info</span></label>
+</div>
+<div class="filter-group">
+<span class="filter-label">Category</span>
+<label class="filter-chip cat-detect"><input type="checkbox" data-filter="category" value="detect" checked><span>detect</span></label>
+<label class="filter-chip cat-defend"><input type="checkbox" data-filter="category" value="defend" checked><span>defend</span></label>
+<label class="filter-chip cat-respond"><input type="checkbox" data-filter="category" value="respond" checked><span>respond</span></label>
+</div>
+<div class="filter-group">
+<span class="filter-label">Origin</span>
+<label class="filter-chip tier1"><input type="checkbox" data-filter="origin" value="tier1" checked><span>Semgrep</span></label>
+<label class="filter-chip tier2"><input type="checkbox" data-filter="origin" value="tier2" checked><span>Copilot</span></label>
+</div>
+<div class="filter-group filter-search-group">
+<input type="search" id="finding-search" class="filter-search" placeholder="Search rule_id / file / message…" autocomplete="off">
+<button type="button" id="filter-reset" class="filter-reset">Reset</button>
+</div>
+<div id="filter-status" class="filter-status"></div>
+</div>
+<div class="findings-section detect" data-section="detect">
 <div class="section-header">
 <span class="section-title">🔴 Detect &mdash; vulnerability surfaces</span>
 <span class="section-subtitle">Where the agent is exploitable</span>
-<span class="section-count">6 findings</span>
+<span class="section-count" data-section-count="detect" data-section-total="6">6 findings</span>
 </div>
-<div class="finding">
+<div class="finding" data-severity="critical" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM02 owasp_llm:LLM03 owasp_agentic:T3 mitre_atlas:AML.T0012 cwe:CWE-798" data-search="hardcoded-llm-credentials testbed/demo-agent/config.py hardcoded credential string passed to an llm client constructor (openai, anthropic, cohere, mistral, together, groq, huggingface, google generative ai, aws bedrock). secrets in source code are cwe-798 (use of hard-coded credentials) — they end up in git history, container images, and ci logs. use environment variables, a secrets manager (aws secrets manager, hashicorp vault, azure key vault), or the sdk's default credential resolver instead.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill critical">critical</span>
 <span class="finding-rule">hardcoded-llm-credentials</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/config.py:7</div>
 <div class="finding-message">Hardcoded credential string passed to an LLM client constructor (OpenAI, Anthropic, Cohere, Mistral, Together, Groq, HuggingFace, Google generative AI, AWS Bedrock). Secrets in source code are CWE-798 (Use of Hard-coded Credentials) — they end up in git history, container images, and CI logs. Use environment variables, a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), or the SDK's default credential resolver instead.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-<span class="finding-tag">OWASP Agentic T3</span>
-<span class="finding-tag">ATLAS AML.T0012</span>
-<span class="finding-tag">CWE CWE-798</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM02" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM02">OWASP LLM LLM02</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM03" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM03">OWASP LLM LLM03</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T3" role="button" tabindex="0" title="Click to filter by OWASP Agentic T3">OWASP Agentic T3</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0012" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0012">ATLAS AML.T0012</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-798" role="button" tabindex="0" title="Click to filter by CWE CWE-798">CWE CWE-798</span>
 </div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="critical" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM05 owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T11 mitre_atlas:AML.T0011 mitre_atlas:AML.T0050 cwe:CWE-94" data-search="llm-output-to-code-execution testbed/demo-agent/tools.py output from an llm call flows into a dangerous code-execution sink (eval / exec / os.system / subprocess with shell=true). llm output is attacker-controllable via prompt injection — feeding it to a code executor is arbitrary code execution on the host. owasp llm05 improper output handling, owasp agentic t11.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill critical">critical</span>
 <span class="finding-rule">llm-output-to-code-execution</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/tools.py:21</div>
 <div class="finding-message">Output from an LLM call flows into a dangerous code-execution sink (eval / exec / os.system / subprocess with shell=True). LLM output is attacker-controllable via prompt injection — feeding it to a code executor is arbitrary code execution on the host. OWASP LLM05 Improper Output Handling, OWASP Agentic T11.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM05</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP Agentic T11</span>
-<span class="finding-tag">ATLAS AML.T0011</span>
-<span class="finding-tag">ATLAS AML.T0050</span>
-<span class="finding-tag">CWE CWE-94</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM05" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM05">OWASP LLM LLM05</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM06" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM06">OWASP LLM LLM06</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T2" role="button" tabindex="0" title="Click to filter by OWASP Agentic T2">OWASP Agentic T2</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T11" role="button" tabindex="0" title="Click to filter by OWASP Agentic T11">OWASP Agentic T11</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0011" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0011">ATLAS AML.T0011</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0050" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0050">ATLAS AML.T0050</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-94" role="button" tabindex="0" title="Click to filter by CWE CWE-94">CWE CWE-94</span>
 </div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM01 owasp_agentic:T6 mitre_atlas:AML.T0051" data-search="unsanitized-user-input-to-llm testbed/demo-agent/controller.py user input from an http request flows directly into an llm/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. this is the canonical prompt-injection surface (owasp llm01).">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">unsanitized-user-input-to-llm</span>
@@ -365,136 +526,159 @@ footer {
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:21</div>
 <div class="finding-message">User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">ATLAS AML.T0051</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM01" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM01">OWASP LLM LLM01</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T6" role="button" tabindex="0" title="Click to filter by OWASP Agentic T6">OWASP Agentic T6</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0051" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0051">ATLAS AML.T0051</span>
 </div>
 <div class="finding-remediation"><strong>Copilot reasoning:</strong> request.json[&quot;message&quot;] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.</div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="high" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM01 owasp_agentic:T1 owasp_agentic:T6 cwe:CWE-94" data-search="tier2-llm01-02 testbed/demo-agent/controller.py untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. indirect prompt-injection surface — attacker-controlled webpage content flows into the llm via the summarise prompt.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">TIER2-LLM01-02</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:30</div>
 <div class="finding-message">Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface — attacker-controlled webpage content flows into the LLM via the summarise prompt.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">OWASP Agentic T1</span>
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">CWE CWE-94</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM01" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM01">OWASP LLM LLM01</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T1" role="button" tabindex="0" title="Click to filter by OWASP Agentic T1">OWASP Agentic T1</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T6" role="button" tabindex="0" title="Click to filter by OWASP Agentic T6">OWASP Agentic T6</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-94" role="button" tabindex="0" title="Click to filter by CWE CWE-94">CWE CWE-94</span>
 </div>
 <div class="finding-snippet">docs = WebBaseLoader(article_url).load()</div>
 <div class="finding-remediation"><strong>Fix:</strong> Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted user input — pass through a guardrail layer before the LLM call.</div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM01 owasp_agentic:T6 mitre_atlas:AML.T0051" data-search="unsanitized-user-input-to-llm testbed/demo-agent/controller.py user input from an http request flows directly into an llm/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. this is the canonical prompt-injection surface (owasp llm01).">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">unsanitized-user-input-to-llm</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:34</div>
 <div class="finding-message">User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">ATLAS AML.T0051</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM01" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM01">OWASP LLM LLM01</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T6" role="button" tabindex="0" title="Click to filter by OWASP Agentic T6">OWASP Agentic T6</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0051" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0051">ATLAS AML.T0051</span>
 </div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="medium" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM04 owasp_agentic:T1" data-search="tier2-agentic-t1-01 testbed/demo-agent/memory.py memory poisoning surface: both user input and raw llm output are persisted to session memory without validation. future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn n that influence turn n+1.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">TIER2-AGENTIC-T1-01</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/memory.py:17</div>
 <div class="finding-message">Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM04</span>
-<span class="finding-tag">OWASP Agentic T1</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM04" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM04">OWASP LLM LLM04</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T1" role="button" tabindex="0" title="Click to filter by OWASP Agentic T1">OWASP Agentic T1</span>
 </div>
 <div class="finding-snippet">memory.setdefault(session_id, []).append({&quot;user&quot;: user_message, &quot;assistant&quot;: llm_response})</div>
 <div class="finding-remediation"><strong>Fix:</strong> Validate memory writes the same way you'd validate database writes — schema-check or pass through a content moderation classifier on persistence.</div>
 </div>
 </div>
-<div class="findings-section defend">
+</div>
+<div class="findings-section defend" data-section="defend">
 <div class="section-header">
 <span class="section-title">🟡 Defend &mdash; missing controls</span>
 <span class="section-subtitle">What active defences are missing</span>
-<span class="section-count">2 findings</span>
+<span class="section-count" data-section-count="defend" data-section-total="2">2 findings</span>
 </div>
-<div class="finding">
+<div class="finding" data-severity="high" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T10" data-search="tier2-llm06-01 testbed/demo-agent/tools.py destructive tool registered without a human-in-the-loop approval gate. the `cancel_subscription` tool name starts with a destructive verb and the body posts to a billing api; the agent can invoke it autonomously if the planner decides to.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">TIER2-LLM06-01</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/tools.py:26</div>
 <div class="finding-message">Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP Agentic T10</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM06" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM06">OWASP LLM LLM06</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T2" role="button" tabindex="0" title="Click to filter by OWASP Agentic T2">OWASP Agentic T2</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T10" role="button" tabindex="0" title="Click to filter by OWASP Agentic T10">OWASP Agentic T10</span>
 </div>
 <div class="finding-snippet">@tool def cancel_subscription(customer_id: str)</div>
 <div class="finding-remediation"><strong>Fix:</strong> Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation.</div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="medium" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T4 cwe:CWE-400" data-search="tier2-llm10-01 testbed/demo-agent/controller.py chatopenai client instantiated without explicit timeout or max_tokens cap. a slow or runaway model call has no upper bound — dos / cost exposure.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">TIER2-LLM10-01</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:14</div>
 <div class="finding-message">ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound — DoS / cost exposure.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">OWASP Agentic T4</span>
-<span class="finding-tag">CWE CWE-400</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM10" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM10">OWASP LLM LLM10</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T4" role="button" tabindex="0" title="Click to filter by OWASP Agentic T4">OWASP Agentic T4</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-400" role="button" tabindex="0" title="Click to filter by CWE CWE-400">CWE CWE-400</span>
 </div>
 <div class="finding-snippet">chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)</div>
 <div class="finding-remediation"><strong>Fix:</strong> Pass timeout=30 (or whatever per-call ceiling fits your latency budget) and max_tokens=2000 to the ChatOpenAI constructor.</div>
 </div>
 </div>
-<div class="findings-section respond">
+</div>
+<div class="findings-section respond" data-section="respond">
 <div class="section-header">
 <span class="section-title">🔵 Respond &mdash; observability gaps</span>
 <span class="section-subtitle">Whether incidents can be detected and recovered</span>
-<span class="section-count">2 findings</span>
+<span class="section-count" data-section-count="respond" data-section-total="2">2 findings</span>
 </div>
-<div class="finding">
+<div class="finding" data-severity="high" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM02 owasp_agentic:T8 cwe:CWE-200" data-search="tier2-llm02-04 testbed/demo-agent/notifications.py llm output published to sns without scrubbing. the reply_body is a bedrock-generated string that may inadvertently include pii echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. sns subscribers receive it unfiltered.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">TIER2-LLM02-04</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/notifications.py:24</div>
 <div class="finding-message">LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">CWE CWE-200</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM02" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM02">OWASP LLM LLM02</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T8" role="button" tabindex="0" title="Click to filter by OWASP Agentic T8">OWASP Agentic T8</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-200" role="button" tabindex="0" title="Click to filter by CWE CWE-200">CWE CWE-200</span>
 </div>
 <div class="finding-snippet">sns.publish(TopicArn=&quot;...&quot;, Message=reply_body, ...)</div>
 <div class="finding-remediation"><strong>Fix:</strong> Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient.</div>
 </div>
-<div class="finding">
+</div>
+<div class="finding" data-severity="medium" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T8 mitre_atlas:AML.T0024" data-search="tier2-llm10-02 testbed/demo-agent/notifications.py llm call has no surrounding audit logging. no structured logger setup (no structlog / langsmith / opentelemetry / langchain.callbacks); no logger.info around the call. without an audit trail, incident response can't reconstruct what the model saw or returned.">
 <div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">TIER2-LLM10-02</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/notifications.py:14</div>
 <div class="finding-message">LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.</div>
+<div class="finding-body">
 <div class="finding-tags">
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM10" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM10">OWASP LLM LLM10</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T8" role="button" tabindex="0" title="Click to filter by OWASP Agentic T8">OWASP Agentic T8</span>
+<span class="finding-tag" data-framework-key="mitre_atlas:AML.T0024" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0024">ATLAS AML.T0024</span>
 </div>
 <div class="finding-snippet">response = client.chat.completions.create(...)</div>
 <div class="finding-remediation"><strong>Fix:</strong> Add structured logging around every LLM invocation. Capture: input prompt (hashed), model id, latency, token counts, output (hashed). Recommended: LangSmith or OpenTelemetry traces.</div>
+</div>
 </div>
 </div>
 <h2>Coverage matrix</h2>
@@ -512,4 +696,191 @@ footer {
 AgentShield v2 &middot; 
 Tier 1 fingerprint <code>fc9897035fd993a2…</code>
 </footer>
+<script>
+
+(function () {
+  // ----- DOM lookup -----
+  var findings = Array.prototype.slice.call(document.querySelectorAll('.finding[data-severity]'));
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.findings-section[data-section]'));
+  var filterCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.filter-chip input[data-filter]'));
+  var searchBox = document.getElementById('finding-search');
+  var resetBtn = document.getElementById('filter-reset');
+  var statusEl = document.getElementById('filter-status');
+
+  // Mark each filter-chip with .active mirroring its checkbox state.
+  function syncChipClass(input) {
+    var chip = input.closest('.filter-chip');
+    if (chip) chip.classList.toggle('active', input.checked);
+  }
+  filterCheckboxes.forEach(syncChipClass);
+
+  // ----- single source of truth: framework filter (set of "field:value") -----
+  var activeFrameworkFilters = new Set();
+
+  // ----- compute visibility for one finding -----
+  function findingMatches(f) {
+    // Severity / category / origin: must be in active set.
+    var sev = f.getAttribute('data-severity');
+    var cat = f.getAttribute('data-category');
+    var origin = f.getAttribute('data-origin');
+    if (!isChecked('severity', sev)) return false;
+    if (!isChecked('category', cat)) return false;
+    if (!isChecked('origin', origin)) return false;
+    // Framework drill-down: if any framework filter is active, the finding
+    // must carry at least one of those framework keys.
+    if (activeFrameworkFilters.size > 0) {
+      var fw = (f.getAttribute('data-frameworks') || '').split(/\s+/);
+      var hit = false;
+      activeFrameworkFilters.forEach(function (k) { if (fw.indexOf(k) !== -1) hit = true; });
+      if (!hit) return false;
+    }
+    // Search: case-insensitive substring on the prebuilt search blob.
+    var q = (searchBox.value || '').trim().toLowerCase();
+    if (q && (f.getAttribute('data-search') || '').indexOf(q) === -1) return false;
+    return true;
+  }
+
+  function isChecked(filterName, value) {
+    var input = document.querySelector('.filter-chip input[data-filter="' + filterName + '"][value="' + value + '"]');
+    return input ? input.checked : true;
+  }
+
+  // ----- apply filter: hide non-matching findings, hide empty sections,
+  //       update D/D/R hero counts + section counts + status line -----
+  function applyFilter() {
+    var visiblePerCat = { detect: 0, defend: 0, respond: 0 };
+    findings.forEach(function (f) {
+      var visible = findingMatches(f);
+      f.classList.toggle('filtered-out', !visible);
+      if (visible) visiblePerCat[f.getAttribute('data-category')]++;
+    });
+
+    sections.forEach(function (s) {
+      var cat = s.getAttribute('data-section');
+      // Hide section entirely if no visible non-empty findings AND no
+      // .finding-empty placeholder (keep the "No findings" placeholder
+      // visible if every real finding is filtered out — feels less
+      // jarring than the section vanishing).
+      var visible = visiblePerCat[cat];
+      var totalCard = s.querySelector('[data-section-count]');
+      if (totalCard) {
+        var total = parseInt(totalCard.getAttribute('data-section-total'), 10);
+        if (visible === total) {
+          totalCard.textContent = total + ' finding' + (total === 1 ? '' : 's');
+        } else {
+          totalCard.textContent = visible + ' of ' + total + ' finding' + (total === 1 ? '' : 's');
+        }
+      }
+    });
+
+    // Update D/D/R hero cards.
+    Object.keys(visiblePerCat).forEach(function (cat) {
+      var el = document.querySelector('[data-ddr-count="' + cat + '"]');
+      if (!el) return;
+      var total = parseInt(el.getAttribute('data-ddr-total'), 10);
+      el.textContent = visiblePerCat[cat] === total
+        ? total
+        : visiblePerCat[cat] + '/' + total;
+    });
+
+    // Status line.
+    var totalVisible = visiblePerCat.detect + visiblePerCat.defend + visiblePerCat.respond;
+    var grandTotal = findings.length;
+    var anyFilterActive = (
+      filterCheckboxes.some(function (c) { return !c.checked; }) ||
+      (searchBox.value || '').trim().length > 0 ||
+      activeFrameworkFilters.size > 0
+    );
+    if (anyFilterActive) {
+      var bits = ['Showing ' + totalVisible + ' of ' + grandTotal + ' findings'];
+      if (activeFrameworkFilters.size > 0) {
+        bits.push('framework: ' + Array.from(activeFrameworkFilters).join(', '));
+      }
+      statusEl.textContent = bits.join(' · ');
+      statusEl.classList.add('active');
+    } else {
+      statusEl.textContent = '';
+      statusEl.classList.remove('active');
+    }
+  }
+
+  // ----- wire chip clicks -----
+  filterCheckboxes.forEach(function (input) {
+    input.addEventListener('change', function () {
+      syncChipClass(input);
+      applyFilter();
+    });
+  });
+
+  // ----- wire search input -----
+  searchBox.addEventListener('input', applyFilter);
+
+  // ----- wire reset button -----
+  resetBtn.addEventListener('click', function () {
+    filterCheckboxes.forEach(function (c) {
+      c.checked = true;
+      syncChipClass(c);
+    });
+    searchBox.value = '';
+    activeFrameworkFilters.clear();
+    document.querySelectorAll('.finding-tag.framework-active').forEach(function (t) {
+      t.classList.remove('framework-active');
+    });
+    applyFilter();
+  });
+
+  // ----- wire framework-tag click -> drill-down filter -----
+  function toggleFrameworkFilter(key) {
+    if (activeFrameworkFilters.has(key)) {
+      activeFrameworkFilters.delete(key);
+    } else {
+      activeFrameworkFilters.add(key);
+    }
+    document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+      var k = t.getAttribute('data-framework-key');
+      t.classList.toggle('framework-active', activeFrameworkFilters.has(k));
+    });
+    applyFilter();
+  }
+  document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+    t.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleFrameworkFilter(t.getAttribute('data-framework-key'));
+    });
+    t.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleFrameworkFilter(t.getAttribute('data-framework-key'));
+      }
+    });
+  });
+
+  // ----- wire expand/collapse per finding -----
+  findings.forEach(function (f) {
+    var toggle = f.querySelector('.finding-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      f.classList.toggle('collapsed');
+    });
+  });
+
+  // ----- "expand all" / "collapse all" via keyboard shortcut -----
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      findings.forEach(function (f) { f.classList.remove('collapsed'); });
+    }
+    if (e.key === 'c' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      findings.forEach(function (f) { f.classList.add('collapsed'); });
+    }
+  });
+
+  // initial render
+  applyFilter();
+})();
+
+</script>
 </body></html>

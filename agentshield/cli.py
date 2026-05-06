@@ -151,6 +151,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the unified Markdown report to stdout (in addition to any --output-* files)",
     )
+    mrg.add_argument(
+        "--open",
+        dest="open_html",
+        action="store_true",
+        help=(
+            "Auto-launch the HTML report in the default browser after merging. "
+            "Requires --output-html to also be set. Convenience for the "
+            "interactive dashboard workflow."
+        ),
+    )
 
     return parser
 
@@ -476,10 +486,33 @@ def cmd_merge(args: argparse.Namespace) -> int:
         print()
         print(render_combined_markdown(result))
 
+    # F.21: --open auto-launches the HTML report in the default browser.
+    # Requires --output-html so we have a file:// URL to open. Uses the
+    # stdlib `webbrowser` module — no new dep, works cross-platform.
+    if getattr(args, "open_html", False):
+        if not args.output_html:
+            print(
+                "[agentshield] --open requires --output-html (no HTML report "
+                "to open). Pass --output-html <path>.",
+                file=sys.stderr,
+            )
+        else:
+            import webbrowser
+            uri = Path(args.output_html).resolve().as_uri()
+            print(f"[agentshield] Opening {uri} in your default browser...")
+            try:
+                webbrowser.open(uri)
+            except Exception as exc:  # pragma: no cover (env-specific)
+                print(
+                    f"[agentshield] Could not auto-launch browser: {exc}. "
+                    f"Open the file manually: {uri}",
+                    file=sys.stderr,
+                )
+
     if not written and not args.print_md:
         print(
-            "\n[agentshield] (no --output-{markdown,json,sarif} specified and "
-            "--print not set; pass one to persist or display the unified report)"
+            "\n[agentshield] (no --output-{markdown,json,sarif,html} specified "
+            "and --print not set; pass one to persist or display the unified report)"
         )
 
     # Soft failures (stale, schema errors, tier 2 missing) don't change exit

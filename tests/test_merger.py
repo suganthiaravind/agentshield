@@ -707,3 +707,110 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert "Copilot AI Scan" in html
     assert '<span class="pill tier1">Semgrep</span>' in html
     assert '<span class="pill tier2">Copilot</span>' in html
+
+
+# ---------- Interactive HTML report (F.21) ----------
+
+def test_html_includes_filter_bar(repo: Path) -> None:
+    """The interactive filter bar with severity/category/origin chips +
+    search input + reset button must be present."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'id="filter-bar"' in html
+    assert 'id="finding-search"' in html
+    assert 'id="filter-reset"' in html
+    # Severity chips for all 5 levels.
+    for sev in ("critical", "high", "medium", "low", "info"):
+        assert f'data-filter="severity" value="{sev}"' in html
+    # Category chips for all 3 D/D/R buckets.
+    for cat in ("detect", "defend", "respond"):
+        assert f'data-filter="category" value="{cat}"' in html
+    # Origin chips.
+    assert 'data-filter="origin" value="tier1"' in html
+    assert 'data-filter="origin" value="tier2"' in html
+
+
+def test_html_findings_carry_filter_data_attributes(repo: Path) -> None:
+    """Each .finding card must carry data-* attributes the JS reads to
+    decide visibility per filter state."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    # Tier 1 fixture finding is detect / high severity.
+    assert 'data-severity="high"' in html
+    assert 'data-category="detect"' in html
+    assert 'data-origin="tier1"' in html
+    # Tier 2 fixture finding is respond / high severity.
+    assert 'data-origin="tier2"' in html
+    assert 'data-category="respond"' in html
+    # Search blob lowercased + concatenated.
+    assert 'data-search=' in html
+
+
+def test_html_finding_has_expand_collapse_toggle(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert '<button class="finding-toggle"' in html
+    assert 'class="finding-body"' in html
+
+
+def test_html_framework_tags_are_clickable(repo: Path) -> None:
+    """Each framework tag becomes a clickable filter trigger with a
+    stable data-framework-key the JS uses to toggle the filter."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'data-framework-key=' in html
+    assert 'role="button"' in html
+    # Tier 1 fixture has owasp_llm=LLM01 mapping.
+    assert 'data-framework-key="owasp_llm:LLM01"' in html
+
+
+def test_html_ddr_hero_count_carries_data_attrs(repo: Path) -> None:
+    """The big finding count in each D/D/R hero card carries
+    data-ddr-count + data-ddr-total so JS can render '3/6' when filtered."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    for cat in ("detect", "defend", "respond"):
+        assert f'data-ddr-count="{cat}"' in html
+        assert f'data-ddr-total=' in html
+
+
+def test_html_section_count_carries_data_attrs(repo: Path) -> None:
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    for cat in ("detect", "defend", "respond"):
+        assert f'data-section-count="{cat}"' in html
+
+
+def test_html_includes_filter_js(repo: Path) -> None:
+    """The IIFE that wires the filter bar must be embedded inline."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert "<script>" in html
+    # Sentinel snippets from _HTML_JS — if any of these is missing the JS
+    # has been broken or stripped.
+    assert "applyFilter" in html
+    assert "activeFrameworkFilters" in html
+    assert "finding-toggle" in html
+
+
+def test_html_renders_with_empty_finding_buckets(tmp_path: Path) -> None:
+    """Edge case: D/D/R buckets that have no findings still render the
+    section + 'No findings' placeholder; data attributes still emit."""
+    out = tmp_path / ".agentshield"
+    out.mkdir()
+    _write_tier1(tmp_path, _tier1_payload(findings=[]))
+    payload = _tier2_payload(findings=[])
+    _write_tier2(tmp_path, payload)
+    html = render_combined_html(merge(tmp_path))
+    # All three D/D/R sections still present.
+    for cat in ("detect", "defend", "respond"):
+        assert f'data-section="{cat}"' in html
+    # Empty placeholder finding rows present.
+    assert 'finding-empty' in html
