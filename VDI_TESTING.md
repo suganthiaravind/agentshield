@@ -345,7 +345,7 @@ agentshield scan /path/to/your-spring-ai-agent \
   --output-sarif springai_report.sarif
 ```
 
-The Java rule pack (D001-Java, D002-Java, D003-Java, D004-Java, D005-Java, D006-Java, DF001-Java through DF004-Java, R001-Java, R002-Java, D008-Java) covers Spring AI's `ChatClient` / `ChatModel` / `Prompt` / `UserMessage` / `SystemMessage` shapes natively. See [RULES_COVERAGE.md §3 onward](./RULES_COVERAGE.md#3-detect-rules) for per-rule pattern detail.
+The Java rule pack (D001-Java, D002-Java, D003-Java, D004-Java, D005-Java, D006-Java, DF001-Java through DF004-Java, R001-Java, D008-Java) covers Spring AI's `ChatClient` / `ChatModel` / `Prompt` / `UserMessage` / `SystemMessage` shapes natively. See [RULES_COVERAGE.md §3 onward](./RULES_COVERAGE.md#3-detect-rules) for per-rule pattern detail.
 
 ### 7.5.3 Privacy review before sharing
 
@@ -410,8 +410,8 @@ Don't try to debug deeply — surface the failure quickly so we can decide wheth
 | Tier 3 judge (boto3-Bedrock) | ✅ shipped | B1, B4 |
 | Detect rules (D001 fw + fb, D002, D003, D004, D005, D006, D007, D008) | ✅ shipped | OWASP LLM01-LLM05, LLM07, LLM08 covered |
 | Defend rules (DF001, DF002, DF003, DF004) | ✅ shipped | OWASP LLM06, LLM10 covered |
-| Respond rules (R001, R002) | ✅ shipped | OWASP LLM02 (logging side), LLM10 audit covered |
-| Java parity for D001-D006, DF001-DF004, R001, R002 | ✅ shipped | langchain4j + Spring AI + AWS Bedrock Java SDK + Azure OpenAI Java |
+| Respond rules (R001) | ✅ shipped | OWASP LLM10 audit covered. R002 (logged-without-redaction) retired in Phase E — see ROADMAP §3.8. |
+| Java parity for D001-D006, DF001-DF004, R001 | ✅ shipped | langchain4j + Spring AI + AWS Bedrock Java SDK + Azure OpenAI Java. DF001-Java + R001-Java tightened in Phase E (Lombok @Slf4j + advisor wiring + CompletableFuture suppressors). |
 | OWASP LLM Top 10 coverage | ✅ 9 / 10 | LLM09 Misinformation out of SAST scope |
 | OWASP Agentic AI Top 10 coverage | ✅ 8 / 11 | T5 / T7 / T9 out of SAST scope |
 | MITRE ATLAS mappings | ✅ 6 techniques | T0010 / T0011 / T0012 / T0019 / T0024 / T0050 / T0051 / T0053 |

@@ -30,7 +30,6 @@ The BAD / GOOD snippets are extracted from the project's own test fixtures ([`te
   - [DF004 — destructive tool without human approval](#df004--destructive-tool-without-human-approval)
 - [Respond rules](#respond-rules)
   - [R001 — LLM call without audit logging](#r001--llm-call-without-audit-logging)
-  - [R002 — LLM I/O logged without redaction](#r002--llm-io-logged-without-redaction)
 - [How to verify the fix](#how-to-verify-the-fix)
 
 ## How to use this document
@@ -885,7 +884,23 @@ def chat(prompt):
 
 R001 suppressors: `import structlog`, `from langchain.callbacks import …`, `from langchain_core.callbacks import …`, `from langsmith import …`, `from opentelemetry import …`, or a `callbacks=$CB` keyword on any call. **Plain `import logging` deliberately does NOT suppress** — most apps have stdlib logging for errors but no structured LLM audit trail.
 
-**See R002 below** for the IMPORTANT companion concern: once you're logging LLM I/O, redact it.
+**Companion concern (no longer rule-enforced — judgment-only):** once you're logging LLM I/O, redact it. Use one-way hashes, a redactor like Presidio, or length-only projections. Plain `log.info(prompt)` puts raw user-supplied content into the log stream — a sensitive-information-disclosure surface even if the audit gap itself is closed. (Earlier versions of AgentShield enforced this via the R002 rule. R002 was retired in Phase E because it produced too many FPs on non-LLM logging surfaces; the principle stands but is now reviewer-judgment, not SAST.)
+
+```python
+# Redaction patterns (review-per-deployment, no rule enforces these):
+import hashlib
+prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+log.info(f"User asked (hash={prompt_hash})")              # (1) hash
+
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
+analyzer, anonymizer = AnalyzerEngine(), AnonymizerEngine()
+results = analyzer.analyze(text=prompt, language="en")
+safe = anonymizer.anonymize(text=prompt, analyzer_results=results).text
+log.info(f"User asked: {safe}")                           # (2) redact
+
+log.info(f"prompt_len={len(prompt)} response_len={len(response.content)}")  # (3) length-only
+```
 
 #### Java — BAD
 
@@ -910,54 +925,24 @@ public String chat(String prompt) {
 }
 ```
 
-R001-Java suppressors: SLF4J, java.util.logging, Log4j, OpenTelemetry Java imports.
-
----
-
-### R002 — LLM I/O logged without redaction
-
-**Severity: info — review-per-deployment.** R001 tells you to log; R002 reminds you to redact what you log. Follows naturally from fixing R001.
-
-#### Python — BAD
-
-```python
-log.info(f"User asked: {prompt}")                          # R002 fires (raw prompt in log)
-log.info(f"Model returned: {response.content}")            # R002 fires (raw completion)
-```
-
-#### Python — GOOD
-
-```python
-import hashlib
-from presidio_analyzer import AnalyzerEngine
-from presidio_anonymizer import AnonymizerEngine
-
-# (1) Log a hash — searchable, unreadable
-prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-log.info(f"User asked (hash={prompt_hash})")
-
-# (2) Redact via Presidio
-analyzer = AnalyzerEngine()
-anonymizer = AnonymizerEngine()
-results = analyzer.analyze(text=prompt, language="en")
-safe = anonymizer.anonymize(text=prompt, analyzer_results=results).text
-log.info(f"User asked: {safe}")
-
-# (3) Length-only — zero content leak
-log.info(f"prompt_len={len(prompt)} response_len={len(response.content)}")
-
-# (4) Structured fields you control
-log.info({"role": "user", "msg_id": "abc-123", "model": "gpt-4o-mini"})
-```
-
-#### Java — BAD
+Or using Lombok (Phase E recognises this as a logger import):
 
 ```java
-log.info("User asked: {}", prompt);                        // R002-Java fires
-log.info("Model returned: {}", response);                  // R002-Java fires
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j                                                     // R001-Java suppressed
+public class ChatService {
+    public String chat(String prompt) {
+        String response = chatClient.prompt().user(prompt).call().content();
+        log.info("llm_call promptLen={} responseLen={}", prompt.length(), response.length());
+        return response;
+    }
+}
 ```
 
-#### Java — GOOD
+R001-Java suppressors: SLF4J, java.util.logging, Log4j, OpenTelemetry Java imports, Lombok `@Slf4j`.
+
+**Companion redaction patterns (judgment-only, not rule-enforced):**
 
 ```java
 // (1) Hash
@@ -965,14 +950,12 @@ byte[] hash = MessageDigest.getInstance("SHA-256")
     .digest(prompt.getBytes(StandardCharsets.UTF_8));
 log.info("User asked (hash={})", Base64.getEncoder().encodeToString(hash));
 
-// (2) Redactor (heuristic name match)
+// (2) Redactor (in-house ScrubbingCallAdvisor, OWASP Encoder, etc.)
 log.info("User asked: {}", redactor.redact(prompt));
 
 // (3) Length only
 log.info("prompt len={} response len={}", prompt.length(), response.length());
 ```
-
-R002 is intentionally info-severity — SAST can detect the SHAPE (LLM I/O reaches a log call without a redactor in the same flow) but not the SEMANTICS (was the redactor real? does the log destination need redaction?). Treat it as a review prompt, not a deploy-blocker.
 
 ---
 
@@ -997,6 +980,6 @@ If the finding persists after applying the GOOD pattern, three common reasons:
 
 1. **The sanitiser/import is in a different file** than the LLM call. Most rules use `pattern-not-inside` at file scope — the suppressor must be in the same source file as the call. Bringing the import to the call site fixes this.
 2. **The sanitiser is *named* what AgentShield expects but doesn't actually do anything**. The rules trust method names (`$X.redact(...)`, `$X.guard(...)`) as a heuristic. If your `redact()` is a no-op stub, the rule is correctly suppressed but the underlying risk remains. The audit trail is on you.
-3. **You have multiple rules firing on the same line** — fixing one (e.g. importing `structlog` to suppress R001) doesn't fix others (e.g. `logger.info(prompt)` still triggers R002). Address each rule independently.
+3. **You have multiple rules firing on the same line** — fixing one (e.g. importing `structlog` to suppress R001) may not fix others. Address each rule independently.
 
 When in doubt, `tests/fixtures/{python,java}/<rule_id>_*.py` shows the canonical positive (BAD) and negative (GOOD) shapes — diff your code against the negative fixture for the rule you're trying to suppress.

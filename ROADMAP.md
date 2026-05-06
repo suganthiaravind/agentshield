@@ -16,7 +16,8 @@ This document is the **single canonical source of truth for AgentShield's state*
   - [3.4 Phase B — precision (FP elimination)](#34-phase-b--precision-fp-elimination)
   - [3.5 Phase C — OWASP LLM coverage gap closure](#35-phase-c--owasp-llm-coverage-gap-closure)
   - [3.6 Phase D — polish pass](#36-phase-d--polish-pass)
-  - [3.7 Post-Phase-D — R002 + roadmap consolidation](#37-post-phase-d--r002--roadmap-consolidation)
+  - [3.7 Post-Phase-D — roadmap consolidation + mock judge backend](#37-post-phase-d--roadmap-consolidation--mock-judge-backend)
+  - [3.8 Phase E — judge-driven FP elimination + R002 retirement](#38-phase-e--judge-driven-fp-elimination--r002-retirement)
 - [4. Strategic options — the big bets](#4-strategic-options--the-big-bets)
 - [5. Specific tracks from the original plan](#5-specific-tracks-from-the-original-plan)
 - [6. Quality improvements](#6-quality-improvements)
@@ -43,8 +44,8 @@ This document is the **single canonical source of truth for AgentShield's state*
 
 | Dimension | State |
 |---|---|
-| **Rule families** | 15 distinct (D001 fw + fb, D002, D003, D004, D005, D006, D007, D008, DF001, DF002, DF003, DF004, R001, R002) |
-| **Rule files** | 30 (Python + Java parity for most rules; D007 Python-only; D001 has framework + fallback variants) |
+| **Rule families** | 14 distinct (D001 fw + fb, D002, D003, D004, D005, D006, D007, D008, DF001, DF002, DF003, DF004, R001) — R002 retired in Phase E after real-world FP analysis |
+| **Rule files** | 28 (Python + Java parity for most rules; D007 Python-only; D001 has framework + fallback variants) |
 | **Languages supported** | Python, Java |
 | **OWASP LLM Top 10 coverage** | **9 / 10** (LLM09 Misinformation out of SAST scope) |
 | **OWASP Agentic AI Top 10 coverage** | **8 / 11** (T5 / T7 / T9 out of SAST scope: cascading hallucinations, misaligned behaviours, identity spoofing) |
@@ -149,14 +150,30 @@ The original sequenced one-week plan from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md) (
 
 **Doc:** [PHASE_D_TRIAGE.md](./PHASE_D_TRIAGE.md).
 
-### 3.7 Post-Phase-D — R002 + roadmap consolidation + mock judge backend
+### 3.7 Post-Phase-D — roadmap consolidation + mock judge backend
 
 **Delivered:**
-- **R002 (Python + Java)** — `llm-io-logged-without-redaction`. Info-severity, "review-per-deployment" rule. Catches the LLM02 / LLM10 intersection: R001 encourages logging LLM calls for audit, but the natural `logger.info(prompt)` puts raw user-supplied content into the log stream. Sources: LLM I/O + user-input HTTP / Lambda. Sinks: standard loggers + `print(...)` / `System.out`. Sanitizers: Presidio / heuristic redactor names / one-way hashes / length-only projections / OWASP Encoder. CWE-532 + CWE-200.
-- **OWASP LLM02 coverage triple** — D005 (hardcoded creds) + D008 (untrusted system prompt) + R002 (PII in logs) now address three distinct LLM02 angles.
 - **VDI_TESTING.md refresh** — Stage 7.5 added with specific run commands for Python SMARTSDK + Spring AI agents, privacy-review checklist before sharing reports, and "what to share" / "what the triage produces" guidance.
 - **ROADMAP.md** (this file) — consolidates the scattered "what's left" sections from PHASE_B / C / D into a single canonical pending-work list, plus this phase-by-phase shipped record.
 - **`MockJudgeBackend` + `--llm-backend mock` flag** ([agentshield/judge/mock_backend.py](./agentshield/judge/mock_backend.py)) — deterministic placeholder backend for VDI / dev smoke-testing the orchestrator pipeline without AWS. Returns a fixed `needs_review` verdict on every call with reasoning that explicitly says "no real LLM was called" so a leaked finding can never be mistaken for a real triage. **Stage 4.5** added to [VDI_TESTING.md](./VDI_TESTING.md) showing the full `agentshield scan ... --llm-backend mock` end-to-end test path. 6 new unit tests in [tests/test_judge_mock.py](./tests/test_judge_mock.py); pytest 86 → 92 passing.
+
+### 3.8 Phase E — judge-driven FP elimination + R002 retirement
+
+First real-world validation: ran AgentShield against a production Spring AI codebase inside the JPMC VDI, then asked an LLM-as-judge to grade every finding against the source. Result: **62% false-positive rate on Java**, driven by patterns that synthetic fixtures never exercised.
+
+**Strategic shift:** *fewer high-precision rules over many noisy ones.* Better to under-detect with confidence than to flood reviewers with FPs that train them to ignore the report.
+
+**Delivered:**
+- **R002 retired entirely** (Python + Java). The "LLM I/O logged without redaction" rule was the largest single FP source — it fired on `SessionController` (logging session UUIDs), `SplunkSAMLController` (SAML auth params), and other non-LLM logging surfaces because the taint-mode tracking can't distinguish "log call near LLM import" from "log call of LLM I/O." Replacement guidance folded into REMEDIATION_PATTERNS.md §R001: when implementing audit logging, use a redactor / hash / length-projection. **2 rule files, 4 fixtures, 4 goldens, all doc references** removed. pytest 92 → 88 passing (6 R002 tests deleted, 0 regressions).
+- **DF001-Java + R001-Java FP fixes** based on judge-flagged shapes:
+  - Dropped over-broad catch-alls `$AGENT.run(...)`, `$AGENT.invoke(...)`, `$CHAIN.execute(...)` — these matched `CompletableFuture.runAsync`, `taskExecutor.execute`, etc. Replaced SMARTSDK `$RUNNER.run($AGENT, ...)` with the more specific `$RUNNER.run($AGENT, $INPUT, ...)` two-arg form.
+  - Added explicit `pattern-not` for `CompletableFuture.runAsync(...)` / `supplyAsync(...)` (Java executor framework, not LLM invocation).
+  - Recognised Lombok `@Slf4j` as a logger import in R001-Java (`import lombok.extern.slf4j.Slf4j;` + `lombok.extern.log4j.*`) — Lombok synthesises the SLF4J `log` field at compile time without a direct `org.slf4j.Logger` import.
+  - Recognised in-house Spring AI advisor wiring in DF001-Java via metavariable-regex on import class names ending in `Advisor` / `Guardrail` / `Scrubber` / `Sanitizer` — covers JPMC `ScrubbingCallAdvisor` and similar custom `CallAdvisor` subclasses outside `org.springframework.ai.*`.
+  - Added inline `$CLIENT.prompt().advisors(...).user(...).call(...)` suppressor for the Spring AI inline-advisor pattern.
+- **Coverage preservation verified** — synthetic-vuln-java-app fires identically before/after edits (45 findings across 9 files, no regressions).
+
+**Net:** 1 rule family removed (R002), 5 specific FP shapes eliminated, 0 TPs lost. Coverage is narrower but more trustworthy — the strategic basis for further rule-pack audit (see §4.4).
 
 ## 4. Strategic options — the big bets
 
@@ -186,12 +203,24 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 **Concrete items:**
 - **PR-comment formatter** — render findings as a Markdown comment via a GitHub Action. AgentShield already emits SARIF + Markdown; this is glue, not a new capability.
-- **CI integration recipes** — GitHub Actions / GitLab / Jenkins examples with severity-gated config. Demonstrate the severity ladder we built (e.g. "fail on critical+high, warn on medium, advise on info / R002").
+- **CI integration recipes** — GitHub Actions / GitLab / Jenkins examples with severity-gated config. Demonstrate the severity ladder we built (e.g. "fail on critical+high, warn on medium, advise on info").
 - **5-minute quickstart** in the README with a real before/after on a sample repo.
 - **Methodology writeup** — the Phase-A-through-D testbed-validation work is genuinely novel (most SAST teams don't show their FPR-elimination work). A blog-post-shaped summary would be useful both internally and externally.
 
 **Effort:** S-M (each item 2-4 hours; pick the one most-likely to unblock a real user).
 **Impact:** Highly user-state-dependent — could be the highest-leverage thing if users are interested but not running it yet, or zero-leverage if no users yet exist.
+
+### 4.4 Broader rule-pack audit (Phase E follow-on)
+
+**Hypothesis:** Phase E's R002 retirement is the first instance of "fewer high-precision rules over many noisy ones." Other rules in the pack may also be net-negative on real codebases — we won't know until we run more user-side validation.
+
+**Concrete approach:**
+- **Repeat the LLM-as-judge protocol** on 2-3 additional real production codebases (Python SMARTSDK / langchain / Spring AI / langchain4j). Phase E ran it once on a Spring AI app and surfaced 5 distinct FP shapes — more codebases will surface more.
+- **For each rule, score per-deployment:** does the rule produce ≥ 70% TP-rate on real code? If not, candidates: (a) refine pattern + add suppressors (preferred); (b) downgrade severity from medium → info; (c) retire entirely (R002 precedent).
+- **Likely audit candidates** based on synthetic-only validation today: D001-fb (fallback rule, intentionally low-confidence — should it gate behind judge tier mandatorily?); DF002 (`@Tool` arg schema — may FP on framework-internal tools); DF004 (destructive-verb naming — pure heuristic, no taint).
+
+**Effort:** M (per codebase: ~1 hour scan + ~2 hours judge protocol + ~2 hours rule fixes).
+**Impact:** Each round shrinks the trust gap between "what the rule pack says" and "what reviewers should act on." Compounding effect — every retired/refined rule reduces noise on every future scan.
 
 ## 5. Specific tracks from the original plan
 
@@ -211,7 +240,7 @@ These come from [PHASE_I_PLAN.md](./PHASE_I_PLAN.md)'s sequenced work plan and a
 
 ### 5.3 Track B5 — Audit log to `judge_audit.jsonl`
 
-**What:** Persist every judge call (request, response, model id, latency, verdict) to `judge_audit.jsonl` for compliance / debugging. Aligns with our own R001 + R002 principles (the agent shouldn't tell developers to log without redacting and then itself log unsanitised).
+**What:** Persist every judge call (request, response, model id, latency, verdict) to `judge_audit.jsonl` for compliance / debugging. Aligns with our own R001 principle (audit logging) + the redaction guidance in REMEDIATION_PATTERNS.md §R001 (the agent shouldn't tell developers to log without redacting and then itself log unsanitised).
 **Effort:** S.
 **Status:** Planned.
 

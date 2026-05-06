@@ -5,19 +5,20 @@ rules:
     message: >-
       This module invokes an LLM/agent (SMARTSDK runner, langchain4j model)
       but does not import any known guardrails / input-sanitization library
-      (Lakera Guard Java SDK, OWASP Java Encoder, Apache Commons Text escaping).
+      (Lakera Guard Java SDK, OWASP Java Encoder, Apache Commons Text escaping)
+      and does not wire a Spring AI advisor (.advisors / .defaultAdvisors).
       Java guardrail ecosystem is sparser than Python — calibrate severity per
       repo. Java port of agentshield.defend.no-guardrails-import-in-llm-module.
     patterns:
       - pattern-either:
-          # SMARTSDK Java (wraps Google ADK)
+          # SMARTSDK Java (wraps Google ADK) — explicit two-arg signature
+          # so we don't collide with java.util.concurrent.Executor.run() etc.
           - pattern: $RUNNER.runStream($AGENT, ...)
-          - pattern: $RUNNER.run($AGENT, ...)
+          - pattern: $RUNNER.run($AGENT, $INPUT, ...)
           - pattern: $RUNNER.runAsync($AGENT, ...)
           # langchain4j
           - pattern: $MODEL.generate(...)
           - pattern: $MODEL.chat(...)
-          - pattern: $CHAIN.execute(...)
           - pattern: $ASSISTANT.chat(...)
           # Spring AI
           - pattern: $CLIENT.prompt().user(...).call(...)
@@ -31,19 +32,20 @@ rules:
           # Azure OpenAI Java SDK
           - pattern: $CLIENT.getChatCompletions(...)
           - pattern: $CLIENT.getCompletions(...)
-          # Google ADK Java (direct)
-          - pattern: $AGENT.invoke(...)
-          - pattern: $AGENT.run(...)
           # Embeddings
           - pattern: $MODEL.embed(...)
           - pattern: $EMBEDDING.embedAll(...)
           - pattern: $CLIENT.getEmbeddings(...)
-      # Common false-positive suppressors — $AGENT.run(...) and $AGENT.invoke(...)
-      # collide with Spring Boot's SpringApplication.run(Class, String[])
-      # entry point and similar standard Java APIs. Phase D triage of
-      # spring-ai-examples surfaced 5+ FPs from this single shape.
+      # Over-broad catch-alls dropped (Phase E judge feedback): $AGENT.run(...),
+      # $AGENT.invoke(...), $CHAIN.execute(...) collided with SpringApplication.run,
+      # CompletableFuture.runAsync, taskExecutor.execute, etc. — net negative.
       - pattern-not: SpringApplication.run(...)
       - pattern-not: org.springframework.boot.SpringApplication.run(...)
+      # Async / executor framework calls — these are not LLM invocations.
+      - pattern-not: CompletableFuture.runAsync(...)
+      - pattern-not: CompletableFuture.supplyAsync(...)
+      - pattern-not: java.util.concurrent.CompletableFuture.runAsync(...)
+      - pattern-not: java.util.concurrent.CompletableFuture.supplyAsync(...)
       - pattern-not-inside: |
           import com.lakera.$X;
           ...
@@ -59,6 +61,21 @@ rules:
       - pattern-not-inside: |
           import org.springframework.ai.moderation.$X;
           ...
+      # Spring AI advisor wiring — inline on the prompt chain.
+      - pattern-not: $CLIENT.prompt().advisors(...).user(...).call(...)
+      - pattern-not: $CLIENT.prompt().user(...).advisors(...).call(...)
+      # In-house advisor / guardrail / scrubber classes — recognize any
+      # import whose class name ends in Advisor, Guardrail, Scrubber, or
+      # Sanitizer as guardrail intent. Covers JPMC ScrubbingCallAdvisor
+      # and similar custom CallAdvisor subclasses outside org.springframework.ai.
+      - pattern-not-inside:
+          patterns:
+            - pattern-inside: |
+                import $PKG.$CLS;
+                ...
+            - metavariable-regex:
+                metavariable: $CLS
+                regex: '.*(Advisor|Guardrail|Scrubber|Sanitizer)$'
     metadata:
       category: defend
       agentshield_id: AS-DF-001
@@ -73,9 +90,9 @@ rules:
       remediation: >-
         Add an input/output guardrail layer. For Java, options include:
         Lakera Guard Java SDK (com.lakera), OWASP Java Encoder
-        (org.owasp.encoder), Apache Commons Text (StringEscapeUtils), or call
-        out to a hosted guardrail service (NeMo Guardrails / Llama Guard) over
-        HTTP. Choose at least one input filter (prompt-injection detector) and
-        one output filter (PII / toxic content).
+        (org.owasp.encoder), Apache Commons Text (StringEscapeUtils), or wire a
+        Spring AI advisor via .advisors(...) / .defaultAdvisors(...) (built-in
+        or in-house CallAdvisor subclass). Choose at least one input filter
+        (prompt-injection detector) and one output filter (PII / toxic content).
       references:
         - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

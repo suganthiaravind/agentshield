@@ -43,8 +43,6 @@ Source of truth is the YAML under [agentshield/rules/](./agentshield/rules/) —
 - [5. Respond rules](#5-respond-rules)
   - [R001 (Python) — LLM call without audit logging](#r001-python--llm-call-without-audit-logging)
   - [R001 (Java) — LLM call without audit logging](#r001-java--llm-call-without-audit-logging)
-  - [R002 (Python) — LLM I/O logged without redaction](#r002-python--llm-io-logged-without-redaction)
-  - [R002 (Java) — LLM I/O logged without redaction](#r002-java--llm-io-logged-without-redaction)
 - [6. OWASP Agentic AI Top 10 coverage](#6-owasp-agentic-ai-top-10-coverage)
 - [7. Library cross-reference](#7-library-cross-reference)
 - [8. Known gaps](#8-known-gaps)
@@ -92,9 +90,7 @@ Each row scopes to one language — semgrep filters rules by `languages:`, so a 
 | DF004 | Python | framework | LangChain `@tool` decorated functions named with destructive verbs (delete / send / charge / deploy / …) without HumanApprovalCallbackHandler / LangGraph `interrupt_before=` / inline `input(...)` confirmation |
 | DF004 | Java | framework | langchain4j / Spring AI `@Tool` methods named with destructive verbs without an injected `confirm()` / `requireApproval()` call |
 | R001 | Python | framework | Same coverage as DF001 (Python) |
-| R001 | Java | framework | Same coverage as DF001 (Java) |
-| R002 | Python | framework (info-severity, review-per-deployment) | LLM call return values + user-input HTTP / Lambda sources flowing into `logging.*` / `$LOGGER.*` / `print(...)` without intermediate redactor / hash / length-only projection |
-| R002 | Java | framework (info-severity, review-per-deployment) | Same shape — Spring `@RequestParam` / `@RequestBody` + LLM call return values flowing into SLF4J / `java.util.logging` / `System.out.println(...)` without intermediate redactor / hash / length projection |
+| R001 | Java | framework | Same coverage as DF001 (Java) — Lombok `@Slf4j` recognised as logger (Phase E) |
 
 ## 3. Detect rules
 
@@ -579,59 +575,7 @@ Source: [agentshield/rules/respond/R001-llm-call-without-audit-logging-java.yaml
 - Log4j — `import org.apache.logging.log4j.…`.
 - OpenTelemetry Java — `import io.opentelemetry.…`.
 
-### R002 (Python) — LLM I/O logged without redaction
-
-Source: [agentshield/rules/respond/R002-llm-io-logged-without-redaction.yaml](./agentshield/rules/respond/R002-llm-io-logged-without-redaction.yaml). Mode: `taint`. Severity: **info — review-per-deployment**.
-
-**What it flags.** R001 encourages logging LLM calls for audit. The natural implementation (`logger.info(prompt)` / `logger.info(response.content)`) puts raw user-supplied content into the log stream. Logs are a high-value target and often replicated to less-protected destinations (SIEM, dev consoles, support tools, CI artifacts) — so an audit-trail-with-no-redaction creates a sensitive-information-disclosure surface that complements (rather than fixes) the audit gap R001 covers. OWASP LLM02 + LLM10. CWE-532 (Log Information Exposure) + CWE-200.
-
-**Why info severity.** SAST can detect the *shape* (LLM I/O reaches a log call without an intermediate redactor) but can't verify whether the redactor is real, whether the log destination requires redaction, or whether the field is actually sensitive in this context. Info severity matches that uncertainty — the rule fires as a "review-per-deployment" advisory, not a deploy-blocker. CI pipelines that gate on medium+ won't fail on this.
-
-**Sources (covers both ends of the LLM I/O path):**
-
-- *User-input → about-to-be-prompt* — `request.json[$KEY]` / `request.json.get(...)`, FastAPI `$REQ.json()` / `$REQ.body` (sync + awaited), CLI `input(...)` / `sys.argv[$I]`, AWS Lambda `$EVENT[...]` / `$EVENT.get(...)`.
-- *LLM call return values* — generic LLM verbs (`$LLM.invoke/run/run_stream/run_async/predict/generate/chat/query/complete` + async forms), OpenAI (`chat.completions.create`, `responses.create`, `completions.create`), Anthropic (`messages.create`), AWS Bedrock direct (`invoke_model`, `converse`, `converse_stream`).
-
-**Sinks (log calls):**
-
-- Module-level `logging` — `logging.info/debug/warning/warn/error/critical/exception(...)`.
-- Logger instance — `$LOGGER.info/debug/warning/warn/error/critical/exception/log(level, ...)`.
-- Ad-hoc `print(...)` (often used as poor man's logging in dev).
-
-**Sanitizers:**
-
-- *Redactor / scrubber methods* — Presidio (`AnonymizerEngine().anonymize(...)`), heuristic name match on `$X.redact(...)` / `$X.anonymize(...)` / `$X.mask(...)` / `$X.scrub(...)` / `$X.sanitize(...)` / `$X.strip_pii(...)` (and their bare-function forms).
-- *One-way hashing* — `hashlib.sha256(...).hexdigest()` / `.digest()`, sha512, blake2b, blake2s, md5 (md5 is cryptographically weak but still redacts content for log-correlation purposes).
-- *Length-only projection* — `len(...)` strips content to an int.
-- *Custom summary methods* — `$X.summary()` (model-specific reduced-content projections).
-
-**Known limitations:**
-
-- Heuristic name matching for redactors (`$X.redact`, `$X.mask`, etc.) — a method named `redact` could be a no-op or could be real. The rule trusts the name as a signal, since SAST can't prove redaction semantics.
-- Conditional sanitization (`if env == "prod": value = redact(value)`) — semgrep's intra-procedural taint mode doesn't track per-branch sanitizer application reliably.
-
-### R002 (Java) — LLM I/O logged without redaction
-
-Source: [agentshield/rules/respond/R002-llm-io-logged-without-redaction-java.yaml](./agentshield/rules/respond/R002-llm-io-logged-without-redaction-java.yaml). Mode: `taint`. Severity: **info — review-per-deployment**.
-
-**Sources:**
-
-- *Spring / JAX-RS request inputs* — `@RequestParam`, `@RequestBody`, `@PathVariable`, `@QueryParam` (taint binds to the parameter name via `pattern-inside` on the method signature, same shape as D001 Java).
-- *LLM call return values* — same set as R001 Java: SMARTSDK runner, langchain4j model.generate / chat / chain.execute / assistant.chat, Spring AI ChatClient + ChatModel, AWS Bedrock Runtime invokeModel / converse, Azure OpenAI getChatCompletions / getCompletions, Google ADK Java agent.invoke / .run.
-
-**Sinks:**
-
-- *SLF4J* — `$LOGGER.trace/debug/info/warn/error(...)`.
-- *java.util.logging* — `$LOGGER.log(level, ...)`, `$LOGGER.fine/finer/finest/config/severe/warning(...)`.
-- *Ad-hoc System.out / System.err* — `println / print / printf` on both streams.
-
-**Sanitizers:**
-
-- *OWASP Java Encoder* — `Encode.forJava(...)` (qualified or unqualified).
-- *In-house redactor methods* — heuristic name match on `$X.redact / .anonymize / .mask / .scrub / .sanitize / .stripPii(...)`.
-- *One-way hashing* — `MessageDigest.getInstance($ALGO).digest(...)`, `$DIGEST.digest(...)`.
-- *Length-only projection* — `$X.length()`, `$X.size()`.
-- *Lakera Guard equivalents* — `$G.detect(...)`, `$G.scan(...)`.
+> **R002 removed in Phase E (2026-05-04).** The taint-mode rule for "LLM I/O logged without redaction" was retired after a real Spring AI codebase scan produced a 62% FP rate driven largely by R002 firing on non-LLM logging surfaces (session UUIDs, SAML auth params). The replacement guidance lives in [REMEDIATION_PATTERNS.md §R001](./REMEDIATION_PATTERNS.md#r001--llm-call-without-audit-logging) — when implementing R001's audit logging recommendation, use a redactor / hash / length-projection rather than logging raw I/O. Strategic shift: fewer high-precision rules over many noisy ones.
 
 ## 6. OWASP Agentic AI Top 10 coverage
 

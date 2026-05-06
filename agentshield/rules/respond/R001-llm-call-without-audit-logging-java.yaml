@@ -4,20 +4,20 @@ rules:
     severity: INFO
     message: >-
       LLM/agent invocation in this module without surrounding logger / tracer
-      setup (SLF4J, Log4j, java.util.logging, OpenTelemetry). Without an audit
-      trail you can't reconstruct what the agent saw, decided, or did —
-      blocking incident response and post-hoc red-team analysis. Java port of
-      agentshield.respond.llm-call-without-audit-logging (AS-R-001).
+      setup (SLF4J, Log4j, java.util.logging, OpenTelemetry, Lombok @Slf4j).
+      Without an audit trail you can't reconstruct what the agent saw, decided,
+      or did — blocking incident response and post-hoc red-team analysis. Java
+      port of agentshield.respond.llm-call-without-audit-logging (AS-R-001).
     patterns:
       - pattern-either:
-          # SMARTSDK Java (wraps Google ADK)
+          # SMARTSDK Java (wraps Google ADK) — explicit two-arg signatures so
+          # we don't collide with java.util.concurrent.Executor.run() etc.
           - pattern: $RUNNER.runStream($AGENT, ...)
-          - pattern: $RUNNER.run($AGENT, ...)
+          - pattern: $RUNNER.run($AGENT, $INPUT, ...)
           - pattern: $RUNNER.runAsync($AGENT, ...)
           # langchain4j
           - pattern: $MODEL.generate(...)
           - pattern: $MODEL.chat(...)
-          - pattern: $CHAIN.execute(...)
           - pattern: $ASSISTANT.chat(...)
           # Spring AI
           - pattern: $CLIENT.prompt().user(...).call(...)
@@ -31,18 +31,20 @@ rules:
           # Azure OpenAI Java SDK
           - pattern: $CLIENT.getChatCompletions(...)
           - pattern: $CLIENT.getCompletions(...)
-          # Google ADK Java (direct)
-          - pattern: $AGENT.invoke(...)
-          - pattern: $AGENT.run(...)
           # Embeddings
           - pattern: $MODEL.embed(...)
           - pattern: $EMBEDDING.embedAll(...)
           - pattern: $CLIENT.getEmbeddings(...)
-      # Common false-positive suppressors — `$AGENT.run(...)` collides
-      # with Spring Boot's SpringApplication.run(Class, String[]) entry
-      # point. Phase D triage of spring-ai-examples surfaced this.
+      # Over-broad catch-alls dropped (Phase E judge feedback): $AGENT.run(...),
+      # $AGENT.invoke(...), $CHAIN.execute(...) collided with SpringApplication.run,
+      # CompletableFuture.runAsync, taskExecutor.execute, etc. — net negative.
       - pattern-not: SpringApplication.run(...)
       - pattern-not: org.springframework.boot.SpringApplication.run(...)
+      # Async / executor framework calls — these are not LLM invocations.
+      - pattern-not: CompletableFuture.runAsync(...)
+      - pattern-not: CompletableFuture.supplyAsync(...)
+      - pattern-not: java.util.concurrent.CompletableFuture.runAsync(...)
+      - pattern-not: java.util.concurrent.CompletableFuture.supplyAsync(...)
       - pattern-not-inside: |
           import org.slf4j.Logger;
           ...
@@ -57,6 +59,15 @@ rules:
           ...
       - pattern-not-inside: |
           import io.opentelemetry.$X;
+          ...
+      # Lombok @Slf4j synthesizes a `log` SLF4J field at compile time without
+      # an explicit `import org.slf4j.Logger`. The Lombok import alone is
+      # sufficient — you can't use @Slf4j without it.
+      - pattern-not-inside: |
+          import lombok.extern.slf4j.Slf4j;
+          ...
+      - pattern-not-inside: |
+          import lombok.extern.log4j.$X;
           ...
     metadata:
       category: respond
@@ -73,8 +84,9 @@ rules:
         Add structured logging around every LLM/agent invocation. Capture: input
         prompt, retrieved documents, tool calls made, model output, latency,
         token counts. Recommended: SLF4J + a JSON encoder (Logstash Logback
-        encoder), or OpenTelemetry Java for distributed tracing. At minimum,
-        a dedicated `agent_audit` SLF4J logger writing JSON.
+        encoder), Lombok `@Slf4j` on the class, or OpenTelemetry Java for
+        distributed tracing. At minimum, a dedicated `agent_audit` SLF4J
+        logger writing JSON.
       references:
         - "https://genai.owasp.org/llmrisk/llm10-unbounded-consumption/"
         - "https://opentelemetry.io/docs/languages/java/"
