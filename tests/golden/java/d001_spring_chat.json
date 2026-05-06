@@ -2,14 +2,6 @@
   "fixture": "java/d001_spring_chat.java",
   "expected_findings": [
     {
-      "rule_id": "llm-call-without-audit-logging-java",
-      "line": 21
-    },
-    {
-      "rule_id": "no-guardrails-import-in-llm-module-java",
-      "line": 21
-    },
-    {
       "rule_id": "unsanitized-user-input-to-llm-java",
       "line": 21
     }

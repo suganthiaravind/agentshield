@@ -62,13 +62,23 @@ def test_d001_preserves_framework_mappings(normalized_findings: list[Finding]) -
 
 def test_partition_by_tier(normalized_findings: list[Finding]) -> None:
     by_tier = Normalizer.partition_by_tier(normalized_findings)
-    # Fixtures cover both framework rules (tier-1) and the fallback rule (tier-2).
+    # Phase F.2: D001-fb retired, no fallback findings remain. Framework tier
+    # still fires. The 4-tier model itself goes away in Phase F.6 (CLI rewire),
+    # at which point this test + the partition_by_tier method get rewritten
+    # against the new 2-tier model. Until then, just assert framework still works.
     assert len(by_tier["framework"]) > 0
-    assert len(by_tier["fallback"]) > 0  # at least d001_fallback_openai_wrapper.py
-    assert len(by_tier["judge"]) == 0  # judge tier filled in by Track B, not normalizer
-    assert len(by_tier["discovery"]) == 0  # discovery tier filled in by Track D
+    assert len(by_tier["fallback"]) == 0  # D001-fb retired in F.2
+    assert len(by_tier["judge"]) == 0
+    assert len(by_tier["discovery"]) == 0
 
 
+@pytest.mark.skip(
+    reason=(
+        "D001-fb (the only fallback rule) was retired in Phase F.2. "
+        "The fallback-tier concept itself goes away in F.6 when the CLI "
+        "rewire collapses 4 tiers to 2. This test will be deleted then."
+    )
+)
 def test_fallback_finding_has_low_confidence(normalized_findings: list[Finding]) -> None:
     """Fallback rules carry confidence: low so downstream consumers know to triage."""
     fallback = [f for f in normalized_findings if f.tier == "fallback"]

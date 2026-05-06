@@ -2,10 +2,6 @@
   "fixture": "python/d001_smartsdk_runner.py",
   "expected_findings": [
     {
-      "rule_id": "no-guardrails-import-in-llm-module",
-      "line": 35
-    },
-    {
       "rule_id": "unsanitized-user-input-to-llm",
       "line": 35
     }

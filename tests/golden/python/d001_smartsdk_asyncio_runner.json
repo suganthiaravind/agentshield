@@ -1,9 +1,4 @@
 {
   "fixture": "python/d001_smartsdk_asyncio_runner.py",
-  "expected_findings": [
-    {
-      "rule_id": "no-guardrails-import-in-llm-module",
-      "line": 34
-    }
-  ]
+  "expected_findings": []
 }
