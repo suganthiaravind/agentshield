@@ -301,7 +301,7 @@ _DDR_LABELS = {
         "🔵 Respond",
         "observability gaps",
         "Whether incidents can be detected and recovered",
-        "If the agent misbehaves, will you see it — and stop it?",
+        "If the agent misbehaves, will you see it and stop it?",
     ),
 }
 
