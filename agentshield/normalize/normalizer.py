@@ -205,15 +205,10 @@ class Normalizer:
         findings.sort(key=lambda f: (f.location.file_path, f.location.start_line, f.rule_id))
         return findings
 
-    @staticmethod
-    def partition_by_tier(findings: list[Finding]) -> dict[Tier, list[Finding]]:
-        """Group findings by tier — useful for routing to the judge or report writer."""
-        buckets: dict[Tier, list[Finding]] = {
-            "framework": [],
-            "fallback": [],
-            "judge": [],
-            "discovery": [],
-        }
-        for f in findings:
-            buckets[f.tier].append(f)
-        return buckets
+    # Phase F.6: partition_by_tier removed. The 4-tier model (framework /
+    # fallback / judge / discovery) only made sense when the LLM judge
+    # triaged findings in-process. v2's LLM-as-scanner runs out-of-process
+    # via Copilot, and the rule pack is now framework-only (D001-fb retired
+    # in F.2). The Finding.tier field is retained on the type for backward
+    # compatibility with the JSON writer's output schema, but always
+    # resolves to "framework" now.

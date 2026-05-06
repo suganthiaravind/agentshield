@@ -1,23 +1,42 @@
-"""AgentShield CLI entry point.
+"""AgentShield CLI entry point — v2 architecture (2 tiers).
 
-A1 scaffolding → A2 semgrep runner → A3 normalizer → A4 report writers.
-End-to-end pipeline working except Tier 3 (judge, Track B) and
-Tier 4 (discovery, Track D), which the CLI flags wire up but the
-implementations stub.
+Tier 1 — semgrep with the pruned high-precision rule pack (Phase F.2).
+Tier 2 — LLM-as-scanner via Copilot using the bundled skill files
+(Phase F.3 / F.4). Mandatory; the user runs Copilot Chat in their IDE
+after `agentshield scan` finishes.
+
+Subcommands:
+- `agentshield scan <path>`  — runs Tier 1, emits skill files into the
+  target's `.agentshield/`, prints the Copilot prompt to paste.
+- `agentshield merge <path>` — combines tier1-results.json +
+  tier2-findings.json (the latter written by Copilot) into a unified
+  Markdown / JSON / SARIF report.
+
+Phase F.6 deleted: `agentshield/judge/` (boto3-Bedrock + mock + Copilot
+stub backends + the triage orchestrator) — that was the v1 "Tier 3
+triage" model which v2 replaces with whole-repo Tier 2 scanning.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
 import fnmatch
 import re
+import sys
 from pathlib import Path
 from typing import Sequence
 
 from agentshield import __version__
-from agentshield.judge import Boto3BedrockBackend, JudgeOrchestrator, MockJudgeBackend
-from agentshield.normalize import Normalizer, NormalizerError
+from agentshield.emitter import EmitResult, copilot_prompt, emit_skills
+from agentshield.merger import (
+    MergeError,
+    MergeResult,
+    merge,
+    render_combined_json,
+    render_combined_markdown,
+    render_combined_sarif,
+)
+from agentshield.normalize import Finding, Normalizer, NormalizerError
 from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
 
@@ -25,7 +44,10 @@ from agentshield.runner import SemgrepRunner, SemgrepRunnerError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentshield",
-        description="Pre-production security evaluator for AI agents (static analysis).",
+        description=(
+            "Pre-production security evaluator for AI agents (static "
+            "analysis + LLM-as-scanner via Copilot)."
+        ),
     )
     parser.add_argument(
         "--version",
@@ -35,52 +57,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # ---------- scan ----------
     scan = subparsers.add_parser(
         "scan",
-        help="Scan a target repository for agent security issues",
+        help="Run Tier 1 (semgrep) and emit Tier 2 skill files into the target",
     )
     scan.add_argument("path", help="Path to target repository")
     scan.add_argument(
-        "--config",
-        help="Path to agentshield.yaml config file (default: ./agentshield.yaml if present)",
-    )
-    scan.add_argument(
-        "--llm-backend",
-        choices=["boto3-bedrock", "smartsdk", "copilot", "mock", "none"],
-        default=None,
+        "--output-sarif",
         help=(
-            "LLM backend for the judge tier (default: from config or "
-            "boto3-bedrock). `mock` uses a deterministic placeholder backend "
-            "that returns a fixed `needs_review` verdict — useful for "
-            "smoke-testing the orchestrator pipeline without AWS Bedrock "
-            "access. See VDI_TESTING.md Stage 4.5."
-        ),
-    )
-    scan.add_argument("--output-sarif", help="Write SARIF v2.1.0 report to this path")
-    scan.add_argument("--output-json", help="Write JSON report to this path")
-    scan.add_argument("--output-markdown", help="Write Markdown report to this path")
-    scan.add_argument(
-        "--no-judge",
-        action="store_true",
-        help="Skip Tier 3 LLM judge (offline mode; Tiers 1+2 only)",
-    )
-    scan.add_argument(
-        "--bedrock-model-id",
-        help=(
-            "Bedrock model id or inference-profile ARN, used with "
-            "--llm-backend boto3-bedrock. Required to run the judge tier "
-            "with that backend."
+            "Write a Tier-1-only SARIF report to this path. For the unified "
+            "Tier 1 + Tier 2 report, run `agentshield merge` after Copilot."
         ),
     )
     scan.add_argument(
-        "--bedrock-region",
-        default="us-east-1",
-        help="AWS region for the boto3-bedrock judge backend (default: us-east-1)",
+        "--output-json",
+        help="Write a Tier-1-only JSON report to this path.",
     )
     scan.add_argument(
-        "--discovery",
-        action="store_true",
-        help="Enable Tier 4 discovery pass on files with LLM imports + zero findings",
+        "--output-markdown",
+        help="Write a Tier-1-only Markdown report to this path.",
     )
     scan.add_argument(
         "--scan-all-files",
@@ -90,6 +86,17 @@ def build_parser() -> argparse.ArgumentParser:
             "bypassing semgrep's default directory ignores (tests/, examples/, "
             "vendor/, fixtures/, etc.). Use when scanning a sample/demo repo "
             "where the target code lives under such a directory."
+        ),
+    )
+    scan.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Exclude files matching this glob pattern (repeatable). Most "
+            "useful with --scan-all-files. Patterns: '**/src/test/**' "
+            "(Maven/Gradle), '**/tests/**' (Python)."
         ),
     )
     scan.add_argument(
@@ -103,44 +110,50 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     scan.add_argument(
-        "--exclude",
-        action="append",
-        default=[],
-        metavar="PATTERN",
+        "--no-emit",
+        action="store_true",
         help=(
-            "Exclude files matching this glob pattern (repeatable). Common "
-            "patterns: '**/test/**' or '**/src/test/**' (Maven/Gradle), "
-            "'**/tests/**' (Python). Phase E.3 added this after the third VDI "
-            "judge run showed 55%% of findings on a Spring AI codebase were "
-            "test-file FPs when --scan-all-files was used. Without "
-            "--scan-all-files, semgrep's built-in .semgrepignore already "
-            "excludes test directories; --exclude is most useful in "
-            "--scan-all-files mode."
+            "Skip writing Tier 2 skill files into the target. Tier-1-only "
+            "mode for diagnostics. The final report banner will warn that "
+            "scanning is incomplete."
         ),
     )
     scan.add_argument(
         "--debug",
         action="store_true",
         help=(
-            "Verbose diagnostic output: print the rules path, the list of files "
-            "passed to semgrep (with --scan-all-files), and the raw rule_ids of "
-            "every finding. Use to diagnose 'why did this scan return 0 findings'."
+            "Verbose diagnostic output: print the rules path, the list of "
+            "files passed to semgrep (with --scan-all-files), and the raw "
+            "rule_ids of every finding."
         ),
+    )
+
+    # ---------- merge ----------
+    mrg = subparsers.add_parser(
+        "merge",
+        help="Combine Tier 1 + Tier 2 results into a unified report",
+    )
+    mrg.add_argument("path", help="Path to target repository (containing .agentshield/)")
+    mrg.add_argument("--output-sarif", help="Write unified SARIF v2.1.0 report")
+    mrg.add_argument("--output-json", help="Write unified JSON report")
+    mrg.add_argument("--output-markdown", help="Write unified Markdown report")
+    mrg.add_argument(
+        "--print",
+        dest="print_md",
+        action="store_true",
+        help="Print the unified Markdown report to stdout (in addition to any --output-* files)",
     )
 
     return parser
 
 
+# ---------- scan helpers ----------
+
 _SAMPLE_FILE_LIMIT = 5
 
 
 def _looks_like_network_path(path: Path) -> bool:
-    """Heuristic: True if the path is a UNC share or a Windows mapped network drive.
-
-    Used only to decide whether to surface a `--stage-locally` hint after a
-    zero-finding scan. Conservative — misses are fine (no hint), false positives
-    are mostly fine too (extra hint costs nothing).
-    """
+    """Heuristic: True if the path is a UNC share or a Windows mapped network drive."""
     s = str(path)
     if s.startswith("\\\\") or s.startswith("//"):
         return True
@@ -149,32 +162,18 @@ def _looks_like_network_path(path: Path) -> bool:
             import ctypes
 
             drive_type = ctypes.windll.kernel32.GetDriveTypeW(f"{s[0]}:\\")
-            # 4 = DRIVE_REMOTE
-            return drive_type == 4
+            return drive_type == 4  # DRIVE_REMOTE
         except Exception:
             return False
     return False
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """Translate a glob pattern with `**` support into a compiled regex.
-
-    Semantics match gitignore-style globs:
-      `**/` at the start matches zero or more leading directory components
-      (so `**/src/test/**` matches `src/test/...` even with no prefix).
-      `/**` at the end matches zero or more trailing components.
-      `**` elsewhere matches any sequence of characters.
-      `*` matches anything except `/`.
-      `?` matches a single non-`/` character.
-
-    We use sentinels so `fnmatch.translate` can't collapse `**` into `*`
-    or escape our directory separators.
-    """
+    """gitignore-style `**` semantics; see test_cli_exclude.py for the contract."""
     leading = "\x00LEADING\x00"
     trailing = "\x00TRAILING\x00"
     star2 = "\x00STAR2\x00"
     star1 = "\x00STAR1\x00"
-
     p = pattern
     if p.startswith("**/"):
         p = leading + p[len("**/"):]
@@ -182,7 +181,6 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
         p = p[: -len("/**")] + trailing
     p = p.replace("**", star2)
     p = p.replace("*", star1)
-
     regex = fnmatch.translate(p)
     regex = regex.replace(re.escape(leading), "(?:.*/)?")
     regex = regex.replace(re.escape(trailing), "(?:/.*)?")
@@ -192,12 +190,6 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
 
 
 def _matches_any_pattern(path: Path, root: Path, patterns: list[str]) -> bool:
-    """True if `path` (relative to `root`) matches any of the glob patterns.
-
-    Used by --exclude. Patterns are matched against the POSIX-style relative
-    path so '**/test/**' works the same on Windows and Unix. The basename
-    is also tried so a bare 'test_*.py' pattern matches files anywhere.
-    """
     try:
         rel = path.relative_to(root)
     except ValueError:
@@ -212,14 +204,7 @@ def _matches_any_pattern(path: Path, root: Path, patterns: list[str]) -> bool:
 
 
 def _enumerate_candidate_files(path: Path, exclude: list[str] | None = None) -> list[Path]:
-    """Walk the target tree and return scannable .py / .java files.
-
-    Skips common noise directories (__pycache__, .venv, .git, node_modules).
-    If `exclude` is provided, additionally drops files matching any of the
-    glob patterns (Phase E.3, for filtering out test directories under
-    --scan-all-files where semgrep's built-in .semgrepignore is bypassed).
-    Returns the path itself wrapped in a list when given a single file.
-    """
+    """Walk the target tree and return scannable .py / .java files."""
     exclude = exclude or []
     if path.is_file():
         if path.suffix not in {".py", ".java"}:
@@ -243,11 +228,10 @@ def _enumerate_candidate_files(path: Path, exclude: list[str] | None = None) -> 
 
 
 def _print_file_summary(files: list[Path], debug: bool) -> None:
-    """Print scanned-files summary: count + first N names (all if --debug)."""
     n = len(files)
     if n == 0:
         print("[agentshield] candidate files: 0 (.py / .java)")
-        print(f"[agentshield] WARNING: no scannable files found — verify the target path")
+        print("[agentshield] WARNING: no scannable files found — verify the target path")
         return
     print(f"[agentshield] candidate files: {n} (.py / .java)")
     show = files if debug or n <= _SAMPLE_FILE_LIMIT else files[:_SAMPLE_FILE_LIMIT]
@@ -257,34 +241,77 @@ def _print_file_summary(files: list[Path], debug: bool) -> None:
         print(f"  ... ({n - _SAMPLE_FILE_LIMIT} more; pass --debug to see all)")
 
 
+def _finding_to_emitter_dict(f: Finding) -> dict:
+    """Convert a normalized Finding to the flat dict shape the emitter passes
+    through to tier1-results.json. Copilot reads this file and uses it for:
+    (a) the cross-check section (FP callouts by index), (b) coverage matrix
+    aggregation. Keep field names stable — both the merger and the Tier 2
+    checklist's §7 cross-check section reference them.
+    """
+    return {
+        "rule_id": f.rule_id,
+        "rule_id_short": f.rule_id_short,
+        "agentshield_id": f.agentshield_id,
+        "category": f.category,
+        "severity": f.severity,
+        "file": f.location.file_path,
+        "line": f.location.start_line,
+        "message": f.message,
+        "language": f.language,
+        "framework_mappings": {
+            "owasp_llm": list(f.framework_mappings.owasp_llm),
+            "owasp_agentic": list(f.framework_mappings.owasp_agentic),
+            "mitre_atlas": list(f.framework_mappings.mitre_atlas),
+            "cwe": list(f.framework_mappings.cwe),
+            "nist_ai_rmf": list(f.framework_mappings.nist_ai_rmf),
+        },
+    }
+
+
+def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
+    """The mandatory next-step prompt the user pastes into Copilot Chat."""
+    bar = "=" * 70
+    print()
+    print(bar)
+    print("⚠ TIER 2 NOT YET RUN — scanning is INCOMPLETE.")
+    print(bar)
+    print()
+    print("Skill files written:")
+    for p in emit.emitted_files:
+        print(f"  - {p.relative_to(target_root)}")
+    if emit.gitignore_updated:
+        print(f"  + appended .agentshield/ to {target_root}/.gitignore")
+    print()
+    print("Next step — paste this into Copilot Chat in your IDE:")
+    print()
+    print("-" * 70)
+    print(copilot_prompt())
+    print("-" * 70)
+    print()
+    print(f"Then run:  agentshield merge {target_root}")
+    print()
+
+
+# ---------- scan command ----------
+
 def cmd_scan(args: argparse.Namespace) -> int:
-    """Run Tier 1+2 semgrep scan; remaining tiers stubbed pending A3/A4/B/D."""
+    """Tier 1 (semgrep) + emit Tier 2 skill files into the target."""
     print(f"[agentshield] scan target: {args.path}")
 
-    # Always enumerate candidate files for visibility — even when not using
-    # --scan-all-files. Lets users immediately see "did we find any source
-    # files at all?" which is the first thing to check on a 0-findings scan.
     exclude_patterns = list(args.exclude or [])
     candidate_files = _enumerate_candidate_files(Path(args.path), exclude=exclude_patterns)
     if exclude_patterns:
         print(f"[agentshield] --exclude patterns applied: {exclude_patterns}")
     _print_file_summary(candidate_files, args.debug)
     if not args.scan_all_files and candidate_files and Path(args.path).is_dir():
-        # When semgrep walks a directory, it further filters via its built-in
-        # .semgrepignore (skips tests/, examples/, vendor/, etc.). Single-file
-        # invocations bypass that filter entirely, so the note only applies
-        # to directory scans.
         print(
             "[agentshield] note: without --scan-all-files, semgrep applies "
             "its built-in .semgrepignore (skips tests/, examples/, vendor/, "
             "etc.). Pass --scan-all-files to scan every candidate file above."
         )
 
-    # Tier 1+2 — wired in A2; produces raw SARIF.
     target: Path | str | list[Path]
     if args.scan_all_files:
-        # Pass the explicit file list to semgrep, bypassing its default
-        # directory ignore.
         target = candidate_files
         print(f"[agentshield] --scan-all-files: passing all {len(target)} file(s) to semgrep")
     else:
@@ -299,7 +326,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             "[agentshield] --stage-locally: copying source files to a local temp "
             "tree before scan (UNC / network-drive workaround)"
         )
-    print("[agentshield] Tier 1+2: invoking semgrep on bundled rule pack...")
+    print("[agentshield] Tier 1: invoking semgrep on bundled rule pack (6 families)...")
     try:
         runner = SemgrepRunner()
         sarif = runner.run(target, stage_locally=args.stage_locally)
@@ -315,7 +342,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         return 2
 
     raw_count = SemgrepRunner.count_raw_findings(sarif)
-    print(f"[agentshield] Tier 1+2: {raw_count} raw finding(s)")
+    print(f"[agentshield] Tier 1: {raw_count} raw finding(s)")
     if raw_count == 0 and not args.stage_locally and _looks_like_network_path(Path(args.path)):
         print(
             "[agentshield] HINT: target looks like a UNC / mapped network "
@@ -333,86 +360,24 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 line = loc.get("region", {}).get("startLine", "?")
                 print(f"[agentshield] --debug:   {rid:50s} {uri}:{line}")
 
-    # A3: normalize SARIF to typed Findings partitioned by tier.
     try:
         normalizer = Normalizer()
         findings = normalizer.normalize(sarif)
     except NormalizerError as exc:
         print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
         return 2
-    by_tier = Normalizer.partition_by_tier(findings)
     by_category: dict[str, int] = {}
     for f in findings:
         by_category[f.category] = by_category.get(f.category, 0) + 1
     print(
         f"[agentshield] Normalized: {len(findings)} finding(s) "
-        f"(framework={len(by_tier['framework'])}, fallback={len(by_tier['fallback'])}) "
         f"detect={by_category.get('detect', 0)} "
         f"defend={by_category.get('defend', 0)} "
         f"respond={by_category.get('respond', 0)}"
     )
 
-    # Tier 3 — LLM judge over fallback findings (Track B4 orchestrator).
-    fallback_count = JudgeOrchestrator.count_fallback(findings)
-    if args.no_judge:
-        print(f"[agentshield] Tier 3 judge: skipped (--no-judge); {fallback_count} fallback finding(s) untriaged")
-    elif fallback_count == 0:
-        print("[agentshield] Tier 3 judge: no fallback findings to triage (skipped)")
-    else:
-        backend_choice = args.llm_backend or "boto3-bedrock"
-        if backend_choice == "boto3-bedrock":
-            if not args.bedrock_model_id:
-                print(
-                    "[agentshield] Tier 3 judge: skipped — boto3-bedrock backend requires "
-                    "--bedrock-model-id (or set bedrock_model_id in agentshield.yaml)"
-                )
-            else:
-                backend = Boto3BedrockBackend(
-                    model_id=args.bedrock_model_id,
-                    region_name=args.bedrock_region,
-                )
-                orchestrator = JudgeOrchestrator(backend)
-                print(
-                    f"[agentshield] Tier 3 judge: triaging {fallback_count} fallback "
-                    f"finding(s) via {backend.name} (model={backend.model_id})..."
-                )
-                findings = orchestrator.triage(findings)
-                verdicts = [f.triage.verdict for f in findings if f.triage]
-                summary = {
-                    "confirmed": verdicts.count("confirmed"),
-                    "dismissed": verdicts.count("dismissed"),
-                    "needs_review": verdicts.count("needs_review"),
-                }
-                print(
-                    f"[agentshield] Tier 3 judge: {summary['confirmed']} confirmed, "
-                    f"{summary['dismissed']} dismissed, {summary['needs_review']} needs_review"
-                )
-        elif backend_choice in {"smartsdk", "copilot"}:
-            print(
-                f"[agentshield] Tier 3 judge: backend={backend_choice} not yet implemented "
-                f"(Track B2/B3) — skipped; {fallback_count} fallback finding(s) untriaged"
-            )
-        elif backend_choice == "mock":
-            backend = MockJudgeBackend()
-            orchestrator = JudgeOrchestrator(backend)
-            print(
-                f"[agentshield] Tier 3 judge: triaging {fallback_count} fallback "
-                f"finding(s) via mock backend (no LLM is called — verdicts are "
-                f"placeholders for VDI / smoke-test use)"
-            )
-            findings = orchestrator.triage(findings)
-            print(
-                f"[agentshield] Tier 3 judge: {fallback_count} mock verdict(s) "
-                f"attached as `needs_review`. Re-run with --llm-backend "
-                f"boto3-bedrock for real triage."
-            )
-        elif backend_choice == "none":
-            print(f"[agentshield] Tier 3 judge: backend=none — skipped")
-
-    if args.discovery:
-        print("[agentshield] TODO Tier 4 (discovery pass, enabled)              — Track D")
-
-    # A4: emit reports if requested.
+    # Tier-1-only outputs (legacy compatibility — for the unified report use
+    # `agentshield merge`).
     written: list[str] = []
     if args.output_sarif:
         SarifWriter().write(findings, Path(args.output_sarif))
@@ -424,20 +389,124 @@ def cmd_scan(args: argparse.Namespace) -> int:
         MarkdownWriter().write(findings, Path(args.output_markdown))
         written.append(args.output_markdown)
     if written:
-        print(f"[agentshield] Wrote: {', '.join(written)}")
-    else:
+        print(f"[agentshield] Wrote Tier-1-only report(s): {', '.join(written)}")
+
+    # Emit Tier 2 skill files unless explicitly opted out.
+    if args.no_emit:
         print(
-            "[agentshield] (no --output-{sarif,json,markdown} specified; "
-            "use one to persist findings)"
+            "\n[agentshield] --no-emit: skipping Tier 2 skill-file emission. "
+            "Scanning is INCOMPLETE — no Tier 2 will be runnable."
         )
+        return 0
+
+    target_root = Path(args.path).resolve()
+    if not target_root.is_dir():
+        # Single-file scan; emit into the file's parent.
+        target_root = target_root.parent
+
+    findings_dicts = [_finding_to_emitter_dict(f) for f in findings]
+    scanned_files_rel = [
+        str(p.resolve().relative_to(target_root))
+        if p.resolve().is_relative_to(target_root)
+        else str(p)
+        for p in candidate_files
+    ]
+    try:
+        emit = emit_skills(target_root, findings_dicts, scanned_files_rel)
+    except FileNotFoundError as exc:
+        print(f"[agentshield] ERROR emitting Tier 2 skill files: {exc}", file=sys.stderr)
+        return 2
+
+    _print_tier2_banner(target_root, emit)
     return 0
 
+
+# ---------- merge command ----------
+
+def cmd_merge(args: argparse.Namespace) -> int:
+    """Combine .agentshield/tier1-results.json + .agentshield/tier2-findings.json
+    into a unified report.
+    """
+    target_root = Path(args.path)
+    print(f"[agentshield] merge target: {target_root}")
+
+    try:
+        result = merge(target_root)
+    except MergeError as exc:
+        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    _print_merge_summary(result)
+
+    written: list[str] = []
+    if args.output_markdown:
+        Path(args.output_markdown).write_text(render_combined_markdown(result))
+        written.append(args.output_markdown)
+    if args.output_json:
+        Path(args.output_json).write_text(render_combined_json(result))
+        written.append(args.output_json)
+    if args.output_sarif:
+        Path(args.output_sarif).write_text(render_combined_sarif(result))
+        written.append(args.output_sarif)
+    if written:
+        print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")
+
+    if args.print_md:
+        print()
+        print(render_combined_markdown(result))
+
+    if not written and not args.print_md:
+        print(
+            "\n[agentshield] (no --output-{markdown,json,sarif} specified and "
+            "--print not set; pass one to persist or display the unified report)"
+        )
+
+    # Soft failures (stale, schema errors, tier 2 missing) don't change exit
+    # code — the report banner surfaces them. Hard failures already returned 2.
+    return 0
+
+
+def _print_merge_summary(result: MergeResult) -> None:
+    if not result.tier2_present:
+        print(
+            "[agentshield] ⚠ Tier 2 has NOT been run — report will be "
+            "Tier-1-only with an INCOMPLETE banner. Run Copilot Tier 2 "
+            "(see .agentshield/tier2-bootstrap.md) and re-merge."
+        )
+    elif result.schema_errors:
+        print(
+            f"[agentshield] ❌ Tier 2 output failed schema validation "
+            f"({len(result.schema_errors)} error(s)). Tier 2 findings will "
+            f"NOT be merged. Re-prompt Copilot to fix:"
+        )
+        for e in result.schema_errors[:10]:
+            print(f"  - {e}")
+        if len(result.schema_errors) > 10:
+            print(f"  ... ({len(result.schema_errors) - 10} more)")
+    elif result.stale:
+        print(
+            "[agentshield] ⚠ STALE Tier 2: fingerprint mismatch. The Tier 1 "
+            "rule pack or source code changed since Tier 2 was run. Re-run "
+            "Copilot Tier 2 for fresh results; merging anyway with a STALE "
+            "banner in the report."
+        )
+    else:
+        print("[agentshield] ✓ Tier 1 + Tier 2 fresh; merging.")
+    print(
+        f"[agentshield] Net actionable findings: "
+        f"{result.actionable_finding_count}"
+    )
+
+
+# ---------- entry ----------
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "scan":
         return cmd_scan(args)
+    if args.command == "merge":
+        return cmd_merge(args)
     return 0
 
 

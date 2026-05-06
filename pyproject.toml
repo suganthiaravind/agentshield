@@ -35,11 +35,12 @@ dependencies = [
 semgrep = [
     "semgrep>=1.50",
 ]
-judge = [
-    "boto3>=1.28",
-]
+# Phase F.6: judge extra removed. v2's Tier 2 LLM execution happens via
+# Copilot in the user's IDE — no in-process boto3-Bedrock dep needed.
+# If a future Tier 2 backend wants to call Bedrock for headless CI, it
+# will be a new module, not a revival of the v1 judge orchestrator.
 all = [
-    "agentshield[semgrep,judge]",
+    "agentshield[semgrep]",
 ]
 dev = [
     "pytest>=7.0",
