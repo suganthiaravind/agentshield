@@ -26,7 +26,8 @@ rules:
       - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bforget\s+(everything|all\s+(previous|prior)\s+(instructions|context))[^"\x27]*["\x27]'
     metadata:
       category: detect
-      agentshield_id: AS-D-010
+      agentshield_id: AS-S-D-LLM01-003
+      legacy_ids: ["AS-D-010"]
       severity_normalized: high
       framework_mappings:
         owasp_llm: ["LLM01"]

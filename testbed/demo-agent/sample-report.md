@@ -1,6 +1,6 @@
 # AgentShield Detection Report
 
-_Semgrep Rules-engine Scan + Copilot AI Scan · scanned 2026-05-06T14:00:00Z_
+_Semgrep Rules-engine Scan + Copilot LLM Scan · scanned 2026-05-06T14:00:00Z_
 
 ---
 
@@ -17,7 +17,7 @@ AgentShield's organising spine. Every finding belongs to exactly one category.
 | Metric | Count |
 |---|---|
 | Semgrep Rules-engine Scan findings | 9 |
-| Copilot AI Scan net-new findings | 6 |
+| Copilot LLM Scan net-new findings | 6 |
 | Semgrep findings marked True Positive by Copilot | 1 |
 | Semgrep findings marked Context-Dependent by Copilot | 0 |
 | Semgrep findings marked False Positive by Copilot | 0 |
@@ -61,7 +61,7 @@ _Where the agent is exploitable._
 - **Message:** User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).
 - **Frameworks:** OWASP LLM LLM01 · OWASP Agentic T6 · MITRE ATLAS AML.T0051
 
-### **[Copilot]** 🟧 HIGH `TIER2-LLM01-02`
+### **[Copilot]** 🟧 HIGH `AS-C-D-LLM01-002`
 
 - **Location:** `testbed/demo-agent/controller.py:30`
 - **Message:** Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface — attacker-controlled webpage content flows into the LLM via the summarise prompt.
@@ -82,7 +82,7 @@ _Where the agent is exploitable._
 - **Frameworks:** CWE CWE-732 · OWASP AST10 AST03
 - **Copilot reasoning:** request.json["message"] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.
 
-### **[Copilot]** 🟨 MEDIUM `TIER2-AGENTIC-T1-01`
+### **[Copilot]** 🟨 MEDIUM `AS-C-D-AGENTIC_T1-001`
 
 - **Location:** `testbed/demo-agent/memory.py:17`
 - **Message:** Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.
@@ -112,7 +112,7 @@ _Where the agent is exploitable._
 
 _What active defences are missing._
 
-### **[Copilot]** 🟧 HIGH `TIER2-LLM06-01`
+### **[Copilot]** 🟧 HIGH `AS-C-DF-LLM06-001`
 
 - **Location:** `testbed/demo-agent/tools.py:26`
 - **Message:** Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.
@@ -120,7 +120,7 @@ _What active defences are missing._
 - **Snippet:** `@tool def cancel_subscription(customer_id: str)`
 - **Remediation:** Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation.
 
-### **[Copilot]** 🟨 MEDIUM `TIER2-LLM10-01`
+### **[Copilot]** 🟨 MEDIUM `AS-C-DF-LLM10-001`
 
 - **Location:** `testbed/demo-agent/controller.py:14`
 - **Message:** ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound — DoS / cost exposure.
@@ -132,7 +132,7 @@ _What active defences are missing._
 
 _Whether incidents can be detected and recovered._
 
-### **[Copilot]** 🟧 HIGH `TIER2-LLM02-04`
+### **[Copilot]** 🟧 HIGH `AS-C-R-LLM02-002`
 
 - **Location:** `testbed/demo-agent/notifications.py:24`
 - **Message:** LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.
@@ -140,7 +140,7 @@ _Whether incidents can be detected and recovered._
 - **Snippet:** `sns.publish(TopicArn="...", Message=reply_body, ...)`
 - **Remediation:** Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient.
 
-### **[Copilot]** 🟨 MEDIUM `TIER2-LLM10-02`
+### **[Copilot]** 🟨 MEDIUM `AS-C-R-LLM10-001`
 
 - **Location:** `testbed/demo-agent/notifications.py:14`
 - **Message:** LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.

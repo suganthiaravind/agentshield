@@ -186,13 +186,17 @@ def _validate_finding(
                 )
             )
 
-    # rule_id must start with TIER2-
+    # F.27: rule_id must start with the new "AS-C-" Copilot prefix OR
+    # the legacy "TIER2-" prefix (back-compat for in-flight Copilot
+    # outputs written before the rename).
     if "rule_id" in finding and isinstance(finding["rule_id"], str):
-        if not finding["rule_id"].startswith("TIER2-"):
+        rid = finding["rule_id"]
+        if not (rid.startswith("AS-C-") or rid.startswith("TIER2-")):
             errors.append(
                 SchemaError(
                     f"{path}.rule_id",
-                    f"Tier 2 rule_id must start with 'TIER2-', got {finding['rule_id']!r}",
+                    f"Tier 2 rule_id must start with 'AS-C-' (or legacy 'TIER2-'), "
+                    f"got {finding['rule_id']!r}",
                 )
             )
 

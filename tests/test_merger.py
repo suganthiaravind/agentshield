@@ -324,14 +324,14 @@ def test_markdown_has_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     result = merge(repo)
     md = render_combined_markdown(result)
-    assert "INCOMPLETE: Copilot AI Scan not run" in md
+    assert "INCOMPLETE: Copilot LLM Scan not run" in md
 
 
 def test_markdown_has_stale_banner_when_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     md = render_combined_markdown(merge(repo))
-    assert "STALE Copilot AI Scan" in md
+    assert "STALE Copilot LLM Scan" in md
 
 
 def test_markdown_has_schema_error_banner(repo: Path) -> None:
@@ -626,7 +626,7 @@ def test_html_omits_saige_when_unclassified(repo: Path) -> None:
 def test_html_shows_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     html = render_combined_html(merge(repo))
-    assert "INCOMPLETE — Copilot AI Scan not run." in html
+    assert "INCOMPLETE — Copilot LLM Scan not run." in html
     assert 'class="banner warn"' in html
 
 
@@ -634,7 +634,7 @@ def test_html_shows_stale_banner_on_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     html = render_combined_html(merge(repo))
-    assert "STALE Copilot AI Scan." in html
+    assert "STALE Copilot LLM Scan." in html
     assert 'class="banner stale"' in html
 
 
@@ -671,7 +671,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
 
     SAIGE classification (e.g. 'Classified as: Tier 2') is the only place
     'Tier' may appear in user-visible text. AgentShield's phases show as
-    'Semgrep Rules-engine Scan' / 'Copilot AI Scan' (long form in headers)
+    'Semgrep Rules-engine Scan' / 'Copilot LLM Scan' (long form in headers)
     or 'Semgrep' / 'Copilot' (short form in pills)."""
     _write_tier1(repo, _tier1_payload())
     payload = _tier2_payload()
@@ -694,11 +694,11 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert "**Classified as:** Agentic Tier 2" in md
     # New labels present.
     assert "Semgrep Rules-engine Scan" in md
-    assert "Copilot AI Scan" in md
+    assert "Copilot LLM Scan" in md
     assert "[Semgrep]" in md
     assert "[Copilot]" in md
     # Skipped-files heading uses the AgentShield-phase rename.
-    assert "## Copilot AI Scan skipped files" in md
+    assert "## Copilot LLM Scan skipped files" in md
 
     html = render_combined_html(merge(repo))
     # No AgentShield-phase pills or footer text with the old labels.
@@ -710,7 +710,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert 'class="saige-tier">Agentic Tier 2</div>' in html
     # New labels present.
     assert "Semgrep Rules-engine Scan" in html
-    assert "Copilot AI Scan" in html
+    assert "Copilot LLM Scan" in html
     assert '<span class="pill tier1">Semgrep</span>' in html
     assert '<span class="pill tier2">Copilot</span>' in html
     assert "Semgrep fingerprint" in html
@@ -730,9 +730,8 @@ def test_html_includes_filter_bar(repo: Path) -> None:
     # Severity chips for all 5 levels.
     for sev in ("critical", "high", "medium", "low", "info"):
         assert f'data-filter="severity" value="{sev}"' in html
-    # Category chips for all 3 D/D/R buckets.
-    for cat in ("detect", "defend", "respond"):
-        assert f'data-filter="category" value="{cat}"' in html
+    # F.27: Category chips removed — D/D/R tabs already constrain category.
+    assert 'data-filter="category"' not in html
     # Origin chips.
     assert 'data-filter="origin" value="tier1"' in html
     assert 'data-filter="origin" value="tier2"' in html
@@ -826,18 +825,35 @@ def test_html_renders_with_empty_finding_buckets(tmp_path: Path) -> None:
 # ---------- Tabbed report layout (F.22) ----------
 
 def test_html_has_tab_navigation(repo: Path) -> None:
-    """5 tabs: Detect / Defend / Respond / Coverage / Frameworks. Detect
-    is the default-active tab so the user lands on the most-actionable
-    bucket without having to click."""
+    """6 tabs: Detect / Defend / Respond / Coverage / Frameworks / Reference.
+    Detect is the default-active tab so the user lands on the most-
+    actionable bucket without having to click."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
     assert 'class="tab-nav"' in html
-    for tab in ("detect", "defend", "respond", "coverage", "frameworks"):
+    for tab in ("detect", "defend", "respond", "coverage", "frameworks", "reference"):
         assert f'data-tab="{tab}"' in html
     # Detect is the default-active tab.
     assert 'class="tab-btn active" role="tab" data-tab="detect"' in html
     assert 'aria-selected="true"' in html
+
+
+def test_html_reference_tab_renders_cards_from_three_sources(repo: Path) -> None:
+    """F.26 — the Reference tab pulls Tier 1 / Tier 2 / Manifest checks
+    from the bundled rule pack at render time."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'data-panel="reference"' in html
+    assert 'class="reference-card"' in html
+    # All three source groups present.
+    for source in ("Semgrep", "Copilot", "Manifest"):
+        assert f">{source} " in html or f">{source}<" in html, f"missing source: {source}"
+    # At least one card from each tier.
+    assert "AS-D-001" in html  # Tier 1 D001
+    assert "TIER2-LLM01-01" in html  # Tier 2
+    assert "AS-AST-001" in html  # AST10 manifest
 
 
 def test_html_tab_panels_wrap_each_section(repo: Path) -> None:

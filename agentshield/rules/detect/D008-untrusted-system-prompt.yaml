@@ -65,7 +65,8 @@ rules:
               - pattern: hmac.compare_digest(...)
     metadata:
       category: detect
-      agentshield_id: AS-D-008
+      agentshield_id: AS-S-D-LLM07-001
+      legacy_ids: ["AS-D-008"]
       severity_normalized: critical
       framework_mappings:
         owasp_llm: ["LLM01", "LLM07"]

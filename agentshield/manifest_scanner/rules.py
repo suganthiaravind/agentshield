@@ -3,13 +3,17 @@
 Each rule is a pure function from a ParsedManifest → list[Finding]. The
 scanner module composes them in a fixed order and returns the union.
 
-| Rule ID  | AST  | What it checks                                     |
-|----------|------|----------------------------------------------------|
-| AS-AST-001 | AST01 | Concealment / jailbreak markers in the body prose |
-| AS-AST-003 | AST03 | Over-broad permissions in frontmatter              |
-| AS-AST-004 | AST04 | Insecure metadata (missing description / identity) |
-| AS-AST-005 | AST05 | Unsafe deserialization patterns in body code blocks|
-| AS-AST-007 | AST07 | Update-drift: missing signature / content_hash     |
+| Rule ID prefix | AST | What it checks                                  |
+|----------------|------|------------------------------------------------|
+| AS-M-D-AST01-* | AST01 | Concealment / jailbreak markers in body prose  |
+| AS-M-D-AST03-* | AST03 | Over-broad permissions in frontmatter          |
+| AS-M-D-AST04-* | AST04 | Insecure metadata (missing description / DID)  |
+| AS-M-D-AST05-* | AST05 | Unsafe deserialization in body code blocks     |
+| AS-M-D-AST07-* | AST07 | Update-drift: missing signature / content_hash |
+
+(Legacy `AS-AST-NNN` IDs are preserved on each Finding's `legacy_ids`
+so customer suppress-comments / SARIF integrations from the v1 scheme
+continue to work.)
 
 Severity levels follow AgentShield's existing ladder. AST04 / AST07 are
 flagged at low/info because they describe hygiene gaps that may not be
@@ -27,6 +31,27 @@ from agentshield.normalize.schema import (
     Finding,
     FrameworkMappings,
 )
+
+# F.27 single source of truth for AST10 rule IDs.
+# Each `rule_short` (the slug emitted as `rule_id_short` on findings) maps
+# to (current_agentshield_id, [legacy_ids]). The new IDs follow the
+# uniform `AS-<source>-<DDR>-<anchor>-<seq>` convention; legacy IDs are
+# preserved so customer suppress-comments and dashboards from the v1
+# AST scheme keep working.
+_RULE_IDS: dict[str, tuple[str, list[str]]] = {
+    "ast01-malicious-skill-marker":  ("AS-M-D-AST01-001", ["AS-AST-001"]),
+    "ast03-network-unrestricted":    ("AS-M-D-AST03-001", ["AS-AST-003"]),
+    "ast03-network-wildcard-allow":  ("AS-M-D-AST03-002", ["AS-AST-003"]),
+    "ast03-shell-access":            ("AS-M-D-AST03-003", ["AS-AST-003"]),
+    "ast03-wildcard-file-read":      ("AS-M-D-AST03-004", ["AS-AST-003"]),
+    "ast03-wildcard-file-write":     ("AS-M-D-AST03-005", ["AS-AST-003"]),
+    "ast03-identity-file-write":     ("AS-M-D-AST03-006", ["AS-AST-003"]),
+    "ast04-missing-description":     ("AS-M-D-AST04-001", ["AS-AST-004"]),
+    "ast04-missing-author-identity": ("AS-M-D-AST04-002", ["AS-AST-004"]),
+    "ast05-unsafe-deserialization":  ("AS-M-D-AST05-001", ["AS-AST-005"]),
+    "ast07-missing-signature":       ("AS-M-D-AST07-001", ["AS-AST-007"]),
+    "ast07-missing-content-hash":    ("AS-M-D-AST07-002", ["AS-AST-007"]),
+}
 
 # --- AST01 markers (re-uses D009 / D010 vocabulary applied to .md body) ---
 
@@ -75,7 +100,6 @@ def check_ast01_body_markers(manifest: ParsedManifest) -> list[Finding]:
                 findings.append(
                     _build_finding(
                         rule_short="ast01-malicious-skill-marker",
-                        agentshield_id="AS-AST-001",
                         path=manifest.path,
                         line=abs_line,
                         snippet=line.strip()[:200],
@@ -124,7 +148,6 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast03-network-unrestricted",
-                agentshield_id="AS-AST-003",
                 path=manifest.path,
                 line=fm_line,
                 snippet="permissions.network: true",
@@ -148,7 +171,6 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
             findings.append(
                 _build_finding(
                     rule_short="ast03-network-wildcard-allow",
-                    agentshield_id="AS-AST-003",
                     path=manifest.path,
                     line=fm_line,
                     snippet='permissions.network.allow: ["*"]',
@@ -169,7 +191,6 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast03-shell-access",
-                agentshield_id="AS-AST-003",
                 path=manifest.path,
                 line=fm_line,
                 snippet="permissions.shell: true",
@@ -197,7 +218,6 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                         findings.append(
                             _build_finding(
                                 rule_short=f"ast03-wildcard-file-{key}",
-                                agentshield_id="AS-AST-003",
                                 path=manifest.path,
                                 line=fm_line,
                                 snippet=f"permissions.files.{key}: {p}",
@@ -226,7 +246,6 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                     findings.append(
                         _build_finding(
                             rule_short="ast03-identity-file-write",
-                            agentshield_id="AS-AST-003",
                             path=manifest.path,
                             line=fm_line,
                             snippet=f"permissions.files.write: {p}",
@@ -262,7 +281,6 @@ def check_ast04_metadata(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast04-missing-description",
-                agentshield_id="AS-AST-004",
                 path=manifest.path,
                 line=1,
                 snippet="description: <missing or empty>",
@@ -287,7 +305,6 @@ def check_ast04_metadata(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast04-missing-author-identity",
-                agentshield_id="AS-AST-004",
                 path=manifest.path,
                 line=1,
                 snippet="author.identity: <missing>",
@@ -351,7 +368,6 @@ def check_ast05_unsafe_deserialization(manifest: ParsedManifest) -> list[Finding
                 findings.append(
                     _build_finding(
                         rule_short="ast05-unsafe-deserialization",
-                        agentshield_id="AS-AST-005",
                         path=manifest.path,
                         line=abs_line,
                         snippet=stripped[:200],
@@ -399,7 +415,6 @@ def check_ast07_update_drift(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast07-missing-signature",
-                agentshield_id="AS-AST-007",
                 path=manifest.path,
                 line=1,
                 snippet="signature: <missing>",
@@ -419,7 +434,6 @@ def check_ast07_update_drift(manifest: ParsedManifest) -> list[Finding]:
         findings.append(
             _build_finding(
                 rule_short="ast07-missing-content-hash",
-                agentshield_id="AS-AST-007",
                 path=manifest.path,
                 line=1,
                 snippet="content_hash: <missing>",
@@ -442,7 +456,6 @@ def check_ast07_update_drift(manifest: ParsedManifest) -> list[Finding]:
 def _build_finding(
     *,
     rule_short: str,
-    agentshield_id: str,
     path: Any,
     line: int,
     snippet: str,
@@ -454,11 +467,15 @@ def _build_finding(
     cwe: list[str] | None = None,
 ) -> Finding:
     """Build a Finding in the canonical shape the rest of the pipeline
-    expects, with the AST mapping populated."""
+    expects, with the AST mapping populated. The current/legacy IDs come
+    from the central `_RULE_IDS` table — keep that table the single source
+    of truth for rule identity."""
+    agentshield_id, legacy_ids = _RULE_IDS.get(rule_short, (rule_short, []))
     return Finding(
         rule_id=f"agentshield.detect.{rule_short}",
         rule_id_short=rule_short,
         agentshield_id=agentshield_id,
+        legacy_ids=list(legacy_ids),
         category="detect",
         tier="framework",
         severity=severity,  # type: ignore[arg-type]
@@ -487,4 +504,210 @@ ALL_RULES = [
     check_ast04_metadata,
     check_ast05_unsafe_deserialization,
     check_ast07_update_drift,
+]
+
+
+# --- public reference data (used by the Reference tab in HTML reports) ---
+#
+# One entry per *user-visible rule* — multiple sub-rules under a single
+# AST risk are listed individually so the Reference tab shows the
+# distinct severities. Frameworks/remediation kept short here; the
+# scanner runtime emits the full message on each finding.
+RULE_DESCRIPTIONS = [
+    {
+        "rule_id": "ast01-malicious-skill-marker",
+        "agentshield_id": "AS-M-D-AST01-001",
+        "legacy_ids": ['AS-AST-001'],
+        "title": "AST01 — concealment / jailbreak markers in body",
+        "category": "detect",
+        "severity": "high",
+        "description": (
+            "SKILL.md body prose contains concealment, jailbreak, or "
+            "exfil instructions the host LLM may treat as authoritative "
+            "— the same prose-injection surface documented in the "
+            "ClawHavoc / ToxicSkills 2026 campaigns."
+        ),
+        "frameworks": {"ast": ["AST01"], "owasp_llm": ["LLM01", "LLM03"]},
+        "remediation": (
+            "Remove concealment / jailbreak strings from the skill body. "
+            "If they're red-team fixtures, move them to a dedicated test "
+            "corpus outside the published manifest."
+        ),
+    },
+    {
+        "rule_id": "ast03-network-unrestricted",
+        "agentshield_id": "AS-M-D-AST03-001",
+        "legacy_ids": ['AS-AST-003'],
+        "title": "AST03 — unrestricted network egress",
+        "category": "detect",
+        "severity": "high",
+        "description": (
+            "`permissions.network: true` (or `network.allow: ['*']`) in "
+            "the manifest. Skills with default-allow network can exfil "
+            "credentials or pull C2 instructions silently."
+        ),
+        "frameworks": {
+            "ast": ["AST03"],
+            "owasp_llm": ["LLM03", "LLM06"],
+            "owasp_agentic": ["T2", "T3"],
+            "cwe": ["CWE-732"],
+        },
+        "remediation": (
+            "Use a domain allowlist with default-deny: "
+            "`network.allow: [api.example.com]`."
+        ),
+    },
+    {
+        "rule_id": "ast03-shell-access",
+        "agentshield_id": "AS-M-D-AST03-003",
+        "legacy_ids": ['AS-AST-003'],
+        "title": "AST03 — shell access granted",
+        "category": "detect",
+        "severity": "medium",
+        "description": (
+            "`permissions.shell: true` declared. Skill scripts that can "
+            "shell out have full host privileges — credential stealers "
+            "and reverse shells become trivial."
+        ),
+        "frameworks": {"ast": ["AST03"], "owasp_llm": ["LLM06"], "cwe": ["CWE-78"]},
+        "remediation": (
+            "Grant shell access only when the skill's core function "
+            "requires it; document why in the description."
+        ),
+    },
+    {
+        "rule_id": "ast03-wildcard-file-read",
+        "agentshield_id": "AS-M-D-AST03-004",
+        "legacy_ids": ['AS-AST-003'],
+        "title": "AST03 — wildcard file read/write paths",
+        "category": "detect",
+        "severity": "medium",
+        "description": (
+            "`permissions.files.read` (or `.write`) contains a wildcard "
+            "(e.g. `~/.aws/**`). Wildcards defeat least-privilege review "
+            "— the registry can't tell what the skill will actually "
+            "touch."
+        ),
+        "frameworks": {"ast": ["AST03"], "cwe": ["CWE-732"]},
+        "remediation": "Declare explicit paths; no wildcards.",
+    },
+    {
+        "rule_id": "ast03-identity-file-write",
+        "agentshield_id": "AS-M-D-AST03-006",
+        "legacy_ids": ['AS-AST-003'],
+        "title": "AST03 — write access to identity file",
+        "category": "detect",
+        "severity": "critical",
+        "description": (
+            "Skill requests write access to `SOUL.md`, `MEMORY.md`, or "
+            "`AGENTS.md` without an explicit `deny_write` override. "
+            "These files persist instructions across sessions — writes "
+            "to them are persistence vectors."
+        ),
+        "frameworks": {
+            "ast": ["AST03"],
+            "owasp_llm": ["LLM04"],
+            "owasp_agentic": ["T1"],
+            "cwe": ["CWE-732"],
+        },
+        "remediation": (
+            "Add the file to `permissions.files.deny_write`. If write "
+            "access is genuinely required, document why and require "
+            "operator approval."
+        ),
+    },
+    {
+        "rule_id": "ast04-missing-description",
+        "agentshield_id": "AS-M-D-AST04-001",
+        "legacy_ids": ['AS-AST-004'],
+        "title": "AST04 — missing description",
+        "category": "detect",
+        "severity": "low",
+        "description": (
+            "Frontmatter has no `description` field, or it is empty. "
+            "Without a description the host LLM can't decide when to "
+            "trigger the skill, and reviewers can't verify intent."
+        ),
+        "frameworks": {"ast": ["AST04"]},
+        "remediation": "Add a one-paragraph honest description.",
+    },
+    {
+        "rule_id": "ast04-missing-author-identity",
+        "agentshield_id": "AS-M-D-AST04-002",
+        "legacy_ids": ['AS-AST-004'],
+        "title": "AST04 — missing author identity",
+        "category": "detect",
+        "severity": "info",
+        "description": (
+            "No `author.identity` (DID / signing-key anchor). Without "
+            "a verifiable identity, registry consumers can't detect "
+            "impersonation — the foothold the ClawHub fake-Google skill "
+            "exploited."
+        ),
+        "frameworks": {"ast": ["AST04"]},
+        "remediation": (
+            "Add `author.identity: did:web:<your-domain>` and a "
+            "`signing_key:` field."
+        ),
+    },
+    {
+        "rule_id": "ast05-unsafe-deserialization",
+        "agentshield_id": "AS-M-D-AST05-001",
+        "legacy_ids": ['AS-AST-005'],
+        "title": "AST05 — unsafe deserialization in scripts",
+        "category": "detect",
+        "severity": "high",
+        "description": (
+            "`yaml.load` (without SafeLoader), `pickle.loads`, `eval`, "
+            "or `exec` inside a fenced code block. Skill scripts run "
+            "with the agent's full host permissions — an unsafe "
+            "deserializer is a direct RCE primitive."
+        ),
+        "frameworks": {
+            "ast": ["AST05"],
+            "owasp_llm": ["LLM05"],
+            "owasp_agentic": ["T11"],
+            "cwe": ["CWE-94", "CWE-502"],
+        },
+        "remediation": (
+            "Use `yaml.safe_load`, JSON + schema validation, or "
+            "`ast.literal_eval`. Never `eval`/`exec` on untrusted bytes."
+        ),
+    },
+    {
+        "rule_id": "ast07-missing-signature",
+        "agentshield_id": "AS-M-D-AST07-001",
+        "legacy_ids": ['AS-AST-007'],
+        "title": "AST07 — missing manifest signature",
+        "category": "detect",
+        "severity": "info",
+        "description": (
+            "Frontmatter has no `signature` field. Without an ed25519 "
+            "signature the registry can't verify the skill on update; "
+            "ClawJacked-style update-drift attacks become viable."
+        ),
+        "frameworks": {"ast": ["AST07"], "owasp_llm": ["LLM03"], "cwe": ["CWE-345"]},
+        "remediation": (
+            "Sign the canonical skill payload with an ed25519 key and "
+            "publish the signature in the manifest."
+        ),
+    },
+    {
+        "rule_id": "ast07-missing-content-hash",
+        "agentshield_id": "AS-M-D-AST07-002",
+        "legacy_ids": ['AS-AST-007'],
+        "title": "AST07 — missing content hash",
+        "category": "detect",
+        "severity": "info",
+        "description": (
+            "Frontmatter has no `content_hash` field. Merkle-root "
+            "verification at install time requires a SHA-256 over the "
+            "canonical skill payload."
+        ),
+        "frameworks": {"ast": ["AST07"], "cwe": ["CWE-345"]},
+        "remediation": (
+            "Add `content_hash: sha256:<digest>` over the canonical "
+            "skill payload."
+        ),
+    },
 ]

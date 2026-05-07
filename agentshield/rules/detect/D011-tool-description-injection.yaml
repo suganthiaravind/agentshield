@@ -22,7 +22,8 @@ rules:
       - pattern-regex: '(?is)["\x27]description["\x27]\s*:\s*[fr]?["\x27]{1,3}[^"\x27]*\b(you\s+must|always\s+(call|use)\s+this|ignore\s+(all\s+)?other\s+tools|do\s+not\s+use\s+other|prefer\s+this\s+tool\s+over)[^"\x27]*["\x27]{1,3}'
     metadata:
       category: detect
-      agentshield_id: AS-D-011
+      agentshield_id: AS-S-D-LLM05-002
+      legacy_ids: ["AS-D-011"]
       severity_normalized: medium
       framework_mappings:
         owasp_llm: ["LLM05", "LLM01"]

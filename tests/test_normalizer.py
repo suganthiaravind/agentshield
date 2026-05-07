@@ -54,7 +54,9 @@ def test_d001_preserves_framework_mappings(normalized_findings: list[Finding]) -
         f for f in normalized_findings if f.rule_id_short == "unsanitized-user-input-to-llm"
     )
     assert d001.category == "detect"
-    assert d001.agentshield_id == "AS-D-001"
+    # F.27 — current ID is the new uniform-naming form; legacy ID survives.
+    assert d001.agentshield_id == "AS-S-D-LLM01-001"
+    assert "AS-D-001" in d001.legacy_ids
     assert "LLM01" in d001.framework_mappings.owasp_llm
     assert "T6" in d001.framework_mappings.owasp_agentic
     assert "AML.T0051" in d001.framework_mappings.mitre_atlas

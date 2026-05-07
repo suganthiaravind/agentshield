@@ -348,6 +348,7 @@ _DDR_ICON_SVG = {
         'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
         'stroke-linejoin="round">'
         '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'
+        '<path d="m9 12 2 2 4-4"/>'
         '</svg>'
     ),
     "respond": (
@@ -423,7 +424,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 1. Title
     lines.append("# AgentShield Detection Report")
     lines.append("")
-    lines.append(f"_Semgrep Rules-engine Scan + Copilot AI Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot AI Scan not run)'}_")
+    lines.append(f"_Semgrep Rules-engine Scan + Copilot LLM Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM Scan not run)'}_")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -431,15 +432,15 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 2. Status banners
     if not result.tier2_present:
         lines.append(
-            "> ⚠ **INCOMPLETE: Copilot AI Scan not run.** This report contains "
-            "Semgrep Rules-engine Scan findings only. Run the Copilot AI Scan "
+            "> ⚠ **INCOMPLETE: Copilot LLM Scan not run.** This report contains "
+            "Semgrep Rules-engine Scan findings only. Run the Copilot LLM Scan "
             "against this repo and re-merge for full coverage. See "
             "`.agentshield/tier2-bootstrap.md` for the prompt."
         )
         lines.append("")
     elif result.schema_errors:
         lines.append(
-            "> ❌ **Copilot AI Scan output failed schema validation.** Showing "
+            "> ❌ **Copilot LLM Scan output failed schema validation.** Showing "
             "Semgrep Rules-engine Scan only. Validation errors below — "
             "re-prompt Copilot to fix and re-merge."
         )
@@ -451,9 +452,9 @@ def render_combined_markdown(result: MergeResult) -> str:
         lines.append("")
     elif result.stale:
         lines.append(
-            "> ⚠ **STALE Copilot AI Scan.** The Semgrep fingerprint changed "
-            "since the Copilot AI Scan was run; the code (or rule pack) changed "
-            "in between. Re-run the Copilot AI Scan in Copilot Chat for fresh "
+            "> ⚠ **STALE Copilot LLM Scan.** The Semgrep fingerprint changed "
+            "since the Copilot LLM Scan was run; the code (or rule pack) changed "
+            "in between. Re-run the Copilot LLM Scan in Copilot Chat for fresh "
             "results."
         )
         lines.append(f"> - Semgrep fingerprint (current):  `{r.tier1_fingerprint[:16]}...`")
@@ -503,7 +504,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append("| Metric | Count |")
     lines.append("|---|---|")
     lines.append(f"| Semgrep Rules-engine Scan findings | {tier1_total} |")
-    lines.append(f"| Copilot AI Scan net-new findings | {tier2_total} |")
+    lines.append(f"| Copilot LLM Scan net-new findings | {tier2_total} |")
     if result.tier2_present and not result.schema_errors:
         lines.append(f"| Semgrep findings marked True Positive by Copilot | {tp_marked} |")
         lines.append(f"| Semgrep findings marked Context-Dependent by Copilot | {cd_marked} |")
@@ -602,7 +603,7 @@ def render_combined_markdown(result: MergeResult) -> str:
 
     # 8. Skipped files (transparency)
     if r.tier2_skipped_files:
-        lines.append("## Copilot AI Scan skipped files")
+        lines.append("## Copilot LLM Scan skipped files")
         lines.append("")
         for s in r.tier2_skipped_files:
             lines.append(f"- `{s.get('path', '?')}` — {s.get('reason', 'no reason given')}")
@@ -1172,6 +1173,99 @@ footer {
   padding: 2px 8px; border-radius: 999px;
   background: #ebe7d8; color: #5a5547;
 }
+
+/* F.26: Reference tab — "what AgentShield checks for" cards. */
+.reference-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.ref-source-group { margin-bottom: 28px; }
+.ref-source-group:last-child { margin-bottom: 0; }
+.ref-source-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.ref-source-name {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text);
+}
+.ref-source-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--accent); color: white;
+  letter-spacing: 0.02em; text-transform: none;
+}
+.ref-source-blurb {
+  display: block; margin-top: 4px;
+  font-size: 12px; color: var(--text-muted); font-weight: 400;
+  text-transform: none; letter-spacing: 0; line-height: 1.5;
+}
+.ref-empty {
+  font-size: 12px; color: var(--text-muted); font-style: italic;
+  padding: 8px 0;
+}
+.ref-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+}
+.ref-card-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.ref-card-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.ref-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; font-weight: 600; color: var(--text);
+}
+.ref-legacy {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; color: var(--text-muted);
+  font-style: italic; opacity: 0.75;
+}
+.ref-langs {
+  font-size: 11px; color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.ref-cat {
+  font-size: 10px; font-weight: 600; padding: 2px 8px;
+  border-radius: 4px; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.ref-cat-detect  { background: var(--detect-bg);  color: var(--detect); }
+.ref-cat-defend  { background: var(--defend-bg);  color: var(--defend); }
+.ref-cat-respond { background: var(--respond-bg); color: var(--respond); }
+
+.ref-card-item .ref-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin: 4px 0 6px;
+}
+.ref-desc { font-size: 12px; color: var(--text); line-height: 1.5; margin-bottom: 8px; }
+.ref-fw { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.ref-skip { margin-bottom: 8px; }
+.ref-skip summary {
+  font-size: 11px; color: var(--text-muted); cursor: pointer;
+  font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+}
+.ref-skip summary:hover { color: var(--text); }
+.ref-skip p {
+  font-size: 12px; color: var(--text-muted);
+  margin: 6px 0 0; padding-left: 12px;
+  border-left: 2px solid var(--border); line-height: 1.5;
+}
+.ref-remediation {
+  font-size: 12px; color: var(--text-muted);
+  padding-left: 12px; border-left: 2px solid var(--border);
+  line-height: 1.5;
+}
 """
 
 
@@ -1485,8 +1579,8 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield Detection Report</h1>")
     parts.append(
-        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot AI Scan'
-        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot AI Scan not run")
+        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot LLM Scan'
+        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM Scan not run")
         + "</div>"
     )
     parts.append("</div>")
@@ -1494,13 +1588,13 @@ def render_combined_html(result: MergeResult) -> str:
     # 2. Status banners
     if not result.tier2_present:
         parts.append(
-            '<div class="banner warn"><strong>INCOMPLETE — Copilot AI Scan not run.</strong> '
+            '<div class="banner warn"><strong>INCOMPLETE — Copilot LLM Scan not run.</strong> '
             "This report shows Semgrep Rules-engine Scan findings only. Run the "
-            "Copilot AI Scan and re-merge for full coverage.</div>"
+            "Copilot LLM Scan and re-merge for full coverage.</div>"
         )
     elif result.schema_errors:
         parts.append(
-            '<div class="banner error"><strong>Copilot AI Scan output failed schema validation.</strong> '
+            '<div class="banner error"><strong>Copilot LLM Scan output failed schema validation.</strong> '
             "Showing Semgrep Rules-engine Scan only. Re-prompt Copilot to fix the validation errors below.</div>"
         )
         parts.append('<div class="section"><h2>Schema errors</h2><ul>')
@@ -1509,9 +1603,9 @@ def render_combined_html(result: MergeResult) -> str:
         parts.append("</ul></div>")
     elif result.stale:
         parts.append(
-            '<div class="banner stale"><strong>STALE Copilot AI Scan.</strong> '
-            "The Semgrep fingerprint changed since the Copilot AI Scan was run; results may be inconsistent. "
-            "Re-run the Copilot AI Scan for fresh results.</div>"
+            '<div class="banner stale"><strong>STALE Copilot LLM Scan.</strong> '
+            "The Semgrep fingerprint changed since the Copilot LLM Scan was run; results may be inconsistent. "
+            "Re-run the Copilot LLM Scan for fresh results.</div>"
         )
 
     # 3. D/D/R HERO ROW
@@ -1556,7 +1650,7 @@ def render_combined_html(result: MergeResult) -> str:
     fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
     parts.append('<div class="metrics-row">')
     parts.append(f'<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">{tier1_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Copilot AI Scan</div><div class="metric-value">{tier2_total}</div></div>')
+    parts.append(f'<div class="metric"><div class="metric-label">Copilot LLM Scan</div><div class="metric-value">{tier2_total}</div></div>')
     parts.append(f'<div class="metric"><div class="metric-label">Marked False Positive by Copilot</div><div class="metric-value">{fp_marked}</div></div>')
     parts.append(f'<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">{result.actionable_finding_count}</div></div>')
     parts.append("</div>")
@@ -1608,15 +1702,11 @@ def render_combined_html(result: MergeResult) -> str:
             f'<span>{sev}</span></label>'
         )
     parts.append("</div>")
-    parts.append('<div class="filter-group">')
-    parts.append('<span class="filter-label">Category</span>')
-    for cat in _DDR_ORDER:
-        parts.append(
-            f'<label class="filter-chip cat-{cat}"><input type="checkbox" '
-            f'data-filter="category" value="{cat}" checked>'
-            f'<span>{cat}</span></label>'
-        )
-    parts.append("</div>")
+    # F.27: Category chip group removed — each D/D/R tab already
+    # constrains visible category, so a global category chip is redundant
+    # (and confusing if you toggle "detect" off while on the Detect tab).
+    # The JS still defaults category filters to "checked" via the
+    # `isChecked` fallback, so findings of any category pass through.
     parts.append('<div class="filter-group">')
     parts.append('<span class="filter-label">Origin</span>')
     for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
@@ -1659,6 +1749,10 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append(
         '<button type="button" class="tab-btn" role="tab" data-tab="frameworks" '
         'aria-selected="false">Frameworks</button>'
+    )
+    parts.append(
+        '<button type="button" class="tab-btn" role="tab" data-tab="reference" '
+        'aria-selected="false">Reference</button>'
     )
     parts.append("</div>")
 
@@ -1858,6 +1952,15 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append("</div>")  # /coverage-card
     parts.append("</div>")  # /tab-panel
 
+    # ---- Reference tab panel (F.26) ----
+    # Renders every check the scanner can fire, grouped by source. Pulled
+    # at render-time from the YAML rule pack + checklist template + the
+    # AST10 manifest-rule registry, so the documentation surface is always
+    # in sync with what's actually shipping.
+    parts.append('<div class="tab-panel" role="tabpanel" data-panel="reference">')
+    _render_reference_panel(parts)
+    parts.append("</div>")  # /tab-panel
+
     parts.append("</div>")  # /tab-panels
 
     # Footer
@@ -1877,6 +1980,145 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append('</script>')
     parts.append("</body></html>")
     return "\n".join(parts) + "\n"
+
+
+# ---------- Reference tab (F.26) ----------
+
+# Default paths for the reference loader — the bundled rule pack and
+# checklist template ship inside the agentshield package. Resolved at
+# render time so adding a new rule YAML or editing the checklist
+# automatically updates the Reference tab on the next render.
+_DEFAULT_RULES_PATH = Path(__file__).resolve().parent.parent / "rules"
+_DEFAULT_CHECKLIST_PATH = (
+    Path(__file__).resolve().parent.parent / "skills" / "tier2_checklist.md.tmpl"
+)
+
+# Friendly labels for the framework keys when rendered as small chips.
+_FRAMEWORK_LABEL = {
+    "owasp_llm": "OWASP LLM",
+    "owasp_agentic": "OWASP Agentic",
+    "mitre_atlas": "ATLAS",
+    "cwe": "CWE",
+    "ast": "AST10",
+}
+
+
+def _render_reference_panel(parts: list[str]) -> None:
+    """Emit the inner HTML of the Reference tab panel into `parts`."""
+    from agentshield.merger.reference import build_all_references
+
+    refs = build_all_references(
+        tier1_rules_path=_DEFAULT_RULES_PATH,
+        tier2_checklist_path=_DEFAULT_CHECKLIST_PATH,
+    )
+
+    grouped: dict[str, list] = {"Semgrep": [], "Copilot": [], "Manifest": []}
+    for ref in refs:
+        grouped.setdefault(ref.source, []).append(ref)
+
+    parts.append('<div class="reference-card">')
+    parts.append('<h3 class="panel-title">What AgentShield checks for</h3>')
+    parts.append(
+        '<p class="panel-subtitle">Every rule and checklist entry the '
+        "scanner can fire, pulled live from the bundled rule pack. Use this "
+        "as a product-coverage reference — independent of what the most "
+        "recent scan happened to find.</p>"
+    )
+
+    source_blurbs = {
+        "Semgrep": (
+            "Tier 1 — high-precision Python/Java AST + taint rules run by "
+            "Semgrep. Low false-positive bar; finds concrete call-site "
+            "vulnerabilities."
+        ),
+        "Copilot": (
+            "Tier 2 — semantic checklist Copilot walks file-by-file in the "
+            "user's IDE. Catches cross-function and absence-of-control "
+            "patterns Semgrep can't see."
+        ),
+        "Manifest": (
+            "AST10 — SKILL.md manifest scanner (preview). Checks the "
+            "skill-package distribution layer for malicious content, "
+            "over-broad permissions, and missing integrity metadata."
+        ),
+    }
+
+    for source in ("Semgrep", "Copilot", "Manifest"):
+        bucket = grouped.get(source) or []
+        parts.append('<div class="ref-source-group">')
+        parts.append('<div class="ref-source-header">')
+        parts.append(
+            f'<span class="ref-source-name">{_html_escape(source)} '
+            f'<span class="ref-source-count">{len(bucket)} '
+            f'check{"s" if len(bucket) != 1 else ""}</span></span>'
+        )
+        parts.append(
+            f'<span class="ref-source-blurb">{_html_escape(source_blurbs[source])}</span>'
+        )
+        parts.append("</div>")
+
+        if not bucket:
+            parts.append('<div class="ref-empty">(no checks registered)</div>')
+            parts.append("</div>")  # /ref-source-group
+            continue
+
+        parts.append('<div class="ref-cards">')
+        for ref in bucket:
+            sev = (ref.severity or "info").lower()
+            parts.append('<div class="ref-card-item">')
+            parts.append('<div class="ref-card-head">')
+            parts.append(
+                f'<span class="ref-id">{_html_escape(ref.agentshield_id)}</span>'
+            )
+            if ref.legacy_ids:
+                # F.27: faint caption — "was AS-D-001" / "was TIER2-LLM01-01"
+                # so customers searching for old IDs in dashboards still find
+                # the rule.
+                legacy_str = ", ".join(ref.legacy_ids)
+                parts.append(
+                    f'<span class="ref-legacy" title="Pre-rename ID(s)">'
+                    f'was {_html_escape(legacy_str)}</span>'
+                )
+            parts.append(f'<span class="pill {sev}">{_html_escape(sev)}</span>')
+            if ref.languages:
+                parts.append(
+                    f'<span class="ref-langs">{_html_escape(ref.languages)}</span>'
+                )
+            cat = (ref.category or "detect").lower()
+            parts.append(
+                f'<span class="ref-cat ref-cat-{cat}">{_html_escape(cat)}</span>'
+            )
+            parts.append("</div>")
+            parts.append(
+                f'<div class="ref-title">{_html_escape(ref.title)}</div>'
+            )
+            parts.append(
+                f'<div class="ref-desc">{_html_escape(ref.description)}</div>'
+            )
+            if ref.frameworks:
+                parts.append('<div class="ref-fw">')
+                for k_field, items in ref.frameworks.items():
+                    label = _FRAMEWORK_LABEL.get(k_field, k_field)
+                    for item in items:
+                        parts.append(
+                            f'<span class="finding-tag">'
+                            f'{_html_escape(label)} {_html_escape(item)}</span>'
+                        )
+                parts.append("</div>")
+            if ref.skip_if:
+                parts.append(
+                    f'<details class="ref-skip"><summary>Skip if</summary>'
+                    f'<p>{_html_escape(ref.skip_if)}</p></details>'
+                )
+            if ref.remediation:
+                parts.append(
+                    f'<div class="ref-remediation"><strong>Fix:</strong> '
+                    f'{_html_escape(ref.remediation)}</div>'
+                )
+            parts.append("</div>")  # /ref-card-item
+        parts.append("</div>")  # /ref-cards
+        parts.append("</div>")  # /ref-source-group
+    parts.append("</div>")  # /reference-card
 
 
 def render_combined_sarif(result: MergeResult) -> str:

@@ -55,7 +55,13 @@ def test_bootstrap_explains_fingerprint() -> None:
 
 # ---------- checklist structural invariants ----------
 
-CHECK_ID_RE = re.compile(r"^### (TIER2-[A-Z0-9]+-[A-Z0-9]+(?:-\d+)?)\b", re.MULTILINE)
+# F.27: post-rename headers use the AS-C-<DDR>-<anchor>-<seq> shape; we
+# also tolerate the legacy TIER2- prefix during a transition period in
+# case any user-edited checklist still carries it.
+CHECK_ID_RE = re.compile(
+    r"^### (AS-C-[A-Z0-9_-]+|TIER2-[A-Z0-9]+-[A-Z0-9]+(?:-\d+)?)\b",
+    re.MULTILINE,
+)
 SECTION_RE = re.compile(r"^# §\d+\. .+", re.MULTILINE)
 REQUIRED_SECTIONS = [
     "§1. OWASP LLM Top 10 v2",
@@ -89,26 +95,43 @@ def test_checklist_has_minimum_check_count() -> None:
 
 
 def test_checklist_covers_all_owasp_llm_v2() -> None:
-    """LLM01 through LLM10 must each have at least one check."""
+    """LLM01 through LLM10 must each have at least one check.
+
+    F.27: anchors are now embedded in the AS-C-... ID (e.g.
+    `AS-C-D-LLM01-001`); we look for the anchor token regardless of
+    DDR / seq.
+    """
     content = CHECKLIST.read_text()
+    headers = re.findall(r"^### (AS-C-[A-Z0-9_-]+)", content, flags=re.MULTILINE)
     for n in range(1, 11):
-        marker = f"TIER2-LLM{n:02d}-"
-        assert marker in content, f"OWASP LLM Top 10 v2 missing coverage: LLM{n:02d}"
+        anchor = f"LLM{n:02d}"
+        present = any(f"-{anchor}-" in hdr for hdr in headers)
+        assert present, f"OWASP LLM Top 10 v2 missing coverage: {anchor}"
 
 
 def test_checklist_covers_all_owasp_agentic_t1_t11() -> None:
-    """T1 through T11 must each have at least one check."""
+    """T1 through T11 must each have at least one check.
+
+    F.27: anchor token is `AGENTIC_T{n}` (underscore between AGENTIC
+    and T-number).
+    """
     content = CHECKLIST.read_text()
+    headers = re.findall(r"^### (AS-C-[A-Z0-9_-]+)", content, flags=re.MULTILINE)
     for n in range(1, 12):
-        marker = f"TIER2-AGENTIC-T{n}-"
-        assert marker in content, f"OWASP Agentic AI Top 10 missing coverage: T{n}"
+        anchor = f"AGENTIC_T{n}"
+        present = any(f"-{anchor}-" in hdr for hdr in headers)
+        assert present, f"OWASP Agentic AI Top 10 missing coverage: T{n}"
 
 
 def test_checklist_covers_phase_e_gaps() -> None:
-    """5 net-new gaps Tier 1 never had."""
+    """5 net-new gaps Tier 1 never had. F.27: anchor is `GAP`, sequence
+    runs across both R-GAP and DF-GAP buckets."""
     content = CHECKLIST.read_text()
-    for gap_id in ["TIER2-GAP-01", "TIER2-GAP-02", "TIER2-GAP-03", "TIER2-GAP-04", "TIER2-GAP-05"]:
-        assert gap_id in content, f"Missing Phase E gap check: {gap_id}"
+    headers = re.findall(r"^### (AS-C-[A-Z0-9_-]+)", content, flags=re.MULTILINE)
+    gap_headers = [h for h in headers if "-GAP-" in h]
+    assert len(gap_headers) == 5, (
+        f"Expected 5 GAP entries, found {len(gap_headers)}: {gap_headers}"
+    )
 
 
 def test_checklist_covers_retired_rule_parity() -> None:
@@ -121,7 +144,11 @@ def test_checklist_covers_retired_rule_parity() -> None:
 def test_checklist_every_check_has_severity() -> None:
     """Each ### TIER2-... block must include a Severity: line."""
     content = CHECKLIST.read_text()
-    blocks = re.split(r"^### (TIER2-[A-Z0-9-]+(?:-\d+)?)\b", content, flags=re.MULTILINE)
+    blocks = re.split(
+        r"^### (AS-C-[A-Z0-9_-]+|TIER2-[A-Z0-9-]+(?:-\d+)?)\b",
+        content,
+        flags=re.MULTILINE,
+    )
     # blocks[0] is preamble, then alternating (id, body, id, body, ...)
     pairs = list(zip(blocks[1::2], blocks[2::2]))
     missing = [cid for cid, body in pairs if not re.search(r"^- \*\*Severity:\*\*", body, re.MULTILINE)]
@@ -131,7 +158,11 @@ def test_checklist_every_check_has_severity() -> None:
 def test_checklist_every_check_has_framework_mapping() -> None:
     """Every check must cite at least one of owasp_llm / owasp_agentic / mitre_atlas / cwe."""
     content = CHECKLIST.read_text()
-    blocks = re.split(r"^### (TIER2-[A-Z0-9-]+(?:-\d+)?)\b", content, flags=re.MULTILINE)
+    blocks = re.split(
+        r"^### (AS-C-[A-Z0-9_-]+|TIER2-[A-Z0-9-]+(?:-\d+)?)\b",
+        content,
+        flags=re.MULTILINE,
+    )
     pairs = list(zip(blocks[1::2], blocks[2::2]))
     missing = []
     for cid, body in pairs:

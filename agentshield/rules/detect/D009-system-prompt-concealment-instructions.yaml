@@ -24,7 +24,8 @@ rules:
       - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdon[\x27’]t\s+mention\s+you\s+(used|called)\s+(this\s+)?(tool|skill|function)[^"\x27]*["\x27]{1,3}'
     metadata:
       category: detect
-      agentshield_id: AS-D-009
+      agentshield_id: AS-S-D-LLM01-002
+      legacy_ids: ["AS-D-009"]
       severity_normalized: high
       framework_mappings:
         owasp_llm: ["LLM01", "LLM07"]

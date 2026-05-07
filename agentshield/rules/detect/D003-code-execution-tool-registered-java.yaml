@@ -60,7 +60,8 @@ rules:
       - pattern: ToolSpecification.builder().name(...).description(...).build()
     metadata:
       category: detect
-      agentshield_id: AS-D-003
+      agentshield_id: AS-S-D-LLM06-001
+      legacy_ids: ["AS-D-003"]
       severity_normalized: critical
       framework_mappings:
         owasp_llm: ["LLM05", "LLM06"]

@@ -271,6 +271,7 @@ def _finding_to_emitter_dict(f: Finding) -> dict:
         "rule_id": f.rule_id,
         "rule_id_short": f.rule_id_short,
         "agentshield_id": f.agentshield_id,
+        "legacy_ids": list(f.legacy_ids),
         "category": f.category,
         "severity": f.severity,
         "file": f.location.file_path,

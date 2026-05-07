@@ -32,7 +32,8 @@ rules:
       - pattern: $X.apiCallAttemptTimeout(Duration.ZERO)
     metadata:
       category: defend
-      agentshield_id: AS-DF-003
+      agentshield_id: AS-S-DF-LLM10-001
+      legacy_ids: ["AS-DF-003"]
       severity_normalized: medium
       framework_mappings:
         owasp_llm: ["LLM10"]

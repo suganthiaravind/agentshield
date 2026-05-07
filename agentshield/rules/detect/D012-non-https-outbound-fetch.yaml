@@ -28,7 +28,8 @@ rules:
       - pattern-regex: '\bboto3\.(client|resource)\s*\([^)]*\bendpoint_url\s*=\s*[fr]?["\x27]http://(?!localhost|127\.0\.0\.1)'
     metadata:
       category: detect
-      agentshield_id: AS-D-012
+      agentshield_id: AS-S-D-LLM03-001
+      legacy_ids: ["AS-D-012"]
       severity_normalized: medium
       framework_mappings:
         owasp_llm: ["LLM03"]

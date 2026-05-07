@@ -61,7 +61,12 @@ class Finding(BaseModel):
     # Identity.
     rule_id: str  # full canonical id, e.g. agentshield.detect.unsanitized-user-input-to-llm
     rule_id_short: str  # last segment
-    agentshield_id: str  # e.g. AS-D-001
+    agentshield_id: str  # current canonical id, e.g. AS-S-D-LLM01-001
+    # F.27: prior IDs that referenced this rule before the uniform-naming
+    # migration. Customer suppress-comments / SARIF integrations / dashboards
+    # written against the old IDs continue to work because the normalizer +
+    # validator both accept either form.
+    legacy_ids: list[str] = Field(default_factory=list)
 
     # Categorization — the dual mapping pattern: exactly one D/D/R category,
     # plus many framework_mappings.

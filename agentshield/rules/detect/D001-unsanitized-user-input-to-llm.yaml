@@ -89,7 +89,8 @@ rules:
               - pattern: html.escape(...)
     metadata:
       category: detect
-      agentshield_id: AS-D-001
+      agentshield_id: AS-S-D-LLM01-001
+      legacy_ids: ["AS-D-001"]
       severity_normalized: high
       framework_mappings:
         owasp_llm: ["LLM01"]

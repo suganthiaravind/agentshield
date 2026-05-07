@@ -187,12 +187,14 @@ class Normalizer:
                     continue
                 seen.add(dedup_key)
                 agentshield_id = metadata.get("agentshield_id") or canonical
+                legacy_ids = list(metadata.get("legacy_ids") or [])
                 message = (result.get("message") or {}).get("text") or ""
                 findings.append(
                     Finding(
                         rule_id=canonical,
                         rule_id_short=canonical.rsplit(".", 1)[-1],
                         agentshield_id=agentshield_id,
+                        legacy_ids=legacy_ids,
                         category=category,
                         tier=self._resolve_tier(rule),
                         severity=self._resolve_severity(rule),
