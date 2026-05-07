@@ -754,11 +754,15 @@ def test_html_findings_carry_filter_data_attributes(repo: Path) -> None:
     assert 'data-search=' in html
 
 
-def test_html_finding_has_expand_collapse_toggle(repo: Path) -> None:
+def test_html_finding_has_no_per_card_expand_toggle(repo: Path) -> None:
+    """F.28a — per-finding expand/collapse chevron removed; the only
+    collapsible UX in the report now lives on the Reference tab's D/D/R
+    sub-groups. The .finding-body container stays so structural tests +
+    selectors that target the body still work."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
-    assert '<button class="finding-toggle"' in html
+    assert 'class="finding-toggle"' not in html
     assert 'class="finding-body"' in html
 
 
@@ -803,7 +807,7 @@ def test_html_includes_filter_js(repo: Path) -> None:
     # has been broken or stripped.
     assert "applyFilter" in html
     assert "activeFrameworkFilters" in html
-    assert "finding-toggle" in html
+    assert "activateTab" in html  # F.22 tab switcher
 
 
 def test_html_renders_with_empty_finding_buckets(tmp_path: Path) -> None:

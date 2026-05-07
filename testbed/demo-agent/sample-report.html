@@ -349,27 +349,8 @@ footer {
 }
 .filter-status.active { color: var(--accent); font-weight: 600; }
 
-/* expand/collapse mechanics */
-.finding {
-  cursor: default;
-}
-.finding-toggle {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0 6px 0 0;
-  line-height: 1;
-  transition: transform 0.18s ease, color 0.12s ease;
-  flex-shrink: 0;
-}
-.finding-toggle:hover { color: var(--text); }
-.finding.collapsed .finding-toggle { transform: rotate(-90deg); }
-.finding.collapsed .finding-message,
-.finding.collapsed .finding-body { display: none; }
-
-/* hidden by filter — distinct from collapsed (which only hides the body) */
+/* hidden by filter (F.28a: per-finding collapse removed —
+   Reference-tab groups are the only remaining collapsible UX) */
 .finding.filtered-out,
 .findings-section.empty-by-filter {
   display: none;
@@ -541,6 +522,48 @@ footer {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 12px;
 }
+
+/* F.28: collapsible D/D/R sub-group inside each source */
+.ref-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+.ref-group:last-child { margin-bottom: 0; }
+.ref-group-summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 14px;
+  display: flex; align-items: baseline; gap: 12px;
+  font-size: 13px;
+  list-style: none;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+.ref-group-summary::-webkit-details-marker { display: none; }
+.ref-group-summary:hover { background: rgba(0,0,0,0.02); }
+.ref-group-summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 12px;
+  transition: transform 0.18s ease;
+}
+.ref-group[open] > .ref-group-summary::before { transform: rotate(90deg); }
+.ref-group-name { font-weight: 600; }
+.ref-group-sub { color: var(--text-muted); font-size: 12px; flex: 1; }
+.ref-group-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+  background: #ebe7d8; color: #5a5547;
+  letter-spacing: 0.02em;
+}
+.ref-group.ref-group-detect  > .ref-group-summary { border-left: 4px solid var(--detect); }
+.ref-group.ref-group-defend  > .ref-group-summary { border-left: 4px solid var(--defend); }
+.ref-group.ref-group-respond > .ref-group-summary { border-left: 4px solid var(--respond); }
+.ref-group .ref-cards { padding: 12px 14px 14px; }
 .ref-card-item {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -719,7 +742,6 @@ footer {
 </div>
 <div class="finding" data-severity="critical" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM02 owasp_llm:LLM03 owasp_agentic:T3 mitre_atlas:AML.T0012 cwe:CWE-798" data-search="hardcoded-llm-credentials testbed/demo-agent/config.py hardcoded credential string passed to an llm client constructor (openai, anthropic, cohere, mistral, together, groq, huggingface, google generative ai, aws bedrock). secrets in source code are cwe-798 (use of hard-coded credentials) — they end up in git history, container images, and ci logs. use environment variables, a secrets manager (aws secrets manager, hashicorp vault, azure key vault), or the sdk's default credential resolver instead.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill critical">critical</span>
 <span class="finding-rule">hardcoded-llm-credentials</span>
@@ -738,7 +760,6 @@ footer {
 </div>
 <div class="finding" data-severity="critical" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM05 owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T11 mitre_atlas:AML.T0011 mitre_atlas:AML.T0050 cwe:CWE-94" data-search="llm-output-to-code-execution testbed/demo-agent/tools.py output from an llm call flows into a dangerous code-execution sink (eval / exec / os.system / subprocess with shell=true). llm output is attacker-controllable via prompt injection — feeding it to a code executor is arbitrary code execution on the host. owasp llm05 improper output handling, owasp agentic t11.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill critical">critical</span>
 <span class="finding-rule">llm-output-to-code-execution</span>
@@ -759,7 +780,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM03 owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T3 cwe:CWE-732 ast:AST03" data-search="ast03-network-unrestricted skill.md skill declares unrestricted network egress (`network: true`). ast03 — should be a domain allowlist (`network.allow: [api.example.com]`) with default-deny.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">ast03-network-unrestricted</span>
@@ -778,7 +798,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM01 owasp_agentic:T6 mitre_atlas:AML.T0051" data-search="unsanitized-user-input-to-llm testbed/demo-agent/controller.py user input from an http request flows directly into an llm/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. this is the canonical prompt-injection surface (owasp llm01).">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">unsanitized-user-input-to-llm</span>
@@ -795,7 +814,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM01 owasp_agentic:T1 owasp_agentic:T6 cwe:CWE-94" data-search="as-c-d-llm01-002 testbed/demo-agent/controller.py untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. indirect prompt-injection surface — attacker-controlled webpage content flows into the llm via the summarise prompt.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">AS-C-D-LLM01-002</span>
@@ -815,7 +833,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM01 owasp_agentic:T6 mitre_atlas:AML.T0051" data-search="unsanitized-user-input-to-llm testbed/demo-agent/controller.py user input from an http request flows directly into an llm/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. this is the canonical prompt-injection surface (owasp llm01).">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">unsanitized-user-input-to-llm</span>
@@ -832,7 +849,6 @@ footer {
 </div>
 <div class="finding" data-severity="medium" data-category="detect" data-origin="tier1" data-frameworks="cwe:CWE-732 ast:AST03" data-search="ast03-wildcard-file-read skill.md wildcard read permission on `~/.config/demo-agent/**`. ast03 — skill manifests must declare explicit paths; wildcards defeat least-privilege review.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">ast03-wildcard-file-read</span>
@@ -849,7 +865,6 @@ footer {
 </div>
 <div class="finding" data-severity="medium" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM04 owasp_agentic:T1" data-search="as-c-d-agentic_t1-001 testbed/demo-agent/memory.py memory poisoning surface: both user input and raw llm output are persisted to session memory without validation. future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn n that influence turn n+1.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">AS-C-D-AGENTIC_T1-001</span>
@@ -867,7 +882,6 @@ footer {
 </div>
 <div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="ast:AST04" data-search="ast04-missing-author-identity skill.md skill manifest has no `author.identity` (did / signing-key anchor). ast04 — without a verifiable identity anchor, registry consumers cannot detect impersonation or typosquats; this is the foothold the clawhub fake-google skill exploited.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill info">info</span>
 <span class="finding-rule">ast04-missing-author-identity</span>
@@ -881,7 +895,6 @@ footer {
 </div>
 <div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="cwe:CWE-345 ast:AST07" data-search="ast07-missing-content-hash skill.md skill.md frontmatter has no `content_hash` field. ast07 — merkle-root verification at install time requires a sha-256 over the canonical skill payload.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill info">info</span>
 <span class="finding-rule">ast07-missing-content-hash</span>
@@ -896,7 +909,6 @@ footer {
 </div>
 <div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM03 cwe:CWE-345 ast:AST07" data-search="ast07-missing-signature skill.md skill.md frontmatter has no `signature` field. ast07 — without an ed25519 signature the registry cannot verify the skill on update; clawjacked-style update-drift attacks become viable.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill info">info</span>
 <span class="finding-rule">ast07-missing-signature</span>
@@ -931,7 +943,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T10" data-search="as-c-df-llm06-001 testbed/demo-agent/tools.py destructive tool registered without a human-in-the-loop approval gate. the `cancel_subscription` tool name starts with a destructive verb and the body posts to a billing api; the agent can invoke it autonomously if the planner decides to.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">AS-C-DF-LLM06-001</span>
@@ -950,7 +961,6 @@ footer {
 </div>
 <div class="finding" data-severity="medium" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T4 cwe:CWE-400" data-search="as-c-df-llm10-001 testbed/demo-agent/controller.py chatopenai client instantiated without explicit timeout or max_tokens cap. a slow or runaway model call has no upper bound — dos / cost exposure.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">AS-C-DF-LLM10-001</span>
@@ -988,7 +998,6 @@ footer {
 </div>
 <div class="finding" data-severity="high" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM02 owasp_agentic:T8 cwe:CWE-200" data-search="as-c-r-llm02-002 testbed/demo-agent/notifications.py llm output published to sns without scrubbing. the reply_body is a bedrock-generated string that may inadvertently include pii echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. sns subscribers receive it unfiltered.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
 <span class="finding-rule">AS-C-R-LLM02-002</span>
@@ -1007,7 +1016,6 @@ footer {
 </div>
 <div class="finding" data-severity="medium" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T8 mitre_atlas:AML.T0024" data-search="as-c-r-llm10-001 testbed/demo-agent/notifications.py llm call has no surrounding audit logging. no structured logger setup (no structlog / langsmith / opentelemetry / langchain.callbacks); no logger.info around the call. without an audit trail, incident response can't reconstruct what the model saw or returned.">
 <div class="finding-header">
-<button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
 <span class="finding-rule">AS-C-R-LLM10-001</span>
@@ -1061,7 +1069,7 @@ footer {
 </div>
 </div>
 <div class="framework-group">
-<div class="framework-group-header"><span class="framework-group-name">OWASP Agentic AI Top 10</span><a href="https://genai.owasp.org/llm-top-10-for-agentic-ai/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-group-header"><span class="framework-group-name">OWASP Agentic AI Top 10</span><a href="https://owasp.org/www-project-agentic-ai-threats/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
 <div class="framework-items">
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T1" title="Filter findings to those tagged T1"><span class="framework-item-id">T1</span><span class="framework-item-count">2 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T10" title="Filter findings to those tagged T10"><span class="framework-item-id">T10</span><span class="framework-item-count">1 finding</span></button>
@@ -1111,8 +1119,9 @@ footer {
 <div class="ref-source-group">
 <div class="ref-source-header">
 <span class="ref-source-name">Semgrep <span class="ref-source-count">16 checks</span></span>
-<span class="ref-source-blurb">Tier 1 — high-precision Python/Java AST + taint rules run by Semgrep. Low false-positive bar; finds concrete call-site vulnerabilities.</span>
+<span class="ref-source-blurb">Static rule scan. High-precision Python/Java AST + taint rules. Low false-positive bar; finds concrete call-site vulnerabilities.</span>
 </div>
+<details class="ref-group ref-group-detect"><summary class="ref-group-summary"><span class="ref-group-name">🔴 Detect</span><span class="ref-group-sub">vulnerability surfaces</span><span class="ref-group-count">14 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -1387,6 +1396,10 @@ footer {
 </div>
 <div class="ref-remediation"><strong>Fix:</strong> Never load system prompts from untrusted network sources at runtime. Options, ranked by safety: (1) bake system prompts into the deployed artifact (read from a constant string, a packaged file, or a build- time-resolved config). (2) If runtime loading is required, fetch from a write-restricted source (signed S3 object, parameter store with strict IAM, version-pinned config server) AND verify a cryptographic signature before use. (3) Apply a guardrail (NeMo Guardrails / Lakera / Rebuff) on the loaded prompt to detect injected instructions. Treat any externally-loaded system prompt as untrusted input — same bar as user input.</div>
 </div>
+</div>
+</details>
+<details class="ref-group ref-group-defend"><summary class="ref-group-summary"><span class="ref-group-name">🟡 Defend</span><span class="ref-group-sub">missing controls</span><span class="ref-group-count">2 checks</span></summary>
+<div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
 <span class="ref-id">AS-S-DF-LLM10-001</span>
@@ -1422,12 +1435,14 @@ footer {
 <div class="ref-remediation"><strong>Fix:</strong> Set explicit upper bounds on every LLM call. (1) `timeout=` should be a finite number of seconds matched to your worker SLA — typically 30-60s for interactive paths, longer for batch. (2) `max_tokens=` (or `max_output_tokens=` for Google / OpenAI Responses API) should be set to the smallest value that satisfies your prompt — never None or unbounded. (3) Combine with retry budgets (`max_retries=2-3`) and per-tenant rate limiting upstream of the call. For Bedrock direct boto3, set `Config(read_timeout=N, retries={&quot;max_attempts&quot;: 3})`.</div>
 </div>
 </div>
+</details>
 </div>
 <div class="ref-source-group">
 <div class="ref-source-header">
 <span class="ref-source-name">Copilot <span class="ref-source-count">62 checks</span></span>
-<span class="ref-source-blurb">Tier 2 — semantic checklist Copilot walks file-by-file in the user's IDE. Catches cross-function and absence-of-control patterns Semgrep can't see.</span>
+<span class="ref-source-blurb">LLM-driven checklist. Walks every file in the user's IDE via Copilot Chat. Catches cross-function and absence-of-control patterns the static rules can't see.</span>
 </div>
+<details class="ref-group ref-group-detect"><summary class="ref-group-summary"><span class="ref-group-name">🔴 Detect</span><span class="ref-group-sub">vulnerability surfaces</span><span class="ref-group-count">28 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -1521,43 +1536,6 @@ footer {
 </div>
 <details class="ref-skip"><summary>Skip if</summary><p>Field is hashed, masked (`****1234`), or replaced via a scrubber before prompt construction.</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Scrub PII before prompt construction. Pass only the minimum data the LLM needs to do its task.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-LLM02-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM02-03</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Raw LLM I/O in logs (was R002)</div>
-<div class="ref-desc">`log.info(...)`, `logger.warn(...)`, `print(...)`, `System.out.println(...)`, structured logger calls where the value being logged is (a) the user prompt, (b) the LLM response, (c) any field carrying user-supplied content. Particularly: `log.info(&quot;User asked: {}&quot;, request.message())` style.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">CWE CWE-532</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>The logged value is a hash, length, or output of a scrubber (`redact()`, `mask()`, `anonymize()`, `scrubPii()`, Presidio `AnonymizerEngine`, `MessageDigest.digest`, `len()`, `.length()`).</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Hash, length-only-project, or redact via Presidio before logging. For Spring AI, use the `ScrubbingCallAdvisor` pattern on both directions of the chain.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-LLM02-002</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM02-04</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Sensitive data egress via SNS/email/HTTP sink</div>
-<div class="ref-desc">LLM output flowing into an external sink without scrubbing. Sinks: AWS `SnsClient.publish()`, JavaMail `Transport.send()`, AWS SES `send_email()`, Slack/Teams webhook POSTs, generic HTTP POST to external host, queueing systems (Kafka producer, RabbitMQ publish). This is what the rule pack didn't cover and Phase E judge surfaced.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">CWE CWE-200</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>A scrubber call (`scrubPii`, `redact`, `mask`) is in the same flow before the sink call.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Apply output scrubbing before any external publish. Apply at the edge (publishers) not at the LLM call site, since the call site is far from the eventual recipient.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -1657,6 +1635,317 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
+<span class="ref-id">AS-C-D-LLM08-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM08-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Embedding model unpinned or untrusted</div>
+<div class="ref-desc">`SentenceTransformer(&quot;...&quot;)`, `HuggingFaceEmbeddings(model_name=&quot;...&quot;)`, OpenAI `embeddings.create(model=&quot;text-embedding-3-small&quot;)` without pinning; or model name read from runtime env without validation.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP LLM LLM08</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+<span class="finding-tag">CWE CWE-829</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Embedding model is pinned to a SHA / known-good version.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Pin embedding model versions. Periodically validate retrieval quality on a known-answer eval set.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T1-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T1-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Memory poisoning via persistent store</div>
+<div class="ref-desc">Long-term memory writes (vector store, Redis, DB) where the value being persisted contains user input or LLM output without a trust boundary. `memory.add(user_message)`, `vectorstore.add_texts([response])`, `redis.set(f&quot;user:{uid}:context&quot;, llm_output)`.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T1</span>
+<span class="finding-tag">OWASP LLM LLM04</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Persisted content is a hash, a typed-schema-validated object, or passes through a moderation classifier first.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Validate memory writes the same way you'd validate database writes. Schema-check, classify, hash where feasible.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T2-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T2-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Code-execution tool registered (was D003)</div>
+<div class="ref-desc">A tool/plugin function exposed to the agent whose body calls `exec`, `eval`, `os.system`, `subprocess.*` with `shell=True`, `Runtime.exec`, `ProcessBuilder`, `ScriptEngine.eval`, or any other arbitrary-code interpreter. LangChain `PythonREPLTool`, `ShellTool`, `BashProcess`, langchain4j @Tool wrapping shell exec.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T2</span>
+<span class="finding-tag">OWASP Agentic T11</span>
+<span class="finding-tag">OWASP LLM LLM05</span>
+<span class="finding-tag">OWASP LLM LLM06</span>
+<span class="finding-tag">ATLAS AML.T0050</span>
+<span class="finding-tag">CWE CWE-78</span>
+<span class="finding-tag">CWE CWE-94</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>The tool is a sandboxed REPL with no host-system access (e.g. `RestrictedPython`, isolated container with no mounts).</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Remove the tool or sandbox it strictly. Use LangChain's `SessionsPythonREPLTool` (Azure-managed sandbox) instead of raw `PythonREPLTool`.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T2-002</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T2-02</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Tool argument injection</div>
+<div class="ref-desc">Tool that accepts a string arg and concatenates it into a shell command, SQL query, or HTTP URL without escaping/parameterising. E.g. `@tool def lookup(q): return os.popen(f&quot;grep {q} /data/*&quot;)`.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T2</span>
+<span class="finding-tag">OWASP LLM LLM05</span>
+<span class="finding-tag">CWE CWE-78</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Args go through `shlex.quote()`, parameterised query, or URL-encoded.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Always parameterise. Never f-string user/LLM input into a shell command or SQL.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T5-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T5-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Cascading hallucination — output of one LLM feeds another without verification</div>
+<div class="ref-desc">Multi-step pipelines where LLM-A's output becomes LLM-B's input directly with no schema check, no verification step, no &quot;is this answer right&quot; eval. Common in extract→summarise→email pipelines.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T5</span>
+<span class="finding-tag">OWASP LLM LLM09</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Intermediate outputs are typed-schema-validated and a semantic check (eval agent, classifier, regex assertion) gates the next step.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Add a verification step between LLM hand-offs. Classifier, schema check, or human-eligible review for high-stakes outputs.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T6-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T6-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Goal manipulation via tool description</div>
+<div class="ref-desc">Tool descriptions (`@tool(description=...)`, `Tool(description=...)`, langchain4j `@P(description=...)`) that contain user-controllable substrings. Description should be hardcoded.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T6</span>
+<span class="finding-tag">OWASP LLM LLM01</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Description is a string literal.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Tool descriptions are code-shipped constants.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-AGENTIC_T11-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T11-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">java, python, any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">RCE via deserialisation</div>
+<div class="ref-desc">`pickle.loads(...)`, Java `ObjectInputStream.readObject()`, YAML `yaml.load(...)` (without SafeLoader), where the input is from the network / LLM output / user upload.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T11</span>
+<span class="finding-tag">CWE CWE-94</span>
+<span class="finding-tag">CWE CWE-502</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Input is `yaml.safe_load`, JSON only, or a typed-schema parser.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Never deserialise untrusted data. Use JSON + schema validation. --- # §3. MITRE ATLAS techniques ML-attack-specific techniques. Use the `mitre_atlas` array.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-ATLAS_T0010-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0010-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">ML supply chain compromise</div>
+<div class="ref-desc">Model artifacts, embedding models, or ML libraries pulled from non-pinned sources. Cross-references LLM03-01 / LLM08-01 but at the supply-chain level.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0010</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+<span class="finding-tag">CWE CWE-829</span>
+<span class="finding-tag">CWE CWE-494</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>All ML deps pinned + checksum-verified.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Mirror critical artifacts internally. Verify checksums.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-ATLAS_T0011-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0011-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">User execution via LLM plugin</div>
+<div class="ref-desc">Plugins / tools that the LLM can invoke without user consent for each invocation, where the plugin has side-effects. Cross-references LLM06-01.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0011</span>
+<span class="finding-tag">OWASP LLM LLM06</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Per-invocation consent for side-effecting plugins.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-ATLAS_T0019-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0019-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Publish poisoned datasets</div>
+<div class="ref-desc">Pipelines that publish datasets / fine-tuning corpora to shared registries (HuggingFace Hub, internal Artifactory, shared S3) without a signing / approval step.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0019</span>
+<span class="finding-tag">OWASP LLM LLM04</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Sign published datasets. Require human approval for HF Hub pushes from CI.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-ATLAS_T0050-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0050-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Command and scripting interpreter via LLM</div>
+<div class="ref-desc">Cross-references LLM05-01 / AGENTIC-T2-01. Same shape: LLM output → command interpreter.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0050</span>
+<span class="finding-tag">OWASP LLM LLM05</span>
+<span class="finding-tag">CWE CWE-78</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> As LLM05-01.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-ATLAS_T0053-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0053-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">LLM plugin compromise</div>
+<div class="ref-desc">Plugin loading from third-party registries without pinning / signature verification.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0053</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Pin plugin versions. Verify signatures. --- # §4. CWE first-class concerns Cross-language CWE checks. Use the `cwe` array.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_78-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-78-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">OS Command Injection</div>
+<div class="ref-desc">`os.system`, `subprocess.run(..., shell=True)`, `Runtime.exec(String)`, where the command string is built by concatenating untrusted input.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-78</span>
+<span class="finding-tag">OWASP LLM LLM05</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Use array-form `subprocess.run([cmd, arg])`, `ProcessBuilder(List&lt;String&gt;)`. Never shell=True with user input.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_89-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-89-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">SQL Injection</div>
+<div class="ref-desc">`cursor.execute(f&quot;SELECT * FROM x WHERE id={uid}&quot;)`, Java `Statement.executeQuery(&quot;SELECT ... &quot; + input)`.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-89</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Parameterised queries used (`?` placeholders, prepared statements, ORM with bound params).</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Always parameterise. ORM-managed queries are safest.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_94-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-94-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Code Injection</div>
+<div class="ref-desc">`eval`, `exec`, `compile()` of untrusted strings; Java `ScriptEngine.eval(input)`; template engines with autoescape off processing user-controlled templates.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-94</span>
+<span class="finding-tag">OWASP LLM LLM05</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Don't eval untrusted code. Use proper parsers.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_494-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-494-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Download of code without integrity check</div>
+<div class="ref-desc">Cross-references LLM03-01. Models / packages / binaries downloaded without checksum verification.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-494</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Verify SHA / signature before loading.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_798-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-798-01</span>
+<span class="pill critical">critical</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Hardcoded Credentials</div>
+<div class="ref-desc">Cross-references LLM02-01.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-798</span>
+<span class="finding-tag">OWASP LLM LLM02</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Externalise to env / secrets manager.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-D-CWE_829-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-829-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-detect">detect</span>
+</div>
+<div class="ref-title">Inclusion of Functionality from Untrusted Source</div>
+<div class="ref-desc">Cross-references LLM03-01 / LLM08-01. Models / plugins / packages from untrusted sources.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-829</span>
+<span class="finding-tag">OWASP LLM LLM03</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Allowlist sources. Pin versions. --- # §5. Phase E judge-surfaced gaps Patterns the rule pack never had, surfaced by real-world LLM-as-judge runs in Phase E. These are NEW coverage in v2.</div>
+</div>
+</div>
+</details>
+<details class="ref-group ref-group-defend"><summary class="ref-group-summary"><span class="ref-group-name">🟡 Defend</span><span class="ref-group-sub">missing controls</span><span class="ref-group-count">21 checks</span></summary>
+<div class="ref-cards">
+<div class="ref-card-item">
+<div class="ref-card-head">
 <span class="ref-id">AS-C-DF-LLM06-001</span>
 <span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM06-01</span>
 <span class="pill high">high</span>
@@ -1747,41 +2036,6 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-R-LLM07-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM07-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">System prompt logged or returned in response</div>
-<div class="ref-desc">System prompt string ending up in (a) a log line, (b) an HTTP response body, (c) an error message returned to the user, (d) a stack trace propagated outward.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM07</span>
-<span class="finding-tag">CWE CWE-200</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>System prompt is referenced only for debug-mode logging guarded by a feature flag.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Never log the system prompt at INFO. Strip it from error responses. Treat it as a secret.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-LLM08-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM08-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Embedding model unpinned or untrusted</div>
-<div class="ref-desc">`SentenceTransformer(&quot;...&quot;)`, `HuggingFaceEmbeddings(model_name=&quot;...&quot;)`, OpenAI `embeddings.create(model=&quot;text-embedding-3-small&quot;)` without pinning; or model name read from runtime env without validation.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM08</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-<span class="finding-tag">CWE CWE-829</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Embedding model is pinned to a SHA / known-good version.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Pin embedding model versions. Periodically validate retrieval quality on a known-answer eval set.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
 <span class="ref-id">AS-C-DF-LLM08-001</span>
 <span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM08-02</span>
 <span class="pill medium">medium</span>
@@ -1834,24 +2088,6 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-R-LLM10-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM10-02</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">No audit logging around LLM call (was R001)</div>
-<div class="ref-desc">LLM call (`chain.invoke`, `runner.run`, `chatClient...call()`, `client.invokeModel`, etc.) in a method that has no surrounding logger setup or call. Look for: any `logger.info/warn/error` near the call, structured-logging library imports (structlog, langsmith, opentelemetry, langchain.callbacks), Lombok `@Slf4j`, stdlib `logger = logging.getLogger(__name__)`, or `callbacks=...` kwarg.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Any logger setup or call is present in the file. R001 was retired as a Tier 1 rule because it kept FP-ing on files that DID have logging — Tier 2 reads context, so be lenient here.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Add structured logging around every LLM call: prompt (hashed), model id, latency, token counts, tool calls made, output (hashed). Use OpenTelemetry traces for distributed apps.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
 <span class="ref-id">AS-C-DF-LLM10-002</span>
 <span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM10-03</span>
 <span class="pill medium">medium</span>
@@ -1868,63 +2104,6 @@ footer {
 </div>
 <details class="ref-skip"><summary>Skip if</summary><p>ANY of the above is present in the file OR an obviously related file in the same package (e.g. ChatService.java has the advisor wiring; SchedulingService.java just calls chatService — inherit the guardrail intent).</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Add a guardrail layer at the LLM call site or via a configuration-time advisor wiring. --- # §2. OWASP Agentic AI Top 10 Specific to multi-step agent codebases (planners, tool callers, memory). Use the `owasp_agentic` array to mark T1–T11. ---</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T1-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T1-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Memory poisoning via persistent store</div>
-<div class="ref-desc">Long-term memory writes (vector store, Redis, DB) where the value being persisted contains user input or LLM output without a trust boundary. `memory.add(user_message)`, `vectorstore.add_texts([response])`, `redis.set(f&quot;user:{uid}:context&quot;, llm_output)`.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T1</span>
-<span class="finding-tag">OWASP LLM LLM04</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Persisted content is a hash, a typed-schema-validated object, or passes through a moderation classifier first.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Validate memory writes the same way you'd validate database writes. Schema-check, classify, hash where feasible.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T2-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T2-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Code-execution tool registered (was D003)</div>
-<div class="ref-desc">A tool/plugin function exposed to the agent whose body calls `exec`, `eval`, `os.system`, `subprocess.*` with `shell=True`, `Runtime.exec`, `ProcessBuilder`, `ScriptEngine.eval`, or any other arbitrary-code interpreter. LangChain `PythonREPLTool`, `ShellTool`, `BashProcess`, langchain4j @Tool wrapping shell exec.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP Agentic T11</span>
-<span class="finding-tag">OWASP LLM LLM05</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">ATLAS AML.T0050</span>
-<span class="finding-tag">CWE CWE-78</span>
-<span class="finding-tag">CWE CWE-94</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>The tool is a sandboxed REPL with no host-system access (e.g. `RestrictedPython`, isolated container with no mounts).</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Remove the tool or sandbox it strictly. Use LangChain's `SessionsPythonREPLTool` (Azure-managed sandbox) instead of raw `PythonREPLTool`.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T2-002</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T2-02</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Tool argument injection</div>
-<div class="ref-desc">Tool that accepts a string arg and concatenates it into a shell command, SQL query, or HTTP URL without escaping/parameterising. E.g. `@tool def lookup(q): return os.popen(f&quot;grep {q} /data/*&quot;)`.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP LLM LLM05</span>
-<span class="finding-tag">CWE CWE-78</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Args go through `shlex.quote()`, parameterised query, or URL-encoded.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Always parameterise. Never f-string user/LLM input into a shell command or SQL.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -1996,74 +2175,6 @@ footer {
 </div>
 <details class="ref-skip"><summary>Skip if</summary><p>A circuit-breaker library is in use (`pybreaker`, Resilience4j) on the tool calls AND a graph-level recursion limit is set AND an out-of-band stop signal is wired (SIGTERM handler, feature flag, queue-drain on toggle).</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Wrap tool calls in a circuit breaker that opens after N consecutive failures. Set graph `recursion_limit=` (LangGraph) or planner-iteration cap. Expose a kill switch (feature-flag / SQS-drain / SIGTERM handler) that drains in-flight calls and refuses new ones. Decay agent trust scores over time so silent failure modes (no traffic, no errors) don't accumulate permission.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T5-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T5-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Cascading hallucination — output of one LLM feeds another without verification</div>
-<div class="ref-desc">Multi-step pipelines where LLM-A's output becomes LLM-B's input directly with no schema check, no verification step, no &quot;is this answer right&quot; eval. Common in extract→summarise→email pipelines.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T5</span>
-<span class="finding-tag">OWASP LLM LLM09</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Intermediate outputs are typed-schema-validated and a semantic check (eval agent, classifier, regex assertion) gates the next step.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Add a verification step between LLM hand-offs. Classifier, schema check, or human-eligible review for high-stakes outputs.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T6-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T6-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Goal manipulation via tool description</div>
-<div class="ref-desc">Tool descriptions (`@tool(description=...)`, `Tool(description=...)`, langchain4j `@P(description=...)`) that contain user-controllable substrings. Description should be hardcoded.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">OWASP LLM LLM01</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Description is a string literal.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Tool descriptions are code-shipped constants.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-AGENTIC_T7-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T7-01</span>
-<span class="pill info">info</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">No alignment evaluation hook</div>
-<div class="ref-desc">Agent loop with no callback / hook for alignment evaluation (no langsmith trace, no eval-agent step, no &quot;did the agent's actions match the user's intent&quot; check). Hard to detect statically; flag in high-stakes contexts.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T7</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>A second LLM is used to evaluate the agent's plan/output.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Add an evaluation pass per agent run. Sample outputs to a manual review queue.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-AGENTIC_T8-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T8-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">No audit trail of agent decisions</div>
-<div class="ref-desc">Agent step (planner output, tool call decision, tool result) not logged anywhere. The audit trail must include WHAT the agent decided, not just WHEN it called the LLM.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>A trace library (langsmith, opentelemetry, custom audit logger) captures planner decisions + tool args.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Log every planner decision, tool call (with args), tool result. Structured JSON; queryable.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -2156,190 +2267,6 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-D-AGENTIC_T11-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T11-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">java, python, any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">RCE via deserialisation</div>
-<div class="ref-desc">`pickle.loads(...)`, Java `ObjectInputStream.readObject()`, YAML `yaml.load(...)` (without SafeLoader), where the input is from the network / LLM output / user upload.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T11</span>
-<span class="finding-tag">CWE CWE-94</span>
-<span class="finding-tag">CWE CWE-502</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Input is `yaml.safe_load`, JSON only, or a typed-schema parser.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Never deserialise untrusted data. Use JSON + schema validation. --- # §3. MITRE ATLAS techniques ML-attack-specific techniques. Use the `mitre_atlas` array.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-ATLAS_T0010-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0010-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">ML supply chain compromise</div>
-<div class="ref-desc">Model artifacts, embedding models, or ML libraries pulled from non-pinned sources. Cross-references LLM03-01 / LLM08-01 but at the supply-chain level.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0010</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-<span class="finding-tag">CWE CWE-829</span>
-<span class="finding-tag">CWE CWE-494</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>All ML deps pinned + checksum-verified.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Mirror critical artifacts internally. Verify checksums.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-ATLAS_T0011-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0011-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">User execution via LLM plugin</div>
-<div class="ref-desc">Plugins / tools that the LLM can invoke without user consent for each invocation, where the plugin has side-effects. Cross-references LLM06-01.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0011</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Per-invocation consent for side-effecting plugins.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-ATLAS_T0019-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0019-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Publish poisoned datasets</div>
-<div class="ref-desc">Pipelines that publish datasets / fine-tuning corpora to shared registries (HuggingFace Hub, internal Artifactory, shared S3) without a signing / approval step.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0019</span>
-<span class="finding-tag">OWASP LLM LLM04</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Sign published datasets. Require human approval for HF Hub pushes from CI.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-ATLAS_T0024-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0024-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Exfiltration via ML inference API</div>
-<div class="ref-desc">Inference API endpoints that return raw model internals (logprobs, hidden states, embeddings) to untrusted callers, enabling model-extraction attacks.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0024</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">CWE CWE-200</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Don't return raw model internals to untrusted clients. Add rate limits + cost caps to inference endpoints.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-ATLAS_T0050-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0050-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Command and scripting interpreter via LLM</div>
-<div class="ref-desc">Cross-references LLM05-01 / AGENTIC-T2-01. Same shape: LLM output → command interpreter.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0050</span>
-<span class="finding-tag">OWASP LLM LLM05</span>
-<span class="finding-tag">CWE CWE-78</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> As LLM05-01.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-ATLAS_T0053-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0053-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">LLM plugin compromise</div>
-<div class="ref-desc">Plugin loading from third-party registries without pinning / signature verification.</div>
-<div class="ref-fw">
-<span class="finding-tag">ATLAS AML.T0053</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Pin plugin versions. Verify signatures. --- # §4. CWE first-class concerns Cross-language CWE checks. Use the `cwe` array.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_78-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-78-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">OS Command Injection</div>
-<div class="ref-desc">`os.system`, `subprocess.run(..., shell=True)`, `Runtime.exec(String)`, where the command string is built by concatenating untrusted input.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-78</span>
-<span class="finding-tag">OWASP LLM LLM05</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Use array-form `subprocess.run([cmd, arg])`, `ProcessBuilder(List&lt;String&gt;)`. Never shell=True with user input.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_89-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-89-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">SQL Injection</div>
-<div class="ref-desc">`cursor.execute(f&quot;SELECT * FROM x WHERE id={uid}&quot;)`, Java `Statement.executeQuery(&quot;SELECT ... &quot; + input)`.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-89</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Parameterised queries used (`?` placeholders, prepared statements, ORM with bound params).</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Always parameterise. ORM-managed queries are safest.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_94-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-94-01</span>
-<span class="pill critical">critical</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Code Injection</div>
-<div class="ref-desc">`eval`, `exec`, `compile()` of untrusted strings; Java `ScriptEngine.eval(input)`; template engines with autoescape off processing user-controlled templates.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-94</span>
-<span class="finding-tag">OWASP LLM LLM05</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Don't eval untrusted code. Use proper parsers.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-CWE_200-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-200-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Information Exposure</div>
-<div class="ref-desc">Verbose error responses returned to clients with stack traces, internal hostnames, DB connection strings, file paths.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-200</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Errors filtered through a sanitiser before response serialisation.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Generic error messages to clients; full detail to server logs only.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
 <span class="ref-id">AS-C-DF-CWE_400-001</span>
 <span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-400-01</span>
 <span class="pill medium">medium</span>
@@ -2354,38 +2281,6 @@ footer {
 <span class="finding-tag">OWASP Agentic T4</span>
 </div>
 <div class="ref-remediation"><strong>Fix:</strong> Set limits everywhere external calls happen.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_494-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-494-01</span>
-<span class="pill high">high</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Download of code without integrity check</div>
-<div class="ref-desc">Cross-references LLM03-01. Models / packages / binaries downloaded without checksum verification.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-494</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Verify SHA / signature before loading.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-C-R-CWE_532-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-532-01</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Log Information Exposure</div>
-<div class="ref-desc">Cross-references LLM02-03. Sensitive data in log statements.</div>
-<div class="ref-fw">
-<span class="finding-tag">CWE CWE-532</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Redact / hash before logging.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -2406,35 +2301,180 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_798-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-798-01</span>
-<span class="pill critical">critical</span>
+<span class="ref-id">AS-C-DF-GAP-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-GAP-04</span>
+<span class="pill medium">medium</span>
 <span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
+<span class="ref-cat ref-cat-defend">defend</span>
 </div>
-<div class="ref-title">Hardcoded Credentials</div>
-<div class="ref-desc">Cross-references LLM02-01.</div>
+<div class="ref-title">No explicit LLM call timeout</div>
+<div class="ref-desc">LLM call sites that rely on framework / SDK default timeouts rather than setting one explicitly. For Spring AI: missing `spring.ai.&lt;provider&gt;.timeout` in `application.yml` or no `.requestTimeout(...)` on the builder. Same for langchain4j / Bedrock.</div>
 <div class="ref-fw">
-<span class="finding-tag">CWE CWE-798</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">CWE CWE-400</span>
 </div>
-<div class="ref-remediation"><strong>Fix:</strong> Externalise to env / secrets manager.</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Explicit timeout set anywhere in the call's setup chain.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Set explicit per-call or per-builder timeouts.</div>
+</div>
+</div>
+</details>
+<details class="ref-group ref-group-respond"><summary class="ref-group-summary"><span class="ref-group-name">🔵 Respond</span><span class="ref-group-sub">observability gaps</span><span class="ref-group-count">13 checks</span></summary>
+<div class="ref-cards">
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-LLM02-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM02-03</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">Raw LLM I/O in logs (was R002)</div>
+<div class="ref-desc">`log.info(...)`, `logger.warn(...)`, `print(...)`, `System.out.println(...)`, structured logger calls where the value being logged is (a) the user prompt, (b) the LLM response, (c) any field carrying user-supplied content. Particularly: `log.info(&quot;User asked: {}&quot;, request.message())` style.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">CWE CWE-532</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>The logged value is a hash, length, or output of a scrubber (`redact()`, `mask()`, `anonymize()`, `scrubPii()`, Presidio `AnonymizerEngine`, `MessageDigest.digest`, `len()`, `.length()`).</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Hash, length-only-project, or redact via Presidio before logging. For Spring AI, use the `ScrubbingCallAdvisor` pattern on both directions of the chain.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-D-CWE_829-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-829-01</span>
+<span class="ref-id">AS-C-R-LLM02-002</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM02-04</span>
 <span class="pill high">high</span>
 <span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-detect">detect</span>
+<span class="ref-cat ref-cat-respond">respond</span>
 </div>
-<div class="ref-title">Inclusion of Functionality from Untrusted Source</div>
-<div class="ref-desc">Cross-references LLM03-01 / LLM08-01. Models / plugins / packages from untrusted sources.</div>
+<div class="ref-title">Sensitive data egress via SNS/email/HTTP sink</div>
+<div class="ref-desc">LLM output flowing into an external sink without scrubbing. Sinks: AWS `SnsClient.publish()`, JavaMail `Transport.send()`, AWS SES `send_email()`, Slack/Teams webhook POSTs, generic HTTP POST to external host, queueing systems (Kafka producer, RabbitMQ publish). This is what the rule pack didn't cover and Phase E judge surfaced.</div>
 <div class="ref-fw">
-<span class="finding-tag">CWE CWE-829</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
+<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">CWE CWE-200</span>
 </div>
-<div class="ref-remediation"><strong>Fix:</strong> Allowlist sources. Pin versions. --- # §5. Phase E judge-surfaced gaps Patterns the rule pack never had, surfaced by real-world LLM-as-judge runs in Phase E. These are NEW coverage in v2.</div>
+<details class="ref-skip"><summary>Skip if</summary><p>A scrubber call (`scrubPii`, `redact`, `mask`) is in the same flow before the sink call.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Apply output scrubbing before any external publish. Apply at the edge (publishers) not at the LLM call site, since the call site is far from the eventual recipient.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-LLM07-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM07-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">System prompt logged or returned in response</div>
+<div class="ref-desc">System prompt string ending up in (a) a log line, (b) an HTTP response body, (c) an error message returned to the user, (d) a stack trace propagated outward.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP LLM LLM07</span>
+<span class="finding-tag">CWE CWE-200</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>System prompt is referenced only for debug-mode logging guarded by a feature flag.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Never log the system prompt at INFO. Strip it from error responses. Treat it as a secret.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-LLM10-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-LLM10-02</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">No audit logging around LLM call (was R001)</div>
+<div class="ref-desc">LLM call (`chain.invoke`, `runner.run`, `chatClient...call()`, `client.invokeModel`, etc.) in a method that has no surrounding logger setup or call. Look for: any `logger.info/warn/error` near the call, structured-logging library imports (structlog, langsmith, opentelemetry, langchain.callbacks), Lombok `@Slf4j`, stdlib `logger = logging.getLogger(__name__)`, or `callbacks=...` kwarg.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">ATLAS AML.T0024</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Any logger setup or call is present in the file. R001 was retired as a Tier 1 rule because it kept FP-ing on files that DID have logging — Tier 2 reads context, so be lenient here.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Add structured logging around every LLM call: prompt (hashed), model id, latency, token counts, tool calls made, output (hashed). Use OpenTelemetry traces for distributed apps.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-AGENTIC_T7-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T7-01</span>
+<span class="pill info">info</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">No alignment evaluation hook</div>
+<div class="ref-desc">Agent loop with no callback / hook for alignment evaluation (no langsmith trace, no eval-agent step, no &quot;did the agent's actions match the user's intent&quot; check). Hard to detect statically; flag in high-stakes contexts.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T7</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>A second LLM is used to evaluate the agent's plan/output.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Add an evaluation pass per agent run. Sample outputs to a manual review queue.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-AGENTIC_T8-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-AGENTIC-T8-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">No audit trail of agent decisions</div>
+<div class="ref-desc">Agent step (planner output, tool call decision, tool result) not logged anywhere. The audit trail must include WHAT the agent decided, not just WHEN it called the LLM.</div>
+<div class="ref-fw">
+<span class="finding-tag">OWASP Agentic T8</span>
+<span class="finding-tag">OWASP LLM LLM10</span>
+<span class="finding-tag">ATLAS AML.T0024</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>A trace library (langsmith, opentelemetry, custom audit logger) captures planner decisions + tool args.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Log every planner decision, tool call (with args), tool result. Structured JSON; queryable.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-ATLAS_T0024-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-ATLAS-T0024-01</span>
+<span class="pill high">high</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">Exfiltration via ML inference API</div>
+<div class="ref-desc">Inference API endpoints that return raw model internals (logprobs, hidden states, embeddings) to untrusted callers, enabling model-extraction attacks.</div>
+<div class="ref-fw">
+<span class="finding-tag">ATLAS AML.T0024</span>
+<span class="finding-tag">OWASP LLM LLM02</span>
+<span class="finding-tag">CWE CWE-200</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Don't return raw model internals to untrusted clients. Add rate limits + cost caps to inference endpoints.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-CWE_200-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-200-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">Information Exposure</div>
+<div class="ref-desc">Verbose error responses returned to clients with stack traces, internal hostnames, DB connection strings, file paths.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-200</span>
+<span class="finding-tag">OWASP LLM LLM02</span>
+</div>
+<details class="ref-skip"><summary>Skip if</summary><p>Errors filtered through a sanitiser before response serialisation.</p></details>
+<div class="ref-remediation"><strong>Fix:</strong> Generic error messages to clients; full detail to server logs only.</div>
+</div>
+<div class="ref-card-item">
+<div class="ref-card-head">
+<span class="ref-id">AS-C-R-CWE_532-001</span>
+<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-CWE-532-01</span>
+<span class="pill medium">medium</span>
+<span class="ref-langs">any</span>
+<span class="ref-cat ref-cat-respond">respond</span>
+</div>
+<div class="ref-title">Log Information Exposure</div>
+<div class="ref-desc">Cross-references LLM02-03. Sensitive data in log statements.</div>
+<div class="ref-fw">
+<span class="finding-tag">CWE CWE-532</span>
+<span class="finding-tag">OWASP LLM LLM02</span>
+</div>
+<div class="ref-remediation"><strong>Fix:</strong> Redact / hash before logging.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -2491,23 +2531,6 @@ footer {
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
-<span class="ref-id">AS-C-DF-GAP-001</span>
-<span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-GAP-04</span>
-<span class="pill medium">medium</span>
-<span class="ref-langs">any</span>
-<span class="ref-cat ref-cat-defend">defend</span>
-</div>
-<div class="ref-title">No explicit LLM call timeout</div>
-<div class="ref-desc">LLM call sites that rely on framework / SDK default timeouts rather than setting one explicitly. For Spring AI: missing `spring.ai.&lt;provider&gt;.timeout` in `application.yml` or no `.requestTimeout(...)` on the builder. Same for langchain4j / Bedrock.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">CWE CWE-400</span>
-</div>
-<details class="ref-skip"><summary>Skip if</summary><p>Explicit timeout set anywhere in the call's setup chain.</p></details>
-<div class="ref-remediation"><strong>Fix:</strong> Set explicit per-call or per-builder timeouts.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
 <span class="ref-id">AS-C-R-GAP-004</span>
 <span class="ref-legacy" title="Pre-rename ID(s)">was TIER2-GAP-05</span>
 <span class="pill high">high</span>
@@ -2524,12 +2547,14 @@ footer {
 <div class="ref-remediation"><strong>Fix:</strong> Output scrubber called immediately before any external publish. --- # §6. Retired Tier 1 anti-patterns Coverage equivalent to the 8 rule families retired in Phase F.2, kept here so Tier 2 doesn't lose ground when Tier 1 narrows. Most are already covered in §1–§4 above (cross-referenced). This section just lists the rule-family-level checks for the retired rules so coverage parity is auditable. | Retired rule | Covered by | |---|---| | D001-fb (fallback verb shape) | TIER2-LLM01-01 | | D002 (untrusted document loader) | TIER2-LLM01-02 | | D006 (broad tool permissions) | TIER2-LLM06-02 | | D007 (unpinned model) | TIER2-LLM03-01 | | DF001 (no guardrails import) | TIER2-LLM10-03 | | DF002 (no @Tool args schema) | TIER2-LLM06-03 | | DF004 (destructive verb naming) | TIER2-LLM06-01 | | R001 (no audit logging) | TIER2-LLM10-02 | If you find an instance of a retired-rule anti-pattern that doesn't match the cross-referenced check above, emit it under the retired-rule ID with a `notes` field explaining why none of the cross-refs applied. --- # §7. Tier 1 cross-check After scanning every file, read `.agentshield/tier1-results.json`. For each finding in Tier 1, decide: - **TP** (true positive) — Tier 1 is right; the issue is real. Don't emit a callout (Tier 1 already reported it).</div>
 </div>
 </div>
+</details>
 </div>
 <div class="ref-source-group">
 <div class="ref-source-header">
 <span class="ref-source-name">Manifest <span class="ref-source-count">10 checks</span></span>
-<span class="ref-source-blurb">AST10 — SKILL.md manifest scanner (preview). Checks the skill-package distribution layer for malicious content, over-broad permissions, and missing integrity metadata.</span>
+<span class="ref-source-blurb">SKILL.md manifest scan (preview). Checks the skill-package distribution layer for malicious content, over-broad permissions, and missing integrity metadata. Maps to OWASP Agentic Skills Top 10 (AST10).</span>
 </div>
+<details class="ref-group ref-group-detect"><summary class="ref-group-summary"><span class="ref-group-name">🔴 Detect</span><span class="ref-group-sub">vulnerability surfaces</span><span class="ref-group-count">10 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -2702,6 +2727,7 @@ footer {
 <div class="ref-remediation"><strong>Fix:</strong> Add `content_hash: sha256:&lt;digest&gt;` over the canonical skill payload.</div>
 </div>
 </div>
+</details>
 </div>
 </div>
 </div>
@@ -2941,28 +2967,8 @@ Semgrep fingerprint <code>12bb9b78f6751959…</code>
     b.addEventListener('click', function () { activateTab(b.getAttribute('data-tab')); });
   });
 
-  // ----- wire expand/collapse per finding -----
-  findings.forEach(function (f) {
-    var toggle = f.querySelector('.finding-toggle');
-    if (!toggle) return;
-    toggle.addEventListener('click', function (e) {
-      e.stopPropagation();
-      f.classList.toggle('collapsed');
-    });
-  });
-
-  // ----- "expand all" / "collapse all" via keyboard shortcut -----
-  document.addEventListener('keydown', function (e) {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      findings.forEach(function (f) { f.classList.remove('collapsed'); });
-    }
-    if (e.key === 'c' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-      e.preventDefault();
-      findings.forEach(function (f) { f.classList.add('collapsed'); });
-    }
-  });
+  // F.28a: per-finding expand/collapse removed. Reference-tab D/D/R
+  // sub-groups are now the only collapsible UX in the report.
 
   // initial render
   applyFilter();

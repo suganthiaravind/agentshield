@@ -1021,27 +1021,8 @@ footer {
 }
 .filter-status.active { color: var(--accent); font-weight: 600; }
 
-/* expand/collapse mechanics */
-.finding {
-  cursor: default;
-}
-.finding-toggle {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0 6px 0 0;
-  line-height: 1;
-  transition: transform 0.18s ease, color 0.12s ease;
-  flex-shrink: 0;
-}
-.finding-toggle:hover { color: var(--text); }
-.finding.collapsed .finding-toggle { transform: rotate(-90deg); }
-.finding.collapsed .finding-message,
-.finding.collapsed .finding-body { display: none; }
-
-/* hidden by filter — distinct from collapsed (which only hides the body) */
+/* hidden by filter (F.28a: per-finding collapse removed —
+   Reference-tab groups are the only remaining collapsible UX) */
 .finding.filtered-out,
 .findings-section.empty-by-filter {
   display: none;
@@ -1213,6 +1194,48 @@ footer {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 12px;
 }
+
+/* F.28: collapsible D/D/R sub-group inside each source */
+.ref-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+.ref-group:last-child { margin-bottom: 0; }
+.ref-group-summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 14px;
+  display: flex; align-items: baseline; gap: 12px;
+  font-size: 13px;
+  list-style: none;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+.ref-group-summary::-webkit-details-marker { display: none; }
+.ref-group-summary:hover { background: rgba(0,0,0,0.02); }
+.ref-group-summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 12px;
+  transition: transform 0.18s ease;
+}
+.ref-group[open] > .ref-group-summary::before { transform: rotate(90deg); }
+.ref-group-name { font-weight: 600; }
+.ref-group-sub { color: var(--text-muted); font-size: 12px; flex: 1; }
+.ref-group-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+  background: #ebe7d8; color: #5a5547;
+  letter-spacing: 0.02em;
+}
+.ref-group.ref-group-detect  > .ref-group-summary { border-left: 4px solid var(--detect); }
+.ref-group.ref-group-defend  > .ref-group-summary { border-left: 4px solid var(--defend); }
+.ref-group.ref-group-respond > .ref-group-summary { border-left: 4px solid var(--respond); }
+.ref-group .ref-cards { padding: 12px 14px 14px; }
 .ref-card-item {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1499,28 +1522,8 @@ _HTML_JS = """
     b.addEventListener('click', function () { activateTab(b.getAttribute('data-tab')); });
   });
 
-  // ----- wire expand/collapse per finding -----
-  findings.forEach(function (f) {
-    var toggle = f.querySelector('.finding-toggle');
-    if (!toggle) return;
-    toggle.addEventListener('click', function (e) {
-      e.stopPropagation();
-      f.classList.toggle('collapsed');
-    });
-  });
-
-  // ----- "expand all" / "collapse all" via keyboard shortcut -----
-  document.addEventListener('keydown', function (e) {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      findings.forEach(function (f) { f.classList.remove('collapsed'); });
-    }
-    if (e.key === 'c' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-      e.preventDefault();
-      findings.forEach(function (f) { f.classList.add('collapsed'); });
-    }
-  });
+  // F.28a: per-finding expand/collapse removed. Reference-tab D/D/R
+  // sub-groups are now the only collapsible UX in the report.
 
   // initial render
   applyFilter();
@@ -1832,7 +1835,6 @@ def render_combined_html(result: MergeResult) -> str:
                     f'data-search="{_html_escape(search_blob)}">'
                 )
                 parts.append('<div class="finding-header">')
-                parts.append('<button class="finding-toggle" aria-label="Expand finding details">▾</button>')
                 parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
                 parts.append(f'<span class="pill {sev}">{sev}</span>')
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
@@ -1916,7 +1918,7 @@ def render_combined_html(result: MergeResult) -> str:
         ("OWASP LLM Top 10 v2", "owasp_llm",
          "https://genai.owasp.org/llm-top-10/"),
         ("OWASP Agentic AI Top 10", "owasp_agentic",
-         "https://genai.owasp.org/llm-top-10-for-agentic-ai/"),
+         "https://owasp.org/www-project-agentic-ai-threats/"),
         ("MITRE ATLAS", "mitre_atlas", "https://atlas.mitre.org/"),
         ("CWE first-class", "cwe", "https://cwe.mitre.org/"),
         ("OWASP Agentic Skills Top 10 (preview)", "ast",
@@ -2025,21 +2027,25 @@ def _render_reference_panel(parts: list[str]) -> None:
         "recent scan happened to find.</p>"
     )
 
+    # F.28c: dropped tier numbering. The three sources catch different
+    # classes of bug, not different severities of the same class —
+    # describe each by what it is rather than imposing a false hierarchy.
     source_blurbs = {
         "Semgrep": (
-            "Tier 1 — high-precision Python/Java AST + taint rules run by "
-            "Semgrep. Low false-positive bar; finds concrete call-site "
+            "Static rule scan. High-precision Python/Java AST + taint "
+            "rules. Low false-positive bar; finds concrete call-site "
             "vulnerabilities."
         ),
         "Copilot": (
-            "Tier 2 — semantic checklist Copilot walks file-by-file in the "
-            "user's IDE. Catches cross-function and absence-of-control "
-            "patterns Semgrep can't see."
+            "LLM-driven checklist. Walks every file in the user's IDE "
+            "via Copilot Chat. Catches cross-function and absence-of-"
+            "control patterns the static rules can't see."
         ),
         "Manifest": (
-            "AST10 — SKILL.md manifest scanner (preview). Checks the "
-            "skill-package distribution layer for malicious content, "
-            "over-broad permissions, and missing integrity metadata."
+            "SKILL.md manifest scan (preview). Checks the skill-package "
+            "distribution layer for malicious content, over-broad "
+            "permissions, and missing integrity metadata. Maps to OWASP "
+            "Agentic Skills Top 10 (AST10)."
         ),
     }
 
@@ -2062,63 +2068,82 @@ def _render_reference_panel(parts: list[str]) -> None:
             parts.append("</div>")  # /ref-source-group
             continue
 
-        parts.append('<div class="ref-cards">')
-        for ref in bucket:
-            sev = (ref.severity or "info").lower()
-            parts.append('<div class="ref-card-item">')
-            parts.append('<div class="ref-card-head">')
+        # F.28: sub-group within each source by D/D/R category. Each
+        # sub-group is a `<details>` element — collapsed by default so
+        # the user gets a compact overview first and clicks to expand.
+        # `<details>/<summary>` is native HTML, no JS required.
+        for cat in _DDR_ORDER:
+            sub_bucket = [r for r in bucket if (r.category or "detect").lower() == cat]
+            if not sub_bucket:
+                continue
+            cat_label, cat_subtitle, _desc, _q = _DDR_LABELS[cat]
             parts.append(
-                f'<span class="ref-id">{_html_escape(ref.agentshield_id)}</span>'
+                f'<details class="ref-group ref-group-{cat}">'
+                f'<summary class="ref-group-summary">'
+                f'<span class="ref-group-name">{_html_escape(cat_label)}</span>'
+                f'<span class="ref-group-sub">{_html_escape(cat_subtitle)}</span>'
+                f'<span class="ref-group-count">{len(sub_bucket)} '
+                f'check{"s" if len(sub_bucket) != 1 else ""}</span>'
+                f'</summary>'
             )
-            if ref.legacy_ids:
-                # F.27: faint caption — "was AS-D-001" / "was TIER2-LLM01-01"
-                # so customers searching for old IDs in dashboards still find
-                # the rule.
-                legacy_str = ", ".join(ref.legacy_ids)
-                parts.append(
-                    f'<span class="ref-legacy" title="Pre-rename ID(s)">'
-                    f'was {_html_escape(legacy_str)}</span>'
-                )
-            parts.append(f'<span class="pill {sev}">{_html_escape(sev)}</span>')
-            if ref.languages:
-                parts.append(
-                    f'<span class="ref-langs">{_html_escape(ref.languages)}</span>'
-                )
-            cat = (ref.category or "detect").lower()
-            parts.append(
-                f'<span class="ref-cat ref-cat-{cat}">{_html_escape(cat)}</span>'
-            )
-            parts.append("</div>")
-            parts.append(
-                f'<div class="ref-title">{_html_escape(ref.title)}</div>'
-            )
-            parts.append(
-                f'<div class="ref-desc">{_html_escape(ref.description)}</div>'
-            )
-            if ref.frameworks:
-                parts.append('<div class="ref-fw">')
-                for k_field, items in ref.frameworks.items():
-                    label = _FRAMEWORK_LABEL.get(k_field, k_field)
-                    for item in items:
-                        parts.append(
-                            f'<span class="finding-tag">'
-                            f'{_html_escape(label)} {_html_escape(item)}</span>'
-                        )
-                parts.append("</div>")
-            if ref.skip_if:
-                parts.append(
-                    f'<details class="ref-skip"><summary>Skip if</summary>'
-                    f'<p>{_html_escape(ref.skip_if)}</p></details>'
-                )
-            if ref.remediation:
-                parts.append(
-                    f'<div class="ref-remediation"><strong>Fix:</strong> '
-                    f'{_html_escape(ref.remediation)}</div>'
-                )
-            parts.append("</div>")  # /ref-card-item
-        parts.append("</div>")  # /ref-cards
+            parts.append('<div class="ref-cards">')
+            for ref in sub_bucket:
+                _render_reference_card(parts, ref)
+            parts.append("</div>")  # /ref-cards
+            parts.append("</details>")  # /ref-group
         parts.append("</div>")  # /ref-source-group
     parts.append("</div>")  # /reference-card
+
+
+def _render_reference_card(parts: list[str], ref: Any) -> None:
+    """Emit one rule's reference card. Split out so the sub-grouping
+    code in F.28 can call it without nested-list indentation getting
+    out of hand."""
+    sev = (ref.severity or "info").lower()
+    parts.append('<div class="ref-card-item">')
+    parts.append('<div class="ref-card-head">')
+    parts.append(
+        f'<span class="ref-id">{_html_escape(ref.agentshield_id)}</span>'
+    )
+    if ref.legacy_ids:
+        legacy_str = ", ".join(ref.legacy_ids)
+        parts.append(
+            f'<span class="ref-legacy" title="Pre-rename ID(s)">'
+            f'was {_html_escape(legacy_str)}</span>'
+        )
+    parts.append(f'<span class="pill {sev}">{_html_escape(sev)}</span>')
+    if ref.languages:
+        parts.append(
+            f'<span class="ref-langs">{_html_escape(ref.languages)}</span>'
+        )
+    cat = (ref.category or "detect").lower()
+    parts.append(
+        f'<span class="ref-cat ref-cat-{cat}">{_html_escape(cat)}</span>'
+    )
+    parts.append("</div>")
+    parts.append(f'<div class="ref-title">{_html_escape(ref.title)}</div>')
+    parts.append(f'<div class="ref-desc">{_html_escape(ref.description)}</div>')
+    if ref.frameworks:
+        parts.append('<div class="ref-fw">')
+        for k_field, items in ref.frameworks.items():
+            label = _FRAMEWORK_LABEL.get(k_field, k_field)
+            for item in items:
+                parts.append(
+                    f'<span class="finding-tag">'
+                    f'{_html_escape(label)} {_html_escape(item)}</span>'
+                )
+        parts.append("</div>")
+    if ref.skip_if:
+        parts.append(
+            f'<details class="ref-skip"><summary>Skip if</summary>'
+            f'<p>{_html_escape(ref.skip_if)}</p></details>'
+        )
+    if ref.remediation:
+        parts.append(
+            f'<div class="ref-remediation"><strong>Fix:</strong> '
+            f'{_html_escape(ref.remediation)}</div>'
+        )
+    parts.append("</div>")  # /ref-card-item
 
 
 def render_combined_sarif(result: MergeResult) -> str:

@@ -44,4 +44,4 @@ rules:
         the user mentions cancellation."
       references:
         - "https://genai.owasp.org/llmrisk/llm05-improper-output-handling/"
-        - "https://genai.owasp.org/llm-top-10-for-agentic-ai/"
+        - "https://owasp.org/www-project-agentic-ai-threats/"
