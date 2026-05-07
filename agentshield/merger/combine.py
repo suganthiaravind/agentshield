@@ -823,10 +823,20 @@ h3 { font-size: 15px; }
 .pill.fp       { background: var(--high-bg); color: var(--high); }
 
 .metrics-row {
+  /* F.33: 3 input cards (1fr each) + a thin separator + 1 hero card
+     (1.4fr) so the headline number visually outweighs its inputs.
+     The CSS-only divider is a 1px column the user reads as
+     "everything left = inputs; everything right = result". */
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr 1fr 8px 1.4fr;
   gap: 12px;
   margin-bottom: 24px;
+  align-items: stretch;
+}
+.metrics-row .metrics-divider {
+  align-self: stretch;
+  border-left: 1px dashed var(--border);
+  margin: 4px 0;
 }
 .metric {
   background: var(--panel);
@@ -834,11 +844,29 @@ h3 { font-size: 15px; }
   border-radius: 10px;
   padding: 14px 18px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
+  display: flex; flex-direction: column;
 }
 .metric .metric-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                         color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
 .metric .metric-value { font-size: 28px; font-weight: 700; line-height: 1; }
 .metric .metric-value.actionable { color: var(--accent); }
+/* F.33: subtitle row under the big number — explains what the count
+   means in plain English (raw findings / net-new / excluded / to
+   address) so a stakeholder can scan the row and understand it
+   without consulting the docs. */
+.metric .metric-subtitle {
+  font-size: 11px; color: var(--text-muted); margin-top: 6px;
+  font-style: italic; line-height: 1.4;
+}
+/* F.33: hero treatment for the Net Actionable card. Bigger value,
+   accent border, accent-tinted background — the conclusion card. */
+.metric.metric-hero {
+  border-color: var(--accent);
+  border-left-width: 4px;
+  background: linear-gradient(180deg, #f4f8fb 0%, #ffffff 100%);
+}
+.metric.metric-hero .metric-label { color: var(--accent); }
+.metric.metric-hero .metric-value { font-size: 40px; }
 
 .severity-bar {
   display: flex;
@@ -1741,11 +1769,46 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     tier1_total = len(r.tier1_findings)
     tier2_total = len(r.tier2_findings)
     fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
+    # F.33: redesigned metrics row.
+    # 3 input cards (left of divider) -> 1 hero "Net Actionable" card
+    # (right). Each card carries a one-line subtitle so the number is
+    # legible without external context. FP card stays neutral — a zero
+    # there is ambiguous (could mean "nothing to exclude" or "Copilot
+    # didn't run thoroughly"), so a green/positive tint would mislead.
     parts.append('<div class="metrics-row">')
-    parts.append(f'<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">{tier1_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Copilot LLM Scan</div><div class="metric-value">{tier2_total}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Marked False Positive by Copilot</div><div class="metric-value">{fp_marked}</div></div>')
-    parts.append(f'<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">{result.actionable_finding_count}</div></div>')
+    parts.append(
+        f'<div class="metric">'
+        f'<div class="metric-label">Semgrep Rules-engine Scan</div>'
+        f'<div class="metric-value">{tier1_total}</div>'
+        f'<div class="metric-subtitle">what static rules caught</div>'
+        f'</div>'
+    )
+    parts.append(
+        f'<div class="metric">'
+        f'<div class="metric-label">Copilot LLM Scan</div>'
+        f'<div class="metric-value">{tier2_total}</div>'
+        f'<div class="metric-subtitle">what LLM scan added</div>'
+        f'</div>'
+    )
+    parts.append(
+        f'<div class="metric">'
+        f'<div class="metric-label">False Positives</div>'
+        f'<div class="metric-value">{fp_marked}</div>'
+        f'<div class="metric-subtitle">what was ruled out</div>'
+        f'</div>'
+    )
+    parts.append('<div class="metrics-divider" aria-hidden="true"></div>')
+    # Net Actionable's tooltip carries the formula; the subtitle stays
+    # in the "what …" parallel structure of the three input cards.
+    parts.append(
+        f'<div class="metric metric-hero" '
+        f'title="Net Actionable = Semgrep + Copilot − False Positives '
+        f'(= {tier1_total} + {tier2_total} − {fp_marked})">'
+        f'<div class="metric-label">Net Actionable</div>'
+        f'<div class="metric-value actionable">{result.actionable_finding_count}</div>'
+        f'<div class="metric-subtitle">what\'s left to address</div>'
+        f'</div>'
+    )
     parts.append("</div>")
 
     # 5. Stacked severity bar
