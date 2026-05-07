@@ -5,9 +5,13 @@
 :root {
   --bg: #fafaf7;
   --panel: #ffffff;
-  --border: #e5e3dc;
+  /* F.32: bumped border darkness so 1.5px lines stay visible after VDI
+     chroma-compression. Was #e5e3dc — too close to --bg on lo-DPI. */
+  --border: #d6d3c7;
   --text: #1f2933;
-  --text-muted: #6b7280;
+  /* F.32: muted text darkened from #6b7280 → #4b5563 for contrast on
+     96-ppi VDI displays. Still distinct from --text. */
+  --text-muted: #4b5563;
   --accent: #2c5f7e;
 
   --detect: #c54040;
@@ -23,11 +27,14 @@
   --low: #4f7a4f;
   --info: #5a7a8c;
 
-  --critical-bg: #fdecea;
-  --high-bg: #fdf0e0;
-  --medium-bg: #fbf3dc;
-  --low-bg: #e9f1e7;
-  --info-bg: #e8eef2;
+  /* F.32: severity-pill backgrounds bumped ~30% darker so the pills
+     stay visible against white after VDI compression. The text colors
+     above are unchanged — the contrast ratio improves. */
+  --critical-bg: #f8c9c4;
+  --high-bg: #f9d7a8;
+  --medium-bg: #f3d680;
+  --low-bg: #c9e0c2;
+  --info-bg: #c5d4dd;
 }
 
 * { box-sizing: border-box; }
@@ -41,6 +48,12 @@ body {
   padding: 32px 40px 80px;
   line-height: 1.5;
   font-size: 14px;
+  /* F.32: keep glyph edges crisp on lo-DPI VDI displays where the OS
+     might disable subpixel AA — these hint to the browser to render
+     the text antialiased anyway. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3 { color: var(--text); margin: 0; font-weight: 600; }
@@ -71,10 +84,13 @@ h3 { font-size: 15px; }
 }
 .ddr-card {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   padding: 20px;
   border-top: 4px solid;
+  /* F.32: subtle shadow so the card stays visually distinct from the
+     page background after VDI compression eats the 1.5px border. */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .ddr-card.detect  { border-top-color: var(--detect); }
 .ddr-card.defend  { border-top-color: var(--defend); }
@@ -117,7 +133,9 @@ h3 { font-size: 15px; }
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 600;
+  /* F.32: bumped 600 → 700 so small caps survive VDI subpixel-rendering
+     loss without enlarging the pill. */
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -140,9 +158,10 @@ h3 { font-size: 15px; }
 }
 .metric {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 10px;
   padding: 14px 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
 }
 .metric .metric-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                         color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
@@ -167,11 +186,12 @@ h3 { font-size: 15px; }
 
 .saige-card {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: 10px;
   padding: 18px 22px;
   margin-bottom: 28px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
 }
 .saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                            color: var(--text-muted); font-weight: 600; }
@@ -183,10 +203,11 @@ h3 { font-size: 15px; }
 
 .findings-section {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   margin-bottom: 24px;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
 }
 .findings-section .section-header {
   padding: 16px 20px 12px;
@@ -210,7 +231,7 @@ h3 { font-size: 15px; }
   padding: 1px 7px;
   border-radius: 999px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;  /* F.32 */
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -232,7 +253,7 @@ h3 { font-size: 15px; }
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .finding-message { color: var(--text); font-size: 13px; margin-bottom: 8px; }
 .finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.finding-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+.finding-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;  /* F.32 */
                background: #f1eee5; color: #5a5547; letter-spacing: 0.02em; }
 .finding-snippet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                    font-size: 12px; background: #f5f3ec; padding: 6px 10px;
@@ -268,7 +289,7 @@ footer {
   top: 0;
   z-index: 10;
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   padding: 14px 18px;
   margin-bottom: 20px;
@@ -276,7 +297,7 @@ footer {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);  /* F.32: slightly stronger */
 }
 .filter-bar .filter-group {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
@@ -443,9 +464,10 @@ footer {
 
 .coverage-card {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
 }
 .coverage-card .panel-title { font-size: 16px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
 .coverage-card .panel-subtitle {
@@ -504,9 +526,10 @@ footer {
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
 }
 .ref-source-group { margin-bottom: 28px; }
 .ref-source-group:last-child { margin-bottom: 0; }
