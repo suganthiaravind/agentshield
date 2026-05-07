@@ -1561,6 +1561,46 @@ def _html_escape(s: str) -> str:
     )
 
 
+def _tier2_display_slugs() -> dict[str, str]:
+    """F.31: build `rule_id → display-slug` for Tier 2 entries.
+
+    Copilot writes findings with a canonical `AS-C-D-LLM01-002` rule_id
+    but no `rule_id_short`. To match the Semgrep card layout (which
+    shows the human-readable slug `unsanitized-user-input-to-llm`),
+    we look up each Tier 2 entry's title from the bundled checklist
+    and slugify it. Returns `{}` if the checklist file is missing.
+    Cached implicitly by the merger's per-call render path — cheap.
+    """
+    from agentshield.merger.reference import parse_tier2_checklist
+
+    if not _DEFAULT_CHECKLIST_PATH.exists():
+        return {}
+    refs = parse_tier2_checklist(
+        _DEFAULT_CHECKLIST_PATH.read_text(encoding="utf-8")
+    )
+    out: dict[str, str] = {}
+    for ref in refs:
+        slug = _slugify_title(ref.title)
+        if slug:
+            out[ref.rule_id] = slug
+            for legacy in ref.legacy_ids:
+                # Legacy rule_id (TIER2-LLM01-01) also maps to the slug
+                # so an in-flight Copilot output written before F.27
+                # still renders with a friendly name.
+                out[legacy] = slug
+    return out
+
+
+def _slugify_title(title: str) -> str:
+    """`Indirect prompt injection via document loader` → `indirect-prompt-injection-via-document-loader`."""
+    import re as _re
+    s = title.strip().lower()
+    # Strip common arrow / dash glyphs that show up in titles.
+    s = s.replace("→", " ").replace("—", " ").replace("/", " ")
+    s = _re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
+
+
 def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     """Standalone HTML report — single file, embedded CSS, no external deps.
 
@@ -1588,6 +1628,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     """
     r = result.report
     grouped = _findings_grouped_by_ddr(r)
+    # F.31: rule_id → friendly slug for Tier 2 (Copilot) findings, so the
+    # finding card shows `indirect-prompt-injection-via-document-loader`
+    # instead of `AS-C-D-LLM01-002`. Built once per render.
+    tier2_slugs = _tier2_display_slugs()
     sev_total: dict[str, int] = {}
     for bucket in grouped.values():
         for f in bucket:
@@ -1841,7 +1885,18 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             for f in bucket:
                 origin = f["_origin"]
                 sev = f.get("severity", "info")
-                rule = f.get("rule_id_short") or f.get("rule_id") or "?"
+                # F.31: prefer the human-readable slug. Semgrep findings
+                # already carry `rule_id_short` (e.g. `unsanitized-user-
+                # input-to-llm`); Copilot findings only have `rule_id`
+                # like `AS-C-D-LLM01-002`, so we look up the title from
+                # the bundled checklist and slugify it. Manifest scanner
+                # findings carry `rule_id_short` (`ast03-network-...`).
+                rule = (
+                    f.get("rule_id_short")
+                    or tier2_slugs.get(f.get("rule_id", ""))
+                    or f.get("rule_id")
+                    or "?"
+                )
                 file_ = f.get("file") or "?"
                 line_ = f.get("line") or "?"
                 fm = f.get("framework_mappings") or f

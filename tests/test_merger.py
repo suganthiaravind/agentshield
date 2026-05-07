@@ -810,6 +810,37 @@ def test_html_includes_filter_js(repo: Path) -> None:
     assert "activateTab" in html  # F.22 tab switcher
 
 
+def test_html_copilot_finding_renders_friendly_slug(repo: Path) -> None:
+    """F.31 — Copilot findings only carry the canonical AS-C-* rule_id;
+    the renderer should look up the checklist title and slugify it so
+    the card shows `unsanitised-user-input-llm-call` instead of
+    `AS-C-D-LLM01-001`. Mirrors how Semgrep findings render their
+    `rule_id_short`."""
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload(findings=[
+        {
+            "rule_id": "AS-C-D-LLM01-001",  # post-rename canonical
+            "category": "detect",
+            "severity": "high",
+            "file": "src/foo.py",
+            "line": 10,
+            "snippet": "chain.invoke(user_input)",
+            "message": "Tier 2 catch.",
+            "owasp_llm": ["LLM01"],
+            "owasp_agentic": ["T6"],
+            "mitre_atlas": [],
+            "cwe": [],
+            "remediation": "Wrap with guardrail.",
+        }
+    ])
+    _write_tier2(repo, payload)
+    html = render_combined_html(merge(repo))
+    # The bare canonical ID should NOT be in the .finding-rule span.
+    assert '<span class="finding-rule">AS-C-D-LLM01-001</span>' not in html
+    # A slugified form of the checklist title should be there.
+    assert "unsanitised-user-input-llm-call" in html or "unsanitized-user-input-llm-call" in html
+
+
 def test_html_static_mode_omits_tab_nav_and_filter_bar(repo: Path) -> None:
     """F.29 — `static=True` produces a stacked / printable HTML where the
     tab navigation and filter bar are stripped (no tab-nav element, no

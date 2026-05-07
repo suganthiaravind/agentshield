@@ -830,11 +830,11 @@ footer {
 </div>
 </div>
 </div>
-<div class="finding" data-severity="high" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM01 owasp_agentic:T1 owasp_agentic:T6 cwe:CWE-94" data-search="as-c-d-llm01-002 testbed/demo-agent/controller.py untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. indirect prompt-injection surface — attacker-controlled webpage content flows into the llm via the summarise prompt.">
+<div class="finding" data-severity="high" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM01 owasp_agentic:T1 owasp_agentic:T6 cwe:CWE-94" data-search="indirect-prompt-injection-via-document-loader testbed/demo-agent/controller.py untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. indirect prompt-injection surface — attacker-controlled webpage content flows into the llm via the summarise prompt.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
-<span class="finding-rule">AS-C-D-LLM01-002</span>
+<span class="finding-rule">indirect-prompt-injection-via-document-loader</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:30</div>
 <div class="finding-message">Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface — attacker-controlled webpage content flows into the LLM via the summarise prompt.</div>
@@ -881,11 +881,11 @@ footer {
 <div class="finding-remediation"><strong>Copilot reasoning:</strong> request.json[&quot;message&quot;] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.</div>
 </div>
 </div>
-<div class="finding" data-severity="medium" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM04 owasp_agentic:T1" data-search="as-c-d-agentic_t1-001 testbed/demo-agent/memory.py memory poisoning surface: both user input and raw llm output are persisted to session memory without validation. future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn n that influence turn n+1.">
+<div class="finding" data-severity="medium" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM04 owasp_agentic:T1" data-search="memory-poisoning-via-persistent-store testbed/demo-agent/memory.py memory poisoning surface: both user input and raw llm output are persisted to session memory without validation. future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn n that influence turn n+1.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
-<span class="finding-rule">AS-C-D-AGENTIC_T1-001</span>
+<span class="finding-rule">memory-poisoning-via-persistent-store</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/memory.py:17</div>
 <div class="finding-message">Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.</div>
@@ -959,11 +959,11 @@ footer {
 <span class="sev-mini medium" data-section-sev="medium">1 medium</span>
 </span>
 </div>
-<div class="finding" data-severity="high" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T10" data-search="as-c-df-llm06-001 testbed/demo-agent/tools.py destructive tool registered without a human-in-the-loop approval gate. the `cancel_subscription` tool name starts with a destructive verb and the body posts to a billing api; the agent can invoke it autonomously if the planner decides to.">
+<div class="finding" data-severity="high" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T10" data-search="tool-registered-with-destructive-verb-no-approval-gate testbed/demo-agent/tools.py destructive tool registered without a human-in-the-loop approval gate. the `cancel_subscription` tool name starts with a destructive verb and the body posts to a billing api; the agent can invoke it autonomously if the planner decides to.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
-<span class="finding-rule">AS-C-DF-LLM06-001</span>
+<span class="finding-rule">tool-registered-with-destructive-verb-no-approval-gate</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/tools.py:26</div>
 <div class="finding-message">Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.</div>
@@ -977,11 +977,11 @@ footer {
 <div class="finding-remediation"><strong>Fix:</strong> Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation.</div>
 </div>
 </div>
-<div class="finding" data-severity="medium" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T4 cwe:CWE-400" data-search="as-c-df-llm10-001 testbed/demo-agent/controller.py chatopenai client instantiated without explicit timeout or max_tokens cap. a slow or runaway model call has no upper bound — dos / cost exposure.">
+<div class="finding" data-severity="medium" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T4 cwe:CWE-400" data-search="no-timeout-token-cap-on-llm-call testbed/demo-agent/controller.py chatopenai client instantiated without explicit timeout or max_tokens cap. a slow or runaway model call has no upper bound — dos / cost exposure.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
-<span class="finding-rule">AS-C-DF-LLM10-001</span>
+<span class="finding-rule">no-timeout-token-cap-on-llm-call</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:14</div>
 <div class="finding-message">ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound — DoS / cost exposure.</div>
@@ -1014,11 +1014,11 @@ footer {
 <span class="sev-mini medium" data-section-sev="medium">1 medium</span>
 </span>
 </div>
-<div class="finding" data-severity="high" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM02 owasp_agentic:T8 cwe:CWE-200" data-search="as-c-r-llm02-002 testbed/demo-agent/notifications.py llm output published to sns without scrubbing. the reply_body is a bedrock-generated string that may inadvertently include pii echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. sns subscribers receive it unfiltered.">
+<div class="finding" data-severity="high" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM02 owasp_agentic:T8 cwe:CWE-200" data-search="sensitive-data-egress-via-sns-email-http-sink testbed/demo-agent/notifications.py llm output published to sns without scrubbing. the reply_body is a bedrock-generated string that may inadvertently include pii echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. sns subscribers receive it unfiltered.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill high">high</span>
-<span class="finding-rule">AS-C-R-LLM02-002</span>
+<span class="finding-rule">sensitive-data-egress-via-sns-email-http-sink</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/notifications.py:24</div>
 <div class="finding-message">LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.</div>
@@ -1032,11 +1032,11 @@ footer {
 <div class="finding-remediation"><strong>Fix:</strong> Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient.</div>
 </div>
 </div>
-<div class="finding" data-severity="medium" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T8 mitre_atlas:AML.T0024" data-search="as-c-r-llm10-001 testbed/demo-agent/notifications.py llm call has no surrounding audit logging. no structured logger setup (no structlog / langsmith / opentelemetry / langchain.callbacks); no logger.info around the call. without an audit trail, incident response can't reconstruct what the model saw or returned.">
+<div class="finding" data-severity="medium" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM10 owasp_agentic:T8 mitre_atlas:AML.T0024" data-search="no-audit-logging-around-llm-call-was-r001 testbed/demo-agent/notifications.py llm call has no surrounding audit logging. no structured logger setup (no structlog / langsmith / opentelemetry / langchain.callbacks); no logger.info around the call. without an audit trail, incident response can't reconstruct what the model saw or returned.">
 <div class="finding-header">
 <span class="pill tier2">Copilot</span>
 <span class="pill medium">medium</span>
-<span class="finding-rule">AS-C-R-LLM10-001</span>
+<span class="finding-rule">no-audit-logging-around-llm-call-was-r001</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/notifications.py:14</div>
 <div class="finding-message">LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.</div>
