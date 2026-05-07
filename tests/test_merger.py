@@ -908,6 +908,47 @@ def test_html_coverage_matrix_lives_inside_coverage_tab(repo: Path) -> None:
     assert coverage_panel_start < grid_pos < coverage_panel_end
 
 
+def test_coverage_matrix_includes_ast_axis(repo: Path) -> None:
+    """F.24 — when a Tier 1 finding carries an `ast` mapping, the merger's
+    CoverageMatrix surfaces it on the new 5th axis. Mirrors the contract
+    for owasp_llm/owasp_agentic/mitre_atlas/cwe."""
+    payload = _tier1_payload()
+    # Splice an AST mapping onto the existing fixture finding.
+    payload["findings"][0]["framework_mappings"]["ast"] = ["AST01", "AST03"]
+    _write_tier1(repo, payload)
+    _write_tier2(repo, _tier2_payload())
+    result = merge(repo)
+    assert "AST01" in result.report.coverage.ast
+    assert "AST03" in result.report.coverage.ast
+    cov_dict = result.report.coverage.to_dict()
+    assert cov_dict["ast"] == ["AST01", "AST03"]
+
+
+def test_html_frameworks_tab_includes_ast10_group(repo: Path) -> None:
+    """When any finding has an `ast` mapping, the HTML Frameworks tab
+    must render the new "OWASP Agentic Skills Top 10" group with a
+    clickable item that uses the same data-framework-key contract."""
+    payload = _tier1_payload()
+    payload["findings"][0]["framework_mappings"]["ast"] = ["AST01"]
+    _write_tier1(repo, payload)
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert "OWASP Agentic Skills Top 10" in html
+    assert 'data-framework-key="ast:AST01"' in html
+
+
+def test_tier2_schema_accepts_optional_ast_array(repo: Path) -> None:
+    """Tier 2 payloads MAY include an `ast` array per finding (additive
+    only — never required). Validation must accept it."""
+    payload = _tier2_payload()
+    payload["findings"][0]["ast"] = ["AST01"]
+    _write_tier2(repo, payload)
+    _write_tier1(repo, _tier1_payload())
+    result = merge(repo)
+    assert not result.schema_errors
+    assert "AST01" in result.report.coverage.ast
+
+
 def test_framework_finding_counts_aggregates_both_tiers(repo: Path) -> None:
     """The helper that powers the Frameworks-tab item counts must sum
     Tier 1 + Tier 2 findings per `<field>:<item>` key."""

@@ -1,0 +1,31 @@
+---
+name: demo-agent-helper
+version: 0.1.0
+description: Helper skill for the demo agent — summarises support tickets and posts updates to SNS.
+author:
+  name: Demo Co
+permissions:
+  network: true
+  shell: false
+  files:
+    read:
+      - "~/.config/demo-agent/**"
+    write:
+      - "~/.config/demo-agent/state.json"
+---
+
+# Demo Agent Helper
+
+This skill wraps the demo agent's ticket-summarisation flow so it can be
+invoked as a Claude Code skill during incident reviews.
+
+## Usage
+
+When an SRE asks "summarise ticket TICK-1234", this skill:
+
+1. Calls the demo agent's `summarise(ticket_id)` entry point.
+2. Posts the summary to the support-replies SNS topic.
+
+## Implementation note
+
+The skill calls the agent's existing controller — see `controller.py`.

@@ -10,18 +10,18 @@ AgentShield's organising spine. Every finding belongs to exactly one category.
 
 | **🔴 Detect** _vulnerability surfaces_ | **🟡 Defend** _missing controls_ | **🔵 Respond** _observability gaps_ |
 |---|---|---|
-| **6 findings**<br>🟥 CRITICAL &times; 2<br>🟧 HIGH &times; 3<br>🟨 MEDIUM &times; 1 | **2 findings**<br>🟧 HIGH &times; 1<br>🟨 MEDIUM &times; 1 | **2 findings**<br>🟧 HIGH &times; 1<br>🟨 MEDIUM &times; 1 |
+| **11 findings**<br>🟥 CRITICAL &times; 2<br>🟧 HIGH &times; 4<br>🟨 MEDIUM &times; 2<br>🟦 INFO &times; 3 | **2 findings**<br>🟧 HIGH &times; 1<br>🟨 MEDIUM &times; 1 | **2 findings**<br>🟧 HIGH &times; 1<br>🟨 MEDIUM &times; 1 |
 
 ## Summary
 
 | Metric | Count |
 |---|---|
-| Semgrep Rules-engine Scan findings | 4 |
+| Semgrep Rules-engine Scan findings | 9 |
 | Copilot AI Scan net-new findings | 6 |
 | Semgrep findings marked True Positive by Copilot | 1 |
 | Semgrep findings marked Context-Dependent by Copilot | 0 |
 | Semgrep findings marked False Positive by Copilot | 0 |
-| **Net actionable** | **10** |
+| **Net actionable** | **15** |
 
 ## JPMC SAIGE Agent Tier classification
 
@@ -33,7 +33,7 @@ AgentShield's organising spine. Every finding belongs to exactly one category.
 
 _Informational only — AgentShield does not filter or prioritise findings based on this classification. See [research.md §5](./research.md#5-jpmc-saige-agent-tier-classification) for the category definitions._
 
-## 🔴 Detect — vulnerability surfaces  (6 findings)
+## 🔴 Detect — vulnerability surfaces  (11 findings)
 
 _Where the agent is exploitable._
 
@@ -49,12 +49,17 @@ _Where the agent is exploitable._
 - **Message:** Output from an LLM call flows into a dangerous code-execution sink (eval / exec / os.system / subprocess with shell=True). LLM output is attacker-controllable via prompt injection — feeding it to a code executor is arbitrary code execution on the host. OWASP LLM05 Improper Output Handling, OWASP Agentic T11.
 - **Frameworks:** OWASP LLM LLM05, LLM06 · OWASP Agentic T2, T11 · MITRE ATLAS AML.T0011, AML.T0050 · CWE CWE-94
 
-### **[Semgrep]** 🟧 HIGH `unsanitized-user-input-to-llm`  ·  Copilot verdict: ✅ TP
+### **[Semgrep]** 🟧 HIGH `ast03-network-unrestricted`
+
+- **Location:** `SKILL.md:1`
+- **Message:** Skill declares unrestricted network egress (`network: true`). AST03 — should be a domain allowlist (`network.allow: [api.example.com]`) with default-deny.
+- **Frameworks:** OWASP LLM LLM03, LLM06 · OWASP Agentic T2, T3 · CWE CWE-732 · OWASP AST10 AST03
+
+### **[Semgrep]** 🟧 HIGH `unsanitized-user-input-to-llm`
 
 - **Location:** `testbed/demo-agent/controller.py:21`
 - **Message:** User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).
 - **Frameworks:** OWASP LLM LLM01 · OWASP Agentic T6 · MITRE ATLAS AML.T0051
-- **Copilot reasoning:** request.json["message"] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.
 
 ### **[Copilot]** 🟧 HIGH `TIER2-LLM01-02`
 
@@ -70,6 +75,13 @@ _Where the agent is exploitable._
 - **Message:** User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).
 - **Frameworks:** OWASP LLM LLM01 · OWASP Agentic T6 · MITRE ATLAS AML.T0051
 
+### **[Semgrep]** 🟨 MEDIUM `ast03-wildcard-file-read`  ·  Copilot verdict: ✅ TP
+
+- **Location:** `SKILL.md:1`
+- **Message:** Wildcard read permission on `~/.config/demo-agent/**`. AST03 — skill manifests must declare explicit paths; wildcards defeat least-privilege review.
+- **Frameworks:** CWE CWE-732 · OWASP AST10 AST03
+- **Copilot reasoning:** request.json["message"] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.
+
 ### **[Copilot]** 🟨 MEDIUM `TIER2-AGENTIC-T1-01`
 
 - **Location:** `testbed/demo-agent/memory.py:17`
@@ -77,6 +89,24 @@ _Where the agent is exploitable._
 - **Frameworks:** OWASP LLM LLM04 · OWASP Agentic T1
 - **Snippet:** `memory.setdefault(session_id, []).append({"user": user_message, "assistant": llm_response})`
 - **Remediation:** Validate memory writes the same way you'd validate database writes — schema-check or pass through a content moderation classifier on persistence.
+
+### **[Semgrep]** 🟦 INFO `ast04-missing-author-identity`
+
+- **Location:** `SKILL.md:1`
+- **Message:** Skill manifest has no `author.identity` (DID / signing-key anchor). AST04 — without a verifiable identity anchor, registry consumers cannot detect impersonation or typosquats; this is the foothold the ClawHub fake-Google skill exploited.
+- **Frameworks:** OWASP AST10 AST04
+
+### **[Semgrep]** 🟦 INFO `ast07-missing-content-hash`
+
+- **Location:** `SKILL.md:1`
+- **Message:** SKILL.md frontmatter has no `content_hash` field. AST07 — Merkle-root verification at install time requires a SHA-256 over the canonical skill payload.
+- **Frameworks:** CWE CWE-345 · OWASP AST10 AST07
+
+### **[Semgrep]** 🟦 INFO `ast07-missing-signature`
+
+- **Location:** `SKILL.md:1`
+- **Message:** SKILL.md frontmatter has no `signature` field. AST07 — without an ed25519 signature the registry cannot verify the skill on update; ClawJacked-style update-drift attacks become viable.
+- **Frameworks:** OWASP LLM LLM03 · CWE CWE-345 · OWASP AST10 AST07
 
 ## 🟡 Defend — missing controls  (2 findings)
 
@@ -125,5 +155,6 @@ _Whether incidents can be detected and recovered._
 | owasp_llm | LLM01, LLM02, LLM03, LLM04, LLM05, LLM06, LLM10 |
 | owasp_agentic | T1, T10, T11, T2, T3, T4, T6, T8 |
 | mitre_atlas | AML.T0011, AML.T0012, AML.T0024, AML.T0050, AML.T0051 |
-| cwe | CWE-200, CWE-400, CWE-798, CWE-94 |
+| cwe | CWE-200, CWE-345, CWE-400, CWE-732, CWE-798, CWE-94 |
+| ast | AST03, AST04, AST07 |
 

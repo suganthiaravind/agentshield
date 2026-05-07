@@ -201,6 +201,24 @@ h3 { font-size: 15px; }
 .findings-section .section-title { font-size: 16px; font-weight: 600; }
 .findings-section .section-subtitle { font-size: 12px; color: var(--text-muted); flex: 1; }
 .findings-section .section-count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.findings-section .section-severity {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  margin-left: 10px;
+}
+.sev-mini {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.sev-mini.critical { background: var(--critical-bg); color: var(--critical); }
+.sev-mini.high     { background: var(--high-bg);     color: var(--high); }
+.sev-mini.medium   { background: var(--medium-bg);   color: var(--medium); }
+.sev-mini.low      { background: var(--low-bg);      color: var(--low); }
+.sev-mini.info     { background: var(--info-bg);     color: var(--info); }
 
 .finding {
   padding: 16px 20px;
@@ -498,11 +516,12 @@ footer {
 <div class="ddr-title">Detect</div>
 <div class="ddr-subtitle">vulnerability surfaces</div>
 <div class="ddr-question">"Where is the agent exploitable?"</div>
-<div class="ddr-count" data-ddr-count="detect" data-ddr-total="6">6</div>
+<div class="ddr-count" data-ddr-count="detect" data-ddr-total="11">11</div>
 <div class="sev-pills">
 <span class="pill critical">critical 2</span>
-<span class="pill high">high 3</span>
-<span class="pill medium">medium 1</span>
+<span class="pill high">high 4</span>
+<span class="pill medium">medium 2</span>
+<span class="pill info">info 3</span>
 </div>
 </div>
 <div class="ddr-card defend" data-ddr-card="defend">
@@ -535,20 +554,21 @@ footer {
 </div>
 </div>
 <div class="metrics-row">
-<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">4</div></div>
+<div class="metric"><div class="metric-label">Semgrep Rules-engine Scan</div><div class="metric-value">9</div></div>
 <div class="metric"><div class="metric-label">Copilot AI Scan</div><div class="metric-value">6</div></div>
 <div class="metric"><div class="metric-label">Marked False Positive by Copilot</div><div class="metric-value">0</div></div>
-<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">10</div></div>
+<div class="metric"><div class="metric-label">Net actionable</div><div class="metric-value actionable">15</div></div>
 </div>
 <div class="section">
 <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
 <span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>
-<span><span class="pill critical">2 critical</span> &middot; <span class="pill high">5 high</span> &middot; <span class="pill medium">3 medium</span></span>
+<span><span class="pill critical">2 critical</span> &middot; <span class="pill high">6 high</span> &middot; <span class="pill medium">4 medium</span> &middot; <span class="pill info">3 info</span></span>
 </div>
 <div class="severity-bar">
-<div class="critical" style="width:20.0%"></div>
-<div class="high" style="width:50.0%"></div>
-<div class="medium" style="width:30.0%"></div>
+<div class="critical" style="width:13.3%"></div>
+<div class="high" style="width:40.0%"></div>
+<div class="medium" style="width:26.7%"></div>
+<div class="info" style="width:20.0%"></div>
 </div></div>
 <div class="saige-card">
 <div class="saige-label">JPMC SAIGE Agent Tier classification</div>
@@ -583,7 +603,7 @@ footer {
 <div id="filter-status" class="filter-status"></div>
 </div>
 <div class="tab-nav" role="tablist">
-<button type="button" class="tab-btn active" role="tab" data-tab="detect" aria-selected="true">🔴 Detect <span class="tab-count" data-tab-count="detect" data-tab-total="6">6</span></button>
+<button type="button" class="tab-btn active" role="tab" data-tab="detect" aria-selected="true">🔴 Detect <span class="tab-count" data-tab-count="detect" data-tab-total="11">11</span></button>
 <button type="button" class="tab-btn" role="tab" data-tab="defend" aria-selected="false">🟡 Defend <span class="tab-count" data-tab-count="defend" data-tab-total="2">2</span></button>
 <button type="button" class="tab-btn" role="tab" data-tab="respond" aria-selected="false">🔵 Respond <span class="tab-count" data-tab-count="respond" data-tab-total="2">2</span></button>
 <button type="button" class="tab-btn" role="tab" data-tab="coverage" aria-selected="false">Coverage</button>
@@ -595,7 +615,19 @@ footer {
 <div class="section-header">
 <span class="section-title">🔴 Detect &mdash; vulnerability surfaces</span>
 <span class="section-subtitle">Where the agent is exploitable</span>
-<span class="section-count" data-section-count="detect" data-section-total="6">6 findings</span>
+<span class="section-count" data-section-count="detect" data-section-total="11">11 findings</span>
+<span class="section-severity" data-section-severity="detect"
+ data-section-total-critical="2"
+ data-section-total-high="4"
+ data-section-total-medium="2"
+ data-section-total-low="0"
+ data-section-total-info="3"
+>
+<span class="sev-mini critical" data-section-sev="critical">2 critical</span>
+<span class="sev-mini high" data-section-sev="high">4 high</span>
+<span class="sev-mini medium" data-section-sev="medium">2 medium</span>
+<span class="sev-mini info" data-section-sev="info">3 info</span>
+</span>
 </div>
 <div class="finding" data-severity="critical" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM02 owasp_llm:LLM03 owasp_agentic:T3 mitre_atlas:AML.T0012 cwe:CWE-798" data-search="hardcoded-llm-credentials testbed/demo-agent/config.py hardcoded credential string passed to an llm client constructor (openai, anthropic, cohere, mistral, together, groq, huggingface, google generative ai, aws bedrock). secrets in source code are cwe-798 (use of hard-coded credentials) — they end up in git history, container images, and ci logs. use environment variables, a secrets manager (aws secrets manager, hashicorp vault, azure key vault), or the sdk's default credential resolver instead.">
 <div class="finding-header">
@@ -637,13 +669,31 @@ footer {
 </div>
 </div>
 </div>
+<div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM03 owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T3 cwe:CWE-732 ast:AST03" data-search="ast03-network-unrestricted skill.md skill declares unrestricted network egress (`network: true`). ast03 — should be a domain allowlist (`network.allow: [api.example.com]`) with default-deny.">
+<div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
+<span class="pill tier1">Semgrep</span>
+<span class="pill high">high</span>
+<span class="finding-rule">ast03-network-unrestricted</span>
+</div>
+<div class="finding-meta">SKILL.md:1</div>
+<div class="finding-message">Skill declares unrestricted network egress (`network: true`). AST03 — should be a domain allowlist (`network.allow: [api.example.com]`) with default-deny.</div>
+<div class="finding-body">
+<div class="finding-tags">
+<span class="finding-tag" data-framework-key="owasp_llm:LLM03" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM03">OWASP LLM LLM03</span>
+<span class="finding-tag" data-framework-key="owasp_llm:LLM06" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM06">OWASP LLM LLM06</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T2" role="button" tabindex="0" title="Click to filter by OWASP Agentic T2">OWASP Agentic T2</span>
+<span class="finding-tag" data-framework-key="owasp_agentic:T3" role="button" tabindex="0" title="Click to filter by OWASP Agentic T3">OWASP Agentic T3</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-732" role="button" tabindex="0" title="Click to filter by CWE CWE-732">CWE CWE-732</span>
+</div>
+</div>
+</div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM01 owasp_agentic:T6 mitre_atlas:AML.T0051" data-search="unsanitized-user-input-to-llm testbed/demo-agent/controller.py user input from an http request flows directly into an llm/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. this is the canonical prompt-injection surface (owasp llm01).">
 <div class="finding-header">
 <button class="finding-toggle" aria-label="Expand finding details">▾</button>
 <span class="pill tier1">Semgrep</span>
 <span class="pill high">high</span>
 <span class="finding-rule">unsanitized-user-input-to-llm</span>
-<span class="pill tp">Copilot: TP</span>
 </div>
 <div class="finding-meta">testbed/demo-agent/controller.py:21</div>
 <div class="finding-message">User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).</div>
@@ -653,7 +703,6 @@ footer {
 <span class="finding-tag" data-framework-key="owasp_agentic:T6" role="button" tabindex="0" title="Click to filter by OWASP Agentic T6">OWASP Agentic T6</span>
 <span class="finding-tag" data-framework-key="mitre_atlas:AML.T0051" role="button" tabindex="0" title="Click to filter by ATLAS AML.T0051">ATLAS AML.T0051</span>
 </div>
-<div class="finding-remediation"><strong>Copilot reasoning:</strong> request.json[&quot;message&quot;] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.</div>
 </div>
 </div>
 <div class="finding" data-severity="high" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM01 owasp_agentic:T1 owasp_agentic:T6 cwe:CWE-94" data-search="tier2-llm01-02 testbed/demo-agent/controller.py untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. indirect prompt-injection surface — attacker-controlled webpage content flows into the llm via the summarise prompt.">
@@ -693,6 +742,23 @@ footer {
 </div>
 </div>
 </div>
+<div class="finding" data-severity="medium" data-category="detect" data-origin="tier1" data-frameworks="cwe:CWE-732 ast:AST03" data-search="ast03-wildcard-file-read skill.md wildcard read permission on `~/.config/demo-agent/**`. ast03 — skill manifests must declare explicit paths; wildcards defeat least-privilege review.">
+<div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
+<span class="pill tier1">Semgrep</span>
+<span class="pill medium">medium</span>
+<span class="finding-rule">ast03-wildcard-file-read</span>
+<span class="pill tp">Copilot: TP</span>
+</div>
+<div class="finding-meta">SKILL.md:1</div>
+<div class="finding-message">Wildcard read permission on `~/.config/demo-agent/**`. AST03 — skill manifests must declare explicit paths; wildcards defeat least-privilege review.</div>
+<div class="finding-body">
+<div class="finding-tags">
+<span class="finding-tag" data-framework-key="cwe:CWE-732" role="button" tabindex="0" title="Click to filter by CWE CWE-732">CWE CWE-732</span>
+</div>
+<div class="finding-remediation"><strong>Copilot reasoning:</strong> request.json[&quot;message&quot;] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface.</div>
+</div>
+</div>
 <div class="finding" data-severity="medium" data-category="detect" data-origin="tier2" data-frameworks="owasp_llm:LLM04 owasp_agentic:T1" data-search="tier2-agentic-t1-01 testbed/demo-agent/memory.py memory poisoning surface: both user input and raw llm output are persisted to session memory without validation. future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn n that influence turn n+1.">
 <div class="finding-header">
 <button class="finding-toggle" aria-label="Expand finding details">▾</button>
@@ -711,6 +777,51 @@ footer {
 <div class="finding-remediation"><strong>Fix:</strong> Validate memory writes the same way you'd validate database writes — schema-check or pass through a content moderation classifier on persistence.</div>
 </div>
 </div>
+<div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="ast:AST04" data-search="ast04-missing-author-identity skill.md skill manifest has no `author.identity` (did / signing-key anchor). ast04 — without a verifiable identity anchor, registry consumers cannot detect impersonation or typosquats; this is the foothold the clawhub fake-google skill exploited.">
+<div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
+<span class="pill tier1">Semgrep</span>
+<span class="pill info">info</span>
+<span class="finding-rule">ast04-missing-author-identity</span>
+</div>
+<div class="finding-meta">SKILL.md:1</div>
+<div class="finding-message">Skill manifest has no `author.identity` (DID / signing-key anchor). AST04 — without a verifiable identity anchor, registry consumers cannot detect impersonation or typosquats; this is the foothold the ClawHub fake-Google skill exploited.</div>
+<div class="finding-body">
+<div class="finding-tags">
+</div>
+</div>
+</div>
+<div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="cwe:CWE-345 ast:AST07" data-search="ast07-missing-content-hash skill.md skill.md frontmatter has no `content_hash` field. ast07 — merkle-root verification at install time requires a sha-256 over the canonical skill payload.">
+<div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
+<span class="pill tier1">Semgrep</span>
+<span class="pill info">info</span>
+<span class="finding-rule">ast07-missing-content-hash</span>
+</div>
+<div class="finding-meta">SKILL.md:1</div>
+<div class="finding-message">SKILL.md frontmatter has no `content_hash` field. AST07 — Merkle-root verification at install time requires a SHA-256 over the canonical skill payload.</div>
+<div class="finding-body">
+<div class="finding-tags">
+<span class="finding-tag" data-framework-key="cwe:CWE-345" role="button" tabindex="0" title="Click to filter by CWE CWE-345">CWE CWE-345</span>
+</div>
+</div>
+</div>
+<div class="finding" data-severity="info" data-category="detect" data-origin="tier1" data-frameworks="owasp_llm:LLM03 cwe:CWE-345 ast:AST07" data-search="ast07-missing-signature skill.md skill.md frontmatter has no `signature` field. ast07 — without an ed25519 signature the registry cannot verify the skill on update; clawjacked-style update-drift attacks become viable.">
+<div class="finding-header">
+<button class="finding-toggle" aria-label="Expand finding details">▾</button>
+<span class="pill tier1">Semgrep</span>
+<span class="pill info">info</span>
+<span class="finding-rule">ast07-missing-signature</span>
+</div>
+<div class="finding-meta">SKILL.md:1</div>
+<div class="finding-message">SKILL.md frontmatter has no `signature` field. AST07 — without an ed25519 signature the registry cannot verify the skill on update; ClawJacked-style update-drift attacks become viable.</div>
+<div class="finding-body">
+<div class="finding-tags">
+<span class="finding-tag" data-framework-key="owasp_llm:LLM03" role="button" tabindex="0" title="Click to filter by OWASP LLM LLM03">OWASP LLM LLM03</span>
+<span class="finding-tag" data-framework-key="cwe:CWE-345" role="button" tabindex="0" title="Click to filter by CWE CWE-345">CWE CWE-345</span>
+</div>
+</div>
+</div>
 </div>
 </div>
 <div class="tab-panel" role="tabpanel" data-panel="defend">
@@ -719,6 +830,16 @@ footer {
 <span class="section-title">🟡 Defend &mdash; missing controls</span>
 <span class="section-subtitle">What active defences are missing</span>
 <span class="section-count" data-section-count="defend" data-section-total="2">2 findings</span>
+<span class="section-severity" data-section-severity="defend"
+ data-section-total-critical="0"
+ data-section-total-high="1"
+ data-section-total-medium="1"
+ data-section-total-low="0"
+ data-section-total-info="0"
+>
+<span class="sev-mini high" data-section-sev="high">1 high</span>
+<span class="sev-mini medium" data-section-sev="medium">1 medium</span>
+</span>
 </div>
 <div class="finding" data-severity="high" data-category="defend" data-origin="tier2" data-frameworks="owasp_llm:LLM06 owasp_agentic:T2 owasp_agentic:T10" data-search="tier2-llm06-01 testbed/demo-agent/tools.py destructive tool registered without a human-in-the-loop approval gate. the `cancel_subscription` tool name starts with a destructive verb and the body posts to a billing api; the agent can invoke it autonomously if the planner decides to.">
 <div class="finding-header">
@@ -766,6 +887,16 @@ footer {
 <span class="section-title">🔵 Respond &mdash; observability gaps</span>
 <span class="section-subtitle">Whether incidents can be detected and recovered</span>
 <span class="section-count" data-section-count="respond" data-section-total="2">2 findings</span>
+<span class="section-severity" data-section-severity="respond"
+ data-section-total-critical="0"
+ data-section-total-high="1"
+ data-section-total-medium="1"
+ data-section-total-low="0"
+ data-section-total-info="0"
+>
+<span class="sev-mini high" data-section-sev="high">1 high</span>
+<span class="sev-mini medium" data-section-sev="medium">1 medium</span>
+</span>
 </div>
 <div class="finding" data-severity="high" data-category="respond" data-origin="tier2" data-frameworks="owasp_llm:LLM02 owasp_agentic:T8 cwe:CWE-200" data-search="tier2-llm02-04 testbed/demo-agent/notifications.py llm output published to sns without scrubbing. the reply_body is a bedrock-generated string that may inadvertently include pii echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. sns subscribers receive it unfiltered.">
 <div class="finding-header">
@@ -819,7 +950,9 @@ footer {
 <div class="coverage-label">MITRE ATLAS</div>
 <div class="coverage-items"><span class="coverage-item">AML.T0011</span><span class="coverage-item">AML.T0012</span><span class="coverage-item">AML.T0024</span><span class="coverage-item">AML.T0050</span><span class="coverage-item">AML.T0051</span></div>
 <div class="coverage-label">CWE</div>
-<div class="coverage-items"><span class="coverage-item">CWE-200</span><span class="coverage-item">CWE-400</span><span class="coverage-item">CWE-798</span><span class="coverage-item">CWE-94</span></div>
+<div class="coverage-items"><span class="coverage-item">CWE-200</span><span class="coverage-item">CWE-345</span><span class="coverage-item">CWE-400</span><span class="coverage-item">CWE-732</span><span class="coverage-item">CWE-798</span><span class="coverage-item">CWE-94</span></div>
+<div class="coverage-label">OWASP AST10</div>
+<div class="coverage-items"><span class="coverage-item">AST03</span><span class="coverage-item">AST04</span><span class="coverage-item">AST07</span></div>
 </div>
 </div>
 </div>
@@ -832,10 +965,10 @@ footer {
 <div class="framework-items">
 <button type="button" class="framework-item" data-framework-key="owasp_llm:LLM01" title="Filter findings to those tagged LLM01"><span class="framework-item-id">LLM01</span><span class="framework-item-count">3 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_llm:LLM02" title="Filter findings to those tagged LLM02"><span class="framework-item-id">LLM02</span><span class="framework-item-count">2 findings</span></button>
-<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM03" title="Filter findings to those tagged LLM03"><span class="framework-item-id">LLM03</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM03" title="Filter findings to those tagged LLM03"><span class="framework-item-id">LLM03</span><span class="framework-item-count">3 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_llm:LLM04" title="Filter findings to those tagged LLM04"><span class="framework-item-id">LLM04</span><span class="framework-item-count">1 finding</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_llm:LLM05" title="Filter findings to those tagged LLM05"><span class="framework-item-id">LLM05</span><span class="framework-item-count">1 finding</span></button>
-<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM06" title="Filter findings to those tagged LLM06"><span class="framework-item-id">LLM06</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM06" title="Filter findings to those tagged LLM06"><span class="framework-item-id">LLM06</span><span class="framework-item-count">3 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_llm:LLM10" title="Filter findings to those tagged LLM10"><span class="framework-item-id">LLM10</span><span class="framework-item-count">2 findings</span></button>
 </div>
 </div>
@@ -845,8 +978,8 @@ footer {
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T1" title="Filter findings to those tagged T1"><span class="framework-item-id">T1</span><span class="framework-item-count">2 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T10" title="Filter findings to those tagged T10"><span class="framework-item-id">T10</span><span class="framework-item-count">1 finding</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T11" title="Filter findings to those tagged T11"><span class="framework-item-id">T11</span><span class="framework-item-count">1 finding</span></button>
-<button type="button" class="framework-item" data-framework-key="owasp_agentic:T2" title="Filter findings to those tagged T2"><span class="framework-item-id">T2</span><span class="framework-item-count">2 findings</span></button>
-<button type="button" class="framework-item" data-framework-key="owasp_agentic:T3" title="Filter findings to those tagged T3"><span class="framework-item-id">T3</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T2" title="Filter findings to those tagged T2"><span class="framework-item-id">T2</span><span class="framework-item-count">3 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T3" title="Filter findings to those tagged T3"><span class="framework-item-id">T3</span><span class="framework-item-count">2 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T4" title="Filter findings to those tagged T4"><span class="framework-item-id">T4</span><span class="framework-item-count">1 finding</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T6" title="Filter findings to those tagged T6"><span class="framework-item-id">T6</span><span class="framework-item-count">3 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="owasp_agentic:T8" title="Filter findings to those tagged T8"><span class="framework-item-id">T8</span><span class="framework-item-count">2 findings</span></button>
@@ -866,9 +999,19 @@ footer {
 <div class="framework-group-header"><span class="framework-group-name">CWE first-class</span><a href="https://cwe.mitre.org/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
 <div class="framework-items">
 <button type="button" class="framework-item" data-framework-key="cwe:CWE-200" title="Filter findings to those tagged CWE-200"><span class="framework-item-id">CWE-200</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-345" title="Filter findings to those tagged CWE-345"><span class="framework-item-id">CWE-345</span><span class="framework-item-count">2 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="cwe:CWE-400" title="Filter findings to those tagged CWE-400"><span class="framework-item-id">CWE-400</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-732" title="Filter findings to those tagged CWE-732"><span class="framework-item-id">CWE-732</span><span class="framework-item-count">2 findings</span></button>
 <button type="button" class="framework-item" data-framework-key="cwe:CWE-798" title="Filter findings to those tagged CWE-798"><span class="framework-item-id">CWE-798</span><span class="framework-item-count">1 finding</span></button>
 <button type="button" class="framework-item" data-framework-key="cwe:CWE-94" title="Filter findings to those tagged CWE-94"><span class="framework-item-id">CWE-94</span><span class="framework-item-count">2 findings</span></button>
+</div>
+</div>
+<div class="framework-group">
+<div class="framework-group-header"><span class="framework-group-name">OWASP Agentic Skills Top 10 (preview)</span><a href="https://github.com/OWASP/www-project-agentic-skills-top-10" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-items">
+<button type="button" class="framework-item" data-framework-key="ast:AST03" title="Filter findings to those tagged AST03"><span class="framework-item-id">AST03</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="ast:AST04" title="Filter findings to those tagged AST04"><span class="framework-item-id">AST04</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="ast:AST07" title="Filter findings to those tagged AST07"><span class="framework-item-id">AST07</span><span class="framework-item-count">2 findings</span></button>
 </div>
 </div>
 </div>
@@ -876,7 +1019,7 @@ footer {
 </div>
 <footer>
 AgentShield v2 &middot; 
-Semgrep fingerprint <code>fc9897035fd993a2…</code>
+Semgrep fingerprint <code>12bb9b78f6751959…</code>
 </footer>
 <script>
 
@@ -931,10 +1074,24 @@ Semgrep fingerprint <code>fc9897035fd993a2…</code>
   //       update D/D/R hero counts + section counts + status line -----
   function applyFilter() {
     var visiblePerCat = { detect: 0, defend: 0, respond: 0 };
+    // F.25: track per-category per-severity visible counts, used to
+    // re-render the section-severity pills live as filters change.
+    var visiblePerCatSev = {
+      detect:  { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      defend:  { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      respond: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    };
     findings.forEach(function (f) {
       var visible = findingMatches(f);
       f.classList.toggle('filtered-out', !visible);
-      if (visible) visiblePerCat[f.getAttribute('data-category')]++;
+      if (visible) {
+        var c = f.getAttribute('data-category');
+        var s = f.getAttribute('data-severity');
+        visiblePerCat[c]++;
+        if (visiblePerCatSev[c] && (s in visiblePerCatSev[c])) {
+          visiblePerCatSev[c][s]++;
+        }
+      }
     });
 
     sections.forEach(function (s) {
@@ -952,6 +1109,24 @@ Semgrep fingerprint <code>fc9897035fd993a2…</code>
         } else {
           totalCard.textContent = visible + ' of ' + total + ' finding' + (total === 1 ? '' : 's');
         }
+      }
+      // F.25: rebuild severity-pill breakdown from visiblePerCatSev. We
+      // wipe and re-render rather than toggling display on per-pill nodes
+      // so counts stay accurate as the visible set shrinks/grows.
+      var sevSpan = s.querySelector('[data-section-severity]');
+      if (sevSpan) {
+        var sevs = ['critical','high','medium','low','info'];
+        var sevHtml = '';
+        sevs.forEach(function (sev) {
+          var n = (visiblePerCatSev[cat] || {})[sev] || 0;
+          var totN = parseInt(sevSpan.getAttribute('data-section-total-' + sev) || '0', 10);
+          if (n === 0 && totN === 0) return;
+          if (n === 0) return;  // hide pills with zero-after-filter
+          var label = (n === totN) ? (n + ' ' + sev) : (n + '/' + totN + ' ' + sev);
+          sevHtml += '<span class="sev-mini ' + sev + '" data-section-sev="' + sev + '">'
+                  +  label + '</span>';
+        });
+        sevSpan.innerHTML = sevHtml;
       }
     });
 

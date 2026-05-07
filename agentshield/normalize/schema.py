@@ -37,6 +37,10 @@ class FrameworkMappings(BaseModel):
     nist_ai_rmf: list[str] = Field(default_factory=list)
     mitre_atlas: list[str] = Field(default_factory=list)
     cwe: list[str] = Field(default_factory=list)
+    # F.24: OWASP Agentic Skills Top 10 (AST01–AST10). Tagged on findings
+    # produced by the manifest scanner (which targets SKILL.md files); also
+    # available for code-scan rules where an AST mapping is meaningful.
+    ast: list[str] = Field(default_factory=list)
     agentshield_v1: list[str] = Field(default_factory=list)
 
 

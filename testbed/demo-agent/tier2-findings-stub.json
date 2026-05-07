@@ -1,9 +1,9 @@
 {
   "tier": 2,
   "scanned_at": "2026-05-06T14:00:00Z",
-  "agentshield_tier1_fingerprint": "REPLACE_WITH_TIER1_FINGERPRINT_AT_RENDER_TIME",
+  "agentshield_tier1_fingerprint": "12bb9b78f6751959c505d8a3046481de632a772cbb620415511427294cc8804d",
   "saige_tier": "2",
-  "saige_tier_reasoning": "Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish — outbound notification) and tools.py:32 (POST to billing-api cancel endpoint — modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.",
+  "saige_tier_reasoning": "Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish \u2014 outbound notification) and tools.py:32 (POST to billing-api cancel endpoint \u2014 modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.",
   "scanned_files": [
     "config.py",
     "controller.py",
@@ -20,12 +20,19 @@
       "file": "testbed/demo-agent/controller.py",
       "line": 30,
       "snippet": "docs = WebBaseLoader(article_url).load()",
-      "message": "Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface — attacker-controlled webpage content flows into the LLM via the summarise prompt.",
-      "owasp_llm": ["LLM01"],
-      "owasp_agentic": ["T1", "T6"],
+      "message": "Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface \u2014 attacker-controlled webpage content flows into the LLM via the summarise prompt.",
+      "owasp_llm": [
+        "LLM01"
+      ],
+      "owasp_agentic": [
+        "T1",
+        "T6"
+      ],
       "mitre_atlas": [],
-      "cwe": ["CWE-94"],
-      "remediation": "Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted user input — pass through a guardrail layer before the LLM call."
+      "cwe": [
+        "CWE-94"
+      ],
+      "remediation": "Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted user input \u2014 pass through a guardrail layer before the LLM call."
     },
     {
       "rule_id": "TIER2-AGENTIC-T1-01",
@@ -35,11 +42,15 @@
       "line": 17,
       "snippet": "memory.setdefault(session_id, []).append({\"user\": user_message, \"assistant\": llm_response})",
       "message": "Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.",
-      "owasp_llm": ["LLM04"],
-      "owasp_agentic": ["T1"],
+      "owasp_llm": [
+        "LLM04"
+      ],
+      "owasp_agentic": [
+        "T1"
+      ],
       "mitre_atlas": [],
       "cwe": [],
-      "remediation": "Validate memory writes the same way you'd validate database writes — schema-check or pass through a content moderation classifier on persistence."
+      "remediation": "Validate memory writes the same way you'd validate database writes \u2014 schema-check or pass through a content moderation classifier on persistence."
     },
     {
       "rule_id": "TIER2-LLM06-01",
@@ -49,8 +60,13 @@
       "line": 26,
       "snippet": "@tool def cancel_subscription(customer_id: str)",
       "message": "Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.",
-      "owasp_llm": ["LLM06"],
-      "owasp_agentic": ["T2", "T10"],
+      "owasp_llm": [
+        "LLM06"
+      ],
+      "owasp_agentic": [
+        "T2",
+        "T10"
+      ],
       "mitre_atlas": [],
       "cwe": [],
       "remediation": "Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation."
@@ -62,11 +78,17 @@
       "file": "testbed/demo-agent/controller.py",
       "line": 14,
       "snippet": "chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)",
-      "message": "ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound — DoS / cost exposure.",
-      "owasp_llm": ["LLM10"],
-      "owasp_agentic": ["T4"],
+      "message": "ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound \u2014 DoS / cost exposure.",
+      "owasp_llm": [
+        "LLM10"
+      ],
+      "owasp_agentic": [
+        "T4"
+      ],
       "mitre_atlas": [],
-      "cwe": ["CWE-400"],
+      "cwe": [
+        "CWE-400"
+      ],
       "remediation": "Pass timeout=30 (or whatever per-call ceiling fits your latency budget) and max_tokens=2000 to the ChatOpenAI constructor."
     },
     {
@@ -77,10 +99,16 @@
       "line": 24,
       "snippet": "sns.publish(TopicArn=\"...\", Message=reply_body, ...)",
       "message": "LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.",
-      "owasp_llm": ["LLM02"],
-      "owasp_agentic": ["T8"],
+      "owasp_llm": [
+        "LLM02"
+      ],
+      "owasp_agentic": [
+        "T8"
+      ],
       "mitre_atlas": [],
-      "cwe": ["CWE-200"],
+      "cwe": [
+        "CWE-200"
+      ],
       "remediation": "Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient."
     },
     {
@@ -91,9 +119,15 @@
       "line": 14,
       "snippet": "response = client.chat.completions.create(...)",
       "message": "LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.",
-      "owasp_llm": ["LLM10"],
-      "owasp_agentic": ["T8"],
-      "mitre_atlas": ["AML.T0024"],
+      "owasp_llm": [
+        "LLM10"
+      ],
+      "owasp_agentic": [
+        "T8"
+      ],
+      "mitre_atlas": [
+        "AML.T0024"
+      ],
       "cwe": [],
       "remediation": "Add structured logging around every LLM invocation. Capture: input prompt (hashed), model id, latency, token counts, output (hashed). Recommended: LangSmith or OpenTelemetry traces."
     }

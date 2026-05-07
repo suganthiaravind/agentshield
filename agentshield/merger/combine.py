@@ -62,6 +62,7 @@ class CoverageMatrix:
     owasp_agentic: set[str] = field(default_factory=set)
     mitre_atlas: set[str] = field(default_factory=set)
     cwe: set[str] = field(default_factory=set)
+    ast: set[str] = field(default_factory=set)  # F.24: OWASP Agentic Skills Top 10
 
     def to_dict(self) -> dict[str, list[str]]:
         return {
@@ -69,6 +70,7 @@ class CoverageMatrix:
             "owasp_agentic": sorted(self.owasp_agentic),
             "mitre_atlas": sorted(self.mitre_atlas),
             "cwe": sorted(self.cwe),
+            "ast": sorted(self.ast),
         }
 
 
@@ -262,6 +264,7 @@ def _build_coverage(
             ("owasp_llm", cov.owasp_llm),
             ("owasp_agentic", cov.owasp_agentic),
             ("mitre_atlas", cov.mitre_atlas),
+            ("ast", cov.ast),
         ):
             for v in (fm.get(key) or []):
                 target.add(v)
@@ -278,6 +281,8 @@ def _build_coverage(
             cov.mitre_atlas.add(v)
         for v in f.get("cwe") or []:
             cov.cwe.add(v)
+        for v in f.get("ast") or []:
+            cov.ast.add(v)
     return cov
 
 
@@ -292,11 +297,11 @@ def _framework_finding_counts(report: CombinedReport) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for ann in report.tier1_findings:
         fm = ann.finding.get("framework_mappings") or ann.finding
-        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe"):
+        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast"):
             for v in (fm.get(k_field) or []):
                 counts[f"{k_field}:{v}"] += 1
     for f in report.tier2_findings:
-        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe"):
+        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast"):
             for v in (f.get(k_field) or []):
                 counts[f"{k_field}:{v}"] += 1
     return dict(counts)
@@ -570,6 +575,7 @@ def render_combined_markdown(result: MergeResult) -> str:
                 ("OWASP Agentic", "owasp_agentic"),
                 ("MITRE ATLAS", "mitre_atlas"),
                 ("CWE", "cwe"),
+                ("OWASP AST10", "ast"),
             ):
                 vals = fm.get(k_field) or []
                 if vals:
@@ -866,6 +872,24 @@ h3 { font-size: 15px; }
 .findings-section .section-title { font-size: 16px; font-weight: 600; }
 .findings-section .section-subtitle { font-size: 12px; color: var(--text-muted); flex: 1; }
 .findings-section .section-count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.findings-section .section-severity {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  margin-left: 10px;
+}
+.sev-mini {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.sev-mini.critical { background: var(--critical-bg); color: var(--critical); }
+.sev-mini.high     { background: var(--high-bg);     color: var(--high); }
+.sev-mini.medium   { background: var(--medium-bg);   color: var(--medium); }
+.sev-mini.low      { background: var(--low-bg);      color: var(--low); }
+.sev-mini.info     { background: var(--info-bg);     color: var(--info); }
 
 .finding {
   padding: 16px 20px;
@@ -1203,10 +1227,24 @@ _HTML_JS = """
   //       update D/D/R hero counts + section counts + status line -----
   function applyFilter() {
     var visiblePerCat = { detect: 0, defend: 0, respond: 0 };
+    // F.25: track per-category per-severity visible counts, used to
+    // re-render the section-severity pills live as filters change.
+    var visiblePerCatSev = {
+      detect:  { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      defend:  { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      respond: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    };
     findings.forEach(function (f) {
       var visible = findingMatches(f);
       f.classList.toggle('filtered-out', !visible);
-      if (visible) visiblePerCat[f.getAttribute('data-category')]++;
+      if (visible) {
+        var c = f.getAttribute('data-category');
+        var s = f.getAttribute('data-severity');
+        visiblePerCat[c]++;
+        if (visiblePerCatSev[c] && (s in visiblePerCatSev[c])) {
+          visiblePerCatSev[c][s]++;
+        }
+      }
     });
 
     sections.forEach(function (s) {
@@ -1224,6 +1262,24 @@ _HTML_JS = """
         } else {
           totalCard.textContent = visible + ' of ' + total + ' finding' + (total === 1 ? '' : 's');
         }
+      }
+      // F.25: rebuild severity-pill breakdown from visiblePerCatSev. We
+      // wipe and re-render rather than toggling display on per-pill nodes
+      // so counts stay accurate as the visible set shrinks/grows.
+      var sevSpan = s.querySelector('[data-section-severity]');
+      if (sevSpan) {
+        var sevs = ['critical','high','medium','low','info'];
+        var sevHtml = '';
+        sevs.forEach(function (sev) {
+          var n = (visiblePerCatSev[cat] || {})[sev] || 0;
+          var totN = parseInt(sevSpan.getAttribute('data-section-total-' + sev) || '0', 10);
+          if (n === 0 && totN === 0) return;
+          if (n === 0) return;  // hide pills with zero-after-filter
+          var label = (n === totN) ? (n + ' ' + sev) : (n + '/' + totN + ' ' + sev);
+          sevHtml += '<span class="sev-mini ' + sev + '" data-section-sev="' + sev + '">'
+                  +  label + '</span>';
+        });
+        sevSpan.innerHTML = sevHtml;
       }
     });
 
@@ -1624,6 +1680,26 @@ def render_combined_html(result: MergeResult) -> str:
             f'<span class="section-count" data-section-count="{cat}" '
             f'data-section-total="{len(bucket)}">{len(bucket)} finding{"s" if len(bucket) != 1 else ""}</span>'
         )
+        # F.25: per-severity breakdown next to the count. Re-rendered live by
+        # the JS as filters change (only severities present in the visible
+        # subset show up). data-section-total-{sev} preserves the unfiltered
+        # totals so the JS can decide between "5 high" and "3 of 5 high".
+        sev_counts_section: dict[str, int] = {}
+        for f in bucket:
+            s = f.get("severity", "info")
+            sev_counts_section[s] = sev_counts_section.get(s, 0) + 1
+        parts.append(f'<span class="section-severity" data-section-severity="{cat}"')
+        for sev_key in ("critical", "high", "medium", "low", "info"):
+            parts.append(f' data-section-total-{sev_key}="{sev_counts_section.get(sev_key, 0)}"')
+        parts.append(">")
+        for sev_key in ("critical", "high", "medium", "low", "info"):
+            n = sev_counts_section.get(sev_key, 0)
+            if n:
+                parts.append(
+                    f'<span class="sev-mini {sev_key}" data-section-sev="{sev_key}">'
+                    f'{n} {sev_key}</span>'
+                )
+        parts.append("</span>")
         parts.append("</div>")
         if not bucket:
             parts.append(
@@ -1643,6 +1719,7 @@ def render_combined_html(result: MergeResult) -> str:
                 for k_label, k_field in (
                     ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
                     ("ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+                    ("AST10", "ast"),
                 ):
                     for v in (fm.get(k_field) or []):
                         tags.append(f"{k_label} {v}")
@@ -1716,6 +1793,7 @@ def render_combined_html(result: MergeResult) -> str:
     for k_label, k_key in (
         ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
         ("MITRE ATLAS", "mitre_atlas"), ("CWE", "cwe"),
+        ("OWASP AST10", "ast"),
     ):
         items = sorted(getattr(r.coverage, k_key))
         parts.append(f'<div class="coverage-label">{_html_escape(k_label)}</div>')
@@ -1747,6 +1825,8 @@ def render_combined_html(result: MergeResult) -> str:
          "https://genai.owasp.org/llm-top-10-for-agentic-ai/"),
         ("MITRE ATLAS", "mitre_atlas", "https://atlas.mitre.org/"),
         ("CWE first-class", "cwe", "https://cwe.mitre.org/"),
+        ("OWASP Agentic Skills Top 10 (preview)", "ast",
+         "https://github.com/OWASP/www-project-agentic-skills-top-10"),
     ):
         items = sorted(getattr(r.coverage, k_key))
         parts.append('<div class="framework-group">')

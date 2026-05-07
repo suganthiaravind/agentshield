@@ -37,6 +37,7 @@ from agentshield.merger import (
     render_combined_html,
     render_combined_sarif,
 )
+from agentshield.manifest_scanner import scan_manifests
 from agentshield.normalize import Finding, Normalizer, NormalizerError
 from agentshield.report import JsonWriter, MarkdownWriter, SarifWriter
 from agentshield.runner import SemgrepRunner, SemgrepRunnerError
@@ -282,6 +283,7 @@ def _finding_to_emitter_dict(f: Finding) -> dict:
             "mitre_atlas": list(f.framework_mappings.mitre_atlas),
             "cwe": list(f.framework_mappings.cwe),
             "nist_ai_rmf": list(f.framework_mappings.nist_ai_rmf),
+            "ast": list(f.framework_mappings.ast),
         },
     }
 
@@ -393,6 +395,25 @@ def cmd_scan(args: argparse.Namespace) -> int:
         f"defend={by_category.get('defend', 0)} "
         f"respond={by_category.get('respond', 0)}"
     )
+
+    # F.24: AST10 manifest scanner — runs alongside Semgrep when the target
+    # is a directory tree. SKILL.md files under the target are parsed and
+    # checked against 5 AST rules; findings flow into the same `findings`
+    # list that the Semgrep stage produced, so downstream emit / merge /
+    # report code sees one unified set.
+    target_for_manifest = Path(args.path)
+    if target_for_manifest.is_dir():
+        manifest_findings = scan_manifests(target_for_manifest)
+        if manifest_findings:
+            print(
+                f"[agentshield] AST10 manifest scan: "
+                f"{len(manifest_findings)} finding(s) across "
+                f"{len({f.location.file_path for f in manifest_findings})} "
+                f"SKILL.md file(s)"
+            )
+            findings.extend(manifest_findings)
+        elif args.debug:
+            print("[agentshield] --debug: AST10 manifest scan: no SKILL.md findings")
 
     # Tier-1-only outputs (legacy compatibility — for the unified report use
     # `agentshield merge`).

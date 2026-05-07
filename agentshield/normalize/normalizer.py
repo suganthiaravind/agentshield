@@ -120,6 +120,7 @@ class Normalizer:
             nist_ai_rmf=list(mappings.get("nist_ai_rmf") or []),
             mitre_atlas=list(mappings.get("mitre_atlas") or []),
             cwe=list(mappings.get("cwe") or []),
+            ast=list(mappings.get("ast") or []),
             agentshield_v1=list(mappings.get("agentshield_v1") or []),
         )
 

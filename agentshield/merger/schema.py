@@ -165,6 +165,11 @@ def _validate_finding(
         else:
             _check_type(finding[fname], ftype, f"{path}.{fname}", errors)
 
+    # F.24: Optional `ast` array (OWASP Agentic Skills Top 10). Permitted but
+    # not required — only manifest-scanner findings tend to populate it.
+    if "ast" in finding:
+        _check_array_of_strings(finding["ast"], f"{path}.ast", errors)
+
     # Enum checks
     if "severity" in finding:
         _check_enum(finding["severity"], SEVERITY_ENUM, f"{path}.severity", errors)
