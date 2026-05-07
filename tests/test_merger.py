@@ -810,6 +810,50 @@ def test_html_includes_filter_js(repo: Path) -> None:
     assert "activateTab" in html  # F.22 tab switcher
 
 
+def test_html_static_mode_omits_tab_nav_and_filter_bar(repo: Path) -> None:
+    """F.29 — `static=True` produces a stacked / printable HTML where the
+    tab navigation and filter bar are stripped (no tab-nav element, no
+    filter-bar element). All panels still render — just as <section>s
+    instead of tab-panels."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    result = merge(repo)
+    static_html = render_combined_html(result, static=True)
+    interactive_html = render_combined_html(result, static=False)
+    # Interactive: tab nav + filter bar elements present.
+    assert 'class="tab-nav"' in interactive_html
+    assert 'id="filter-bar"' in interactive_html
+    # Static: those elements are gone.
+    assert 'class="tab-nav"' not in static_html
+    assert 'id="filter-bar"' not in static_html
+
+
+def test_html_static_mode_renders_all_six_panels_as_sections(repo: Path) -> None:
+    """F.29 — every panel must be visible in static mode: Detect, Defend,
+    Respond, Coverage, Frameworks, Reference. Each is wrapped in a
+    `<section class="static-section">` so it stacks vertically."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    static_html = render_combined_html(merge(repo), static=True)
+    for panel in ("detect", "defend", "respond", "coverage", "frameworks", "reference"):
+        assert (
+            f'<section class="static-section" data-panel="{panel}">'
+            in static_html
+        ), f"Static mode missing panel: {panel}"
+
+
+def test_html_static_mode_preserves_finding_data_attrs(repo: Path) -> None:
+    """F.29 sanity — the finding data-attributes (data-severity, etc.)
+    survive in static mode even though the JS that uses them isn't
+    active. Keeps the file useful as a structured archive — a future
+    importer can still walk the HTML."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    static_html = render_combined_html(merge(repo), static=True)
+    assert 'data-severity="high"' in static_html
+    assert 'data-origin="tier1"' in static_html
+
+
 def test_html_renders_with_empty_finding_buckets(tmp_path: Path) -> None:
     """Edge case: D/D/R buckets that have no findings still render the
     section + 'No findings' placeholder; data attributes still emit."""

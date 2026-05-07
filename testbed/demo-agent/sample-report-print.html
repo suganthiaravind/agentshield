@@ -710,36 +710,8 @@ footer {
 <div class="saige-rationale">Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish — outbound notification) and tools.py:32 (POST to billing-api cancel endpoint — modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.</div>
 <div class="saige-footer">Informational only — AgentShield does not filter or prioritise findings based on this classification.</div>
 </div>
-<div class="filter-bar" id="filter-bar">
-<div class="filter-group">
-<span class="filter-label">Severity</span>
-<label class="filter-chip critical"><input type="checkbox" data-filter="severity" value="critical" checked><span>critical</span></label>
-<label class="filter-chip high"><input type="checkbox" data-filter="severity" value="high" checked><span>high</span></label>
-<label class="filter-chip medium"><input type="checkbox" data-filter="severity" value="medium" checked><span>medium</span></label>
-<label class="filter-chip low"><input type="checkbox" data-filter="severity" value="low" checked><span>low</span></label>
-<label class="filter-chip info"><input type="checkbox" data-filter="severity" value="info" checked><span>info</span></label>
-</div>
-<div class="filter-group">
-<span class="filter-label">Origin</span>
-<label class="filter-chip tier1"><input type="checkbox" data-filter="origin" value="tier1" checked><span>Semgrep</span></label>
-<label class="filter-chip tier2"><input type="checkbox" data-filter="origin" value="tier2" checked><span>Copilot</span></label>
-</div>
-<div class="filter-group filter-search-group">
-<input type="search" id="finding-search" class="filter-search" placeholder="Search rule_id / file / message…" autocomplete="off">
-<button type="button" id="filter-reset" class="filter-reset">Reset</button>
-</div>
-<div id="filter-status" class="filter-status"></div>
-</div>
-<div class="tab-nav" role="tablist">
-<button type="button" class="tab-btn active" role="tab" data-tab="detect" aria-selected="true">🔴 Detect <span class="tab-count" data-tab-count="detect" data-tab-total="11">11</span></button>
-<button type="button" class="tab-btn" role="tab" data-tab="defend" aria-selected="false">🟡 Defend <span class="tab-count" data-tab-count="defend" data-tab-total="2">2</span></button>
-<button type="button" class="tab-btn" role="tab" data-tab="respond" aria-selected="false">🔵 Respond <span class="tab-count" data-tab-count="respond" data-tab-total="2">2</span></button>
-<button type="button" class="tab-btn" role="tab" data-tab="coverage" aria-selected="false">Coverage</button>
-<button type="button" class="tab-btn" role="tab" data-tab="frameworks" aria-selected="false">Frameworks</button>
-<button type="button" class="tab-btn" role="tab" data-tab="reference" aria-selected="false">Reference</button>
-</div>
-<div class="tab-panels">
-<div class="tab-panel active" role="tabpanel" data-panel="detect">
+<div class="static-report">
+<section class="static-section" data-panel="detect">
 <div class="findings-section detect" data-section="detect">
 <div class="section-header">
 <span class="section-title">🔴 Detect &mdash; vulnerability surfaces</span>
@@ -941,8 +913,8 @@ footer {
 </div>
 </div>
 </div>
-</div>
-<div class="tab-panel" role="tabpanel" data-panel="defend">
+</section>
+<section class="static-section" data-panel="defend">
 <div class="findings-section defend" data-section="defend">
 <div class="section-header">
 <span class="section-title">🟡 Defend &mdash; missing controls</span>
@@ -996,8 +968,8 @@ footer {
 </div>
 </div>
 </div>
-</div>
-<div class="tab-panel" role="tabpanel" data-panel="respond">
+</section>
+<section class="static-section" data-panel="respond">
 <div class="findings-section respond" data-section="respond">
 <div class="section-header">
 <span class="section-title">🔵 Respond &mdash; observability gaps</span>
@@ -1051,8 +1023,8 @@ footer {
 </div>
 </div>
 </div>
-</div>
-<div class="tab-panel" role="tabpanel" data-panel="coverage">
+</section>
+<section class="static-section" data-panel="coverage">
 <div class="coverage-card">
 <h3 class="panel-title">Coverage matrix</h3>
 <p class="panel-subtitle">Frameworks the unified scan touched. Click any item in the Frameworks tab to filter findings down to that item.</p>
@@ -1069,8 +1041,8 @@ footer {
 <div class="coverage-items"><span class="coverage-item">AST03</span><span class="coverage-item">AST04</span><span class="coverage-item">AST07</span></div>
 </div>
 </div>
-</div>
-<div class="tab-panel" role="tabpanel" data-panel="frameworks">
+</section>
+<section class="static-section" data-panel="frameworks">
 <div class="coverage-card">
 <h3 class="panel-title">Findings by Security framework</h3>
 <p class="panel-subtitle">The same findings, regrouped per framework item, with a per-item count. Click any item to filter the D/D/R tabs down to findings tagged with it.</p>
@@ -1129,8 +1101,8 @@ footer {
 </div>
 </div>
 </div>
-</div>
-<div class="tab-panel" role="tabpanel" data-panel="reference">
+</section>
+<section class="static-section" data-panel="reference">
 <div class="reference-card">
 <h3 class="panel-title">What AgentShield checks for</h3>
 <p class="panel-subtitle">Every rule and checklist entry the scanner can fire, pulled live from the bundled rule pack. Use this as a product-coverage reference — independent of what the most recent scan happened to find.</p>
@@ -2748,7 +2720,7 @@ footer {
 </details>
 </div>
 </div>
-</div>
+</section>
 </div>
 <footer>
 AgentShield v2 &middot; 

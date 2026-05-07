@@ -1095,6 +1095,24 @@ footer {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
+/* F.29: static / printable variant — every section visible, stacked. */
+.static-section {
+  display: block;
+  margin: 32px 0;
+  scroll-margin-top: 16px;
+}
+.static-section:first-of-type { margin-top: 0; }
+.static-report > .static-section + .static-section {
+  border-top: 1px dashed var(--border);
+  padding-top: 32px;
+}
+@media print {
+  /* If someone prints the interactive report (Ctrl+P), unfold all
+     panels too so the hard-copy isn't just the active tab. */
+  .tab-nav, .filter-bar { display: none !important; }
+  .tab-panel { display: block !important; page-break-before: always; }
+}
+
 .coverage-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1543,8 +1561,13 @@ def _html_escape(s: str) -> str:
     )
 
 
-def render_combined_html(result: MergeResult) -> str:
+def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     """Standalone HTML report — single file, embedded CSS, no external deps.
+
+    F.29: when `static=True`, drops the filter bar and the tab navigation;
+    every panel renders as a stacked `<section>` with its own heading. Use
+    this mode for distribution-ready (printable / emailable / read-without-
+    clicking) reports. Default `static=False` keeps the interactive UX.
 
     Layout (F.17):
       1. Report header (title + scan timestamp)
@@ -1695,80 +1718,91 @@ def render_combined_html(result: MergeResult) -> str:
     # F.21: filter bar — sits above the three findings sections, drives the
     # JS at the bottom of the page. Severity / category / origin checkboxes
     # default to all-on; search box matches across rule_id + file + message.
-    parts.append('<div class="filter-bar" id="filter-bar">')
-    parts.append('<div class="filter-group">')
-    parts.append('<span class="filter-label">Severity</span>')
-    for sev in ("critical", "high", "medium", "low", "info"):
+    # F.29: skip in static mode — no JS, no filtering, just stacked sections.
+    if not static:
+        parts.append('<div class="filter-bar" id="filter-bar">')
+        parts.append('<div class="filter-group">')
+        parts.append('<span class="filter-label">Severity</span>')
+        for sev in ("critical", "high", "medium", "low", "info"):
+            parts.append(
+                f'<label class="filter-chip {sev}"><input type="checkbox" '
+                f'data-filter="severity" value="{sev}" checked>'
+                f'<span>{sev}</span></label>'
+            )
+        parts.append("</div>")
+        # F.27: Category chip group removed — each D/D/R tab already
+        # constrains visible category, so a global category chip is redundant
+        # (and confusing if you toggle "detect" off while on the Detect tab).
+        # The JS still defaults category filters to "checked" via the
+        # `isChecked` fallback, so findings of any category pass through.
+        parts.append('<div class="filter-group">')
+        parts.append('<span class="filter-label">Origin</span>')
+        for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
+            parts.append(
+                f'<label class="filter-chip {origin_key}"><input type="checkbox" '
+                f'data-filter="origin" value="{origin_key}" checked>'
+                f'<span>{origin_label}</span></label>'
+            )
+        parts.append("</div>")
+        parts.append('<div class="filter-group filter-search-group">')
         parts.append(
-            f'<label class="filter-chip {sev}"><input type="checkbox" '
-            f'data-filter="severity" value="{sev}" checked>'
-            f'<span>{sev}</span></label>'
+            '<input type="search" id="finding-search" class="filter-search" '
+            'placeholder="Search rule_id / file / message…" autocomplete="off">'
         )
-    parts.append("</div>")
-    # F.27: Category chip group removed — each D/D/R tab already
-    # constrains visible category, so a global category chip is redundant
-    # (and confusing if you toggle "detect" off while on the Detect tab).
-    # The JS still defaults category filters to "checked" via the
-    # `isChecked` fallback, so findings of any category pass through.
-    parts.append('<div class="filter-group">')
-    parts.append('<span class="filter-label">Origin</span>')
-    for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
-        parts.append(
-            f'<label class="filter-chip {origin_key}"><input type="checkbox" '
-            f'data-filter="origin" value="{origin_key}" checked>'
-            f'<span>{origin_label}</span></label>'
-        )
-    parts.append("</div>")
-    parts.append('<div class="filter-group filter-search-group">')
-    parts.append(
-        '<input type="search" id="finding-search" class="filter-search" '
-        'placeholder="Search rule_id / file / message…" autocomplete="off">'
-    )
-    parts.append('<button type="button" id="filter-reset" class="filter-reset">Reset</button>')
-    parts.append("</div>")
-    parts.append('<div id="filter-status" class="filter-status"></div>')
-    parts.append("</div>")
+        parts.append('<button type="button" id="filter-reset" class="filter-reset">Reset</button>')
+        parts.append("</div>")
+        parts.append('<div id="filter-status" class="filter-status"></div>')
+        parts.append("</div>")
 
-    # F.22: tab navigation — D/D/R panels + Coverage + Frameworks. The filter
-    # bar above applies globally; tab counts update live with the filter
-    # state. Initial active tab = Detect.
-    parts.append('<div class="tab-nav" role="tablist">')
-    for cat in _DDR_ORDER:
-        emoji_label, _sub, _desc, _q = _DDR_LABELS[cat]
-        bucket = grouped[cat]
-        active = " active" if cat == "detect" else ""
+        # F.22: tab navigation — D/D/R panels + Coverage + Frameworks. The filter
+        # bar above applies globally; tab counts update live with the filter
+        # state. Initial active tab = Detect.
+        parts.append('<div class="tab-nav" role="tablist">')
+        for cat in _DDR_ORDER:
+            emoji_label, _sub, _desc, _q = _DDR_LABELS[cat]
+            bucket = grouped[cat]
+            active = " active" if cat == "detect" else ""
+            parts.append(
+                f'<button type="button" class="tab-btn{active}" role="tab" '
+                f'data-tab="{cat}" aria-selected="{"true" if cat == "detect" else "false"}">'
+                f'{_html_escape(emoji_label)} '
+                f'<span class="tab-count" data-tab-count="{cat}" '
+                f'data-tab-total="{len(bucket)}">{len(bucket)}</span>'
+                f'</button>'
+            )
         parts.append(
-            f'<button type="button" class="tab-btn{active}" role="tab" '
-            f'data-tab="{cat}" aria-selected="{"true" if cat == "detect" else "false"}">'
-            f'{_html_escape(emoji_label)} '
-            f'<span class="tab-count" data-tab-count="{cat}" '
-            f'data-tab-total="{len(bucket)}">{len(bucket)}</span>'
-            f'</button>'
+            '<button type="button" class="tab-btn" role="tab" data-tab="coverage" '
+            'aria-selected="false">Coverage</button>'
         )
-    parts.append(
-        '<button type="button" class="tab-btn" role="tab" data-tab="coverage" '
-        'aria-selected="false">Coverage</button>'
-    )
-    parts.append(
-        '<button type="button" class="tab-btn" role="tab" data-tab="frameworks" '
-        'aria-selected="false">Frameworks</button>'
-    )
-    parts.append(
-        '<button type="button" class="tab-btn" role="tab" data-tab="reference" '
-        'aria-selected="false">Reference</button>'
-    )
-    parts.append("</div>")
+        parts.append(
+            '<button type="button" class="tab-btn" role="tab" data-tab="frameworks" '
+            'aria-selected="false">Frameworks</button>'
+        )
+        parts.append(
+            '<button type="button" class="tab-btn" role="tab" data-tab="reference" '
+            'aria-selected="false">Reference</button>'
+        )
+        parts.append("</div>")
 
-    parts.append('<div class="tab-panels">')
+    # F.29: in static mode each panel renders as a stand-alone <section>
+    # with a visible heading; in interactive mode they all live inside a
+    # tab-panels container.
+    if static:
+        parts.append('<div class="static-report">')
+    else:
+        parts.append('<div class="tab-panels">')
 
     # ---- D/D/R panels (one per category) ----
     for cat in _DDR_ORDER:
         emoji_label, subtitle, desc, _question = _DDR_LABELS[cat]
         bucket = grouped[cat]
         active = " active" if cat == "detect" else ""
-        parts.append(
-            f'<div class="tab-panel{active}" role="tabpanel" data-panel="{cat}">'
-        )
+        if static:
+            parts.append(f'<section class="static-section" data-panel="{cat}">')
+        else:
+            parts.append(
+                f'<div class="tab-panel{active}" role="tabpanel" data-panel="{cat}">'
+            )
         parts.append(f'<div class="findings-section {cat}" data-section="{cat}">')
         parts.append('<div class="section-header">')
         parts.append(f'<span class="section-title">{_html_escape(emoji_label)} &mdash; {_html_escape(subtitle)}</span>')
@@ -1875,10 +1909,13 @@ def render_combined_html(result: MergeResult) -> str:
                 parts.append("</div>")  # /finding-body
                 parts.append("</div>")  # /finding
         parts.append("</div>")  # /findings-section
-        parts.append("</div>")  # /tab-panel (D/D/R)
+        parts.append("</section>" if static else "</div>")  # /tab-panel (D/D/R)
 
     # ---- Coverage tab panel ----
-    parts.append('<div class="tab-panel" role="tabpanel" data-panel="coverage">')
+    if static:
+        parts.append('<section class="static-section" data-panel="coverage">')
+    else:
+        parts.append('<div class="tab-panel" role="tabpanel" data-panel="coverage">')
     parts.append('<div class="coverage-card">')
     parts.append('<h3 class="panel-title">Coverage matrix</h3>')
     parts.append(
@@ -1900,12 +1937,15 @@ def render_combined_html(result: MergeResult) -> str:
             parts.append('<div class="coverage-empty">(none touched)</div>')
     parts.append("</div>")
     parts.append("</div>")  # /coverage-card
-    parts.append("</div>")  # /tab-panel
+    parts.append("</section>" if static else "</div>")  # /tab-panel
 
     # ---- Frameworks tab panel ----
     # Per-framework drill-down: each item shows count + clickable chip that
     # activates the same framework filter the per-finding tags use.
-    parts.append('<div class="tab-panel" role="tabpanel" data-panel="frameworks">')
+    if static:
+        parts.append('<section class="static-section" data-panel="frameworks">')
+    else:
+        parts.append('<div class="tab-panel" role="tabpanel" data-panel="frameworks">')
     parts.append('<div class="coverage-card">')
     parts.append('<h3 class="panel-title">Findings by Security framework</h3>')
     parts.append(
@@ -1952,18 +1992,21 @@ def render_combined_html(result: MergeResult) -> str:
             parts.append("</div>")
         parts.append("</div>")  # /framework-group
     parts.append("</div>")  # /coverage-card
-    parts.append("</div>")  # /tab-panel
+    parts.append("</section>" if static else "</div>")  # /tab-panel
 
     # ---- Reference tab panel (F.26) ----
     # Renders every check the scanner can fire, grouped by source. Pulled
     # at render-time from the YAML rule pack + checklist template + the
     # AST10 manifest-rule registry, so the documentation surface is always
     # in sync with what's actually shipping.
-    parts.append('<div class="tab-panel" role="tabpanel" data-panel="reference">')
+    if static:
+        parts.append('<section class="static-section" data-panel="reference">')
+    else:
+        parts.append('<div class="tab-panel" role="tabpanel" data-panel="reference">')
     _render_reference_panel(parts)
-    parts.append("</div>")  # /tab-panel
+    parts.append("</section>" if static else "</div>")  # /tab-panel
 
-    parts.append("</div>")  # /tab-panels
+    parts.append("</div>")  # /tab-panels (or /static-report)
 
     # Footer
     parts.append("<footer>")

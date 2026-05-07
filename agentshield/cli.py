@@ -497,10 +497,20 @@ def cmd_merge(args: argparse.Namespace) -> int:
         )
         written.append(args.output_sarif)
     if args.output_html:
-        Path(args.output_html).write_text(
-            render_combined_html(result), encoding="utf-8"
-        )
+        # F.29: emit two HTML reports for one --output-html flag:
+        #   <name>.html        — interactive (tabs, filters, search)
+        #   <name>-print.html  — stacked, all sections visible, print-friendly
+        # Both files are fully self-contained (CSS+JS inlined). The print
+        # variant is the one to email / attach to a JIRA / save as PDF; the
+        # interactive variant is for live review.
+        html_path = Path(args.output_html)
+        html_path.write_text(render_combined_html(result), encoding="utf-8")
         written.append(args.output_html)
+        print_path = html_path.with_name(html_path.stem + "-print" + html_path.suffix)
+        print_path.write_text(
+            render_combined_html(result, static=True), encoding="utf-8"
+        )
+        written.append(str(print_path))
     if written:
         print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")
 
