@@ -1,0 +1,52 @@
+rules:
+  - id: agentshield.detect.non-https-outbound-fetch
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A network fetch targets a plaintext `http://` URL where the response
+      is treated as code, config, model artifact, or RAG document — i.e.
+      the response will affect agent behaviour. Plaintext transport means
+      a network attacker (corporate proxy, coffee-shop Wi-Fi, compromised
+      ISP) can substitute response content silently. Pairs with CWE-494
+      (download of code without integrity check): integrity verification
+      can't help if the URL itself is intercepted. Use HTTPS so the
+      response is at least transport-authenticated. OWASP LLM03 (supply
+      chain) / Agentic T6 (untrusted retrieval).
+    pattern-either:
+      # Generic HTTP libraries with literal http:// URL.
+      - pattern-regex: '\b(requests|httpx)\.(get|post|put|patch|delete|request|head|options)\s*\(\s*[fr]?["\x27]http://'
+      - pattern-regex: '\burllib\.request\.urlopen\s*\(\s*[fr]?["\x27]http://'
+      # Bare `urlopen(...)` (when imported as `from urllib.request import urlopen`).
+      # Negative lookbehind avoids double-firing on the qualified form above.
+      - pattern-regex: '(?<![\w\.])urlopen\s*\(\s*[fr]?["\x27]http://'
+      # LangChain document loaders (RAG ingestion path).
+      - pattern-regex: '\b(WebBaseLoader|UnstructuredURLLoader|RecursiveUrlLoader|AsyncHtmlLoader|SeleniumURLLoader)\s*\(\s*[fr]?["\x27]http://'
+      # HuggingFace / transformers downloads.
+      - pattern-regex: '\b(hf_hub_download|snapshot_download)\s*\(\s*[^)]*\burl\s*=\s*[fr]?["\x27]http://'
+      # boto3 endpoint override pointing at plaintext (rare but seen in
+      # local-stack / hand-rolled gateway configs that get committed).
+      - pattern-regex: '\bboto3\.(client|resource)\s*\([^)]*\bendpoint_url\s*=\s*[fr]?["\x27]http://(?!localhost|127\.0\.0\.1)'
+    metadata:
+      category: detect
+      agentshield_id: AS-D-012
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM03"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0010"]
+        cwe: ["CWE-319", "CWE-494", "CWE-829"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Switch the URL to `https://`. If the target genuinely speaks only
+        HTTP (legacy internal service), terminate TLS at a reverse proxy
+        and call the proxy over HTTPS — never fetch agent-affecting
+        content over plaintext. This rule explicitly excludes
+        `http://localhost` and `http://127.0.0.1` (development /
+        loopback). For RAG document ingestion, combine with an explicit
+        hostname allowlist (see TIER2-LLM01-02).
+      references:
+        - "https://cwe.mitre.org/data/definitions/319.html"
+        - "https://cwe.mitre.org/data/definitions/494.html"
+        - "https://genai.owasp.org/llmrisk/llm03-supply-chain/"

@@ -1,0 +1,25 @@
+{
+  "fixture": "python/d012_non_https_outbound.py",
+  "expected_findings": [
+    {
+      "rule_id": "non-https-outbound-fetch",
+      "line": 12
+    },
+    {
+      "rule_id": "non-https-outbound-fetch",
+      "line": 13
+    },
+    {
+      "rule_id": "non-https-outbound-fetch",
+      "line": 14
+    },
+    {
+      "rule_id": "non-https-outbound-fetch",
+      "line": 15
+    },
+    {
+      "rule_id": "non-https-outbound-fetch",
+      "line": 16
+    }
+  ]
+}

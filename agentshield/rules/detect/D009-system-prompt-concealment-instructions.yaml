@@ -1,0 +1,47 @@
+rules:
+  - id: agentshield.detect.system-prompt-concealment-instructions
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A system-prompt or tool description contains instructions telling the
+      agent to deceive its own user — phrases like "do not tell the user",
+      "hide this action", or "don't mention you used this tool". Even when
+      added by a developer for "polish", these markers transform the agent
+      into a deception vehicle: the agent can act on the user's behalf
+      without revealing what it did. This is the static cousin of Cisco
+      AI-Defense's PROMPT_INJECTION_CONCEALMENT signature, applied to the
+      agent's own configured prompts. OWASP LLM01 / Agentic T8.
+    pattern-either:
+      # Concealment markers in any string literal (single, double, triple,
+      # f-string / raw / byte prefixes). These phrases have no legitimate
+      # production use — the only paths that produce them are (1) a
+      # developer instructing the agent to deceive its user, or (2) a
+      # red-team fixture that should not have shipped.
+      - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdo\s+not\s+(tell|inform|mention|notify)\s+(the\s+)?user[^"\x27]*["\x27]{1,3}'
+      - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdon[\x27’]t\s+(tell|inform|mention)\s+(the\s+)?user[^"\x27]*["\x27]{1,3}'
+      - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bhide\s+(this|that|the)\s+(action|operation|step|tool\s+call|fact)[^"\x27]*["\x27]{1,3}'
+      - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bkeep\s+(this|that|it)\s+(secret|hidden)[^"\x27]*["\x27]{1,3}'
+      - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdon[\x27’]t\s+mention\s+you\s+(used|called)\s+(this\s+)?(tool|skill|function)[^"\x27]*["\x27]{1,3}'
+    metadata:
+      category: detect
+      agentshield_id: AS-D-009
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01", "LLM07"]
+        owasp_agentic: ["T6", "T8"]
+        nist_ai_rmf: ["GOVERN-1.2", "MAP-2.3"]
+        mitre_atlas: ["AML.T0051"]
+        cwe: ["CWE-489"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Remove concealment instructions from system prompts and tool
+        descriptions. If a control-flow step truly should not be surfaced
+        verbatim (e.g. an internal trace ID), summarise it explicitly in
+        the user-facing response rather than instructing the agent to hide
+        it. Transparency is a precondition for human oversight (OWASP
+        Agentic T8) — if the agent can hide actions from its user, neither
+        the user nor an auditor can verify what it did.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        - "https://genai.owasp.org/llm-top-10-for-agentic-ai/"

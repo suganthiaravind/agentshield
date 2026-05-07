@@ -511,7 +511,7 @@ def test_markdown_renders_saige_classification_section(repo: Path) -> None:
     _write_tier2(repo, payload)
     md = render_combined_markdown(merge(repo))
     assert "## JPMC SAIGE Agent Tier classification" in md
-    assert "**Classified as:** Tier 3" in md
+    assert "**Classified as:** Agentic Tier 3" in md
     assert "External customer-facing endpoint at api.py:99." in md
     assert "Informational only" in md  # the explanatory footnote
 
@@ -524,15 +524,15 @@ def test_markdown_omits_saige_section_when_unclassified(repo: Path) -> None:
 
 
 def test_markdown_renders_non_agent_label_correctly(repo: Path) -> None:
-    """saige_tier='non-agent' should render as 'Non-Agent', not 'Tier non-agent'."""
+    """saige_tier='non-agent' should render as 'Non Agent', not 'Agentic Tier non-agent'."""
     _write_tier1(repo, _tier1_payload())
     payload = _tier2_payload()
     payload["saige_tier"] = "non-agent"
     payload["saige_tier_reasoning"] = "No LLM calls; deterministic data pipeline."
     _write_tier2(repo, payload)
     md = render_combined_markdown(merge(repo))
-    assert "**Classified as:** Non-Agent" in md
-    assert "Tier non-agent" not in md
+    assert "**Classified as:** Non Agent" in md
+    assert "Agentic Tier non-agent" not in md
 
 
 def test_json_includes_saige_fields(repo: Path) -> None:
@@ -612,7 +612,7 @@ def test_html_renders_saige_card_when_classified(repo: Path) -> None:
     _write_tier2(repo, payload)
     html = render_combined_html(merge(repo))
     assert 'class="saige-card"' in html
-    assert "Tier 2" in html
+    assert "Agentic Tier 2" in html
     assert "Autonomous + state-changing internal calls only." in html
 
 
@@ -677,6 +677,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     payload = _tier2_payload()
     payload["saige_tier"] = "2"
     payload["saige_tier_reasoning"] = "Autonomous + state-changing internal."
+    payload["skipped_files"] = [{"path": "tests/conftest.py", "reason": "test file"}]
     _write_tier2(repo, payload)
 
     md = render_combined_markdown(merge(repo))
@@ -687,26 +688,32 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert "[Tier 2]" not in md
     assert "Tier 2 verdict" not in md
     assert "Tier 2 reasoning" not in md
-    # SAIGE classification still uses 'Tier 2' (its naming, unchanged).
-    assert "**Classified as:** Tier 2" in md
+    assert "Tier 2 skipped files" not in md
+    # SAIGE classification renders with the "Agentic Tier" prefix to keep it
+    # visually separable from AgentShield's own scan-phase labels.
+    assert "**Classified as:** Agentic Tier 2" in md
     # New labels present.
     assert "Semgrep Rules-engine Scan" in md
     assert "Copilot AI Scan" in md
     assert "[Semgrep]" in md
     assert "[Copilot]" in md
+    # Skipped-files heading uses the AgentShield-phase rename.
+    assert "## Copilot AI Scan skipped files" in md
 
     html = render_combined_html(merge(repo))
-    # No AgentShield-phase pills with the old labels.
+    # No AgentShield-phase pills or footer text with the old labels.
     assert '>Tier 1</span>' not in html
     assert '>Tier 2</span>' not in html
-    # SAIGE display tier is allowed to say 'Tier 2' inside its dedicated
-    # saige-tier element — verify the SAIGE classification rendered correctly.
-    assert 'class="saige-tier">Tier 2</div>' in html
+    assert "Tier 1 fingerprint" not in html
+    # SAIGE classification renders with the "Agentic Tier" prefix inside its
+    # dedicated saige-tier element — verify it rendered correctly.
+    assert 'class="saige-tier">Agentic Tier 2</div>' in html
     # New labels present.
     assert "Semgrep Rules-engine Scan" in html
     assert "Copilot AI Scan" in html
     assert '<span class="pill tier1">Semgrep</span>' in html
     assert '<span class="pill tier2">Copilot</span>' in html
+    assert "Semgrep fingerprint" in html
 
 
 # ---------- Interactive HTML report (F.21) ----------
@@ -814,3 +821,108 @@ def test_html_renders_with_empty_finding_buckets(tmp_path: Path) -> None:
         assert f'data-section="{cat}"' in html
     # Empty placeholder finding rows present.
     assert 'finding-empty' in html
+
+
+# ---------- Tabbed report layout (F.22) ----------
+
+def test_html_has_tab_navigation(repo: Path) -> None:
+    """5 tabs: Detect / Defend / Respond / Coverage / Frameworks. Detect
+    is the default-active tab so the user lands on the most-actionable
+    bucket without having to click."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'class="tab-nav"' in html
+    for tab in ("detect", "defend", "respond", "coverage", "frameworks"):
+        assert f'data-tab="{tab}"' in html
+    # Detect is the default-active tab.
+    assert 'class="tab-btn active" role="tab" data-tab="detect"' in html
+    assert 'aria-selected="true"' in html
+
+
+def test_html_tab_panels_wrap_each_section(repo: Path) -> None:
+    """Each D/D/R findings-section now lives inside a .tab-panel; Coverage
+    and Frameworks each have their own .tab-panel."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    for panel in ("detect", "defend", "respond", "coverage", "frameworks"):
+        assert f'data-panel="{panel}"' in html
+    # Detect panel is initially visible.
+    assert 'class="tab-panel active" role="tabpanel" data-panel="detect"' in html
+
+
+def test_html_tab_count_pill_carries_data_attrs(repo: Path) -> None:
+    """Each D/D/R tab button has a .tab-count pill with data-tab-count +
+    data-tab-total so the JS can render '3/6' style counts when filtered."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    for cat in ("detect", "defend", "respond"):
+        assert f'data-tab-count="{cat}"' in html
+
+
+def test_html_frameworks_tab_lists_clickable_items(repo: Path) -> None:
+    """Frameworks tab renders one .framework-group per framework with
+    clickable .framework-item buttons that share the same
+    data-framework-key the per-finding tags use."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    assert 'class="framework-group"' in html
+    assert 'class="framework-item"' in html
+    # Tier 1 fixture has owasp_llm=LLM01; Tier 2 fixture has owasp_llm=LLM02.
+    # Both should appear as clickable items in the Frameworks tab.
+    assert 'data-framework-key="owasp_llm:LLM01"' in html
+    assert 'data-framework-key="owasp_llm:LLM02"' in html
+    # Reference URLs to the framework specs.
+    assert "genai.owasp.org" in html
+    assert "atlas.mitre.org" in html
+    assert "cwe.mitre.org" in html
+
+
+def test_html_tab_js_wired(repo: Path) -> None:
+    """The tab-switch JS function must be present in the embedded script."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    # Sentinel snippets from the F.22 JS.
+    assert "activateTab" in html
+    assert "data-tab-count" in html
+
+
+def test_html_coverage_matrix_lives_inside_coverage_tab(repo: Path) -> None:
+    """The pre-F.22 layout had a stand-alone Coverage section. F.22 moves
+    that matrix into the Coverage tab panel — outside the panel there
+    should be no .coverage-grid."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    html = render_combined_html(merge(repo))
+    coverage_panel_start = html.find('data-panel="coverage"')
+    coverage_panel_end = html.find('data-panel="frameworks"')
+    assert coverage_panel_start != -1
+    assert coverage_panel_end != -1 and coverage_panel_end > coverage_panel_start
+    # The coverage-grid must sit between the coverage panel start and the
+    # frameworks panel start.
+    grid_pos = html.find('class="coverage-grid"')
+    assert coverage_panel_start < grid_pos < coverage_panel_end
+
+
+def test_framework_finding_counts_aggregates_both_tiers(repo: Path) -> None:
+    """The helper that powers the Frameworks-tab item counts must sum
+    Tier 1 + Tier 2 findings per `<field>:<item>` key."""
+    from agentshield.merger.combine import _framework_finding_counts
+
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    result = merge(repo)
+    counts = _framework_finding_counts(result.report)
+    # Tier 1 fixture has owasp_llm=LLM01, owasp_agentic=T6, mitre_atlas=AML.T0051, cwe=CWE-94.
+    assert counts.get("owasp_llm:LLM01") == 1
+    assert counts.get("owasp_agentic:T6") == 1
+    assert counts.get("mitre_atlas:AML.T0051") == 1
+    assert counts.get("cwe:CWE-94") == 1
+    # Tier 2 fixture has owasp_llm=LLM02, owasp_agentic=T8, cwe=CWE-200.
+    assert counts.get("owasp_llm:LLM02") == 1
+    assert counts.get("owasp_agentic:T8") == 1
+    assert counts.get("cwe:CWE-200") == 1

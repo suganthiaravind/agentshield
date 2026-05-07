@@ -1,0 +1,46 @@
+rules:
+  - id: agentshield.detect.tool-description-injection
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A registered LLM tool's description contains imperative, prompt-style
+      instructions that target the LLM rather than describing the tool's
+      function ("you MUST call this tool", "ignore other tools", "always
+      use this tool"). Tool descriptions are concatenated into the
+      planner prompt verbatim — a description that issues commands biases
+      tool selection and can override the system prompt. This is the
+      static cousin of OWASP "Tool Poisoning" (LLM05 / Agentic T6): when
+      the tool registry itself becomes a prompt-injection surface, every
+      planner decision is corrupted. Common in ported example code that
+      mixes prompt-engineering tricks with API documentation.
+    pattern-either:
+      # LangChain @tool decorator with imperative description in docstring.
+      - pattern-regex: '(?is)@tool[^"\x27]*?["\x27]{3}[^"\x27]*\b(you\s+must|always\s+(call|use)\s+this|ignore\s+(all\s+)?other\s+tools|do\s+not\s+use\s+other|prefer\s+this\s+tool\s+over)[^"\x27]*["\x27]{3}'
+      # LangChain Tool / StructuredTool description= argument.
+      - pattern-regex: '(?is)\b(Tool|StructuredTool|FunctionTool)\s*\(\s*[^)]*\bdescription\s*=\s*[fr]?["\x27]{1,3}[^"\x27]*\b(you\s+must|always\s+(call|use)\s+this|ignore\s+(all\s+)?other\s+tools|do\s+not\s+use\s+other|prefer\s+this\s+tool\s+over)[^"\x27]*["\x27]{1,3}'
+      # OpenAI function-calling tool spec — `description` field with same markers.
+      - pattern-regex: '(?is)["\x27]description["\x27]\s*:\s*[fr]?["\x27]{1,3}[^"\x27]*\b(you\s+must|always\s+(call|use)\s+this|ignore\s+(all\s+)?other\s+tools|do\s+not\s+use\s+other|prefer\s+this\s+tool\s+over)[^"\x27]*["\x27]{1,3}'
+    metadata:
+      category: detect
+      agentshield_id: AS-D-011
+      severity_normalized: medium
+      framework_mappings:
+        owasp_llm: ["LLM05", "LLM01"]
+        owasp_agentic: ["T2", "T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Rewrite the tool description as a neutral, declarative statement
+        of what the tool does — input, output, and side-effects. Tool
+        selection bias belongs in the system prompt under explicit
+        developer control, not embedded in tool descriptions where it
+        gets concatenated into every planner prompt by the framework.
+        Pattern to follow: "Cancels a customer's subscription. Input —
+        customer_id (str). Side-effect — calls billing API; irreversible
+        without re-subscribe." Anti-pattern: "You MUST use this tool when
+        the user mentions cancellation."
+      references:
+        - "https://genai.owasp.org/llmrisk/llm05-improper-output-handling/"
+        - "https://genai.owasp.org/llm-top-10-for-agentic-ai/"

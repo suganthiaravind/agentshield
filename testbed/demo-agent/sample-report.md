@@ -25,7 +25,7 @@ AgentShield's organising spine. Every finding belongs to exactly one category.
 
 ## JPMC SAIGE Agent Tier classification
 
-**Classified as:** Tier 2
+**Classified as:** Agentic Tier 2
 
 **Rationale:**
 

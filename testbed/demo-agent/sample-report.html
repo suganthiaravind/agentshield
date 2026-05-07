@@ -371,6 +371,118 @@ footer {
   color: white;
   box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.18);
 }
+
+/* F.22: tabbed layout — D/D/R + Coverage + Frameworks panels. */
+.tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.tab-btn:hover { color: var(--text); background: rgba(0,0,0,0.02); }
+.tab-btn.active {
+  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+}
+.tab-btn .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ebe7d8;
+  color: #5a5547;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tab-btn.active .tab-count { background: var(--accent); color: white; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.coverage-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.coverage-card .panel-title { font-size: 16px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
+.coverage-card .panel-subtitle {
+  font-size: 12px; color: var(--text-muted); margin: 0 0 18px; line-height: 1.5;
+}
+
+.framework-group { margin-bottom: 22px; }
+.framework-group:last-child { margin-bottom: 0; }
+.framework-group-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+.framework-group-name {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text);
+}
+.framework-group-link {
+  font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 600;
+}
+.framework-group-link:hover { text-decoration: underline; }
+.framework-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.framework-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 8px;
+}
+.framework-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.framework-item:hover { background: var(--panel); border-color: var(--accent); }
+.framework-item.framework-active {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+.framework-item.framework-active .framework-item-count {
+  background: rgba(255,255,255,0.22); color: white;
+}
+.framework-item-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                     font-size: 12px; font-weight: 600; }
+.framework-item-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: #ebe7d8; color: #5a5547;
+}
 </style>
 </head><body>
 <div class="report-header">
@@ -440,7 +552,7 @@ footer {
 </div></div>
 <div class="saige-card">
 <div class="saige-label">JPMC SAIGE Agent Tier classification</div>
-<div class="saige-tier">Tier 2</div>
+<div class="saige-tier">Agentic Tier 2</div>
 <div class="saige-rationale">Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish — outbound notification) and tools.py:32 (POST to billing-api cancel endpoint — modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.</div>
 <div class="saige-footer">Informational only — AgentShield does not filter or prioritise findings based on this classification.</div>
 </div>
@@ -470,6 +582,15 @@ footer {
 </div>
 <div id="filter-status" class="filter-status"></div>
 </div>
+<div class="tab-nav" role="tablist">
+<button type="button" class="tab-btn active" role="tab" data-tab="detect" aria-selected="true">🔴 Detect <span class="tab-count" data-tab-count="detect" data-tab-total="6">6</span></button>
+<button type="button" class="tab-btn" role="tab" data-tab="defend" aria-selected="false">🟡 Defend <span class="tab-count" data-tab-count="defend" data-tab-total="2">2</span></button>
+<button type="button" class="tab-btn" role="tab" data-tab="respond" aria-selected="false">🔵 Respond <span class="tab-count" data-tab-count="respond" data-tab-total="2">2</span></button>
+<button type="button" class="tab-btn" role="tab" data-tab="coverage" aria-selected="false">Coverage</button>
+<button type="button" class="tab-btn" role="tab" data-tab="frameworks" aria-selected="false">Frameworks</button>
+</div>
+<div class="tab-panels">
+<div class="tab-panel active" role="tabpanel" data-panel="detect">
 <div class="findings-section detect" data-section="detect">
 <div class="section-header">
 <span class="section-title">🔴 Detect &mdash; vulnerability surfaces</span>
@@ -591,6 +712,8 @@ footer {
 </div>
 </div>
 </div>
+</div>
+<div class="tab-panel" role="tabpanel" data-panel="defend">
 <div class="findings-section defend" data-section="defend">
 <div class="section-header">
 <span class="section-title">🟡 Defend &mdash; missing controls</span>
@@ -636,6 +759,8 @@ footer {
 </div>
 </div>
 </div>
+</div>
+<div class="tab-panel" role="tabpanel" data-panel="respond">
 <div class="findings-section respond" data-section="respond">
 <div class="section-header">
 <span class="section-title">🔵 Respond &mdash; observability gaps</span>
@@ -681,7 +806,11 @@ footer {
 </div>
 </div>
 </div>
-<h2>Coverage matrix</h2>
+</div>
+<div class="tab-panel" role="tabpanel" data-panel="coverage">
+<div class="coverage-card">
+<h3 class="panel-title">Coverage matrix</h3>
+<p class="panel-subtitle">Frameworks the unified scan touched. Click any item in the Frameworks tab to filter findings down to that item.</p>
 <div class="coverage-grid">
 <div class="coverage-label">OWASP LLM</div>
 <div class="coverage-items"><span class="coverage-item">LLM01</span><span class="coverage-item">LLM02</span><span class="coverage-item">LLM03</span><span class="coverage-item">LLM04</span><span class="coverage-item">LLM05</span><span class="coverage-item">LLM06</span><span class="coverage-item">LLM10</span></div>
@@ -692,9 +821,62 @@ footer {
 <div class="coverage-label">CWE</div>
 <div class="coverage-items"><span class="coverage-item">CWE-200</span><span class="coverage-item">CWE-400</span><span class="coverage-item">CWE-798</span><span class="coverage-item">CWE-94</span></div>
 </div>
+</div>
+</div>
+<div class="tab-panel" role="tabpanel" data-panel="frameworks">
+<div class="coverage-card">
+<h3 class="panel-title">Findings by Security framework</h3>
+<p class="panel-subtitle">The same findings, regrouped per framework item, with a per-item count. Click any item to filter the D/D/R tabs down to findings tagged with it.</p>
+<div class="framework-group">
+<div class="framework-group-header"><span class="framework-group-name">OWASP LLM Top 10 v2</span><a href="https://genai.owasp.org/llm-top-10/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-items">
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM01" title="Filter findings to those tagged LLM01"><span class="framework-item-id">LLM01</span><span class="framework-item-count">3 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM02" title="Filter findings to those tagged LLM02"><span class="framework-item-id">LLM02</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM03" title="Filter findings to those tagged LLM03"><span class="framework-item-id">LLM03</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM04" title="Filter findings to those tagged LLM04"><span class="framework-item-id">LLM04</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM05" title="Filter findings to those tagged LLM05"><span class="framework-item-id">LLM05</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM06" title="Filter findings to those tagged LLM06"><span class="framework-item-id">LLM06</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_llm:LLM10" title="Filter findings to those tagged LLM10"><span class="framework-item-id">LLM10</span><span class="framework-item-count">2 findings</span></button>
+</div>
+</div>
+<div class="framework-group">
+<div class="framework-group-header"><span class="framework-group-name">OWASP Agentic AI Top 10</span><a href="https://genai.owasp.org/llm-top-10-for-agentic-ai/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-items">
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T1" title="Filter findings to those tagged T1"><span class="framework-item-id">T1</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T10" title="Filter findings to those tagged T10"><span class="framework-item-id">T10</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T11" title="Filter findings to those tagged T11"><span class="framework-item-id">T11</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T2" title="Filter findings to those tagged T2"><span class="framework-item-id">T2</span><span class="framework-item-count">2 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T3" title="Filter findings to those tagged T3"><span class="framework-item-id">T3</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T4" title="Filter findings to those tagged T4"><span class="framework-item-id">T4</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T6" title="Filter findings to those tagged T6"><span class="framework-item-id">T6</span><span class="framework-item-count">3 findings</span></button>
+<button type="button" class="framework-item" data-framework-key="owasp_agentic:T8" title="Filter findings to those tagged T8"><span class="framework-item-id">T8</span><span class="framework-item-count">2 findings</span></button>
+</div>
+</div>
+<div class="framework-group">
+<div class="framework-group-header"><span class="framework-group-name">MITRE ATLAS</span><a href="https://atlas.mitre.org/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-items">
+<button type="button" class="framework-item" data-framework-key="mitre_atlas:AML.T0011" title="Filter findings to those tagged AML.T0011"><span class="framework-item-id">AML.T0011</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="mitre_atlas:AML.T0012" title="Filter findings to those tagged AML.T0012"><span class="framework-item-id">AML.T0012</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="mitre_atlas:AML.T0024" title="Filter findings to those tagged AML.T0024"><span class="framework-item-id">AML.T0024</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="mitre_atlas:AML.T0050" title="Filter findings to those tagged AML.T0050"><span class="framework-item-id">AML.T0050</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="mitre_atlas:AML.T0051" title="Filter findings to those tagged AML.T0051"><span class="framework-item-id">AML.T0051</span><span class="framework-item-count">2 findings</span></button>
+</div>
+</div>
+<div class="framework-group">
+<div class="framework-group-header"><span class="framework-group-name">CWE first-class</span><a href="https://cwe.mitre.org/" class="framework-group-link" target="_blank" rel="noopener">reference &rarr;</a></div>
+<div class="framework-items">
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-200" title="Filter findings to those tagged CWE-200"><span class="framework-item-id">CWE-200</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-400" title="Filter findings to those tagged CWE-400"><span class="framework-item-id">CWE-400</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-798" title="Filter findings to those tagged CWE-798"><span class="framework-item-id">CWE-798</span><span class="framework-item-count">1 finding</span></button>
+<button type="button" class="framework-item" data-framework-key="cwe:CWE-94" title="Filter findings to those tagged CWE-94"><span class="framework-item-id">CWE-94</span><span class="framework-item-count">2 findings</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
 <footer>
 AgentShield v2 &middot; 
-Tier 1 fingerprint <code>fc9897035fd993a2…</code>
+Semgrep fingerprint <code>fc9897035fd993a2…</code>
 </footer>
 <script>
 
@@ -783,6 +965,16 @@ Tier 1 fingerprint <code>fc9897035fd993a2…</code>
         : visiblePerCat[cat] + '/' + total;
     });
 
+    // F.22: update tab-count pills next to each D/D/R tab button.
+    Object.keys(visiblePerCat).forEach(function (cat) {
+      var tabCount = document.querySelector('[data-tab-count="' + cat + '"]');
+      if (!tabCount) return;
+      var total = parseInt(tabCount.getAttribute('data-tab-total'), 10);
+      tabCount.textContent = visiblePerCat[cat] === total
+        ? total
+        : visiblePerCat[cat] + '/' + total;
+    });
+
     // Status line.
     var totalVisible = visiblePerCat.detect + visiblePerCat.defend + visiblePerCat.respond;
     var grandTotal = findings.length;
@@ -829,20 +1021,33 @@ Tier 1 fingerprint <code>fc9897035fd993a2…</code>
     applyFilter();
   });
 
-  // ----- wire framework-tag click -> drill-down filter -----
+  // ----- wire framework drill-down (per-finding tags + Frameworks-panel buttons) -----
   function toggleFrameworkFilter(key) {
     if (activeFrameworkFilters.has(key)) {
       activeFrameworkFilters.delete(key);
     } else {
       activeFrameworkFilters.add(key);
     }
-    document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+    // Sync visual state on every clickable framework-key node — both the
+    // small per-finding chips and the bigger Frameworks-tab buttons share
+    // the same `data-framework-key` attribute and `framework-active` class.
+    document.querySelectorAll('[data-framework-key]').forEach(function (t) {
       var k = t.getAttribute('data-framework-key');
       t.classList.toggle('framework-active', activeFrameworkFilters.has(k));
     });
     applyFilter();
+    // F.22: when filtering from the Frameworks tab, jump straight to Detect
+    // so the user immediately sees the filter outcome — otherwise the
+    // numbers update silently behind a tab they're not looking at.
+    if (activeFrameworkFilters.size > 0) {
+      var anyDdrVisible = ['detect', 'defend', 'respond'].some(function (cat) {
+        var btn = document.querySelector('.tab-btn[data-tab="' + cat + '"]');
+        return btn && btn.classList.contains('active');
+      });
+      if (!anyDdrVisible) activateTab('detect');
+    }
   }
-  document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+  document.querySelectorAll('[data-framework-key]').forEach(function (t) {
     t.addEventListener('click', function (e) {
       e.stopPropagation();
       toggleFrameworkFilter(t.getAttribute('data-framework-key'));
@@ -853,6 +1058,23 @@ Tier 1 fingerprint <code>fc9897035fd993a2…</code>
         toggleFrameworkFilter(t.getAttribute('data-framework-key'));
       }
     });
+  });
+
+  // ----- F.22: tab switching -----
+  var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tab-btn[data-tab]'));
+  var tabPanels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel[data-panel]'));
+  function activateTab(name) {
+    tabButtons.forEach(function (b) {
+      var on = b.getAttribute('data-tab') === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    tabPanels.forEach(function (p) {
+      p.classList.toggle('active', p.getAttribute('data-panel') === name);
+    });
+  }
+  tabButtons.forEach(function (b) {
+    b.addEventListener('click', function () { activateTab(b.getAttribute('data-tab')); });
   });
 
   // ----- wire expand/collapse per finding -----

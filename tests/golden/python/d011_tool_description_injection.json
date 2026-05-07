@@ -1,0 +1,13 @@
+{
+  "fixture": "python/d011_tool_description_injection.py",
+  "expected_findings": [
+    {
+      "rule_id": "tool-description-injection",
+      "line": 15
+    },
+    {
+      "rule_id": "tool-description-injection",
+      "line": 24
+    }
+  ]
+}

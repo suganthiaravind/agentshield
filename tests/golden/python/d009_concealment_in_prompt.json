@@ -1,0 +1,21 @@
+{
+  "fixture": "python/d009_concealment_in_prompt.py",
+  "expected_findings": [
+    {
+      "rule_id": "system-prompt-concealment-instructions",
+      "line": 11
+    },
+    {
+      "rule_id": "system-prompt-concealment-instructions",
+      "line": 12
+    },
+    {
+      "rule_id": "system-prompt-concealment-instructions",
+      "line": 13
+    },
+    {
+      "rule_id": "system-prompt-concealment-instructions",
+      "line": 14
+    }
+  ]
+}

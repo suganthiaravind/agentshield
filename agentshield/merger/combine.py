@@ -281,6 +281,27 @@ def _build_coverage(
     return cov
 
 
+def _framework_finding_counts(report: CombinedReport) -> dict[str, int]:
+    """Count findings per "<framework_field>:<item>" key, both tiers combined.
+
+    Used by the Frameworks tab in the HTML report — every clickable item
+    shows how many findings carry that framework tag, matching the same
+    `<field>:<value>` key the per-finding `data-framework-key` JS filter
+    uses. Returning a flat dict keeps the renderer one .get() per item.
+    """
+    counts: Counter[str] = Counter()
+    for ann in report.tier1_findings:
+        fm = ann.finding.get("framework_mappings") or ann.finding
+        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe"):
+            for v in (fm.get(k_field) or []):
+                counts[f"{k_field}:{v}"] += 1
+    for f in report.tier2_findings:
+        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe"):
+            for v in (f.get(k_field) or []):
+                counts[f"{k_field}:{v}"] += 1
+    return dict(counts)
+
+
 # ---------- renderers ----------
 
 _DDR_LABELS = {
@@ -488,8 +509,8 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 5. SAIGE classification (if present)
     if r.saige_tier:
         tier_label = (
-            "Non-Agent" if r.saige_tier == "non-agent"
-            else f"Tier {r.saige_tier}"
+            "Non Agent" if r.saige_tier == "non-agent"
+            else f"Agentic Tier {r.saige_tier}"
         )
         lines.append("## JPMC SAIGE Agent Tier classification")
         lines.append("")
@@ -575,7 +596,7 @@ def render_combined_markdown(result: MergeResult) -> str:
 
     # 8. Skipped files (transparency)
     if r.tier2_skipped_files:
-        lines.append("## Tier 2 skipped files")
+        lines.append("## Copilot AI Scan skipped files")
         lines.append("")
         for s in r.tier2_skipped_files:
             lines.append(f"- `{s.get('path', '?')}` — {s.get('reason', 'no reason given')}")
@@ -1015,6 +1036,118 @@ footer {
   color: white;
   box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.18);
 }
+
+/* F.22: tabbed layout — D/D/R + Coverage + Frameworks panels. */
+.tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.tab-btn:hover { color: var(--text); background: rgba(0,0,0,0.02); }
+.tab-btn.active {
+  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+}
+.tab-btn .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ebe7d8;
+  color: #5a5547;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tab-btn.active .tab-count { background: var(--accent); color: white; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.coverage-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.coverage-card .panel-title { font-size: 16px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
+.coverage-card .panel-subtitle {
+  font-size: 12px; color: var(--text-muted); margin: 0 0 18px; line-height: 1.5;
+}
+
+.framework-group { margin-bottom: 22px; }
+.framework-group:last-child { margin-bottom: 0; }
+.framework-group-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+.framework-group-name {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text);
+}
+.framework-group-link {
+  font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 600;
+}
+.framework-group-link:hover { text-decoration: underline; }
+.framework-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.framework-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 8px;
+}
+.framework-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.framework-item:hover { background: var(--panel); border-color: var(--accent); }
+.framework-item.framework-active {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+.framework-item.framework-active .framework-item-count {
+  background: rgba(255,255,255,0.22); color: white;
+}
+.framework-item-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                     font-size: 12px; font-weight: 600; }
+.framework-item-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: #ebe7d8; color: #5a5547;
+}
 """
 
 
@@ -1104,6 +1237,16 @@ _HTML_JS = """
         : visiblePerCat[cat] + '/' + total;
     });
 
+    // F.22: update tab-count pills next to each D/D/R tab button.
+    Object.keys(visiblePerCat).forEach(function (cat) {
+      var tabCount = document.querySelector('[data-tab-count="' + cat + '"]');
+      if (!tabCount) return;
+      var total = parseInt(tabCount.getAttribute('data-tab-total'), 10);
+      tabCount.textContent = visiblePerCat[cat] === total
+        ? total
+        : visiblePerCat[cat] + '/' + total;
+    });
+
     // Status line.
     var totalVisible = visiblePerCat.detect + visiblePerCat.defend + visiblePerCat.respond;
     var grandTotal = findings.length;
@@ -1150,20 +1293,33 @@ _HTML_JS = """
     applyFilter();
   });
 
-  // ----- wire framework-tag click -> drill-down filter -----
+  // ----- wire framework drill-down (per-finding tags + Frameworks-panel buttons) -----
   function toggleFrameworkFilter(key) {
     if (activeFrameworkFilters.has(key)) {
       activeFrameworkFilters.delete(key);
     } else {
       activeFrameworkFilters.add(key);
     }
-    document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+    // Sync visual state on every clickable framework-key node — both the
+    // small per-finding chips and the bigger Frameworks-tab buttons share
+    // the same `data-framework-key` attribute and `framework-active` class.
+    document.querySelectorAll('[data-framework-key]').forEach(function (t) {
       var k = t.getAttribute('data-framework-key');
       t.classList.toggle('framework-active', activeFrameworkFilters.has(k));
     });
     applyFilter();
+    // F.22: when filtering from the Frameworks tab, jump straight to Detect
+    // so the user immediately sees the filter outcome — otherwise the
+    // numbers update silently behind a tab they're not looking at.
+    if (activeFrameworkFilters.size > 0) {
+      var anyDdrVisible = ['detect', 'defend', 'respond'].some(function (cat) {
+        var btn = document.querySelector('.tab-btn[data-tab="' + cat + '"]');
+        return btn && btn.classList.contains('active');
+      });
+      if (!anyDdrVisible) activateTab('detect');
+    }
   }
-  document.querySelectorAll('.finding-tag[data-framework-key]').forEach(function (t) {
+  document.querySelectorAll('[data-framework-key]').forEach(function (t) {
     t.addEventListener('click', function (e) {
       e.stopPropagation();
       toggleFrameworkFilter(t.getAttribute('data-framework-key'));
@@ -1174,6 +1330,23 @@ _HTML_JS = """
         toggleFrameworkFilter(t.getAttribute('data-framework-key'));
       }
     });
+  });
+
+  // ----- F.22: tab switching -----
+  var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tab-btn[data-tab]'));
+  var tabPanels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel[data-panel]'));
+  function activateTab(name) {
+    tabButtons.forEach(function (b) {
+      var on = b.getAttribute('data-tab') === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    tabPanels.forEach(function (p) {
+      p.classList.toggle('active', p.getAttribute('data-panel') === name);
+    });
+  }
+  tabButtons.forEach(function (b) {
+    b.addEventListener('click', function () { activateTab(b.getAttribute('data-tab')); });
   });
 
   // ----- wire expand/collapse per finding -----
@@ -1354,7 +1527,7 @@ def render_combined_html(result: MergeResult) -> str:
 
     # 6. SAIGE classification
     if r.saige_tier:
-        tier_label = "Non-Agent" if r.saige_tier == "non-agent" else f"Tier {r.saige_tier}"
+        tier_label = "Non Agent" if r.saige_tier == "non-agent" else f"Agentic Tier {r.saige_tier}"
         parts.append('<div class="saige-card">')
         parts.append('<div class="saige-label">JPMC SAIGE Agent Tier classification</div>')
         parts.append(f'<div class="saige-tier">{_html_escape(tier_label)}</div>')
@@ -1407,9 +1580,42 @@ def render_combined_html(result: MergeResult) -> str:
     parts.append('<div id="filter-status" class="filter-status"></div>')
     parts.append("</div>")
 
+    # F.22: tab navigation — D/D/R panels + Coverage + Frameworks. The filter
+    # bar above applies globally; tab counts update live with the filter
+    # state. Initial active tab = Detect.
+    parts.append('<div class="tab-nav" role="tablist">')
+    for cat in _DDR_ORDER:
+        emoji_label, _sub, _desc, _q = _DDR_LABELS[cat]
+        bucket = grouped[cat]
+        active = " active" if cat == "detect" else ""
+        parts.append(
+            f'<button type="button" class="tab-btn{active}" role="tab" '
+            f'data-tab="{cat}" aria-selected="{"true" if cat == "detect" else "false"}">'
+            f'{_html_escape(emoji_label)} '
+            f'<span class="tab-count" data-tab-count="{cat}" '
+            f'data-tab-total="{len(bucket)}">{len(bucket)}</span>'
+            f'</button>'
+        )
+    parts.append(
+        '<button type="button" class="tab-btn" role="tab" data-tab="coverage" '
+        'aria-selected="false">Coverage</button>'
+    )
+    parts.append(
+        '<button type="button" class="tab-btn" role="tab" data-tab="frameworks" '
+        'aria-selected="false">Frameworks</button>'
+    )
+    parts.append("</div>")
+
+    parts.append('<div class="tab-panels">')
+
+    # ---- D/D/R panels (one per category) ----
     for cat in _DDR_ORDER:
         emoji_label, subtitle, desc, _question = _DDR_LABELS[cat]
         bucket = grouped[cat]
+        active = " active" if cat == "detect" else ""
+        parts.append(
+            f'<div class="tab-panel{active}" role="tabpanel" data-panel="{cat}">'
+        )
         parts.append(f'<div class="findings-section {cat}" data-section="{cat}">')
         parts.append('<div class="section-header">')
         parts.append(f'<span class="section-title">{_html_escape(emoji_label)} &mdash; {_html_escape(subtitle)}</span>')
@@ -1495,10 +1701,17 @@ def render_combined_html(result: MergeResult) -> str:
                     parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
                 parts.append("</div>")  # /finding-body
                 parts.append("</div>")  # /finding
-        parts.append("</div>")
+        parts.append("</div>")  # /findings-section
+        parts.append("</div>")  # /tab-panel (D/D/R)
 
-    # 8. Coverage matrix
-    parts.append('<h2>Coverage matrix</h2>')
+    # ---- Coverage tab panel ----
+    parts.append('<div class="tab-panel" role="tabpanel" data-panel="coverage">')
+    parts.append('<div class="coverage-card">')
+    parts.append('<h3 class="panel-title">Coverage matrix</h3>')
+    parts.append(
+        '<p class="panel-subtitle">Frameworks the unified scan touched. '
+        'Click any item in the Frameworks tab to filter findings down to that item.</p>'
+    )
     parts.append('<div class="coverage-grid">')
     for k_label, k_key in (
         ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
@@ -1512,12 +1725,66 @@ def render_combined_html(result: MergeResult) -> str:
         else:
             parts.append('<div class="coverage-empty">(none touched)</div>')
     parts.append("</div>")
+    parts.append("</div>")  # /coverage-card
+    parts.append("</div>")  # /tab-panel
 
-    # 9. Footer
+    # ---- Frameworks tab panel ----
+    # Per-framework drill-down: each item shows count + clickable chip that
+    # activates the same framework filter the per-finding tags use.
+    parts.append('<div class="tab-panel" role="tabpanel" data-panel="frameworks">')
+    parts.append('<div class="coverage-card">')
+    parts.append('<h3 class="panel-title">Findings by Security framework</h3>')
+    parts.append(
+        '<p class="panel-subtitle">The same findings, regrouped per framework '
+        'item, with a per-item count. Click any item to filter the D/D/R '
+        'tabs down to findings tagged with it.</p>'
+    )
+    fw_counts = _framework_finding_counts(r)
+    for k_label, k_key, k_url in (
+        ("OWASP LLM Top 10 v2", "owasp_llm",
+         "https://genai.owasp.org/llm-top-10/"),
+        ("OWASP Agentic AI Top 10", "owasp_agentic",
+         "https://genai.owasp.org/llm-top-10-for-agentic-ai/"),
+        ("MITRE ATLAS", "mitre_atlas", "https://atlas.mitre.org/"),
+        ("CWE first-class", "cwe", "https://cwe.mitre.org/"),
+    ):
+        items = sorted(getattr(r.coverage, k_key))
+        parts.append('<div class="framework-group">')
+        parts.append(
+            f'<div class="framework-group-header">'
+            f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
+            f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
+            f'target="_blank" rel="noopener">reference &rarr;</a>'
+            f'</div>'
+        )
+        if not items:
+            parts.append('<div class="framework-empty">(no findings hit this framework)</div>')
+        else:
+            parts.append('<div class="framework-items">')
+            for item in items:
+                key = f"{k_key}:{item}"
+                count = fw_counts.get(key, 0)
+                parts.append(
+                    f'<button type="button" class="framework-item" '
+                    f'data-framework-key="{_html_escape(key)}" '
+                    f'title="Filter findings to those tagged {_html_escape(item)}">'
+                    f'<span class="framework-item-id">{_html_escape(item)}</span>'
+                    f'<span class="framework-item-count">{count} '
+                    f'finding{"s" if count != 1 else ""}</span>'
+                    f'</button>'
+                )
+            parts.append("</div>")
+        parts.append("</div>")  # /framework-group
+    parts.append("</div>")  # /coverage-card
+    parts.append("</div>")  # /tab-panel
+
+    parts.append("</div>")  # /tab-panels
+
+    # Footer
     parts.append("<footer>")
     parts.append("AgentShield v2 &middot; ")
     if r.tier1_fingerprint:
-        parts.append(f'Tier 1 fingerprint <code>{_html_escape(r.tier1_fingerprint[:16])}…</code>')
+        parts.append(f'Semgrep fingerprint <code>{_html_escape(r.tier1_fingerprint[:16])}…</code>')
     parts.append("</footer>")
 
     # F.21: client-side interactivity. Vanilla JS, no framework, no network

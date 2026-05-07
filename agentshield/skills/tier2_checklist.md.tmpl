@@ -54,8 +54,8 @@ fire — re-read the check definition.
 
 | Section | Frameworks covered | Check count |
 |---|---|---|
-| §1 OWASP LLM Top 10 v2 | LLM01–LLM10 | ~25 |
-| §2 OWASP Agentic AI Top 10 | T1–T11 | ~22 |
+| §1 OWASP LLM Top 10 v2 | LLM01–LLM10 | ~27 |
+| §2 OWASP Agentic AI Top 10 | T1–T11 | ~26 |
 | §3 MITRE ATLAS techniques | 6 ML-app-relevant techniques | ~6 |
 | §4 CWE first-class concerns | CWE-78, 89, 94, 200, 400, 494, 532, 732, 798, 829 | ~10 |
 | §5 Phase E judge-surfaced gaps | 5 patterns rules never had | ~5 |
@@ -346,6 +346,54 @@ checks. Map findings using the `owasp_llm` array.
 - **Remediation:** Always provide an args schema. Pydantic for
   langchain Python; `@P` / `@ToolParam` for Java.
 
+### TIER2-LLM06-04 — LLM call inside the permission-decision path
+- **Severity:** high
+- **Languages:** any
+- **Frameworks:** owasp_llm=[LLM06], owasp_agentic=[T2, T9]
+- **Look for:** A function whose name or return value indicates an
+  authorisation gate (`is_allowed`, `can_<verb>`, `check_permission`,
+  `authorize`, returns `bool` / `Decision` / "allow"|"deny") that
+  internally calls an LLM (`chat.completions.create`, `chain.invoke`,
+  `client.messages.create`, `bedrock.invoke_model`) to make the
+  decision. Includes "ask the LLM if this action is safe" patterns.
+- **Skip if:** The LLM call is for *explanation* of an already-made
+  deterministic decision (e.g. "tell the user why this was denied"),
+  or the LLM result is one signal among many fed into a deterministic
+  rule.
+- **Why it matters:** Mirrors OWASP ASI-08 (Policy Bypass). LLM-based
+  permission decisions fail open: a successful prompt-injection turns
+  every "deny" into "allow", and the gate becomes a recommendation
+  surface for attackers. Policy must be deterministic, fail-closed,
+  and not reachable by user-controlled prompts.
+- **Remediation:** Move authorisation to a deterministic rules engine
+  (OPA, Cedar, hand-rolled predicate). The LLM may *propose* an action;
+  a non-LLM gate must *approve* it. If you need natural-language
+  reasoning in the audit trail, log it as rationale alongside the
+  deterministic decision — don't let it be the decision.
+
+### TIER2-LLM06-05 — Lookalike / shadow tool names registered
+- **Severity:** medium
+- **Languages:** any
+- **Frameworks:** owasp_llm=[LLM06], owasp_agentic=[T2, T6]
+- **Look for:** Two or more tools registered to the same agent whose
+  names differ only by a typosquat-shaped suffix or character swap
+  (`cancel_subscription` + `cancel_subscription_v2`,
+  `read_file` + `read__file`, `send_email` + `send_email_internal`).
+  Especially suspicious when the lookalike has broader permissions
+  than the original. Borrowed from Cisco AI-Defense's "tool shadowing"
+  category.
+- **Skip if:** The two tools are clearly versioned (`v1` is deprecated
+  and unregistered before runtime) or one is gated behind a different
+  capability flag and unreachable from the planner.
+- **Why it matters:** Planners pick tools by name+description match.
+  A shadow tool with a near-identical name can hijack invocations
+  intended for the legitimate one — same surface as supply-chain
+  typosquatting, but inside the agent's own tool registry.
+- **Remediation:** Enforce unique tool names at registration time
+  (`assert name not in registry`). Run a Levenshtein-distance check
+  in CI on the registered tool list. Remove deprecated versions
+  rather than leaving them registered alongside their replacement.
+
 ### TIER2-LLM07-01 — System prompt logged or returned in response
 - **Severity:** medium
 - **Languages:** any
@@ -558,6 +606,35 @@ Use the `owasp_agentic` array to mark T1–T11.
 - **Remediation:** Always set timeouts. Use circuit breakers for
   external dependencies.
 
+### TIER2-AGENTIC-T4-03 — No circuit breaker / kill switch on agent loop
+- **Severity:** medium
+- **Languages:** any
+- **Frameworks:** owasp_agentic=[T4, T8], owasp_llm=[LLM10]
+- **Look for:** An agent loop / planner / `while`-style retry that has
+  no failure-counting circuit breaker and no externally-triggerable
+  kill switch. Symptoms: LangGraph graph with no `recursion_limit=`;
+  custom `while True:` planner with no consecutive-failure cap;
+  no `agent.stop()` / `kill_switch` / `cancellation_token` reachable
+  from outside the loop; no degraded-mode fallback when a downstream
+  tool repeatedly errors.
+- **Skip if:** A circuit-breaker library is in use (`pybreaker`,
+  Resilience4j) on the tool calls AND a graph-level recursion limit
+  is set AND an out-of-band stop signal is wired (SIGTERM handler,
+  feature flag, queue-drain on toggle).
+- **Why it matters:** Mirrors OWASP ASI-10 (Behavioural Anomaly).
+  When an agent misbehaves — runaway tool calls, infinite plan loops,
+  malformed outputs feeding the next step — the only safe answer is
+  "stop". An agent without a circuit breaker turns a transient bug
+  into an incident; an agent without a kill switch turns an incident
+  into a paged engineer manually killing pods.
+- **Remediation:** Wrap tool calls in a circuit breaker that opens
+  after N consecutive failures. Set graph `recursion_limit=`
+  (LangGraph) or planner-iteration cap. Expose a kill switch
+  (feature-flag / SQS-drain / SIGTERM handler) that drains in-flight
+  calls and refuses new ones. Decay agent trust scores over time so
+  silent failure modes (no traffic, no errors) don't accumulate
+  permission.
+
 ### TIER2-AGENTIC-T5-01 — Cascading hallucination — output of one LLM feeds another without verification
 - **Severity:** medium
 - **Languages:** any
@@ -630,6 +707,87 @@ Use the `owasp_agentic` array to mark T1–T11.
   Per-request creds limit blast radius.
 - **Remediation:** Use STS AssumeRole, OIDC tokens, or signed JWTs
   with TTL ≤ 1h.
+
+### TIER2-AGENTIC-T9-02 — Self-promoting agent (modifies its own role / trust)
+- **Severity:** high
+- **Languages:** any
+- **Frameworks:** owasp_agentic=[T9, T3], owasp_llm=[LLM06], cwe=[CWE-269]
+- **Look for:** Code where an agent / agent loop writes to its own
+  role, trust score, capability list, or scope without external
+  attestation. Symptoms: `self.role = ...`, `agent.permissions.add(...)`,
+  `trust_registry.set(self.id, ...)`, `self.capabilities += ...`,
+  agent code calling its own `/api/grant-role` or equivalent. The
+  decisive question: who is the *writer*? If the same agent that's
+  bound to the identity can mutate the identity's authority, the
+  privilege model is broken.
+- **Skip if:** Privilege/role changes go through a separate identity
+  service that requires a signed attestation (human approval, SRE
+  witness, OIDC step-up, hardware-key). If the writer is a different
+  process with its own credentials, it's not self-promotion.
+- **Why it matters:** Mirrors OWASP ASI-04 (Unauthorised Escalation).
+  Once an agent can promote itself, every other control downstream
+  is a recommendation: a prompt-injection turns into a privilege-
+  escalation primitive in one step. Human-in-the-loop on the action
+  doesn't help if the agent already has the permission to skip the
+  human.
+- **Remediation:** Privilege state lives in an external authority
+  (IAM, OPA, identity service) that the agent reads but cannot write.
+  Promotions require an attestation from a different principal
+  (human + hardware key, or a deterministic policy that the agent
+  cannot influence). Log every promotion attempt, even denied ones.
+
+### TIER2-AGENTIC-T9-03 — Inter-agent message accepted without identity verification
+- **Severity:** high
+- **Languages:** any
+- **Frameworks:** owasp_agentic=[T9, T5], owasp_llm=[LLM06]
+- **Look for:** Multi-agent code (CrewAI `Crew(...)`, LangGraph
+  supervisor / handoffs, AutoGen `GroupChat`, custom `accept_task` /
+  `dispatch` / `handle_message` handlers) where one agent processes
+  a task / plan / instruction from another agent without checking
+  who sent it. Specifically: no signature verification, no trust
+  score check, no allowlist of accepted senders, no scope-narrowing
+  on delegation.
+- **Skip if:** Inter-agent messages are signed (Ed25519, JWT, mTLS)
+  AND the receiver verifies the signature AND a trust-threshold
+  check exists before the action runs. Single-process toy demos
+  (`if __name__ == "__main__"`) get a pass.
+- **Why it matters:** Mirrors OWASP ASI-05 (Trust Boundary
+  Violation). Multi-agent systems where every agent trusts every
+  other agent collapse into a single shared blast radius — one
+  compromised agent compromises every action across the crew. The
+  "fellow agent" channel is the easiest privilege-escalation path
+  in agentic systems.
+- **Remediation:** Each agent gets its own identity (DID / signed
+  token / mTLS cert). Receivers verify the sender's signature
+  before acting. Delegation must narrow scope: a child task's
+  capability set ⊆ parent's. Reject (with audit log) any message
+  from an unknown or low-trust sender.
+
+### TIER2-AGENTIC-T9-04 — Agent identified by string name, not crypto identity
+- **Severity:** medium
+- **Languages:** any
+- **Frameworks:** owasp_agentic=[T9], cwe=[CWE-287, CWE-322]
+- **Look for:** Agent identity carried as a bare string —
+  `agent_name = "billing-agent"`, `Agent(name="research-bot")`,
+  audit-log `agent_id` populated from a config string with no
+  cryptographic backing. No DID (`did:web:`, `did:key:`), no
+  per-agent key material, no signing of inter-agent messages or
+  audit entries.
+- **Skip if:** The agent has a unique cryptographic identity (Ed25519
+  keypair, JWK, mTLS cert) AND tool calls / audit entries / inter-
+  agent messages are signed with that key.
+- **Why it matters:** Mirrors OWASP ASI-07 (Insecure Identity).
+  String names are spoof-trivial: any process that knows the name
+  can claim the identity. Without crypto identity you can't tell
+  which agent really emitted a finding, which agent really called a
+  tool, or which agent really sent a multi-agent message — making
+  T9-02 (self-promotion) and T9-03 (inter-agent trust) checks
+  meaningless from outside the box.
+- **Remediation:** Issue per-agent keypairs at provisioning. Sign
+  audit entries (hash-chained) and inter-agent messages with the
+  agent's key. Verify on receipt. Treat the keypair as the source
+  of truth for identity; the human-readable name is a label for
+  operators, not a security primitive.
 
 ### TIER2-AGENTIC-T10-01 — High-volume HITL request fatigue
 - **Severity:** low

@@ -1,0 +1,33 @@
+{
+  "fixture": "python/d010_jailbreak_markers.py",
+  "expected_findings": [
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 10
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 11
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 12
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 13
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 14
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 15
+    },
+    {
+      "rule_id": "system-prompt-jailbreak-markers",
+      "line": 16
+    }
+  ]
+}

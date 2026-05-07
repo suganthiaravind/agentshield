@@ -1,0 +1,49 @@
+rules:
+  - id: agentshield.detect.system-prompt-jailbreak-markers
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A hardcoded prompt string contains jailbreak / mode-switch markers —
+      phrases like "you are now in unrestricted mode", "developer mode",
+      "disable safety filters", "ignore previous instructions". These
+      strings are typically left-over from prompt-engineering experiments
+      or red-team scaffolding that should never reach production. Any of
+      these baked into a system prompt actively suppresses safety
+      behaviour; baked into a user-facing prompt template, it primes the
+      model to ignore its own guardrails. Mirrors Cisco AI-Defense
+      PROMPT_INJECTION_UNRESTRICTED_MODE / IGNORE_INSTRUCTIONS signatures
+      applied to the agent's own configured prompts. OWASP LLM01.
+    pattern-either:
+      # Mode-switch strings ("now in <mode> mode", "enter <mode> mode").
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\byou\s+are\s+now\s+in\s+(unrestricted|debug|developer|admin|god|jailbreak|dan)\s+mode[^"\x27]*["\x27]'
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\benter\s+(unrestricted|debug|developer|admin|jailbreak|dan)\s+mode[^"\x27]*["\x27]'
+      # Disable-safety strings.
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bdisable\s+(all\s+)?(safety|security|content|ethical)\s+(filters|checks|guidelines|guardrails)[^"\x27]*["\x27]'
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bbypass\s+(content|usage|safety)\s+polic(y|ies)[^"\x27]*["\x27]'
+      # Override-previous-instructions strings.
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bignore\s+(all\s+)?(previous|prior|earlier)\s+(instructions|rules|prompts|guidelines)[^"\x27]*["\x27]'
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bdisregard\s+(all\s+)?(previous|prior)\s+(instructions|rules)[^"\x27]*["\x27]'
+      - pattern-regex: '(?i)[fr]?["\x27][^"\x27]*\bforget\s+(everything|all\s+(previous|prior)\s+(instructions|context))[^"\x27]*["\x27]'
+    metadata:
+      category: detect
+      agentshield_id: AS-D-010
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T6"]
+        nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
+        mitre_atlas: ["AML.T0051"]
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Delete jailbreak strings from production prompts. If a red-team
+        fixture is genuinely needed (e.g. for evaluation), keep it in a
+        test-only file under `tests/` or `evals/` — AgentShield treats
+        those paths as lower-severity by default. For research or
+        adversarial evaluation, move the strings into a dedicated test
+        corpus that does not sit in the same module as the production
+        prompt template. Whitelist-comments
+        (`# nosec - red-team eval string`) on the production line only
+        hide the symptom; remove the string itself.
+      references:
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
