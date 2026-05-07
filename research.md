@@ -1,11 +1,11 @@
 # AgentShield — Research & References
 
 Status: 2026-05-06
-Companion to: [README.md](./README.md), [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [RULES_COVERAGE.md](./RULES_COVERAGE.md), [GLOSSARY.md](./GLOSSARY.md)
+Companion to: [README.md](./README.md), [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md). Per-rule detail lives in the **Reference tab** of any generated HTML report.
 
 This document is the **forward-looking reference** for AgentShield: the security frameworks AgentShield maps findings to, the Detect / Defend / Respond taxonomy that organises every finding, and the open-source AI agent security tools that complement (or compete with) AgentShield.
 
-For per-rule detail (what each Tier 1 rule pattern matches, what suppresses it), see [RULES_COVERAGE.md](./RULES_COVERAGE.md). For per-check detail on Tier 2 (what each of the 56 LLM-as-scanner checks looks for), see [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl).
+For per-rule detail (what each Semgrep rule, Copilot check, and AST10 manifest rule looks for, with suppressors and framework mappings), open the **Reference tab** in any generated HTML report — `agentshield merge --output-html report.html` produces it. The print-friendly stacked variant is `report-print.html`. The raw Tier 2 checklist source is at [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl).
 
 ## Contents
 
@@ -48,7 +48,7 @@ The unified `agentshield merge` report combines both tiers + a Tier-2-cross-chec
 
 Every AgentShield finding carries pointers into multiple external taxonomies via its `framework_mappings` block. The dual-mapping pattern: a finding has **exactly one** D/D/R category (AgentShield's organising spine — see §3) plus **many** external mappings (OWASP / Agentic / NIST / MITRE / CWE). This lets a single finding tell different consumers different things — a compliance team sees "this satisfies OWASP LLM01 + NIST MAP-2.3," a security engineer sees "this is a Detect rule firing on a missing input filter."
 
-For per-rule detail of which framework items each Tier 1 rule maps to, see [RULES_COVERAGE.md §6](./RULES_COVERAGE.md#6-retired-rule--tier-2-cross-reference) (cross-reference) and the individual rule sections.
+For per-rule detail of which framework items each rule maps to, open the **Reference tab** of any generated HTML report — every card lists its full framework chip set inline. Or browse to **Frameworks tab → click any framework item** to drill down to the rules that touch it.
 
 ### 2.1 OWASP LLM Top 10 v2 (2025)
 

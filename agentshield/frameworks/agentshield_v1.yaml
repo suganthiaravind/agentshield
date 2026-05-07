@@ -7,7 +7,7 @@
 
 framework: "AgentShield Framework v1"
 version: "0.1.0"
-url: "https://github.com/<TBD>/agentshield"
+url: "https://github.com/suganthiaravind/agentshield"
 
 entries:
   AS-R-001:

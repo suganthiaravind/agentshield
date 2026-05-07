@@ -96,7 +96,7 @@ agentshield/
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
 | [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |
-| [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule (active or retired) detects, framework by framework |
+| **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, with framework mappings. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; or open `report-print.html` for a printable list. |
 | [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for each finding |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs |
 

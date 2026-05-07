@@ -262,7 +262,6 @@ testbed/                          [unchanged — same regression targets]
 docs/
   ARCHITECTURE_V2.md              [this file]
   ROADMAP.md                      [Phase F section added]
-  RULES_COVERAGE.md               [updated for 6-family pack]
   REMEDIATION_PATTERNS.md         [updated for 6 families]
   TIER2_USAGE.md                  [NEW — Copilot workflow walkthrough]
   VDI_TESTING.md                  [updated for v2 commands]

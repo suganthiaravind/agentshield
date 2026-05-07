@@ -35,7 +35,7 @@ This document is the **single canonical source of truth for AgentShield's state*
 | [TIER2_USAGE.md](./TIER2_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
 | [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | 5-minute cheat sheet for running v2 in a JPMC VDI. |
 | [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
-| [RULES_COVERAGE.md](./RULES_COVERAGE.md) | What each rule detects, language by language. |
+| **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, framework by framework. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; `report-print.html` is the stacked / printable variant. |
 | [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for fixing each rule's finding (Python + Java). |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
 | [REQUIREMENTS.md](./REQUIREMENTS.md) | What you need installed + how to run AgentShield in a VDI. |
@@ -377,7 +377,7 @@ Phase D eliminated the SpringApplication.run FP class on spring-ai-examples (64 
 
 ### 6.3 Async embedding source patterns (Python)
 
-[RULES_COVERAGE.md §8](./RULES_COVERAGE.md#8-known-gaps) Known Gaps notes that DF001 / R001 cover `$MODEL.embed(...)` and `$MODEL.aembed(...)` but not the awaited form `await $X.embed(...)`. Verified-not-firing-on-real-code today; would be a small completeness improvement.
+DF001 / R001 (now retired into Tier 2) historically covered `$MODEL.embed(...)` and `$MODEL.aembed(...)` but not the awaited form `await $X.embed(...)`. Verified-not-firing-on-real-code today; would be a small completeness improvement if revisited.
 **Effort:** XS.
 
 ### 6.4 Java `CompletableFuture`-chained sinks
