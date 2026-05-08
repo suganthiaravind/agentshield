@@ -295,3 +295,222 @@ def build_all_references(
         refs.extend(parse_tier2_checklist(tier2_checklist_path.read_text(encoding="utf-8")))
     refs.extend(load_manifest_scanner_references())
     return refs
+
+
+# ---------- Fix-skill renderer (F.34) ----------
+#
+# Emits one OWASP-Universal-Skill-Format SKILL.md per source so that an
+# LLM coding assistant (Claude Code / Copilot Chat) loaded with the skill
+# can interpret and remediate AgentShield findings of that source. The
+# body content is generated directly from the same RuleReference data
+# that powers the Reference tab — so the skills stay in sync with the
+# rule pack as long as the build script is re-run after rule changes
+# (test_skills.py asserts no drift).
+
+# Per-source frontmatter metadata. The `description` is the LLM-discovery
+# hint — it must enumerate the trigger phrases / patterns that should
+# load the skill. Vague descriptions never trigger.
+_FIX_SKILL_META = {
+    "Semgrep": {
+        "name": "agentshield-semgrep-fixes",
+        "title": "AgentShield Semgrep (Tier 1) Remediation Skill",
+        "id_prefix": "AS-S-",
+        "blurb": (
+            "Help developers fix AgentShield Tier 1 (Semgrep) findings — "
+            "high-precision Python/Java AST + taint matches with rule IDs "
+            "starting `AS-S-`."
+        ),
+        "triggers": [
+            "the user pastes a finding ID starting with `AS-S-` "
+            "(e.g. `AS-S-D-LLM01-001`) into chat",
+            "the user asks how to fix an AgentShield Semgrep finding",
+            "the user pastes a SARIF result with `ruleId` starting "
+            "`agentshield.detect.*` / `agentshield.defend.*`",
+            "the user references a legacy AgentShield Tier 1 ID like "
+            "`AS-D-001` / `AS-DF-003` (those are aliased to current IDs)",
+        ],
+    },
+    "Copilot": {
+        "name": "agentshield-copilot-fixes",
+        "title": "AgentShield Copilot (Tier 2) Remediation Skill",
+        "id_prefix": "AS-C-",
+        "blurb": (
+            "Help developers fix AgentShield Tier 2 (Copilot LLM-as-"
+            "scanner) findings — semantic / cross-function checks with "
+            "rule IDs starting `AS-C-`."
+        ),
+        "triggers": [
+            "the user pastes a finding ID starting with `AS-C-` "
+            "(e.g. `AS-C-DF-LLM06-004`) into chat",
+            "the user asks how to fix an AgentShield Copilot finding",
+            "the user references a legacy `TIER2-LLM..-..` / "
+            "`TIER2-AGENTIC-T..-..` / `TIER2-CWE-..-..` ID — they alias "
+            "to current `AS-C-*` IDs",
+            "the user has just run `agentshield merge` and asks about "
+            "Tier 2 entries in the report",
+        ],
+    },
+    "Manifest": {
+        "name": "agentshield-manifest-fixes",
+        "title": "AgentShield AST10 Manifest Remediation Skill",
+        "id_prefix": "AS-M-",
+        "blurb": (
+            "Help developers fix AgentShield AST10 manifest-scanner "
+            "findings — checks on `SKILL.md` packages with rule IDs "
+            "starting `AS-M-`. Maps to OWASP Agentic Skills Top 10 "
+            "(AST10)."
+        ),
+        "triggers": [
+            "the user pastes a finding ID starting with `AS-M-` "
+            "(e.g. `AS-M-D-AST03-001`) into chat",
+            "the user asks how to fix an AgentShield manifest / SKILL.md"
+            " finding",
+            "the user references an AST10 risk (`AST01` … `AST07`) on a "
+            "skill package they're building or auditing",
+            "the user references a legacy `AS-AST-NNN` ID — those alias "
+            "to current `AS-M-*` IDs",
+        ],
+    },
+}
+
+
+def render_fix_skill(source: str, refs: list[RuleReference]) -> str:
+    """Render the SKILL.md content for one source's fix skill.
+
+    Pulls every rule for `source` from `refs`, sorts by category +
+    agentshield_id for stability, and emits OWASP-UF YAML frontmatter +
+    a per-rule remediation body.
+    """
+    if source not in _FIX_SKILL_META:
+        raise ValueError(f"unknown source: {source!r}")
+    meta = _FIX_SKILL_META[source]
+
+    src_refs = [r for r in refs if r.source == source]
+    src_refs.sort(key=lambda r: (r.category, r.agentshield_id))
+
+    cat_order = ("detect", "defend", "respond")
+
+    lines: list[str] = []
+
+    # ----- frontmatter -----
+    lines.append("---")
+    lines.append(f"name: {meta['name']}")
+    lines.append("description: |")
+    # The description is critical for LLM discovery. List trigger
+    # patterns explicitly — vague descriptions never trigger.
+    lines.append(f"  {meta['blurb']}")
+    lines.append("")
+    lines.append("  Use this skill when:")
+    for t in meta["triggers"]:
+        lines.append(f"    - {t}")
+    lines.append("author:")
+    lines.append("  name: AgentShield")
+    lines.append("  identity: did:web:github.com/suganthiaravind/agentshield")
+    # OWASP-UF permission shape (from research/owasp-ast10/README.md).
+    # Read-only skill: no network, no shell, no file writes.
+    lines.append("permissions:")
+    lines.append('  network:')
+    lines.append('    allow: []')
+    lines.append("  shell: false")
+    lines.append("  files:")
+    lines.append("    read: []")
+    lines.append("    write: []")
+    lines.append("    deny_write:")
+    lines.append("      - SOUL.md")
+    lines.append("      - MEMORY.md")
+    lines.append("      - AGENTS.md")
+    lines.append("risk_tier: L0")
+    lines.append("---")
+    lines.append("")
+
+    # ----- body -----
+    lines.append(f"# {meta['title']}")
+    lines.append("")
+    lines.append(meta["blurb"])
+    lines.append("")
+    lines.append(
+        f"When a user pastes an `{meta['id_prefix']}…` finding ID or "
+        "asks about one of the rules below, walk them through the "
+        "remediation. Cite the canonical rule ID and the framework "
+        "mappings; if the user pasted a legacy ID, mention it once and "
+        "carry on with the current ID."
+    )
+    lines.append("")
+    lines.append(f"Total rules in this skill: **{len(src_refs)}**")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    if not src_refs:
+        lines.append(f"_No rules currently registered for source `{source}`._")
+        return "\n".join(lines) + "\n"
+
+    # Group by D/D/R for readability.
+    for cat in cat_order:
+        bucket = [r for r in src_refs if r.category == cat]
+        if not bucket:
+            continue
+        emoji_label, _sub, _desc, _q = {
+            "detect": ("🔴 Detect", "", "", ""),
+            "defend": ("🟡 Defend", "", "", ""),
+            "respond": ("🔵 Respond", "", "", ""),
+        }[cat]
+        lines.append(f"## {emoji_label} ({len(bucket)})")
+        lines.append("")
+        for ref in bucket:
+            lines.extend(_render_fix_skill_rule(ref))
+            lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # Footer pointing back at AgentShield itself.
+    lines.append("## Related")
+    lines.append("")
+    lines.append(
+        "- AgentShield repo: https://github.com/suganthiaravind/agentshield"
+    )
+    lines.append(
+        "- For the live, full rule list across all three sources, run "
+        "`agentshield merge --output-html report.html` and open the "
+        "**Reference tab** of the generated report."
+    )
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def _render_fix_skill_rule(ref: RuleReference) -> list[str]:
+    """One block per rule. Severity, lang, framework chips, what it
+    flags, and the remediation guidance (the user's actionable bit)."""
+    chips = []
+    for k, items in ref.frameworks.items():
+        label = {
+            "owasp_llm": "OWASP LLM",
+            "owasp_agentic": "OWASP Agentic",
+            "mitre_atlas": "MITRE ATLAS",
+            "cwe": "CWE",
+            "ast": "AST10",
+        }.get(k, k)
+        for v in items:
+            chips.append(f"`{label} {v}`")
+
+    out: list[str] = []
+    out.append(f"### `{ref.agentshield_id}` — {ref.title}")
+    out.append("")
+    meta_bits = [f"**Severity:** {ref.severity}"]
+    if ref.languages:
+        meta_bits.append(f"**Languages:** {ref.languages}")
+    if ref.legacy_ids:
+        meta_bits.append(f"**Legacy ID:** `{', '.join(ref.legacy_ids)}`")
+    out.append(" · ".join(meta_bits))
+    if chips:
+        out.append("")
+        out.append("**Frameworks:** " + " ".join(chips))
+    out.append("")
+    out.append(f"**What it flags:** {ref.description}")
+    if ref.skip_if:
+        out.append("")
+        out.append(f"**Skip if:** {ref.skip_if}")
+    if ref.remediation:
+        out.append("")
+        out.append(f"**Remediation:** {ref.remediation}")
+    return out

@@ -178,3 +178,59 @@ def test_build_all_references_skips_missing_checklist(tmp_path: Path) -> None:
     )
     sources = {r.source for r in refs}
     assert sources == {"Semgrep", "Manifest"}
+
+
+# ---------- F.34: fix-skill SKILL.md generator ----------
+
+def test_render_fix_skill_emits_owasp_uf_frontmatter() -> None:
+    """Every fix-skill must lead with valid OWASP-Universal-Skill-Format
+    YAML frontmatter so Claude / Copilot can discover and load it."""
+    from agentshield.merger.reference import render_fix_skill
+
+    refs = build_all_references(
+        tier1_rules_path=RULES_PATH,
+        tier2_checklist_path=CHECKLIST_PATH,
+    )
+    for source in ("Semgrep", "Copilot", "Manifest"):
+        md = render_fix_skill(source, refs)
+        # Frontmatter shape.
+        assert md.startswith("---\n"), f"{source}: missing frontmatter open"
+        # Must declare its discovery-relevant fields.
+        for field in ("name:", "description:", "author:", "permissions:", "risk_tier:"):
+            assert field in md.split("\n---\n", 1)[0], (
+                f"{source}: missing frontmatter field {field}"
+            )
+        # Must be read-only by construction (no shell, no writes).
+        assert "shell: false" in md
+        # Must list at least one trigger phrase ("AS-S-" / "AS-C-" / "AS-M-").
+        prefix = {"Semgrep": "AS-S-", "Copilot": "AS-C-", "Manifest": "AS-M-"}[source]
+        assert prefix in md
+
+
+def test_fix_skill_files_on_disk_match_fresh_render() -> None:
+    """Drift guard: the committed skill files in `agentshield/skills/`
+    must match what the generator produces today. If a rule changes
+    and someone forgets to re-run `python -m agentshield.skills.
+    _build_fix_skills`, this test fails on CI."""
+    from agentshield.merger.reference import render_fix_skill
+
+    refs = build_all_references(
+        tier1_rules_path=RULES_PATH,
+        tier2_checklist_path=CHECKLIST_PATH,
+    )
+    expected = {
+        "Semgrep": REPO / "agentshield" / "skills" / "agentshield_semgrep_fixes.md",
+        "Copilot": REPO / "agentshield" / "skills" / "agentshield_copilot_fixes.md",
+        "Manifest": REPO / "agentshield" / "skills" / "agentshield_manifest_fixes.md",
+    }
+    for source, path in expected.items():
+        assert path.exists(), (
+            f"Missing fix-skill: {path}. "
+            f"Run `python -m agentshield.skills._build_fix_skills` to (re)generate."
+        )
+        on_disk = path.read_text(encoding="utf-8")
+        fresh = render_fix_skill(source, refs)
+        assert on_disk == fresh, (
+            f"{path.name} is out of sync with the rule pack. "
+            f"Run `python -m agentshield.skills._build_fix_skills` to refresh."
+        )
