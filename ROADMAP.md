@@ -1,7 +1,7 @@
 # Roadmap
 
 Status: 2026-05-05
-Companion to: [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [VDI_TESTING.md](./VDI_TESTING.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md)
+Companion to: [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md)
 
 This document is the **single canonical source of truth for AgentShield's state** — both what's been delivered and what's still pending. The phase-triage docs (PHASE_B / C / D) are historical records of what each phase did; this file reads top-down so anyone picking up the project sees the current state, the trajectory, and the open questions in one place.
 
@@ -33,11 +33,9 @@ This document is the **single canonical source of truth for AgentShield's state*
 | **ROADMAP.md** (this file) | Canonical state of project — what's done + what's pending. Maintained continuously. |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — system layout, why the architecture is what it is. |
 | [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
-| [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | 5-minute cheat sheet for running v2 in a JPMC VDI. |
-| [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
+| [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch. |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, framework by framework. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; `report-print.html` is the stacked / printable variant. |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
-| [REQUIREMENTS.md](./REQUIREMENTS.md) | What you need installed + how to run AgentShield in a VDI. |
 
 > Phase B/C/D triage logs and PHASE_I_PLAN.md / TESTBED_VALIDATION.md were deleted in F.12 — their content is summarised in §3 below; full detail is in git history.
 
@@ -75,7 +73,7 @@ The original sequenced one-week plan (decided 2026-05-02) — landed across the 
 - **Tier 3 LLM judge tier** — boto3-Bedrock backend (`Boto3BedrockBackend`) + `JudgeOrchestrator` that routes fallback findings to the judge for triage. CLI flags `--llm-backend`, `--bedrock-model-id`, `--bedrock-region`.
 - **Three output writers** — SARIF v2.1.0 ([agentshield/report/sarif.py](./agentshield/report/sarif.py)), JSON ([agentshield/report/json_writer.py](./agentshield/report/json_writer.py)), Markdown ([agentshield/report/markdown.py](./agentshield/report/markdown.py)).
 - **Initial rule pack** — D001 (fw + fb), D002, D003, DF001, DF002, R001 — covering OWASP LLM01 (Prompt Injection), LLM06 (Excessive Agency), LLM10 audit logging side. Python only initially.
-- **Documentation** — [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md), [REQUIREMENTS.md](./REQUIREMENTS.md), [VDI_TESTING.md](./VDI_TESTING.md). (v1 docs ARCHITECTURE.md / ARCHITECTURE_RATIONALE.md / TIER_FLOWS.md / LLM_JUDGE_DESIGN.md were deleted in Phase F.10; their content lives in git history.)
+- **Documentation** — [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md). (v1 docs ARCHITECTURE.md / ARCHITECTURE_RATIONALE.md / TIER_FLOWS.md / LLM_JUDGE_DESIGN.md were deleted in Phase F.10; their content lives in git history.)
 - **Java rule parity (initial)** — Java versions of D001 / DF001 / R001 for langchain4j + Spring AI + Bedrock direct.
 
 ### 3.2 Phase A — testbed validation methodology
@@ -155,9 +153,9 @@ The original sequenced one-week plan (decided 2026-05-02) — landed across the 
 ### 3.7 Post-Phase-D — roadmap consolidation + mock judge backend
 
 **Delivered:**
-- **VDI_TESTING.md refresh** — Stage 7.5 added with specific run commands for Python SMARTSDK + Spring AI agents, privacy-review checklist before sharing reports, and "what to share" / "what the triage produces" guidance.
+- **VDI testing playbook refresh** — Stage 7.5 added with specific run commands for Python SMARTSDK + Spring AI agents, privacy-review checklist before sharing reports, and "what to share" / "what the triage produces" guidance. (Doc was later folded into [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) in F.39.)
 - **ROADMAP.md** (this file) — consolidates the scattered "what's left" sections from PHASE_B / C / D into a single canonical pending-work list, plus this phase-by-phase shipped record.
-- **`MockJudgeBackend` + `--llm-backend mock` flag** ([agentshield/judge/mock_backend.py](./agentshield/judge/mock_backend.py)) — deterministic placeholder backend for VDI / dev smoke-testing the orchestrator pipeline without AWS. Returns a fixed `needs_review` verdict on every call with reasoning that explicitly says "no real LLM was called" so a leaked finding can never be mistaken for a real triage. **Stage 4.5** added to [VDI_TESTING.md](./VDI_TESTING.md) showing the full `agentshield scan ... --llm-backend mock` end-to-end test path. 6 new unit tests in [tests/test_judge_mock.py](./tests/test_judge_mock.py); pytest 86 → 92 passing.
+- **`MockJudgeBackend` + `--llm-backend mock` flag** ([agentshield/judge/mock_backend.py](./agentshield/judge/mock_backend.py)) — deterministic placeholder backend for VDI / dev smoke-testing the orchestrator pipeline without AWS. Returns a fixed `needs_review` verdict on every call with reasoning that explicitly says "no real LLM was called" so a leaked finding can never be mistaken for a real triage. **Stage 4.5** added to the VDI testing playbook (later folded into [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) in F.39) showing the full `agentshield scan ... --llm-backend mock` end-to-end test path. 6 new unit tests in [tests/test_judge_mock.py](./tests/test_judge_mock.py); pytest 86 → 92 passing.
 
 ### 3.8 Phase E — judge-driven FP elimination + R002 retirement (Java + Python)
 
@@ -248,7 +246,7 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
 
-**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).
 
 **F.8 — v2 validation: projection vs actual VDI runs.**
 
@@ -276,7 +274,7 @@ The v2 hypothesis holds in projection: shrinking Tier 1 to 6 narrow rules elimin
 *`moip-thematic` (Java Spring AI) — pending VDI run.*
 *`JpmcTriage` (Java Spring AI, first Phase E codebase) — pending VDI run.*
 
-**Whether the actual Tier 2 numbers match the projection on the remaining 2 codebases requires real Copilot runs in your VDI** — see [QUICKSTART_VDI.md](./QUICKSTART_VDI.md). Update this section with the actual numbers when those runs come back.
+**Whether the actual Tier 2 numbers match the projection on the remaining 2 codebases requires real Copilot runs in your VDI** — see [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md). Update this section with the actual numbers when those runs come back.
 
 ## 4. Strategic options — the big bets
 
@@ -332,7 +330,7 @@ The strategic question after Phase D is: **what's actually limiting users?** Wit
 
 ## 5. Specific tracks from the original plan
 
-These come from the original v0.1 sequenced work plan and are referenced in the [VDI_TESTING.md](./VDI_TESTING.md) "What's NOT in this build" table.
+These come from the original v0.1 sequenced work plan and were originally tracked in the VDI testing playbook (folded into [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) in F.39).
 
 > **Phase F supersedes the original Track B (judge backends) and Track D (Tier 4 discovery) entirely.** v2's Tier 2 architecture (LLM-as-scanner via Copilot) replaces the v1 "Tier 3 LLM judge" model. Tracks B2/B3/B5/D below are kept here as historical context but are **not on the roadmap as planned work** — the v2 architecture either obsoletes them or replaces them with different work (e.g. a future Bedrock-based Tier 2 backend would be a new module, not a revival of Track B2).
 

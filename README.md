@@ -28,7 +28,7 @@ pip install -e ".[semgrep,dev]"        # semgrep is mandatory; dev = pytest + ru
 
 ## Quickstart (5 minutes)
 
-See [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) for the focused cheat sheet. Full v2 flow:
+See [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) for the install + execution guide (VDI-friendly). Full v2 flow:
 
 ```bash
 # 1. Tier 1 scan + emit Tier 2 skill files
@@ -90,9 +90,8 @@ agentshield/
 
 | Doc | When to read |
 |---|---|
-| [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | First time running v2 in a JPMC VDI — 5-minute cheat sheet |
+| [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch |
 | [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations |
-| [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting per stage |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
 | [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |

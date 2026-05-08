@@ -1,7 +1,7 @@
 # AgentShield — Copilot LLM Scan walkthrough
 
 Status: 2026-05-07 (Phase F architecture v2; file renamed from `TIER2_USAGE.md` in F.35 — content updated for current rule pack + ID scheme)
-Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [VDI_TESTING.md](./VDI_TESTING.md), [README.md](./README.md)
+Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md), [README.md](./README.md)
 
 This document walks through the **Copilot LLM Scan** step (a.k.a. "Tier 2" in the internal pipeline) in detail — what Copilot actually does when you paste the prompt, what the output looks like, and what to do when something goes wrong.
 
