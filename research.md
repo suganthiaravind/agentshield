@@ -1,7 +1,7 @@
 # AgentShield — Research & References
 
 Status: 2026-05-06
-Companion to: [README.md](./README.md), [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md). Per-rule detail lives in the **Reference tab** of any generated HTML report.
+Companion to: [README.md](./README.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [GLOSSARY.md](./GLOSSARY.md). Per-rule detail lives in the **Reference tab** of any generated HTML report.
 
 This document is the **forward-looking reference** for AgentShield: the security frameworks AgentShield maps findings to, the Detect / Defend / Respond taxonomy that organises every finding, and the open-source AI agent security tools that complement (or compete with) AgentShield.
 
@@ -40,7 +40,7 @@ The AI agent security tooling landscape splits into two camps:
 
 The unified `agentshield merge` report combines both tiers + a Tier-2-cross-checked verdict on each Tier 1 finding (TP / CD / FP).
 
-**Where AgentShield deliberately does not compete:** runtime probing of live agents (use Promptfoo / Garak / AgentDojo), supply-chain CVE scanning of dependencies (use Trivy or similar — a future integration documented in [ROADMAP.md §5.5](./ROADMAP.md)), or general-purpose web/infrastructure SAST (use CodeQL / Snyk).
+**Where AgentShield deliberately does not compete:** runtime probing of live agents (use Promptfoo / Garak / AgentDojo), supply-chain CVE scanning of dependencies (use Trivy or similar — a possible future integration), or general-purpose web/infrastructure SAST (use CodeQL / Snyk).
 
 ---
 
@@ -189,7 +189,7 @@ The ecosystem AgentShield is part of. Each tool below has its own niche; AgentSh
 - **License:** Apache 2.0
 - **Specialty:** dependency CVEs, SBOM generation, IaC misconfiguration scanning.
 - **Where it overlaps with AgentShield:** None directly — AgentShield doesn't scan `requirements.txt` / `pom.xml` for dependency CVEs.
-- **Best use:** run before AgentShield to catch known-vulnerable LLM SDK versions (LangChain CVEs, etc.). Documented in [ROADMAP.md §5.5](./ROADMAP.md) as a planned integration (Track F).
+- **Best use:** run before AgentShield to catch known-vulnerable LLM SDK versions (LangChain CVEs, etc.). Possible future integration.
 
 ### 4.2 Runtime red-teaming
 

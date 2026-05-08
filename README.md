@@ -2,7 +2,7 @@
 
 Pre-production security evaluator for AI agents. Two-tier static analysis (semgrep) + LLM-as-scanner (Copilot).
 
-**Status:** v2 architecture shipped (2026-05-06, branch `architecture-v2`). See [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) for the design and [ROADMAP.md §3.9](./ROADMAP.md#39-phase-f--architecture-v2-2-tiers-copilot-as-scanner) for what landed in each phase.
+**Status:** v2 architecture shipped on the `architecture-v2` branch. See [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) for the current design; `git log --oneline architecture-v2` shows the phase-by-phase shipped history.
 
 ## What it does
 
@@ -92,7 +92,6 @@ agentshield/
 |---|---|
 | [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
-| [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, with framework mappings. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; or open `report-print.html` for a printable list. |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs |

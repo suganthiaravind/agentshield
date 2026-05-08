@@ -225,7 +225,7 @@ What to log per LLM call: the prompt that was sent (with retrieved documents), t
 
 ## 4. Static vs dynamic security analysis
 
-The Phase I / Phase II split is documented in [ROADMAP.md](./ROADMAP.md).
+Phase I = static analysis + LLM-as-scanner (current scope, what's shipped). Phase II = dynamic / runtime red-teaming (out of scope; tools like Promptfoo / Garak / AgentDojo cover that surface).
 
 ### Static analysis (SAST)
 
