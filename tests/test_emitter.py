@@ -70,15 +70,24 @@ def fixed_now() -> datetime:
 
 # ---------- template copying ----------
 
-def test_emits_all_three_templates_into_dot_agentshield(
+def test_emits_all_templates_into_dot_agentshield(
     repo: Path, sample_findings: list[dict], fixed_now: datetime
 ) -> None:
     result = emit_skills(repo, sample_findings, ["src/api/chat.py"], now_utc=fixed_now)
     out = repo / ".agentshield"
+    # Tier 2 bootstrap + checklist + output schema (the things Copilot
+    # reads to run Tier 2).
     assert (out / "tier2-bootstrap.md").is_file()
     assert (out / "tier2-checklist.md").is_file()
     assert (out / "tier2-output-schema.md").is_file()
-    assert len(result.emitted_files) == 4  # 3 templates + tier1-results.json
+    # F.34b — per-source fix skills emitted alongside so a developer
+    # can drop one into Claude Code / Copilot Chat without leaving the
+    # scanned target's directory.
+    assert (out / "agentshield-semgrep-fixes.md").is_file()
+    assert (out / "agentshield-copilot-fixes.md").is_file()
+    assert (out / "agentshield-manifest-fixes.md").is_file()
+    # 6 templates + tier1-results.json = 7 emitted files.
+    assert len(result.emitted_files) == 7
 
 
 def test_templates_copied_verbatim(
