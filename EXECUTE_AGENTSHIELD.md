@@ -1,7 +1,7 @@
 # Executing AgentShield — install + run guide (VDI-friendly)
 
 Status: 2026-05-07 — current.
-Companion to: [README.md](./README.md) (product overview), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) (how the pieces fit), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) (Tier 2 walkthrough in detail).
+Companion to: [README.md](./README.md) (product overview), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) (how the pieces fit; Tier 2 / Copilot LLM Scan detail in §2.2).
 
 This is the only file you need to install and run AgentShield in a JPMC VDI (or any locked-down environment). Top-to-bottom; copy-paste-able.
 
@@ -211,13 +211,13 @@ After this command finishes, your target repo's `.agentshield/` directory contai
    - Single file: ~30 s
    - 10 files: ~2 min
    - 50 files: ~10–15 min
-   - 200+ files: may need to chunk by directory; see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) "Trouble cases".
+   - 200+ files: may need to chunk by directory; see §12.3 below.
 
 5. Confirm `.agentshield/tier2-findings.json` exists. If it doesn't, follow up in chat:
 
    > "You said you finished but `.agentshield/tier2-findings.json` doesn't exist. Please write the JSON output to that path."
 
-For everything else that can go wrong with Copilot (it summarised instead of executing, it stopped halfway, the JSON is malformed, etc.), see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) "Trouble cases".
+For everything else that can go wrong with Copilot (it summarised instead of executing, it stopped halfway, the JSON is malformed, etc.), see §12.3 "Tier 2 (Copilot) issues" below.
 
 ### 7.3 Merge → unified report
 
@@ -380,7 +380,50 @@ The merger does **not** return non-zero on findings — exit code reflects wheth
 
 ### Tier 2 (Copilot) issues
 
-For all Tier 2-specific issues — Copilot summarised instead of executing, stopped halfway, scanned only the active file, hit context-window limits — see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) "Trouble cases and how to handle them".
+#### "Copilot ignored my prompt and just summarised the codebase"
+
+Some Copilot variants treat `@workspace` requests as a context-load only. Re-prompt explicitly:
+
+> "Don't summarise. Execute the scan: read `.agentshield/tier2-checklist.md`, walk every source file, write findings to `.agentshield/tier2-findings.json` per `.agentshield/tier2-output-schema.md`."
+
+#### "Copilot scanned only the file currently open"
+
+Add explicit file enumeration:
+
+> "Use `@workspace` to enumerate every `.py`, `.java`, `.ts`, `.go` file in this repo. Walk them all, not just the active editor file."
+
+#### "Copilot says it's done but `.agentshield/tier2-findings.json` doesn't exist"
+
+Some Copilot variants don't auto-write to disk. Follow up:
+
+> "You said you finished but `.agentshield/tier2-findings.json` doesn't exist. Please write the JSON output to that path."
+
+#### "Schema validation says my JSON has 12 errors"
+
+The merger's error output names each field path. Paste them straight into Copilot Chat:
+
+> "Your `.agentshield/tier2-findings.json` failed schema validation. Fix these errors:
+> - `findings[2].severity: invalid value 'urgent' (allowed: ['critical', 'high', 'medium', 'low', 'info'])`
+> - `findings[5].owasp_llm: expected list, got NoneType`
+> - ..."
+
+#### "Tier 2 took forever and Copilot stopped"
+
+For large codebases (200+ files), Tier 2 in a single Copilot session can run into context limits. Workarounds:
+
+- **Run in chunks** — prompt by directory: `@workspace Walk only src/api/. Append to existing tier2-findings.json.`
+- **Resume from where it stopped** — `"Continue from where you left off. The files you've already scanned are in the existing .agentshield/tier2-findings.json's scanned_files array — process the rest and append findings."`
+- **Skip files explicitly** — add files to the `skipped_files` array if you genuinely can't scan them; the merger surfaces these as a coverage gap rather than failing.
+
+#### "Fingerprint mismatch, but nothing changed"
+
+If you didn't re-run `agentshield scan` between Tier 2 finishing and `agentshield merge`, the most likely cause is Copilot copied the wrong fingerprint (or invented one). Re-prompt:
+
+> "Open `.agentshield/tier1-results.json`, read the `agentshield_tier1_fingerprint` field, and update `.agentshield/tier2-findings.json`'s `agentshield_tier1_fingerprint` to that exact value (don't change anything else)."
+
+#### "I want to skip Tier 2 entirely for a quick check"
+
+Use `--no-emit` on `agentshield scan` to suppress the Tier 2 emission. The CLI will warn that scanning is incomplete; the Tier-1-only Markdown / JSON / SARIF outputs from `--output-*` are still produced. **Don't gate CI on Tier-1-only results without understanding what's missing** — see [ARCHITECTURE_V2.md §2.2](./ARCHITECTURE_V2.md) for what Tier 2 catches that Tier 1 can't.
 
 ---
 
@@ -402,6 +445,5 @@ If you're validating a new AgentShield build on real customer code, share with t
 Once §6.2 (`pytest -q`) is green and §7 produces a report, you're done with the install + execution path. For deeper context:
 
 - **[ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md)** — how the three scanners + merger fit together. Read once for orientation.
-- **[COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md)** — Copilot Chat-specific walkthrough. Read if Tier 2 misbehaves.
 - **[GLOSSARY.md](./GLOSSARY.md)** — security-term definitions. Reference as needed.
 - **The Reference tab in any generated report** — the live, always-current rule list. Replaces the old `RULES_COVERAGE.md` doc.

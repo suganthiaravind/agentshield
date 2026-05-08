@@ -1,7 +1,7 @@
 # AgentShield Architecture
 
 Status: 2026-05-07 — current.
-Companion to: [README.md](./README.md) (install + quickstart), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) (Tier 2 walkthrough), [GLOSSARY.md](./GLOSSARY.md) (security-term definitions).
+Companion to: [README.md](./README.md) (install + quickstart), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) (install + run guide), [GLOSSARY.md](./GLOSSARY.md) (security-term definitions).
 
 This document describes how AgentShield is built today. For the live, always-current rule list, open the **Reference tab** of any HTML report (`agentshield merge --output-html report.html`) — it's auto-generated from the rule pack, so it can never drift.
 
@@ -107,6 +107,88 @@ Each rule's YAML carries `metadata.framework_mappings` with multi-axis tags (OWA
 8. JPMC SAIGE Agent Tier classification (Non-Agent / Agentic Tier 0–3) — informational only
 
 **Why Copilot specifically?** Tier 2 needs cross-function reasoning, absence-of-control detection, and intent comprehension — strengths the LLM has and Semgrep doesn't. The IDE handoff means AgentShield itself has no LLM dependency, no API key, no AWS / Bedrock surface, no token cost. Copilot runs against the user's existing IDE license.
+
+#### What Tier 2 catches that Tier 1 can't
+
+These are the four shapes of finding that motivated splitting Tier 2 out as a separate scanning surface:
+
+- **Cross-method reasoning** — a guardrail wired in `ChatService`'s constructor protects calls in `SchedulingService`, but Tier 1's per-file taint can't see that.
+- **Absence detection that requires context** — "is there an audit log around this LLM call?" depends on whether logging *intent* exists in the file (`@Slf4j`, stdlib `logger = logging.getLogger(...)`, OpenTelemetry imports), not just specific patterns.
+- **Anti-patterns that need code-comprehension** — scrubber bypass (`if length > MAX: return original`), SNS / email sinks of LLM output without scrubbing, rate-limit absence on agent loops.
+- **Intent reasoning** — does this `chain.invoke(user_input)` look like a guardrailed pipeline (call sites with surrounding sanitisation), or a prompt-injection vector?
+
+#### How Copilot processes the workspace
+
+Per file:
+
+1. **Reads the file** into its context window.
+2. **Walks the 62-entry checklist** — for each check whose `Languages:` field matches the file's language (or `any`), decides whether the anti-pattern is present.
+3. **Emits a finding** if yes, into `.agentshield/tier2-findings.json` per the strict schema.
+
+After every file has been walked:
+
+4. **Reads `.agentshield/tier1-results.json`** and produces a `tier1_fp_callouts` array — one entry per Tier 1 finding it has an opinion about, with verdict (`TP` / `CD` / `FP`) and reasoning.
+5. **Copies the `agentshield_tier1_fingerprint`** field verbatim from `tier1-results.json` into the output (the contract that lets the merger detect stale Tier 2 runs).
+
+Time depends on repo size: ~30 s for one file, ~2 min for ten, ~10–15 min for fifty. 200+ files typically need to chunk by directory.
+
+#### Sample `tier2-findings.json` shape
+
+```json
+{
+  "tier": 2,
+  "scanned_at": "2026-05-06T22:14:00Z",
+  "agentshield_tier1_fingerprint": "1d33b903f7d02a04...",
+  "scanned_files": ["src/foo.py", "src/bar.java"],
+  "skipped_files": [],
+  "findings": [
+    {
+      "rule_id": "AS-C-R-LLM02-002",
+      "category": "respond",
+      "severity": "high",
+      "file": "src/notify.py",
+      "line": 17,
+      "snippet": "sns.publish(llm_output)",
+      "message": "LLM output published to SNS without scrubbing.",
+      "owasp_llm": ["LLM02"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": [],
+      "cwe": ["CWE-200"],
+      "ast": [],
+      "remediation": "Pass output through scrubberService.scrubPii() before publish."
+    }
+  ],
+  "tier1_fp_callouts": [
+    {
+      "tier1_finding_index": 0,
+      "file": "src/main/java/SchedulingService.java",
+      "line": 98,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm-java",
+      "verdict": "CD",
+      "reasoning": "ChatService constructor wires ScrubbingCallAdvisor; sanitiser exists across method boundaries that Tier 1's import-based check can't see."
+    }
+  ]
+}
+```
+
+The strict schema (every required field, every enum value, the `verdict` allowed set) lives in [`agentshield/skills/tier2_output_schema.md.tmpl`](./agentshield/skills/tier2_output_schema.md.tmpl) and is validated by `agentshield/merger/schema.py` on every merge.
+
+#### When Tier 2 is wrong
+
+LLM scanners can hallucinate findings and miss real ones. Two safeguards:
+
+1. **Tier 1 is independent.** Both scanners run independently; Tier 2's verdicts on Tier 1 findings are *advisory* — the merger keeps every Tier 1 finding and just annotates it with the verdict. CI gates can choose to honour or ignore Tier 2 FP-marks.
+2. **Every Tier 2 finding cites its evidence.** Framework mappings, snippet, remediation. A reviewer can validate a Tier 2 finding against the source the same way they'd validate a Tier 1 finding.
+
+If Tier 2 is consistently wrong on a specific check across multiple codebases, that's signal to refine the check definition in [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl). The skill file is versioned with the code; updates ship with each AgentShield release.
+
+#### CI considerations
+
+Tier 2 needs Copilot Chat in an IDE. CI runners typically don't have that:
+
+1. **Tier-1-only CI** — `agentshield scan --no-emit --output-sarif sarif.json`. Surfaces the high-signal findings; misses what only Tier 2 catches. Acceptable as a *gate* (block PRs on Tier 1 errors), not as the *audit*.
+2. **Local pre-merge audit** — developer runs Tier 2 locally before opening a PR and commits the unified report (or its hash) as evidence. Reviewer can re-run if suspicious.
+3. **Future programmatic backend** — the merger is backend-agnostic: anything that writes a schema-valid `tier2-findings.json` works. A headless Bedrock / hosted-Copilot backend would slot in cleanly without any merge-side changes.
 
 ### 2.3 AST10 — Manifest scanner
 

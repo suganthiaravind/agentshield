@@ -44,7 +44,7 @@ agentshield scan /path/to/your-agent-repo \
 agentshield merge /path/to/your-agent-repo --output-markdown report.md
 ```
 
-For the Copilot Tier 2 step in detail (exact prompt, sample output, trouble cases), see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md).
+For the Copilot Tier 2 step in detail (architectural overview + sample output) see [ARCHITECTURE_V2.md §2.2](./ARCHITECTURE_V2.md). For trouble cases (Copilot misbehaviour, schema errors, etc.) see [EXECUTE_AGENTSHIELD.md §12.3](./EXECUTE_AGENTSHIELD.md).
 
 ## CLI reference
 
@@ -91,7 +91,6 @@ agentshield/
 | Doc | When to read |
 |---|---|
 | [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch |
-| [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
 | [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |

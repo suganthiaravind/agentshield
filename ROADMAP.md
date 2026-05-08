@@ -32,7 +32,6 @@ This document is the **single canonical source of truth for AgentShield's state*
 |---|---|
 | **ROADMAP.md** (this file) | Canonical state of project — what's done + what's pending. Maintained continuously. |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — system layout, why the architecture is what it is. |
-| [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
 | [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch. |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, framework by framework. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; `report-print.html` is the stacked / printable variant. |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
@@ -246,7 +245,7 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
 
-**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).
 
 **F.8 — v2 validation: projection vs actual VDI runs.**
 
