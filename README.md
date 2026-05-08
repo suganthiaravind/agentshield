@@ -97,7 +97,6 @@ agentshield/
 | [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, with framework mappings. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; or open `report-print.html` for a printable list. |
-| [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for each finding |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs |
 
 ## Phase I scope

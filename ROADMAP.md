@@ -36,7 +36,6 @@ This document is the **single canonical source of truth for AgentShield's state*
 | [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | 5-minute cheat sheet for running v2 in a JPMC VDI. |
 | [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, framework by framework. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; `report-print.html` is the stacked / printable variant. |
-| [REMEDIATION_PATTERNS.md](./REMEDIATION_PATTERNS.md) | Worked BAD / GOOD code examples for fixing each rule's finding (Python + Java). |
 | [GLOSSARY.md](./GLOSSARY.md) | Definitions for security terms used across the docs. |
 | [REQUIREMENTS.md](./REQUIREMENTS.md) | What you need installed + how to run AgentShield in a VDI. |
 
@@ -167,7 +166,7 @@ First real-world validation: ran AgentShield against a production Spring AI code
 **Strategic shift:** *fewer high-precision rules over many noisy ones.* Better to under-detect with confidence than to flood reviewers with FPs that train them to ignore the report.
 
 **Delivered:**
-- **R002 retired entirely** (Python + Java). The "LLM I/O logged without redaction" rule was the largest single FP source — it fired on `SessionController` (logging session UUIDs), `SplunkSAMLController` (SAML auth params), and other non-LLM logging surfaces because the taint-mode tracking can't distinguish "log call near LLM import" from "log call of LLM I/O." Replacement guidance folded into REMEDIATION_PATTERNS.md §R001: when implementing audit logging, use a redactor / hash / length-projection. **2 rule files, 4 fixtures, 4 goldens, all doc references** removed. pytest 92 → 88 passing (6 R002 tests deleted, 0 regressions).
+- **R002 retired entirely** (Python + Java). The "LLM I/O logged without redaction" rule was the largest single FP source — it fired on `SessionController` (logging session UUIDs), `SplunkSAMLController` (SAML auth params), and other non-LLM logging surfaces because the taint-mode tracking can't distinguish "log call near LLM import" from "log call of LLM I/O." Replacement guidance lived on as a Tier 2 audit-logging anti-pattern (now `AS-C-R-LLM10-001` "no audit logging around LLM call"): when implementing audit logging, use a redactor / hash / length-projection. **2 rule files, 4 fixtures, 4 goldens, all doc references** removed. pytest 92 → 88 passing (6 R002 tests deleted, 0 regressions).
 - **DF001-Java + R001-Java FP fixes** based on judge-flagged shapes:
   - Dropped over-broad catch-alls `$AGENT.run(...)`, `$AGENT.invoke(...)`, `$CHAIN.execute(...)` — these matched `CompletableFuture.runAsync`, `taskExecutor.execute`, etc. Replaced SMARTSDK `$RUNNER.run($AGENT, ...)` with the more specific `$RUNNER.run($AGENT, $INPUT, ...)` two-arg form.
   - Added explicit `pattern-not` for `CompletableFuture.runAsync(...)` / `supplyAsync(...)` (Java executor framework, not LLM invocation).
