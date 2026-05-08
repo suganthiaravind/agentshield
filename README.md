@@ -44,7 +44,7 @@ agentshield scan /path/to/your-agent-repo \
 agentshield merge /path/to/your-agent-repo --output-markdown report.md
 ```
 
-For the Copilot Tier 2 step in detail (exact prompt, sample output, trouble cases), see [TIER2_USAGE.md](./TIER2_USAGE.md).
+For the Copilot Tier 2 step in detail (exact prompt, sample output, trouble cases), see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md).
 
 ## CLI reference
 
@@ -91,7 +91,7 @@ agentshield/
 | Doc | When to read |
 |---|---|
 | [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | First time running v2 in a JPMC VDI — 5-minute cheat sheet |
-| [TIER2_USAGE.md](./TIER2_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations |
+| [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations |
 | [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting per stage |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
 | [ROADMAP.md](./ROADMAP.md) | Canonical project state, phase-by-phase shipped record, strategic options |

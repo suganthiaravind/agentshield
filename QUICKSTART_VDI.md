@@ -2,7 +2,7 @@
 
 Status: 2026-05-06 (Phase F architecture v2)
 For the comprehensive playbook with troubleshooting, see [VDI_TESTING.md](./VDI_TESTING.md).
-For the Copilot Tier 2 walkthrough in detail, see [TIER2_USAGE.md](./TIER2_USAGE.md).
+For the Copilot Tier 2 walkthrough in detail, see [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md).
 
 This is the 5-minute cheat sheet — the minimum commands to scan a real agent codebase end-to-end (Tier 1 + Tier 2 + unified report) inside a JPMC VDI.
 
@@ -196,7 +196,7 @@ In your VDI's IDE (VS Code or JetBrains):
 **If Copilot only scanned the active editor file:** re-prompt:
 > "Use `@workspace` to enumerate every `.py`, `.java`, `.ts` file in this repo. Walk them all, not just the open editor file."
 
-For more trouble cases, see [TIER2_USAGE.md "Trouble cases" section](./TIER2_USAGE.md#trouble-cases-and-how-to-handle-them).
+For more trouble cases, see [COPILOT_LLM_SCAN_USAGE.md "Trouble cases" section](./COPILOT_LLM_SCAN_USAGE.md#trouble-cases-and-how-to-handle-them).
 
 ---
 

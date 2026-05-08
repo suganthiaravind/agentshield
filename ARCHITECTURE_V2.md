@@ -263,7 +263,7 @@ docs/
   ARCHITECTURE_V2.md              [this file]
   ROADMAP.md                      [Phase F section added]
   REMEDIATION_PATTERNS.md         [updated for 6 families]
-  TIER2_USAGE.md                  [NEW — Copilot workflow walkthrough]
+  COPILOT_LLM_SCAN_USAGE.md       [Copilot workflow walkthrough — was TIER2_USAGE.md]
   VDI_TESTING.md                  [updated for v2 commands]
 ```
 
@@ -279,7 +279,7 @@ Phased rollout on `architecture-v2` branch. Each phase is a separate commit; use
 | **F.4** | Emitter — `agentshield/emitter/skill_emitter.py` + tests. Renders templates into target repo. | |
 | **F.5** | Merger — `agentshield/merger/combine.py` + tests. Reads tier1 + tier2 outputs, produces combined report. | |
 | **F.6** | CLI rewire — drop `--no-judge`, `--llm-backend`, `--bedrock-*`, `--discovery`. Add `agentshield merge` subcommand. Add Tier-2-not-run warning. Delete `agentshield/judge/` + its tests. | |
-| **F.7** | Docs — update ROADMAP §3.X (Phase F shipped), RULES_COVERAGE, REMEDIATION_PATTERNS, VDI_TESTING. Write new TIER2_USAGE.md walkthrough. | |
+| **F.7** | Docs — update ROADMAP §3.X (Phase F shipped), RULES_COVERAGE, REMEDIATION_PATTERNS, VDI_TESTING. Write the Copilot LLM Scan walkthrough. | |
 | **F.8** | Validation — re-run on the three Phase E codebases (Java thematic, Python SMARTSDK Lambda, Java JpmcTriage if available) and document precision deltas. | |
 
 ## 9. What stays the same

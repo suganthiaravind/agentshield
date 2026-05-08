@@ -294,7 +294,7 @@ Expected stdout includes the `⚠ TIER 2 NOT YET RUN — scanning is INCOMPLETE.
 
 ### 5.3 End-to-end Tier 2 with Copilot
 
-This needs an IDE — not testable from the CLI alone. See [`TIER2_USAGE.md`](./TIER2_USAGE.md) for the full Copilot walkthrough; [`QUICKSTART_VDI.md`](./QUICKSTART_VDI.md) is the 5-min version.
+This needs an IDE — not testable from the CLI alone. See [`COPILOT_LLM_SCAN_USAGE.md`](./COPILOT_LLM_SCAN_USAGE.md) for the full Copilot walkthrough; [`QUICKSTART_VDI.md`](./QUICKSTART_VDI.md) is the 5-min version.
 
 ### 5.4 Staged validation playbook
 
@@ -332,7 +332,7 @@ For a more thorough first-time run-through with explicit checkpoints, follow [`V
 | `agentshield merge` says `❌ Tier 2 output failed schema validation` | Copilot's JSON shape is off | re-prompt Copilot citing the field-path errors the merger printed (e.g. `findings[2].severity: invalid value 'urgent'`) |
 | `agentshield merge` says `⚠ STALE Tier 2: fingerprint mismatch` | code or rule pack changed between scan and merge | re-run Copilot with the same prompt to refresh `tier2-findings.json` |
 
-For more, see [`TIER2_USAGE.md` "Trouble cases"](./TIER2_USAGE.md#trouble-cases-and-how-to-handle-them).
+For more, see [`COPILOT_LLM_SCAN_USAGE.md` "Trouble cases"](./COPILOT_LLM_SCAN_USAGE.md#trouble-cases-and-how-to-handle-them).
 
 ---
 

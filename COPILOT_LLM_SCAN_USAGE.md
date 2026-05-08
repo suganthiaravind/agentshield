@@ -1,9 +1,9 @@
-# AgentShield Tier 2 — Copilot walkthrough
+# AgentShield — Copilot LLM Scan walkthrough
 
-Status: 2026-05-06 (Phase F architecture v2)
+Status: 2026-05-07 (Phase F architecture v2; file renamed from `TIER2_USAGE.md` in F.35 — content updated for current rule pack + ID scheme)
 Companion to: [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [VDI_TESTING.md](./VDI_TESTING.md), [README.md](./README.md)
 
-This document walks through the Tier 2 step in detail — what Copilot actually does when you paste the prompt, what the output looks like, and what to do when something goes wrong.
+This document walks through the **Copilot LLM Scan** step (a.k.a. "Tier 2" in the internal pipeline) in detail — what Copilot actually does when you paste the prompt, what the output looks like, and what to do when something goes wrong.
 
 > **TL;DR.** After `agentshield scan`, your target repo has a `.agentshield/` folder. Open the repo in VS Code or JetBrains. Open Copilot Chat. Paste the prompt the CLI printed. Copilot writes `tier2-findings.json` over a few minutes. Run `agentshield merge .` to get the unified report.
 
@@ -11,7 +11,9 @@ This document walks through the Tier 2 step in detail — what Copilot actually 
 
 ## Why Tier 2 exists
 
-Tier 1 (semgrep) catches narrow, high-precision patterns: hardcoded credentials, untrusted user input flowing into LLM calls, code-execution sinks, etc. Six rule families, all narrow taint or narrow regex. By design it ships with a small surface and high signal.
+Tier 1 (Semgrep Rules-engine Scan) catches narrow, high-precision patterns: hardcoded credentials, untrusted user input flowing into LLM calls, code-execution sinks, system-prompt concealment / jailbreak markers, tool-description injection, non-HTTPS outbound fetches, etc. **Ten rule families** across Detect / Defend, all narrow taint or narrow regex. The AST10 manifest scanner runs alongside Tier 1 and adds checks on `SKILL.md` packages.
+
+By design Tier 1 + AST10 ship with a small surface and high signal.
 
 The trade-off: a lot of important security concerns can't be expressed as semgrep patterns:
 
@@ -29,14 +31,17 @@ Tier 2 is the LLM doing what the LLM is good at: reading a file, understanding t
 ```
 <your-repo>/
 ├── .agentshield/
-│   ├── tier1-results.json          ← Tier 1 findings + fingerprint hash (input for Copilot)
-│   ├── tier2-bootstrap.md          ← Plain-language explanation of Tier 2
-│   ├── tier2-checklist.md          ← The 56-check comprehensive checklist
-│   └── tier2-output-schema.md      ← Strict JSON shape Copilot must emit
-└── .gitignore                      ← `.agentshield/` appended (idempotent)
+│   ├── tier1-results.json              ← Tier 1 + AST10 findings + fingerprint hash (input for Copilot)
+│   ├── tier2-bootstrap.md              ← Plain-language explanation of the Copilot scan
+│   ├── tier2-checklist.md              ← The 62-check comprehensive checklist
+│   ├── tier2-output-schema.md          ← Strict JSON shape Copilot must emit
+│   ├── agentshield-semgrep-fixes.md    ← (F.34b) per-rule remediation skill — drop into Claude Code / Copilot Chat to fix any AS-S-* finding
+│   ├── agentshield-copilot-fixes.md    ← (F.34b) same for AS-C-* (Copilot LLM Scan) findings
+│   └── agentshield-manifest-fixes.md   ← (F.34b) same for AS-M-* (AST10 manifest) findings
+└── .gitignore                          ← `.agentshield/` appended (idempotent)
 ```
 
-All four are generated artifacts; the gitignore append keeps them out of commits.
+All seven are generated artifacts; the gitignore append keeps them out of commits. The three `agentshield-*-fixes.md` files are OWASP-Universal-Skill-Format SKILL.md packages — read-only (`risk_tier: L0`, no shell, no network, no file writes), discoverable by their finding-ID prefix triggers.
 
 ---
 
@@ -88,7 +93,7 @@ If Copilot stops mid-scan (context-window pressure on large repos), prompt:
 For each source file in your workspace, Copilot:
 
 1. **Reads the file** into its context window.
-2. **Walks the checklist** — 56 checks across 7 sections (OWASP LLM Top 10 v2, OWASP Agentic AI Top 10, MITRE ATLAS, CWE first-class, Phase E gaps, retired-rule parity, Tier 1 cross-check).
+2. **Walks the checklist** — 62 checks across 8 sections (OWASP LLM Top 10 v2, OWASP Agentic AI Top 10, MITRE ATLAS, CWE first-class, Phase E gaps, retired-rule parity, Tier 1 cross-check, JPMC SAIGE Agent Tier classification).
 3. **For each check that's in scope** for the file's language, decides whether the anti-pattern is present.
 4. **Emits a finding** if yes, into `.agentshield/tier2-findings.json` per the strict schema.
 5. **At the end**, reads `.agentshield/tier1-results.json` and produces a `tier1_fp_callouts` array marking each Tier 1 finding TP / CD / FP with reasoning.
@@ -112,7 +117,7 @@ Time depends on repo size:
   "skipped_files": [],
   "findings": [
     {
-      "rule_id": "TIER2-LLM02-04",
+      "rule_id": "AS-C-R-LLM02-002",
       "category": "respond",
       "severity": "high",
       "file": "src/notify.py",
@@ -123,6 +128,7 @@ Time depends on repo size:
       "owasp_agentic": ["T8"],
       "mitre_atlas": [],
       "cwe": ["CWE-200"],
+      "ast": [],
       "remediation": "Pass output through scrubberService.scrubPii() before publish."
     }
   ],
@@ -165,7 +171,7 @@ The unified report sections:
 1. **Summary** — Tier 1 count, Tier 2 count, FP-marked Tier 1 count, **net actionable** (Tier 1 minus FP-marked + Tier 2)
 2. **Tier 1 findings** — each one annotated with Tier 2's verdict + reasoning where applicable
 3. **Tier 2 net-new findings** — what static rules missed
-4. **Coverage matrix** — which OWASP / Agentic / ATLAS / CWE items the combined scan touched
+4. **Coverage matrix** — which OWASP LLM / OWASP Agentic / MITRE ATLAS / CWE / OWASP AST10 items the combined scan touched (5 framework axes)
 
 ---
 
@@ -230,3 +236,12 @@ Tier 2 findings are not infallible. The LLM can hallucinate findings (a check th
 2. **The combined report cites everything.** Tier 2 findings include framework mappings, snippets, and remediation guidance. A reviewer can validate each Tier 2 finding against the source the same way they'd validate a Tier 1 finding.
 
 If Tier 2 is consistently wrong on a specific check across multiple codebases, that's signal to refine the check definition in [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl). The skill file is versioned with the code; updates ship with each AgentShield release.
+
+---
+
+## Where to look for more detail
+
+- **The HTML report's Reference tab** — every check the scanner can fire (Semgrep + Copilot + Manifest), generated live from the rule pack. Run `agentshield merge --output-html report.html` and open the **Reference** tab. The print-friendly stacked variant is `report-print.html`.
+- **The fix-skill files** in `<target>/.agentshield/agentshield-{semgrep,copilot,manifest}-fixes.md` — load the matching one into Claude Code / Copilot Chat and paste a finding ID to get a remediation walkthrough. OWASP-Universal-Skill-Format files; read-only by construction.
+- **The Tier 2 checklist source** at [`agentshield/skills/tier2_checklist.md.tmpl`](./agentshield/skills/tier2_checklist.md.tmpl) — the definitive list of what Copilot looks for.
+- **Per-rule fix guidance** is also surfaced inline in the report (`Fix:` line under each finding) and in the Reference-tab cards.

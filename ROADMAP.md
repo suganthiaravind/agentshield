@@ -32,7 +32,7 @@ This document is the **single canonical source of truth for AgentShield's state*
 |---|---|
 | **ROADMAP.md** (this file) | Canonical state of project — what's done + what's pending. Maintained continuously. |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — system layout, why the architecture is what it is. |
-| [TIER2_USAGE.md](./TIER2_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
+| [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) | Detailed Copilot walkthrough; trouble cases; CI considerations. |
 | [QUICKSTART_VDI.md](./QUICKSTART_VDI.md) | 5-minute cheat sheet for running v2 in a JPMC VDI. |
 | [VDI_TESTING.md](./VDI_TESTING.md) | Comprehensive staged validation playbook with troubleshooting. |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, framework by framework. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; `report-print.html` is the stacked / printable variant. |
@@ -249,7 +249,7 @@ Third judge protocol on `moip-thematic` / `moip-triage-agent` (Java Spring AI th
 
 **Pytest:** 92 → 123 passing across the migration. Net +31 tests covering the new modules (emitter, merger, skills) minus the 30 deleted judge tests.
 
-**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
+**Doc:** [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md), [QUICKSTART_VDI.md](./QUICKSTART_VDI.md).
 
 **F.8 — v2 validation: projection vs actual VDI runs.**
 

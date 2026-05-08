@@ -1,7 +1,7 @@
 # Remediation Patterns
 
 Status: 2026-05-06 (Phase F architecture v2 shipped)
-Companion to: [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [TIER2_USAGE.md](./TIER2_USAGE.md), [README.md](./README.md). Per-rule detail (severities, framework mappings, suppressors) lives in the **Reference tab** of any generated HTML report.
+Companion to: [ROADMAP.md](./ROADMAP.md), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md), [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md), [README.md](./README.md). Per-rule detail (severities, framework mappings, suppressors) lives in the **Reference tab** of any generated HTML report.
 
 > ## ⚠ v2 architecture note
 >

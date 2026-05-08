@@ -11,7 +11,7 @@ This playbook is staged so you can verify each layer independently — if Stage 
 > - **Tier 1** — semgrep with a 6-family rule pack (`agentshield scan`)
 > - **Tier 2** — LLM-as-scanner via Copilot in your IDE, using bundled skill files emitted into `<target>/.agentshield/`
 >
-> Both tiers are mandatory. After Tier 1, you paste a prompt into Copilot Chat; Copilot writes `tier2-findings.json`; `agentshield merge` produces the unified report. **No AWS / Bedrock dependency.** See [TIER2_USAGE.md](./TIER2_USAGE.md) for the Copilot walkthrough.
+> Both tiers are mandatory. After Tier 1, you paste a prompt into Copilot Chat; Copilot writes `tier2-findings.json`; `agentshield merge` produces the unified report. **No AWS / Bedrock dependency.** See [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) for the Copilot walkthrough.
 
 ---
 
@@ -151,7 +151,7 @@ cat /tmp/agentshield-vdi-test/.agentshield/tier1-results.json | head -10
 
 ## Stage 5 — Tier 2 via Copilot Chat
 
-This is the new mandatory step in v2. See [TIER2_USAGE.md](./TIER2_USAGE.md) for screenshots / detailed walkthrough.
+This is the new mandatory step in v2. See [COPILOT_LLM_SCAN_USAGE.md](./COPILOT_LLM_SCAN_USAGE.md) for screenshots / detailed walkthrough.
 
 **Quick version:**
 
