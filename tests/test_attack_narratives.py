@@ -78,3 +78,36 @@ def test_canonical_demo_rules_have_narratives() -> None:
         assert narrative_for(rule_id) is not None, (
             f"{rule_id} should have a curated narrative"
         )
+
+
+def test_every_bundled_rule_has_a_narrative() -> None:
+    """Coverage invariant: every rule in the bundled Tier 1 + Tier 2 +
+    manifest pack must have a curated attack narrative. Adding a new
+    rule without writing its narrative would result in finding cards
+    with no scenario block — caught here before it ships.
+
+    To add coverage: drop an entry into `NARRATIVES` in
+    `attack_narratives.py` keyed by the normalised rule ID (the
+    `AS-<source>-` prefix stripped, e.g. `D-LLM01-001`).
+    """
+    from pathlib import Path
+
+    from agentshield.merger.reference import build_all_references
+
+    repo_root = Path(__file__).resolve().parent.parent
+    refs = build_all_references(
+        tier1_rules_path=repo_root / "agentshield" / "rules",
+        tier2_checklist_path=(
+            repo_root / "agentshield" / "skills" / "tier2_checklist.md.tmpl"
+        ),
+    )
+    missing: list[str] = []
+    for ref in refs:
+        if narrative_for(ref.agentshield_id) is None:
+            missing.append(f"{ref.agentshield_id} ({ref.source}: {ref.title})")
+    assert not missing, (
+        f"{len(missing)} bundled rule(s) lack an attack narrative. Add "
+        f"entries to `NARRATIVES` keyed by the normalised rule ID "
+        f"(strip `AS-<source>-`):\n  "
+        + "\n  ".join(missing)
+    )
