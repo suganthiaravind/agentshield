@@ -41,7 +41,7 @@ Total rules in this skill: **16**
 
 **Severity:** critical · **Languages:** java · **Legacy ID:** `AS-D-005`
 
-**Frameworks:** `OWASP LLM LLM02` `OWASP LLM LLM03` `OWASP Agentic T3` `MITRE ATLAS AML.T0012` `CWE CWE-798`
+**Frameworks:** `OWASP LLM LLM02` `OWASP Agentic T3` `MITRE ATLAS AML.T0012` `CWE CWE-798`
 
 **What it flags:** Hardcoded credential string passed to a Java LLM client constructor or builder (langchain4j, Spring AI, Azure OpenAI, AWS Bedrock direct). Secrets in source code are CWE-798 — they end up in git history, jar manifests, container images, and CI logs. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), Spring's `@Value("${env.var}")`, or the SDK's default credential resolver instead. Java port of agentshield.detect.hardcoded-llm-credentials.
 
@@ -51,7 +51,7 @@ Total rules in this skill: **16**
 
 **Severity:** critical · **Languages:** python · **Legacy ID:** `AS-D-005`
 
-**Frameworks:** `OWASP LLM LLM02` `OWASP LLM LLM03` `OWASP Agentic T3` `MITRE ATLAS AML.T0012` `CWE CWE-798`
+**Frameworks:** `OWASP LLM LLM02` `OWASP Agentic T3` `MITRE ATLAS AML.T0012` `CWE CWE-798`
 
 **What it flags:** Hardcoded credential string passed to an LLM client constructor (OpenAI, Anthropic, Cohere, Mistral, Together, Groq, HuggingFace, Google generative AI, AWS Bedrock). Secrets in source code are CWE-798 (Use of Hard-coded Credentials) — they end up in git history, container images, and CI logs. Use environment variables, a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), or the SDK's default credential resolver instead.
 
@@ -101,7 +101,7 @@ Total rules in this skill: **16**
 
 **Severity:** medium · **Languages:** python · **Legacy ID:** `AS-D-012`
 
-**Frameworks:** `OWASP LLM LLM03` `OWASP Agentic T6` `MITRE ATLAS AML.T0010` `CWE CWE-319` `CWE CWE-494` `CWE CWE-829`
+**Frameworks:** `OWASP Agentic T6` `MITRE ATLAS AML.T0010` `CWE CWE-319` `CWE CWE-494` `CWE CWE-829`
 
 **What it flags:** A network fetch targets a plaintext `http://` URL where the response is treated as code, config, model artifact, or RAG document — i.e. the response will affect agent behaviour. Plaintext transport means a network attacker (corporate proxy, coffee-shop Wi-Fi, compromised ISP) can substitute response content silently. Pairs with CWE-494 (download of code without integrity check): integrity verification can't help if the URL itself is intercepted. Use HTTPS so the response is at least transport-authenticated. OWASP LLM03 (supply chain) / Agentic T6 (untrusted retrieval).
 

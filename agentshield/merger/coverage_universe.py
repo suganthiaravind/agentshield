@@ -30,18 +30,38 @@ from typing import Iterable
 # Order matters — chips render in declaration order, which makes the
 # matrix scannable left-to-right for the common case (LLM01 first, …).
 
-# OWASP LLM Top 10 for LLM Applications v2 (2025 release).
+# OWASP LLM Top 10 for LLM Applications v2 (2025 release) — curated subset.
 # https://genai.owasp.org/llm-top-10/
+#
+# The full Top 10 mixes LLM-application threats with model-layer / data-
+# pipeline threats. AgentShield targets *agent* code (the call-site, the
+# tool surface, the orchestration layer, the SKILL.md manifest), so we
+# scope this universe to the items that manifest in app code:
+#
+#   Kept (call-site / agent-layer):
+#     LLM01 Prompt Injection, LLM02 Sensitive Info Disclosure,
+#     LLM05 Improper Output Handling, LLM06 Excessive Agency,
+#     LLM07 System Prompt Leakage, LLM10 Unbounded Consumption.
+#
+#   Dropped (model-layer / data-pipeline — better covered by ML-Ops or
+#   ATLAS scanners than by a code-side tool):
+#     LLM03 Supply Chain     → covered by ATLAS T0010 / CWE-494/829
+#     LLM04 Data Poisoning   → covered by ATLAS T0019
+#     LLM08 Vector/Embedding → covered by ATLAS / CWE
+#     LLM09 Misinformation   → covered by OWASP Agentic T5 (Cascading
+#                              Hallucination), the agent-layer framing
+#
+# Rule IDs that still contain `LLM03`/`LLM04`/`LLM08`/`LLM09` as their
+# anchor segment are preserved verbatim (no ID renames) — the rules
+# remain but their `owasp_llm` tag list no longer includes the dropped
+# items. Suppression comments and external dashboards keyed on those
+# IDs continue to work.
 OWASP_LLM_UNIVERSE: list[str] = [
     "LLM01",  # Prompt Injection
     "LLM02",  # Sensitive Information Disclosure
-    "LLM03",  # Supply Chain
-    "LLM04",  # Data and Model Poisoning
     "LLM05",  # Improper Output Handling
     "LLM06",  # Excessive Agency
     "LLM07",  # System Prompt Leakage
-    "LLM08",  # Vector and Embedding Weaknesses
-    "LLM09",  # Misinformation
     "LLM10",  # Unbounded Consumption
 ]
 

@@ -113,7 +113,7 @@ def check_ast01_body_markers(manifest: ParsedManifest) -> list[Finding]:
                         ),
                         severity="high",
                         ast_id="AST01",
-                        owasp_llm=["LLM01", "LLM03"],
+                        owasp_llm=["LLM01"],
                     )
                 )
                 break  # one finding per line; don't double-fire on multi-marker lines
@@ -159,7 +159,7 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                 ),
                 severity="high",
                 ast_id="AST03",
-                owasp_llm=["LLM03", "LLM06"],
+                owasp_llm=["LLM06"],
                 owasp_agentic=["T2", "T3"],
                 cwe=["CWE-732"],
             )
@@ -180,7 +180,7 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                     ),
                     severity="high",
                     ast_id="AST03",
-                    owasp_llm=["LLM03", "LLM06"],
+                    owasp_llm=["LLM06"],
                     owasp_agentic=["T2", "T3"],
                     cwe=["CWE-732"],
                 )
@@ -259,7 +259,7 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                             ),
                             severity="critical",
                             ast_id="AST03",
-                            owasp_llm=["LLM04"],
+                            owasp_llm=[],
                             owasp_agentic=["T1"],
                             cwe=["CWE-732"],
                         )
@@ -426,7 +426,7 @@ def check_ast07_update_drift(manifest: ParsedManifest) -> list[Finding]:
                 ),
                 severity="info",
                 ast_id="AST07",
-                owasp_llm=["LLM03"],
+                owasp_llm=[],
                 cwe=["CWE-345"],
             )
         )
@@ -543,7 +543,7 @@ RULE_DESCRIPTIONS = [
             "— the same prose-injection surface documented in the "
             "ClawHavoc / ToxicSkills 2026 campaigns."
         ),
-        "frameworks": {"ast": ["AST01"], "owasp_llm": ["LLM01", "LLM03"]},
+        "frameworks": {"ast": ["AST01"], "owasp_llm": ["LLM01"]},
         "remediation": (
             "Remove concealment / jailbreak strings from the skill body. "
             "If they're red-team fixtures, move them to a dedicated test "
@@ -564,7 +564,7 @@ RULE_DESCRIPTIONS = [
         ),
         "frameworks": {
             "ast": ["AST03"],
-            "owasp_llm": ["LLM03", "LLM06"],
+            "owasp_llm": ["LLM06"],
             "owasp_agentic": ["T2", "T3"],
             "cwe": ["CWE-732"],
         },
@@ -622,7 +622,7 @@ RULE_DESCRIPTIONS = [
         ),
         "frameworks": {
             "ast": ["AST03"],
-            "owasp_llm": ["LLM04"],
+            "owasp_llm": [],
             "owasp_agentic": ["T1"],
             "cwe": ["CWE-732"],
         },
@@ -702,7 +702,7 @@ RULE_DESCRIPTIONS = [
             "signature the registry can't verify the skill on update; "
             "ClawJacked-style update-drift attacks become viable."
         ),
-        "frameworks": {"ast": ["AST07"], "owasp_llm": ["LLM03"], "cwe": ["CWE-345"]},
+        "frameworks": {"ast": ["AST07"], "owasp_llm": [], "cwe": ["CWE-345"]},
         "remediation": (
             "Sign the canonical skill payload with an ed25519 key and "
             "publish the signature in the manifest."

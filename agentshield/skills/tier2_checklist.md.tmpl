@@ -147,7 +147,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-LLM02-01
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM02, LLM03], cwe=[CWE-798]
+- **Frameworks:** owasp_llm=[LLM02], cwe=[CWE-798]
 - **Look for:** Literal credential strings passed to LLM SDK
   constructors or builders. Patterns include OpenAI `api_key="sk-..."`,
   Anthropic `api_key="sk-ant-..."`, AWS `aws_access_key_id="AKIA..."`,
@@ -229,7 +229,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-LLM03-01
 - **Languages:** python, any
-- **Frameworks:** owasp_llm=[LLM03, LLM04], cwe=[CWE-494, CWE-829]
+- **Frameworks:** cwe=[CWE-494, CWE-829]
 - **Look for:** `from_pretrained(...)` / `hf_hub_download(...)` /
   `snapshot_download(...)` from `transformers`, `diffusers`,
   `sentence_transformers`, `huggingface_hub` without a `revision=` git
@@ -247,7 +247,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-LLM03-02
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM03, LLM06], owasp_agentic=[T2, T11], mitre_atlas=[AML.T0053]
+- **Frameworks:** owasp_llm=[LLM06], owasp_agentic=[T2, T11], mitre_atlas=[AML.T0053]
 - **Look for:** Tool/plugin loaded by URL or runtime-discovered from an
   external registry. Patterns: `load_tools(["plugin-name"])` from an
   external manifest, `MCPServer(url=...)` where URL is dynamic,
@@ -265,7 +265,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-LLM04-01
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM04], mitre_atlas=[AML.T0019]
+- **Frameworks:** mitre_atlas=[AML.T0019]
 - **Look for:** Fine-tuning, embeddings indexing, or RAG corpus build
   pulling from user-uploaded files, public web scrapes, or untrusted
   S3 prefixes without provenance checks. `OpenAIFineTuningJob`,
@@ -450,7 +450,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-LLM08-01
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM08, LLM03], cwe=[CWE-829]
+- **Frameworks:** cwe=[CWE-829]
 - **Look for:** `SentenceTransformer("...")`, `HuggingFaceEmbeddings(model_name="...")`,
   OpenAI `embeddings.create(model="text-embedding-3-small")` without
   pinning; or model name read from runtime env without validation.
@@ -466,7 +466,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** defend
 - **Legacy ID:** TIER2-LLM08-02
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM08], owasp_agentic=[T3], cwe=[CWE-200]
+- **Frameworks:** owasp_agentic=[T3], cwe=[CWE-200]
 - **Look for:** Pinecone / Weaviate / Chroma / OpenSearch / Postgres
   pgvector queries that don't filter by tenant / user / authorisation
   scope. `collection.query(query=embedding, k=5)` with no `filter=` arg
@@ -483,7 +483,7 @@ checks. Map findings using the `owasp_llm` array.
 - **Category:** defend
 - **Legacy ID:** TIER2-LLM09-01
 - **Languages:** any
-- **Frameworks:** owasp_llm=[LLM09]
+- **Frameworks:** owasp_agentic=[T5]
 - **Look for:** LLM response returned to a downstream consumer (UI,
   another service, automated decision pipeline) without any
   uncertainty signal — no `logprobs` capture, no self-evaluation
@@ -571,7 +571,7 @@ Use the `owasp_agentic` array to mark T1–T11.
 - **Category:** detect
 - **Legacy ID:** TIER2-AGENTIC-T1-01
 - **Languages:** any
-- **Frameworks:** owasp_agentic=[T1], owasp_llm=[LLM04]
+- **Frameworks:** owasp_agentic=[T1]
 - **Look for:** Long-term memory writes (vector store, Redis, DB) where
   the value being persisted contains user input or LLM output without a
   trust boundary. `memory.add(user_message)`, `vectorstore.add_texts([response])`,
@@ -702,7 +702,7 @@ Use the `owasp_agentic` array to mark T1–T11.
 - **Category:** detect
 - **Legacy ID:** TIER2-AGENTIC-T5-01
 - **Languages:** any
-- **Frameworks:** owasp_agentic=[T5], owasp_llm=[LLM09]
+- **Frameworks:** owasp_agentic=[T5]
 - **Look for:** Multi-step pipelines where LLM-A's output becomes
   LLM-B's input directly with no schema check, no verification step,
   no "is this answer right" eval. Common in extract→summarise→email
@@ -907,7 +907,7 @@ ML-attack-specific techniques. Use the `mitre_atlas` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-ATLAS-T0010-01
 - **Languages:** any
-- **Frameworks:** mitre_atlas=[AML.T0010], owasp_llm=[LLM03], cwe=[CWE-829, CWE-494]
+- **Frameworks:** mitre_atlas=[AML.T0010], cwe=[CWE-829, CWE-494]
 - **Look for:** Model artifacts, embedding models, or ML libraries
   pulled from non-pinned sources. Cross-references LLM03-01 / LLM08-01
   but at the supply-chain level.
@@ -930,7 +930,7 @@ ML-attack-specific techniques. Use the `mitre_atlas` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-ATLAS-T0019-01
 - **Languages:** any
-- **Frameworks:** mitre_atlas=[AML.T0019], owasp_llm=[LLM04]
+- **Frameworks:** mitre_atlas=[AML.T0019]
 - **Look for:** Pipelines that publish datasets / fine-tuning corpora
   to shared registries (HuggingFace Hub, internal Artifactory,
   shared S3) without a signing / approval step.
@@ -964,7 +964,7 @@ ML-attack-specific techniques. Use the `mitre_atlas` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-ATLAS-T0053-01
 - **Languages:** any
-- **Frameworks:** mitre_atlas=[AML.T0053], owasp_llm=[LLM03]
+- **Frameworks:** mitre_atlas=[AML.T0053]
 - **Look for:** Plugin loading from third-party registries without
   pinning / signature verification.
 - **Remediation:** Pin plugin versions. Verify signatures.
@@ -1038,7 +1038,7 @@ Cross-language CWE checks. Use the `cwe` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-CWE-494-01
 - **Languages:** any
-- **Frameworks:** cwe=[CWE-494], owasp_llm=[LLM03]
+- **Frameworks:** cwe=[CWE-494]
 - **Look for:** Cross-references LLM03-01. Models / packages /
   binaries downloaded without checksum verification.
 - **Remediation:** Verify SHA / signature before loading.
@@ -1076,7 +1076,7 @@ Cross-language CWE checks. Use the `cwe` array.
 - **Category:** detect
 - **Legacy ID:** TIER2-CWE-829-01
 - **Languages:** any
-- **Frameworks:** cwe=[CWE-829], owasp_llm=[LLM03]
+- **Frameworks:** cwe=[CWE-829]
 - **Look for:** Cross-references LLM03-01 / LLM08-01. Models /
   plugins / packages from untrusted sources.
 - **Remediation:** Allowlist sources. Pin versions.

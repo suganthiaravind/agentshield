@@ -446,7 +446,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines: list[str] = []
 
     # 1. Title
-    lines.append("# AgentShield Detection Report")
+    lines.append("# AgentShield Pre-Production Review")
     lines.append("")
     lines.append(f"_Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM-as-a-Judge Scan not run)'}_")
     lines.append("")
@@ -1869,13 +1869,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts: list[str] = []
     parts.append("<!doctype html>")
     parts.append('<html lang="en"><head><meta charset="utf-8">')
-    parts.append("<title>AgentShield Detection Report</title>")
+    parts.append("<title>AgentShield Pre-Production Review</title>")
     parts.append(f"<style>{_HTML_CSS}</style>")
     parts.append("</head><body>")
 
     # 1. Header
     parts.append('<div class="report-header">')
-    parts.append("<h1>AgentShield Detection Report</h1>")
+    parts.append("<h1>AgentShield Pre-Production Review</h1>")
     parts.append(
         '<div class="subtitle">Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan'
         + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM-as-a-Judge Scan not run")
@@ -2333,6 +2333,12 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('</div>')
 
     _CURATED_NOTE = {
+        "owasp_llm": (
+            "Curated to the 6 call-site / agent-layer items (LLM01, LLM02, "
+            "LLM05, LLM06, LLM07, LLM10). LLM03 / LLM04 / LLM08 / LLM09 are "
+            "model-layer or data-pipeline concerns better covered by "
+            "ML-Ops or ATLAS scanners than by a code-side tool."
+        ),
         "mitre_atlas": (
             "MITRE ATLAS is too large to enumerate in full; the universe "
             "below is a curated LLM/agent-relevant subset."
@@ -2344,7 +2350,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     }
 
     for k_label, k_key, k_url in (
-        ("OWASP LLM Top 10 v2", "owasp_llm",
+        ("OWASP LLM Top 10 v2 (curated)", "owasp_llm",
          "https://genai.owasp.org/llm-top-10/"),
         ("OWASP Agentic AI Top 10", "owasp_agentic",
          "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"),
@@ -2482,7 +2488,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     )
     fw_counts = _framework_finding_counts(r)
     for k_label, k_key, k_url in (
-        ("OWASP LLM Top 10 v2", "owasp_llm",
+        ("OWASP LLM Top 10 v2 (curated)", "owasp_llm",
          "https://genai.owasp.org/llm-top-10/"),
         ("OWASP Agentic AI Top 10", "owasp_agentic",
          "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"),

@@ -41,7 +41,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-AGENTIC-T1-01`
 
-**Frameworks:** `OWASP Agentic T1` `OWASP LLM LLM04`
+**Frameworks:** `OWASP Agentic T1`
 
 **What it flags:** Long-term memory writes (vector store, Redis, DB) where the value being persisted contains user input or LLM output without a trust boundary. `memory.add(user_message)`, `vectorstore.add_texts([response])`, `redis.set(f"user:{uid}:context", llm_output)`.
 
@@ -89,7 +89,7 @@ Total rules in this skill: **62**
 
 **Severity:** medium · **Languages:** any · **Legacy ID:** `TIER2-AGENTIC-T5-01`
 
-**Frameworks:** `OWASP Agentic T5` `OWASP LLM LLM09`
+**Frameworks:** `OWASP Agentic T5`
 
 **What it flags:** Multi-step pipelines where LLM-A's output becomes LLM-B's input directly with no schema check, no verification step, no "is this answer right" eval. Common in extract→summarise→email pipelines.
 
@@ -113,7 +113,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-ATLAS-T0010-01`
 
-**Frameworks:** `MITRE ATLAS AML.T0010` `OWASP LLM LLM03` `CWE CWE-829` `CWE CWE-494`
+**Frameworks:** `MITRE ATLAS AML.T0010` `CWE CWE-829` `CWE CWE-494`
 
 **What it flags:** Model artifacts, embedding models, or ML libraries pulled from non-pinned sources. Cross-references LLM03-01 / LLM08-01 but at the supply-chain level.
 
@@ -135,7 +135,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-ATLAS-T0019-01`
 
-**Frameworks:** `MITRE ATLAS AML.T0019` `OWASP LLM LLM04`
+**Frameworks:** `MITRE ATLAS AML.T0019`
 
 **What it flags:** Pipelines that publish datasets / fine-tuning corpora to shared registries (HuggingFace Hub, internal Artifactory, shared S3) without a signing / approval step.
 
@@ -155,7 +155,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-ATLAS-T0053-01`
 
-**Frameworks:** `MITRE ATLAS AML.T0053` `OWASP LLM LLM03`
+**Frameworks:** `MITRE ATLAS AML.T0053`
 
 **What it flags:** Plugin loading from third-party registries without pinning / signature verification.
 
@@ -165,7 +165,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-CWE-494-01`
 
-**Frameworks:** `CWE CWE-494` `OWASP LLM LLM03`
+**Frameworks:** `CWE CWE-494`
 
 **What it flags:** Cross-references LLM03-01. Models / packages / binaries downloaded without checksum verification.
 
@@ -195,7 +195,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-CWE-829-01`
 
-**Frameworks:** `CWE CWE-829` `OWASP LLM LLM03`
+**Frameworks:** `CWE CWE-829`
 
 **What it flags:** Cross-references LLM03-01 / LLM08-01. Models / plugins / packages from untrusted sources.
 
@@ -263,7 +263,7 @@ Total rules in this skill: **62**
 
 **Severity:** critical · **Languages:** any · **Legacy ID:** `TIER2-LLM02-01`
 
-**Frameworks:** `OWASP LLM LLM02` `OWASP LLM LLM03` `CWE CWE-798`
+**Frameworks:** `OWASP LLM LLM02` `CWE CWE-798`
 
 **What it flags:** Literal credential strings passed to LLM SDK constructors or builders. Patterns include OpenAI `api_key="sk-..."`, Anthropic `api_key="sk-ant-..."`, AWS `aws_access_key_id="AKIA..."`, Azure `AzureKeyCredential("...")`, Google `genai.configure(api_key="...")`, langchain4j builder `.apiKey("...")`, Spring AI `OpenAiApi("...")`, HuggingFace `token="hf_..."`.
 
@@ -287,7 +287,7 @@ Total rules in this skill: **62**
 
 **Severity:** medium · **Languages:** python, any · **Legacy ID:** `TIER2-LLM03-01`
 
-**Frameworks:** `OWASP LLM LLM03` `OWASP LLM LLM04` `CWE CWE-494` `CWE CWE-829`
+**Frameworks:** `CWE CWE-494` `CWE CWE-829`
 
 **What it flags:** `from_pretrained(...)` / `hf_hub_download(...)` / `snapshot_download(...)` from `transformers`, `diffusers`, `sentence_transformers`, `huggingface_hub` without a `revision=` git SHA pin. `AutoModel.from_pretrained("org/model")` without revision.
 
@@ -299,7 +299,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-LLM03-02`
 
-**Frameworks:** `OWASP LLM LLM03` `OWASP LLM LLM06` `OWASP Agentic T2` `OWASP Agentic T11` `MITRE ATLAS AML.T0053`
+**Frameworks:** `OWASP LLM LLM06` `OWASP Agentic T2` `OWASP Agentic T11` `MITRE ATLAS AML.T0053`
 
 **What it flags:** Tool/plugin loaded by URL or runtime-discovered from an external registry. Patterns: `load_tools(["plugin-name"])` from an external manifest, `MCPServer(url=...)` where URL is dynamic, langchain4j `ToolSpecification` populated from a remote schema fetch.
 
@@ -311,7 +311,7 @@ Total rules in this skill: **62**
 
 **Severity:** high · **Languages:** any · **Legacy ID:** `TIER2-LLM04-01`
 
-**Frameworks:** `OWASP LLM LLM04` `MITRE ATLAS AML.T0019`
+**Frameworks:** `MITRE ATLAS AML.T0019`
 
 **What it flags:** Fine-tuning, embeddings indexing, or RAG corpus build pulling from user-uploaded files, public web scrapes, or untrusted S3 prefixes without provenance checks. `OpenAIFineTuningJob`, `Bedrock CustomModel`, vector-store `add_documents(...)` with user-supplied docs.
 
@@ -347,7 +347,7 @@ Total rules in this skill: **62**
 
 **Severity:** medium · **Languages:** any · **Legacy ID:** `TIER2-LLM08-01`
 
-**Frameworks:** `OWASP LLM LLM08` `OWASP LLM LLM03` `CWE CWE-829`
+**Frameworks:** `CWE CWE-829`
 
 **What it flags:** `SentenceTransformer("...")`, `HuggingFaceEmbeddings(model_name="...")`, OpenAI `embeddings.create(model="text-embedding-3-small")` without pinning; or model name read from runtime env without validation.
 
@@ -563,7 +563,7 @@ Total rules in this skill: **62**
 
 **Severity:** medium · **Languages:** any · **Legacy ID:** `TIER2-LLM08-02`
 
-**Frameworks:** `OWASP LLM LLM08` `OWASP Agentic T3` `CWE CWE-200`
+**Frameworks:** `OWASP Agentic T3` `CWE CWE-200`
 
 **What it flags:** Pinecone / Weaviate / Chroma / OpenSearch / Postgres pgvector queries that don't filter by tenant / user / authorisation scope. `collection.query(query=embedding, k=5)` with no `filter=` arg in a multi-tenant codebase.
 
@@ -575,7 +575,7 @@ Total rules in this skill: **62**
 
 **Severity:** info · **Languages:** any · **Legacy ID:** `TIER2-LLM09-01`
 
-**Frameworks:** `OWASP LLM LLM09`
+**Frameworks:** `OWASP Agentic T5`
 
 **What it flags:** LLM response returned to a downstream consumer (UI, another service, automated decision pipeline) without any uncertainty signal — no `logprobs` capture, no self-evaluation prompt, no "I'm not sure" parser. This is harder to detect statically; flag if (a) the call is in a high-stakes context (medical, financial, legal) AND (b) the output is treated as ground truth.
 

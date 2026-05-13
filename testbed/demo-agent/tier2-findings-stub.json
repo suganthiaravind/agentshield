@@ -42,9 +42,7 @@
       "line": 17,
       "snippet": "memory.setdefault(session_id, []).append({\"user\": user_message, \"assistant\": llm_response})",
       "message": "Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.",
-      "owasp_llm": [
-        "LLM04"
-      ],
+      "owasp_llm": [],
       "owasp_agentic": [
         "T1"
       ],

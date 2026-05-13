@@ -32,7 +32,7 @@ rules:
       legacy_ids: ["AS-D-012"]
       severity_normalized: medium
       framework_mappings:
-        owasp_llm: ["LLM03"]
+        owasp_llm: []
         owasp_agentic: ["T6"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
         mitre_atlas: ["AML.T0010"]

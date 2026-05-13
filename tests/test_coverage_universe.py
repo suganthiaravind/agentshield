@@ -68,12 +68,20 @@ def test_universe_is_superset_of_scanner_coverage() -> None:
     )
 
 
-def test_owasp_llm_universe_covers_top_10() -> None:
-    """LLM01–LLM10 must all be present — the matrix is meant to show
-    'we cover X of the 10 OWASP LLM items'. If the list ever drops one,
-    the headline math breaks."""
-    expected = {f"LLM{i:02d}" for i in range(1, 11)}
-    assert expected.issubset(set(FRAMEWORK_UNIVERSES["owasp_llm"]))
+def test_owasp_llm_universe_curated_subset() -> None:
+    """The OWASP LLM Top 10 universe is intentionally curated to the 6
+    call-site / agent-layer items. LLM03 (Supply Chain), LLM04 (Data
+    Poisoning), LLM08 (Vector/Embedding), LLM09 (Misinformation) are
+    model-layer or data-pipeline concerns better covered by ML-Ops or
+    ATLAS scanners. See the OWASP_LLM_UNIVERSE docstring in
+    coverage_universe.py for the full rationale.
+
+    If a future scope decision puts a dropped item back in scope, update
+    this expected set + the universe in lockstep."""
+    kept = {"LLM01", "LLM02", "LLM05", "LLM06", "LLM07", "LLM10"}
+    dropped = {"LLM03", "LLM04", "LLM08", "LLM09"}
+    assert set(FRAMEWORK_UNIVERSES["owasp_llm"]) == kept
+    assert dropped.isdisjoint(FRAMEWORK_UNIVERSES["owasp_llm"])
 
 
 def test_owasp_ast_universe_covers_top_10() -> None:

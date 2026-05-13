@@ -41,7 +41,7 @@ Total rules in this skill: **10**
 
 **Severity:** high · **Languages:** markdown · **Legacy ID:** `AS-AST-001`
 
-**Frameworks:** `AST10 AST01` `OWASP LLM LLM01` `OWASP LLM LLM03`
+**Frameworks:** `AST10 AST01` `OWASP LLM LLM01`
 
 **What it flags:** SKILL.md body prose contains concealment, jailbreak, or exfil instructions the host LLM may treat as authoritative — the same prose-injection surface documented in the ClawHavoc / ToxicSkills 2026 campaigns.
 
@@ -51,7 +51,7 @@ Total rules in this skill: **10**
 
 **Severity:** high · **Languages:** markdown · **Legacy ID:** `AS-AST-003`
 
-**Frameworks:** `AST10 AST03` `OWASP LLM LLM03` `OWASP LLM LLM06` `OWASP Agentic T2` `OWASP Agentic T3` `CWE CWE-732`
+**Frameworks:** `AST10 AST03` `OWASP LLM LLM06` `OWASP Agentic T2` `OWASP Agentic T3` `CWE CWE-732`
 
 **What it flags:** `permissions.network: true` (or `network.allow: ['*']`) in the manifest. Skills with default-allow network can exfil credentials or pull C2 instructions silently.
 
@@ -81,7 +81,7 @@ Total rules in this skill: **10**
 
 **Severity:** critical · **Languages:** markdown · **Legacy ID:** `AS-AST-003`
 
-**Frameworks:** `AST10 AST03` `OWASP LLM LLM04` `OWASP Agentic T1` `CWE CWE-732`
+**Frameworks:** `AST10 AST03` `OWASP Agentic T1` `CWE CWE-732`
 
 **What it flags:** Skill requests write access to `SOUL.md`, `MEMORY.md`, or `AGENTS.md` without an explicit `deny_write` override. These files persist instructions across sessions — writes to them are persistence vectors.
 
@@ -121,7 +121,7 @@ Total rules in this skill: **10**
 
 **Severity:** info · **Languages:** markdown · **Legacy ID:** `AS-AST-007`
 
-**Frameworks:** `AST10 AST07` `OWASP LLM LLM03` `CWE CWE-345`
+**Frameworks:** `AST10 AST07` `CWE CWE-345`
 
 **What it flags:** Frontmatter has no `signature` field. Without an ed25519 signature the registry can't verify the skill on update; ClawJacked-style update-drift attacks become viable.
 
