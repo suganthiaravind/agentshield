@@ -134,12 +134,76 @@
   ],
   "tier1_fp_callouts": [
     {
+      "tier1_finding_index": 0,
+      "file": "testbed/demo-agent/config.py",
+      "line": 7,
+      "tier1_rule": "agentshield.detect.hardcoded-llm-credentials",
+      "verdict": "TP",
+      "reasoning": "API key literal `sk-ant-api03-...` committed to source; ships in every container image, build artefact, and git clone. No env-var indirection, no secret manager lookup. Real credential exposure."
+    },
+    {
       "tier1_finding_index": 1,
       "file": "testbed/demo-agent/controller.py",
       "line": 21,
       "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
       "verdict": "TP",
       "reasoning": "request.json[\"message\"] is user-controlled and flows directly into chain.invoke with no guardrail wrapper or sanitiser between source and sink. Confirmed prompt-injection surface."
+    },
+    {
+      "tier1_finding_index": 2,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 34,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
+      "verdict": "TP",
+      "reasoning": "Second injection path: article_url is fetched (controller.py:30) and the document body is concatenated into the summarise prompt without sanitisation. Indirect prompt-injection surface — distinct from the line 21 direct-input path."
+    },
+    {
+      "tier1_finding_index": 3,
+      "file": "testbed/demo-agent/tools.py",
+      "line": 21,
+      "tier1_rule": "agentshield.detect.llm-output-to-code-execution",
+      "verdict": "TP",
+      "reasoning": "LLM output is passed to `eval()` with no allow-listing or sandbox. Single successful prompt injection becomes RCE on the agent host."
+    },
+    {
+      "tier1_finding_index": 4,
+      "file": "testbed/demo-agent/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast03-network-unrestricted",
+      "verdict": "TP",
+      "reasoning": "Manifest declares unrestricted outbound network. A compromised or malicious skill can exfiltrate prompts/memory to any attacker-controlled domain without tripping a network-policy violation. Concrete risk."
+    },
+    {
+      "tier1_finding_index": 5,
+      "file": "testbed/demo-agent/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast03-wildcard-file-read",
+      "verdict": "CD",
+      "reasoning": "Wildcard read path IS in the manifest, but the skill's documented purpose involves scanning user-supplied document directories. Defensible if the deploy target jails the agent process under a sandbox root — verify the sandbox boundary is actually enforced in your deploy."
+    },
+    {
+      "tier1_finding_index": 6,
+      "file": "testbed/demo-agent/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast04-missing-author-identity",
+      "verdict": "CD",
+      "reasoning": "Missing `author` field is a metadata gap, not a direct vulnerability. In a private internal registry where every skill is published by the same team, the field is administrative. In a multi-publisher marketplace it's a real provenance gap — verdict depends on deploy context."
+    },
+    {
+      "tier1_finding_index": 7,
+      "file": "testbed/demo-agent/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-content-hash",
+      "verdict": "CD",
+      "reasoning": "Missing content hash is mitigated when the skill is loaded from a trusted private registry over mTLS (the transport guarantees integrity). It becomes a real gap the moment the skill flows through a CDN edge, mirror, or public marketplace — verify your distribution path."
+    },
+    {
+      "tier1_finding_index": 8,
+      "file": "testbed/demo-agent/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-signature",
+      "verdict": "TP",
+      "reasoning": "Unsigned skill bundle ships with no way for the loader to verify provenance. Classic supply-chain swap surface — registry compromise, CDN edge compromise, or in-transit MITM all yield silent skill substitution."
     }
   ]
 }

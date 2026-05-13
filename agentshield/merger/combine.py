@@ -367,6 +367,29 @@ _VERDICT_BADGE = {
     "FP": "⚠ FP",
 }
 
+# Hover tooltip + legend text for the Copilot cross-check verdicts on
+# Tier 1 findings. Three states by design — collapsing CD into TP causes
+# alert fatigue ("you fix 100 'TPs' but 60 were already mitigated");
+# collapsing it into FP hides real risk ("we said FP but the mitigation
+# got removed in a later refactor"). See
+# agentshield/skills/tier2_output_schema.md.tmpl §verdict for the
+# canonical schema definition.
+_VERDICT_MEANINGS = {
+    "TP": (
+        "True Positive — pattern is present and unmitigated. Real issue, "
+        "fix it."
+    ),
+    "CD": (
+        "Context-Dependent — pattern is present but mitigated elsewhere "
+        "(sanitiser, auth check, feature flag). Defensible; verify the "
+        "mitigation stays in place."
+    ),
+    "FP": (
+        "False Positive — pattern isn't actually there (test fixture, "
+        "mock, unreachable path). Safe to suppress."
+    ),
+}
+
 
 def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
     """Group Tier 1 + Tier 2 findings by D/D/R category.
@@ -856,8 +879,8 @@ h3 { font-size: 15px; }
    address) so a stakeholder can scan the row and understand it
    without consulting the docs. */
 .metric .metric-subtitle {
-  font-size: 11px; color: var(--text-muted); margin-top: 6px;
-  font-style: italic; line-height: 1.4;
+  font-size: 13px; color: var(--text-muted); margin-top: 6px;
+  font-style: italic; line-height: 1.45;
 }
 /* F.33: hero treatment for the Net Actionable card. Bigger value,
    accent border, accent-tinted background — the conclusion card. */
@@ -2168,8 +2191,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 parts.append(f'<span class="pill {sev}">{sev}</span>')
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
                 if origin == "tier1" and f.get("_tier2_verdict"):
-                    v = f["_tier2_verdict"].lower()
-                    parts.append(f'<span class="pill {v}">Copilot: {f["_tier2_verdict"]}</span>')
+                    v_raw = f["_tier2_verdict"]
+                    v = v_raw.lower()
+                    meaning = _VERDICT_MEANINGS.get(v_raw, "")
+                    parts.append(
+                        f'<span class="pill {v}" title="{_html_escape(meaning)}">'
+                        f'Copilot: {v_raw}</span>'
+                    )
                 parts.append("</div>")
                 parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
                 if f.get("message"):
@@ -2563,10 +2591,9 @@ def _render_reference_panel(parts: list[str]) -> None:
     parts.append('<div class="reference-card">')
     parts.append('<h3 class="panel-title">What AgentShield checks for</h3>')
     parts.append(
-        '<p class="panel-subtitle">Every rule and checklist entry the '
-        "scanner can fire, pulled live from the bundled rule pack. Use this "
-        "as a product-coverage reference — independent of what the most "
-        "recent scan happened to find.</p>"
+        '<p class="panel-subtitle">This page lists everything the scanner '
+        "is capable of catching, taken straight from its current ruleset. "
+        "Use it to understand the tool's full coverage.</p>"
     )
 
     # F.28c: dropped tier numbering. The three sources catch different
