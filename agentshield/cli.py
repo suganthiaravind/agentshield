@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Sequence
 
 from agentshield import __version__
-from agentshield.emitter import EmitResult, copilot_prompt, emit_skills
+from agentshield.emitter import EmitResult, copilot_prompt, default_output_dir, emit_skills
 from agentshield.merger import (
     MergeError,
     MergeResult,
@@ -289,6 +289,22 @@ def _finding_to_emitter_dict(f: Finding) -> dict:
     }
 
 
+def _display_path(path: Path, *roots: Path) -> str:
+    """Render `path` relative to the first matching `root`, else absolute.
+
+    Lets the scan banner show short, copy-pasteable paths for both the
+    Copilot-contract files (under <target>/.agentshield/) and the
+    developer-facing fix-skill files (under <cwd>/output/).
+    """
+    resolved = path.resolve()
+    for root in roots:
+        try:
+            return str(resolved.relative_to(root.resolve()))
+        except ValueError:
+            continue
+    return str(resolved)
+
+
 def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
     """The mandatory next-step prompt the user pastes into Copilot Chat."""
     bar = "=" * 70
@@ -297,10 +313,20 @@ def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
     print("⚠ TIER 2 NOT YET RUN — scanning is INCOMPLETE.")
     print(bar)
     print()
-    print("Skill files written:")
-    for p in emit.emitted_files:
-        print(f"  - {p.relative_to(target_root)}")
+    cwd = Path.cwd()
+    fix_skill_set = {p.resolve() for p in emit.fix_skill_files}
+    contract_files = [p for p in emit.emitted_files if p.resolve() not in fix_skill_set]
+    print(f"Copilot contract files (in {target_root}/.agentshield/):")
+    for p in contract_files:
+        print(f"  - {_display_path(p, target_root)}")
+    if emit.fix_skill_files:
+        out_label = _display_path(emit.output_dir or default_output_dir(), cwd)
+        print()
+        print(f"Fix-skill files (in {out_label}/):")
+        for p in emit.fix_skill_files:
+            print(f"  - {_display_path(p, emit.output_dir or default_output_dir(), cwd)}")
     if emit.gitignore_updated:
+        print()
         print(f"  + appended .agentshield/ to {target_root}/.gitignore")
     print()
     print("Next step — paste this into Copilot Chat in your IDE:")
@@ -452,7 +478,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
         for p in candidate_files
     ]
     try:
-        emit = emit_skills(target_root, findings_dicts, scanned_files_rel)
+        emit = emit_skills(
+            target_root,
+            findings_dicts,
+            scanned_files_rel,
+            output_dir=default_output_dir(),
+        )
     except FileNotFoundError as exc:
         print(f"[agentshield] ERROR emitting Tier 2 skill files: {exc}", file=sys.stderr)
         return 2
@@ -477,6 +508,23 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return 2
 
     _print_merge_summary(result)
+
+    # If the user didn't pass any --output-* flag (and isn't just printing
+    # to stdout), default to dropping the HTML report into <cwd>/output/.
+    # Predictable location, same folder the fix-skill .md files live in,
+    # so a developer doesn't have to remember a path. Explicit flags
+    # still win when given.
+    if (
+        not args.output_html
+        and not args.output_markdown
+        and not args.output_json
+        and not args.output_sarif
+        and not args.print_md
+    ):
+        out_dir = default_output_dir()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        args.output_html = str(out_dir / "agentshield-report.html")
+        print(f"[agentshield] No --output-* specified; defaulting to {args.output_html}")
 
     # Force UTF-8 — the merger renders ⚠ / ✓ / ❌ / 🟡 banners that don't
     # encode in Windows' default cp1252 (Phase F.10 fix from VDI run).
@@ -504,6 +552,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         # variant is the one to email / attach to a JIRA / save as PDF; the
         # interactive variant is for live review.
         html_path = Path(args.output_html)
+        html_path.parent.mkdir(parents=True, exist_ok=True)
         html_path.write_text(render_combined_html(result), encoding="utf-8")
         written.append(args.output_html)
         print_path = html_path.with_name(html_path.stem + "-print" + html_path.suffix)
@@ -540,12 +589,6 @@ def cmd_merge(args: argparse.Namespace) -> int:
                     f"Open the file manually: {uri}",
                     file=sys.stderr,
                 )
-
-    if not written and not args.print_md:
-        print(
-            "\n[agentshield] (no --output-{markdown,json,sarif,html} specified "
-            "and --print not set; pass one to persist or display the unified report)"
-        )
 
     # Soft failures (stale, schema errors, tier 2 missing) don't change exit
     # code — the report banner surfaces them. Hard failures already returned 2.

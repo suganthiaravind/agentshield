@@ -6,6 +6,7 @@ from agentshield.emitter.skill_emitter import (
     GITIGNORE_MARKER,
     compute_tier1_fingerprint,
     copilot_prompt,
+    default_output_dir,
     emit_skills,
     ensure_gitignored,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "GITIGNORE_MARKER",
     "compute_tier1_fingerprint",
     "copilot_prompt",
+    "default_output_dir",
     "emit_skills",
     "ensure_gitignored",
 ]

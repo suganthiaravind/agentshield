@@ -32,7 +32,12 @@ from agentshield.emitter import (
     emit_skills,
     ensure_gitignored,
 )
-from agentshield.emitter.skill_emitter import SKILLS_DIR, TEMPLATE_FILES
+from agentshield.emitter.skill_emitter import (
+    FIX_SKILL_FILES,
+    SKILLS_DIR,
+    TEMPLATE_FILES,
+    TIER2_TEMPLATE_FILES,
+)
 
 
 # ---------- fixtures ----------
@@ -70,57 +75,116 @@ def fixed_now() -> datetime:
 
 # ---------- template copying ----------
 
-def test_emits_all_templates_into_dot_agentshield(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+def test_emits_tier2_contract_files_into_dot_agentshield(
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
-    result = emit_skills(repo, sample_findings, ["src/api/chat.py"], now_utc=fixed_now)
-    out = repo / ".agentshield"
+    output_dir = tmp_path / "out"
+    result = emit_skills(
+        repo,
+        sample_findings,
+        ["src/api/chat.py"],
+        now_utc=fixed_now,
+        output_dir=output_dir,
+    )
+    contract = repo / ".agentshield"
     # Tier 2 bootstrap + checklist + output schema (the things Copilot
-    # reads to run Tier 2).
-    assert (out / "tier2-bootstrap.md").is_file()
-    assert (out / "tier2-checklist.md").is_file()
-    assert (out / "tier2-output-schema.md").is_file()
-    # F.34b — per-source fix skills emitted alongside so a developer
-    # can drop one into Claude Code / Copilot Chat without leaving the
-    # scanned target's directory.
-    assert (out / "agentshield-semgrep-fixes.md").is_file()
-    assert (out / "agentshield-copilot-fixes.md").is_file()
-    assert (out / "agentshield-manifest-fixes.md").is_file()
-    # 6 templates + tier1-results.json = 7 emitted files.
+    # reads to run Tier 2) — must stay under the target's .agentshield/
+    # because the Copilot prompt hardcodes those paths.
+    assert (contract / "tier2-bootstrap.md").is_file()
+    assert (contract / "tier2-checklist.md").is_file()
+    assert (contract / "tier2-output-schema.md").is_file()
+    # 3 Tier 2 templates + tier1-results.json + 3 fix-skill files = 7.
     assert len(result.emitted_files) == 7
 
 
+def test_emits_fix_skill_files_into_output_dir(
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
+) -> None:
+    """F.34b fix-skill .md files now land in the developer-facing
+    output dir (one stable place across scans), not the target's
+    `.agentshield/`."""
+    output_dir = tmp_path / "out"
+    result = emit_skills(
+        repo,
+        sample_findings,
+        [],
+        now_utc=fixed_now,
+        output_dir=output_dir,
+    )
+    assert (output_dir / "agentshield-semgrep-fixes.md").is_file()
+    assert (output_dir / "agentshield-copilot-fixes.md").is_file()
+    assert (output_dir / "agentshield-manifest-fixes.md").is_file()
+    # And NOT inside the target's .agentshield/ anymore.
+    for fname in FIX_SKILL_FILES.values():
+        assert not (repo / ".agentshield" / fname).exists(), (
+            f"{fname} should no longer be emitted under target/.agentshield/"
+        )
+    assert result.output_dir == output_dir
+    assert len(result.fix_skill_files) == 3
+
+
+def test_output_dir_defaults_to_cwd_output(
+    repo: Path,
+    sample_findings: list[dict],
+    fixed_now: datetime,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No explicit output_dir → default to <cwd>/output/."""
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    result = emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+    assert result.output_dir == cwd / "output"
+    assert (cwd / "output" / "agentshield-semgrep-fixes.md").is_file()
+
+
 def test_templates_copied_verbatim(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
     """The on-disk file content must match the bundled template byte-for-byte
     (no template substitution today; if we add it, this test should change
     intentionally)."""
-    emit_skills(repo, sample_findings, [], now_utc=fixed_now)
-    for src_name, dst_name in TEMPLATE_FILES.items():
+    output_dir = tmp_path / "out"
+    emit_skills(repo, sample_findings, [], now_utc=fixed_now, output_dir=output_dir)
+    for src_name, dst_name in TIER2_TEMPLATE_FILES.items():
         src_text = (SKILLS_DIR / src_name).read_text()
         dst_text = (repo / ".agentshield" / dst_name).read_text()
         assert src_text == dst_text, f"Template {src_name} was mutated during emit"
+    for src_name, dst_name in FIX_SKILL_FILES.items():
+        src_text = (SKILLS_DIR / src_name).read_text()
+        dst_text = (output_dir / dst_name).read_text()
+        assert src_text == dst_text, f"Fix-skill {src_name} was mutated during emit"
+    # Sanity: the union view used by other tests still matches the bundled set.
+    assert set(TEMPLATE_FILES) == set(TIER2_TEMPLATE_FILES) | set(FIX_SKILL_FILES)
 
 
 def test_emit_overwrites_existing_template_files(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
     """Re-running emit must refresh the templates so they always reflect the
     bundled v2 contract — they are generated artifacts, not user-editable."""
     out = repo / ".agentshield"
     out.mkdir()
     (out / "tier2-checklist.md").write_text("STALE CONTENT FROM YESTERDAY")
-    emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+    emit_skills(
+        repo, sample_findings, [], now_utc=fixed_now, output_dir=tmp_path / "out"
+    )
     assert "STALE CONTENT" not in (out / "tier2-checklist.md").read_text()
 
 
 # ---------- tier1-results.json shape ----------
 
 def test_tier1_results_json_has_required_top_level_fields(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
-    emit_skills(repo, sample_findings, ["src/api/chat.py"], now_utc=fixed_now)
+    emit_skills(
+        repo,
+        sample_findings,
+        ["src/api/chat.py"],
+        now_utc=fixed_now,
+        output_dir=tmp_path / "out",
+    )
     payload = json.loads((repo / ".agentshield" / "tier1-results.json").read_text())
     for field in ["tier", "scanned_at", "agentshield_tier1_fingerprint", "scanned_files", "findings"]:
         assert field in payload, f"tier1-results.json missing {field}"
@@ -131,9 +195,11 @@ def test_tier1_results_json_has_required_top_level_fields(
 
 
 def test_tier1_results_includes_fingerprint(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
-    result = emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+    result = emit_skills(
+        repo, sample_findings, [], now_utc=fixed_now, output_dir=tmp_path / "out"
+    )
     payload = json.loads((repo / ".agentshield" / "tier1-results.json").read_text())
     assert payload["agentshield_tier1_fingerprint"] == result.fingerprint
     assert len(result.fingerprint) == 64  # SHA-256 hex
@@ -230,27 +296,33 @@ def test_gitignore_handles_no_trailing_newline(repo: Path) -> None:
 # ---------- end-to-end re-emit ----------
 
 def test_emit_is_idempotent_on_re_run(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
     """Running scan twice should produce a stable on-disk state. Templates
     + tier1-results.json overwrite; .gitignore stays one entry."""
-    emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+    out_dir = tmp_path / "out"
+    emit_skills(repo, sample_findings, [], now_utc=fixed_now, output_dir=out_dir)
     first_gi = (repo / ".gitignore").read_text()
-    emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+    emit_skills(repo, sample_findings, [], now_utc=fixed_now, output_dir=out_dir)
     second_gi = (repo / ".gitignore").read_text()
     assert first_gi == second_gi  # no duplicate gitignore entry
     assert second_gi.count(GITIGNORE_ENTRY) == 1
 
 
 def test_emit_result_carries_expected_fields(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime
+    repo: Path, sample_findings: list[dict], fixed_now: datetime, tmp_path: Path
 ) -> None:
-    result = emit_skills(repo, sample_findings, ["a.py"], now_utc=fixed_now)
+    output_dir = tmp_path / "out"
+    result = emit_skills(
+        repo, sample_findings, ["a.py"], now_utc=fixed_now, output_dir=output_dir
+    )
     assert result.target_root == repo
     assert result.tier1_path == repo / ".agentshield" / "tier1-results.json"
+    assert result.output_dir == output_dir
     assert len(result.fingerprint) == 64
     assert result.gitignore_updated is True
     assert all(p.exists() for p in result.emitted_files)
+    assert all(p.exists() for p in result.fix_skill_files)
 
 
 # ---------- Copilot prompt ----------
@@ -268,11 +340,17 @@ def test_copilot_prompt_mentions_required_files() -> None:
 # ---------- error handling ----------
 
 def test_emit_raises_when_template_missing(
-    repo: Path, sample_findings: list[dict], fixed_now: datetime, monkeypatch: pytest.MonkeyPatch
+    repo: Path,
+    sample_findings: list[dict],
+    fixed_now: datetime,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If the package install is corrupt and a template is missing, the
     emitter must fail loudly rather than silently writing partial output."""
     from agentshield.emitter import skill_emitter
     monkeypatch.setattr(skill_emitter, "SKILLS_DIR", Path("/nonexistent/path"))
     with pytest.raises(FileNotFoundError, match="Bundled skill template missing"):
-        emit_skills(repo, sample_findings, [], now_utc=fixed_now)
+        emit_skills(
+            repo, sample_findings, [], now_utc=fixed_now, output_dir=tmp_path / "out"
+        )

@@ -46,3 +46,6 @@ ENV/
 # Trivy DB cache (large, regenerable)
 .trivy-cache/
 trivy-db/
+
+# AgentShield CLI output (reports + fix-skill .md files; regenerable)
+output/
