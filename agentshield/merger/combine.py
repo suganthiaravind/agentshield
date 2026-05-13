@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentshield.merger.attack_narratives import narrative_for
 from agentshield.merger.schema import SchemaError, validate_tier2_findings
 
 
@@ -960,6 +961,61 @@ h3 { font-size: 15px; }
                    border-radius: 4px; margin: 6px 0; color: #2a2620; overflow-x: auto; }
 .finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
                        padding-left: 12px; border-left: 2px solid var(--border); }
+
+/* v4: per-finding static attack narrative — collapsed by default in the
+   interactive HTML, forced open in the static / print variant. Tinted
+   warning palette so it reads as "here's what bad looks like" without
+   being mistaken for an actual incident alert. */
+.finding-attack-scenario {
+  margin-top: 10px;
+  border: 1px solid #e9c8a5;
+  border-radius: 8px;
+  background: #fcf5ec;
+  overflow: hidden;
+}
+.finding-attack-scenario > summary {
+  cursor: pointer; user-select: none;
+  padding: 8px 12px;
+  font-size: 12.5px; font-weight: 600;
+  color: #7a4a18;
+  display: flex; align-items: center; gap: 6px;
+}
+.finding-attack-scenario > summary::marker,
+.finding-attack-scenario > summary::-webkit-details-marker { color: #b67a3a; }
+.finding-attack-scenario > summary:hover { background: #f7ebd8; }
+.finding-attack-scenario .attack-icon {
+  display: inline-block;
+  font-size: 13px; color: #b86a1a;
+  margin-right: 2px;
+}
+.finding-attack-scenario[open] > summary {
+  border-bottom: 1px solid #e9c8a5;
+  background: #f7ebd8;
+}
+.finding-attack-scenario .attack-body { padding: 10px 14px 12px; }
+.finding-attack-scenario .attack-section { margin-bottom: 10px; }
+.finding-attack-scenario .attack-section:last-of-type { margin-bottom: 6px; }
+.finding-attack-scenario .attack-label {
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: #7a4a18; margin-bottom: 3px;
+}
+.finding-attack-scenario .attack-text {
+  font-size: 12.5px; color: var(--text); line-height: 1.55;
+}
+.finding-attack-scenario .attack-payload {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: #2a2620; color: #f5f0e6;
+  padding: 8px 12px; border-radius: 4px;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+  line-height: 1.5;
+}
+.finding-attack-scenario .attack-disclaimer {
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-muted); font-style: italic;
+}
 
 .coverage-grid {
   display: grid;
@@ -2145,6 +2201,59 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
                     parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                # v4: static attack narrative — what an attack on this
+                # finding looks like in practice. Pure documentation; no
+                # execution. Rendered only when the rule has a curated
+                # narrative entry — silent for others.
+                # Tier 1 findings carry both legacy `rule_id` (e.g.
+                # `agentshield.detect.unsanitized-user-input-to-llm`) and
+                # canonical `agentshield_id` (e.g. `AS-S-D-LLM01-001`).
+                # Prefer the canonical ID since the narrative library is
+                # keyed off it; Tier 2 / manifest findings have rule_id
+                # already in canonical form.
+                scenario = narrative_for(
+                    f.get("agentshield_id") or f.get("rule_id") or ""
+                )
+                if scenario is not None:
+                    open_attr = " open" if static else ""
+                    parts.append(
+                        f'<details class="finding-attack-scenario"{open_attr}>'
+                    )
+                    parts.append(
+                        f'<summary><span class="attack-icon" aria-hidden="true">'
+                        f'&#9888;</span> Attack scenario &mdash; '
+                        f'{_html_escape(scenario.title)}</summary>'
+                    )
+                    parts.append('<div class="attack-body">')
+                    parts.append(
+                        f'<div class="attack-section">'
+                        f'<div class="attack-label">What the attacker sends</div>'
+                        f'<pre class="attack-payload">'
+                        f'{_html_escape(scenario.attacker_input)}'
+                        f'</pre></div>'
+                    )
+                    parts.append(
+                        f'<div class="attack-section">'
+                        f'<div class="attack-label">How it lands</div>'
+                        f'<div class="attack-text">'
+                        f'{_html_escape(scenario.code_path)}'
+                        f'</div></div>'
+                    )
+                    parts.append(
+                        f'<div class="attack-section">'
+                        f'<div class="attack-label">What the attacker gets</div>'
+                        f'<div class="attack-text">'
+                        f'{_html_escape(scenario.impact)}'
+                        f'</div></div>'
+                    )
+                    parts.append(
+                        '<div class="attack-disclaimer">'
+                        'Static walkthrough &mdash; no payloads were '
+                        'executed against your system.'
+                        '</div>'
+                    )
+                    parts.append('</div>')  # /attack-body
+                    parts.append('</details>')
                 parts.append("</div>")  # /finding-body
                 parts.append("</div>")  # /finding
         parts.append("</div>")  # /findings-section
