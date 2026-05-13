@@ -327,7 +327,7 @@ _DDR_LABELS = {
         "🔵 Respond",
         "observability gaps",
         "Whether incidents can be detected and recovered",
-        "If the agent misbehaves, will you see it and stop it?",
+        "If something goes wrong, will you see it and stop it?",
     ),
 }
 
@@ -1223,6 +1223,104 @@ footer {
   background: #ebe7d8; color: #5a5547;
 }
 
+/* Coverage Matrix — 3-state chips (issues / clean / not-scanned).
+   Separate from the Frameworks tab's clickable-filter chips. */
+.coverage-summary {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 6px 14px; margin-bottom: 10px;
+  font-size: 12px; color: var(--text-muted);
+}
+.coverage-summary .cov-headline {
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.coverage-summary .cov-stat { font-variant-numeric: tabular-nums; }
+.coverage-summary .cov-stat-issues  { color: #b8261d; font-weight: 600; }
+.coverage-summary .cov-stat-clean   { color: #1f6b3a; font-weight: 600; }
+.coverage-summary .cov-stat-gap     { color: #6e6655; font-weight: 600; }
+
+.coverage-chips {
+  display: flex; flex-wrap: wrap; gap: 6px 6px;
+  margin-bottom: 4px;
+}
+.coverage-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; font-weight: 600;
+  cursor: help;
+}
+.coverage-chip .cov-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px; font-weight: 700;
+  padding: 0 6px; border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+}
+.coverage-chip-issues {
+  background: #fbe6e3; border-color: #e9b4ad; color: #8a1d15;
+}
+.coverage-chip-issues .cov-chip-count { background: #b8261d; color: white; }
+.coverage-chip-clean {
+  background: #e3f1e5; border-color: #b3d6b9; color: #1f6b3a;
+}
+.coverage-chip-gap {
+  background: #f0ede4; border-color: #d9d2bf; color: #6e6655;
+  opacity: 0.85;
+}
+.coverage-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  font-size: 11px; color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.coverage-legend .leg-swatch {
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 999px; margin-right: 5px; vertical-align: -1px;
+}
+.coverage-legend .leg-swatch-issues { background: #b8261d; }
+.coverage-legend .leg-swatch-clean  { background: #1f6b3a; }
+.coverage-legend .leg-swatch-gap    { background: #b3aa92; }
+.coverage-fw-note {
+  font-size: 11px; color: var(--text-muted);
+  font-style: italic; margin-top: -2px; margin-bottom: 10px;
+}
+
+/* Per-framework "why N items are not scanned" disclosure. Tooltips on
+   gray chips give the same info, but tooltips don't render in print /
+   PDF — this details block does. Stays collapsed by default to keep
+   the matrix dense. */
+.coverage-gap-details {
+  margin-top: 6px; margin-bottom: 0;
+  font-size: 11.5px; color: var(--text-muted);
+}
+.coverage-gap-details summary {
+  cursor: pointer; display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 4px 10px;
+  border: 1px dashed var(--border); border-radius: 6px;
+  background: transparent;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+.coverage-gap-details summary:hover { color: var(--text); border-color: var(--accent); }
+.coverage-gap-details[open] summary { margin-bottom: 8px; }
+.coverage-gap-list {
+  margin: 0; padding-left: 18px;
+  list-style: disc;
+  line-height: 1.55;
+}
+.coverage-gap-list li { margin-bottom: 4px; }
+.coverage-gap-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px;
+  background: #f0ede4; color: #6e6655;
+}
+/* In the static / print variant the details block is rendered with the
+   `open` attribute so the gap reasons are part of the hard-copy without
+   relying on @media print hacks. */
+.static-report .coverage-gap-details[open] summary { margin-bottom: 6px; }
+
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
   background: var(--panel);
@@ -1787,7 +1885,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<div class="metric">'
         f'<div class="metric-label">Copilot LLM Scan</div>'
         f'<div class="metric-value">{tier2_total}</div>'
-        f'<div class="metric-subtitle">what LLM scan added</div>'
+        f'<div class="metric-subtitle">what LLM found</div>'
         f'</div>'
     )
     parts.append(
@@ -2053,6 +2151,25 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append("</section>" if static else "</div>")  # /tab-panel (D/D/R)
 
     # ---- Coverage tab panel ----
+    # Three-state matrix: for every framework item in the curated universe,
+    # show whether THIS run produced findings for it (red), the scanner
+    # has a rule for it but found nothing this run (green), or the rule
+    # pack has no coverage at all (gray gap). Lets a reader instantly tell
+    # apart "we checked and you're clean" from "we never looked."
+    from agentshield.merger.coverage_universe import (
+        FRAMEWORK_UNIVERSES,
+        compute_scanner_coverage,
+        gap_reason,
+    )
+    from agentshield.merger.reference import build_all_references
+
+    _all_refs = build_all_references(
+        tier1_rules_path=_DEFAULT_RULES_PATH,
+        tier2_checklist_path=_DEFAULT_CHECKLIST_PATH,
+    )
+    scanner_cov = compute_scanner_coverage(_all_refs)
+    fw_counts = _framework_finding_counts(r)
+
     if static:
         parts.append('<section class="static-section" data-panel="coverage">')
     else:
@@ -2060,23 +2177,155 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('<div class="coverage-card">')
     parts.append('<h3 class="panel-title">Coverage matrix</h3>')
     parts.append(
-        '<p class="panel-subtitle">Frameworks the unified scan touched. '
-        'Click any item in the Frameworks tab to filter findings down to that item.</p>'
+        '<p class="panel-subtitle">Per-framework view of what AgentShield '
+        '<em>checked</em>, and what it <em>found</em>. Each chip is one '
+        'framework item — its colour shows whether this run produced '
+        'findings (red), the rule pack covers it but nothing fired '
+        '(green), or it sits outside the scanner’s current coverage '
+        '(gray).</p>'
     )
-    parts.append('<div class="coverage-grid">')
-    for k_label, k_key in (
-        ("OWASP LLM", "owasp_llm"), ("OWASP Agentic", "owasp_agentic"),
-        ("MITRE ATLAS", "mitre_atlas"), ("CWE", "cwe"),
-        ("OWASP AST10", "ast"),
+    parts.append('<div class="coverage-legend">')
+    parts.append(
+        '<span><span class="leg-swatch leg-swatch-issues"></span>'
+        'Scanned &mdash; with findings</span>'
+        '<span><span class="leg-swatch leg-swatch-clean"></span>'
+        'Scanned &mdash; clean this run</span>'
+        '<span><span class="leg-swatch leg-swatch-gap"></span>'
+        'Not scanned (no rule covers this item yet)</span>'
+    )
+    parts.append('</div>')
+
+    _CURATED_NOTE = {
+        "mitre_atlas": (
+            "MITRE ATLAS is too large to enumerate in full; the universe "
+            "below is a curated LLM/agent-relevant subset."
+        ),
+        "cwe": (
+            "CWE has 1000+ weaknesses; the universe below is a curated "
+            "subset most relevant to LLM/agent app code."
+        ),
+    }
+
+    for k_label, k_key, k_url in (
+        ("OWASP LLM Top 10 v2", "owasp_llm",
+         "https://genai.owasp.org/llm-top-10/"),
+        ("OWASP Agentic AI Top 10", "owasp_agentic",
+         "https://owasp.org/www-project-agentic-ai-threats/"),
+        ("MITRE ATLAS (curated)", "mitre_atlas", "https://atlas.mitre.org/"),
+        ("CWE (curated)", "cwe", "https://cwe.mitre.org/"),
+        ("OWASP Agentic Skills Top 10", "ast",
+         "https://github.com/OWASP/www-project-agentic-skills-top-10"),
     ):
-        items = sorted(getattr(r.coverage, k_key))
-        parts.append(f'<div class="coverage-label">{_html_escape(k_label)}</div>')
-        if items:
-            chips = "".join(f'<span class="coverage-item">{_html_escape(i)}</span>' for i in items)
-            parts.append(f'<div class="coverage-items">{chips}</div>')
-        else:
-            parts.append('<div class="coverage-empty">(none touched)</div>')
-    parts.append("</div>")
+        universe = FRAMEWORK_UNIVERSES[k_key]
+        scanner_set = scanner_cov.get(k_key, set())
+        findings_set = set(getattr(r.coverage, k_key))
+
+        # State buckets (declaration order, not alphabetical, so the chips
+        # read in the framework's own numbering, e.g. LLM01 → LLM10).
+        items_issues: list[tuple[str, int]] = []
+        items_clean: list[str] = []
+        items_gap: list[str] = []
+        for item in universe:
+            if item in findings_set:
+                count = fw_counts.get(f"{k_key}:{item}", 0)
+                items_issues.append((item, count))
+            elif item in scanner_set:
+                items_clean.append(item)
+            else:
+                items_gap.append(item)
+        # Items in scanner_set or findings_set but NOT in the curated
+        # universe — surface them too so coverage stays honest if a rule
+        # references a new ID the universe hasn't caught up with.
+        extras = sorted((scanner_set | findings_set) - set(universe))
+        for item in extras:
+            if item in findings_set:
+                count = fw_counts.get(f"{k_key}:{item}", 0)
+                items_issues.append((item, count))
+            else:
+                items_clean.append(item)
+
+        in_scope = len(items_issues) + len(items_clean)
+        total = in_scope + len(items_gap)
+
+        parts.append('<div class="framework-group">')
+        parts.append(
+            f'<div class="framework-group-header">'
+            f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
+            f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
+            f'target="_blank" rel="noopener">reference &rarr;</a>'
+            f'</div>'
+        )
+        parts.append('<div class="coverage-summary">')
+        parts.append(
+            f'<span class="cov-headline">'
+            f'{in_scope}/{total} in scope</span>'
+        )
+        parts.append(
+            f'<span class="cov-stat cov-stat-issues">'
+            f'{len(items_issues)} with issues</span>'
+        )
+        parts.append(
+            f'<span class="cov-stat cov-stat-clean">'
+            f'{len(items_clean)} clean</span>'
+        )
+        parts.append(
+            f'<span class="cov-stat cov-stat-gap">'
+            f'{len(items_gap)} not scanned</span>'
+        )
+        parts.append('</div>')
+        if k_key in _CURATED_NOTE:
+            parts.append(
+                f'<div class="coverage-fw-note">'
+                f'{_html_escape(_CURATED_NOTE[k_key])}'
+                f'</div>'
+            )
+        parts.append('<div class="coverage-chips">')
+        for item, count in items_issues:
+            parts.append(
+                f'<span class="coverage-chip coverage-chip-issues" '
+                f'title="{_html_escape(item)}: {count} finding'
+                f'{"s" if count != 1 else ""} this run">'
+                f'{_html_escape(item)}'
+                f'<span class="cov-chip-count">{count}</span>'
+                f'</span>'
+            )
+        for item in items_clean:
+            parts.append(
+                f'<span class="coverage-chip coverage-chip-clean" '
+                f'title="{_html_escape(item)}: covered by the rule pack, '
+                f'no findings this run">'
+                f'{_html_escape(item)}'
+                f'</span>'
+            )
+        for item in items_gap:
+            reason = gap_reason(k_key, item)
+            parts.append(
+                f'<span class="coverage-chip coverage-chip-gap" '
+                f'title="{_html_escape(item)}: {_html_escape(reason)}">'
+                f'{_html_escape(item)}'
+                f'</span>'
+            )
+        parts.append('</div>')
+        # Print-friendly fallback: tooltips don't render in print / PDF,
+        # so emit a compact reasons list when the framework has gaps.
+        if items_gap:
+            open_attr = " open" if static else ""
+            parts.append(f'<details class="coverage-gap-details"{open_attr}>')
+            parts.append(
+                f'<summary>Why {len(items_gap)} '
+                f'item{"s are" if len(items_gap) != 1 else " is"} '
+                f'not scanned</summary>'
+            )
+            parts.append('<ul class="coverage-gap-list">')
+            for item in items_gap:
+                reason = gap_reason(k_key, item)
+                parts.append(
+                    f'<li><code>{_html_escape(item)}</code> &mdash; '
+                    f'{_html_escape(reason)}</li>'
+                )
+            parts.append('</ul>')
+            parts.append('</details>')
+        parts.append('</div>')  # /framework-group
     parts.append("</div>")  # /coverage-card
     parts.append("</section>" if static else "</div>")  # /tab-panel
 

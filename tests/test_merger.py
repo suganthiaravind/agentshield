@@ -660,7 +660,10 @@ def test_html_renders_coverage_matrix(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
-    assert 'class="coverage-grid"' in html
+    # 3-state matrix: each framework section emits a chip row.
+    assert 'class="coverage-chips"' in html
+    # Headline summary surfaces in-scope counts.
+    assert 'class="coverage-summary"' in html
     assert "OWASP LLM" in html
 
 
@@ -988,8 +991,8 @@ def test_html_tab_js_wired(repo: Path) -> None:
 
 def test_html_coverage_matrix_lives_inside_coverage_tab(repo: Path) -> None:
     """The pre-F.22 layout had a stand-alone Coverage section. F.22 moves
-    that matrix into the Coverage tab panel — outside the panel there
-    should be no .coverage-grid."""
+    that matrix into the Coverage tab panel — its chip row should sit
+    between the coverage tab and frameworks tab markers in the markup."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
@@ -997,10 +1000,10 @@ def test_html_coverage_matrix_lives_inside_coverage_tab(repo: Path) -> None:
     coverage_panel_end = html.find('data-panel="frameworks"')
     assert coverage_panel_start != -1
     assert coverage_panel_end != -1 and coverage_panel_end > coverage_panel_start
-    # The coverage-grid must sit between the coverage panel start and the
-    # frameworks panel start.
-    grid_pos = html.find('class="coverage-grid"')
-    assert coverage_panel_start < grid_pos < coverage_panel_end
+    # The 3-state chip row must sit between the coverage panel start and
+    # the frameworks panel start.
+    chips_pos = html.find('class="coverage-chips"')
+    assert coverage_panel_start < chips_pos < coverage_panel_end
 
 
 def test_coverage_matrix_includes_ast_axis(repo: Path) -> None:
