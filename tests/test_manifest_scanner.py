@@ -90,6 +90,13 @@ def test_ast01_fires_on_concealment_marker(tmp_path: Path) -> None:
     assert findings[0].framework_mappings.ast == ["AST01"]
     assert findings[0].severity == "high"
     assert "AST01" in findings[0].message
+    # Remediation flows through from RULE_DESCRIPTIONS so the merged
+    # report's per-finding "Fix:" line has content for manifest
+    # findings (regression guard for the gap where Tier 1 findings
+    # had no remediation while Tier 2 findings did).
+    assert findings[0].remediation, (
+        "AST01 finding must carry remediation text from RULE_DESCRIPTIONS"
+    )
 
 
 def test_ast01_fires_on_jailbreak_marker(tmp_path: Path) -> None:

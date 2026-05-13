@@ -453,6 +453,21 @@ def check_ast07_update_drift(manifest: ParsedManifest) -> list[Finding]:
 # --- helper -------------------------------------------------------------
 
 
+def _remediation_for(rule_short: str) -> str | None:
+    """Look up the curated fix guidance for `rule_short` in
+    `RULE_DESCRIPTIONS` — the same table the Reference tab renders from.
+    Single source of truth for fix text; returns None if the rule isn't
+    in the table or has no remediation field. Linear scan is fine — the
+    table is ~10 entries and only walked on a finding."""
+    for entry in RULE_DESCRIPTIONS:
+        if entry.get("rule_id") == rule_short:
+            text = entry.get("remediation")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+            return None
+    return None
+
+
 def _build_finding(
     *,
     rule_short: str,
@@ -493,6 +508,7 @@ def _build_finding(
             cwe=list(cwe or []),
             ast=[ast_id],
         ),
+        remediation=_remediation_for(rule_short),
     )
 
 

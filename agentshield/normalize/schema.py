@@ -82,3 +82,10 @@ class Finding(BaseModel):
 
     # External taxonomy mappings.
     framework_mappings: FrameworkMappings = Field(default_factory=FrameworkMappings)
+
+    # Curated fix guidance from the rule pack. Tier 1 rule YAMLs and the
+    # manifest scanner's RULE_DESCRIPTIONS table carry a `remediation`
+    # string; carrying it through to the merged report means every Tier
+    # 1 finding card shows a "Fix:" line, matching the parity Tier 2
+    # findings already have.
+    remediation: str | None = None

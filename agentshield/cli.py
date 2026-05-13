@@ -286,6 +286,7 @@ def _finding_to_emitter_dict(f: Finding) -> dict:
             "nist_ai_rmf": list(f.framework_mappings.nist_ai_rmf),
             "ast": list(f.framework_mappings.ast),
         },
+        "remediation": f.remediation,
     }
 
 

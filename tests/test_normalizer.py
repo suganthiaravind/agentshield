@@ -91,3 +91,29 @@ def test_no_orphaned_rule_ids(normalized_findings: list[Finding]) -> None:
         assert f.rule_id in normalizer._rules_by_id, (
             f"Finding has rule_id {f.rule_id!r} that doesn't match any bundled rule"
         )
+
+
+def test_remediation_is_carried_through(normalized_findings: list[Finding]) -> None:
+    """Tier 1 rule YAMLs carry a `metadata.remediation` field; the
+    normalizer must surface it on the Finding so the merged HTML
+    report's per-finding "Fix:" line has content. Regression guard for
+    the original gap where Tier 1 findings showed up with no fix
+    guidance while Tier 2 findings did.
+
+    Not every fixture rule has remediation text, so we check both that
+    at least one finding carries it (proves the wiring works) and that
+    a specifically-known rule (`unsanitized-user-input-to-llm`, which
+    has `remediation` in its YAML) does.
+    """
+    assert any(f.remediation for f in normalized_findings), (
+        "No finding carries remediation — the normalizer is dropping "
+        "metadata.remediation again."
+    )
+    d001 = next(
+        f for f in normalized_findings
+        if f.rule_id_short == "unsanitized-user-input-to-llm"
+    )
+    assert d001.remediation, (
+        "Rule D001 (unsanitized-user-input-to-llm) has metadata.remediation "
+        "in its YAML — the normalizer must surface it on the Finding."
+    )

@@ -189,6 +189,11 @@ class Normalizer:
                 agentshield_id = metadata.get("agentshield_id") or canonical
                 legacy_ids = list(metadata.get("legacy_ids") or [])
                 message = (result.get("message") or {}).get("text") or ""
+                remediation = metadata.get("remediation")
+                if isinstance(remediation, str):
+                    remediation = remediation.strip() or None
+                else:
+                    remediation = None
                 findings.append(
                     Finding(
                         rule_id=canonical,
@@ -203,6 +208,7 @@ class Normalizer:
                         message=message.strip(),
                         language=self._resolve_language(rule),
                         framework_mappings=self._build_framework_mappings(rule),
+                        remediation=remediation,
                     )
                 )
         # Stable order: by file, then by line, then by rule id.
