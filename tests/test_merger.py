@@ -324,14 +324,14 @@ def test_markdown_has_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     result = merge(repo)
     md = render_combined_markdown(result)
-    assert "INCOMPLETE: Copilot LLM Scan not run" in md
+    assert "INCOMPLETE: Copilot LLM-as-a-Judge Scan not run" in md
 
 
 def test_markdown_has_stale_banner_when_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     md = render_combined_markdown(merge(repo))
-    assert "STALE Copilot LLM Scan" in md
+    assert "STALE Copilot LLM-as-a-Judge Scan" in md
 
 
 def test_markdown_has_schema_error_banner(repo: Path) -> None:
@@ -626,7 +626,7 @@ def test_html_omits_saige_when_unclassified(repo: Path) -> None:
 def test_html_shows_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     html = render_combined_html(merge(repo))
-    assert "INCOMPLETE — Copilot LLM Scan not run." in html
+    assert "INCOMPLETE — Copilot LLM-as-a-Judge Scan not run." in html
     assert 'class="banner warn"' in html
 
 
@@ -634,7 +634,7 @@ def test_html_shows_stale_banner_on_fingerprint_mismatch(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload(fingerprint="aaa"))
     _write_tier2(repo, _tier2_payload(fingerprint="bbb"))
     html = render_combined_html(merge(repo))
-    assert "STALE Copilot LLM Scan." in html
+    assert "STALE Copilot LLM-as-a-Judge Scan." in html
     assert 'class="banner stale"' in html
 
 
@@ -674,7 +674,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
 
     SAIGE classification (e.g. 'Classified as: Tier 2') is the only place
     'Tier' may appear in user-visible text. AgentShield's phases show as
-    'Semgrep Rules-engine Scan' / 'Copilot LLM Scan' (long form in headers)
+    'Semgrep Rules-engine Scan' / 'Copilot LLM-as-a-Judge Scan' (long form in headers)
     or 'Semgrep' / 'Copilot' (short form in pills)."""
     _write_tier1(repo, _tier1_payload())
     payload = _tier2_payload()
@@ -697,11 +697,11 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert "**Classified as:** Agentic Tier 2" in md
     # New labels present.
     assert "Semgrep Rules-engine Scan" in md
-    assert "Copilot LLM Scan" in md
+    assert "Copilot LLM-as-a-Judge Scan" in md
     assert "[Semgrep]" in md
     assert "[Copilot]" in md
     # Skipped-files heading uses the AgentShield-phase rename.
-    assert "## Copilot LLM Scan skipped files" in md
+    assert "## Copilot LLM-as-a-Judge Scan skipped files" in md
 
     html = render_combined_html(merge(repo))
     # No AgentShield-phase pills or footer text with the old labels.
@@ -713,7 +713,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     assert 'class="saige-tier">Agentic Tier 2</div>' in html
     # New labels present.
     assert "Semgrep Rules-engine Scan" in html
-    assert "Copilot LLM Scan" in html
+    assert "Copilot LLM-as-a-Judge Scan" in html
     assert '<span class="pill tier1">Semgrep</span>' in html
     assert '<span class="pill tier2">Copilot</span>' in html
     assert "Semgrep fingerprint" in html

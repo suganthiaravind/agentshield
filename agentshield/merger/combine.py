@@ -425,7 +425,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 1. Title
     lines.append("# AgentShield Detection Report")
     lines.append("")
-    lines.append(f"_Semgrep Rules-engine Scan + Copilot LLM Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM Scan not run)'}_")
+    lines.append(f"_Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM-as-a-Judge Scan not run)'}_")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -433,15 +433,15 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 2. Status banners
     if not result.tier2_present:
         lines.append(
-            "> ⚠ **INCOMPLETE: Copilot LLM Scan not run.** This report contains "
-            "Semgrep Rules-engine Scan findings only. Run the Copilot LLM Scan "
+            "> ⚠ **INCOMPLETE: Copilot LLM-as-a-Judge Scan not run.** This report contains "
+            "Semgrep Rules-engine Scan findings only. Run the Copilot LLM-as-a-Judge Scan "
             "against this repo and re-merge for full coverage. See "
             "`.agentshield/tier2-bootstrap.md` for the prompt."
         )
         lines.append("")
     elif result.schema_errors:
         lines.append(
-            "> ❌ **Copilot LLM Scan output failed schema validation.** Showing "
+            "> ❌ **Copilot LLM-as-a-Judge Scan output failed schema validation.** Showing "
             "Semgrep Rules-engine Scan only. Validation errors below — "
             "re-prompt Copilot to fix and re-merge."
         )
@@ -453,9 +453,9 @@ def render_combined_markdown(result: MergeResult) -> str:
         lines.append("")
     elif result.stale:
         lines.append(
-            "> ⚠ **STALE Copilot LLM Scan.** The Semgrep fingerprint changed "
-            "since the Copilot LLM Scan was run; the code (or rule pack) changed "
-            "in between. Re-run the Copilot LLM Scan in Copilot Chat for fresh "
+            "> ⚠ **STALE Copilot LLM-as-a-Judge Scan.** The Semgrep fingerprint changed "
+            "since the Copilot LLM-as-a-Judge Scan was run; the code (or rule pack) changed "
+            "in between. Re-run the Copilot LLM-as-a-Judge Scan in Copilot Chat for fresh "
             "results."
         )
         lines.append(f"> - Semgrep fingerprint (current):  `{r.tier1_fingerprint[:16]}...`")
@@ -505,7 +505,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append("| Metric | Count |")
     lines.append("|---|---|")
     lines.append(f"| Semgrep Rules-engine Scan findings | {tier1_total} |")
-    lines.append(f"| Copilot LLM Scan net-new findings | {tier2_total} |")
+    lines.append(f"| Copilot LLM-as-a-Judge Scan net-new findings | {tier2_total} |")
     if result.tier2_present and not result.schema_errors:
         lines.append(f"| Semgrep findings marked True Positive by Copilot | {tp_marked} |")
         lines.append(f"| Semgrep findings marked Context-Dependent by Copilot | {cd_marked} |")
@@ -604,7 +604,7 @@ def render_combined_markdown(result: MergeResult) -> str:
 
     # 8. Skipped files (transparency)
     if r.tier2_skipped_files:
-        lines.append("## Copilot LLM Scan skipped files")
+        lines.append("## Copilot LLM-as-a-Judge Scan skipped files")
         lines.append("")
         for s in r.tier2_skipped_files:
             lines.append(f"- `{s.get('path', '?')}` — {s.get('reason', 'no reason given')}")
@@ -1854,8 +1854,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield Detection Report</h1>")
     parts.append(
-        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot LLM Scan'
-        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM Scan not run")
+        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan'
+        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM-as-a-Judge Scan not run")
         + "</div>"
     )
     parts.append("</div>")
@@ -1863,13 +1863,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # 2. Status banners
     if not result.tier2_present:
         parts.append(
-            '<div class="banner warn"><strong>INCOMPLETE — Copilot LLM Scan not run.</strong> '
+            '<div class="banner warn"><strong>INCOMPLETE — Copilot LLM-as-a-Judge Scan not run.</strong> '
             "This report shows Semgrep Rules-engine Scan findings only. Run the "
-            "Copilot LLM Scan and re-merge for full coverage.</div>"
+            "Copilot LLM-as-a-Judge Scan and re-merge for full coverage.</div>"
         )
     elif result.schema_errors:
         parts.append(
-            '<div class="banner error"><strong>Copilot LLM Scan output failed schema validation.</strong> '
+            '<div class="banner error"><strong>Copilot LLM-as-a-Judge Scan output failed schema validation.</strong> '
             "Showing Semgrep Rules-engine Scan only. Re-prompt Copilot to fix the validation errors below.</div>"
         )
         parts.append('<div class="section"><h2>Schema errors</h2><ul>')
@@ -1878,9 +1878,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append("</ul></div>")
     elif result.stale:
         parts.append(
-            '<div class="banner stale"><strong>STALE Copilot LLM Scan.</strong> '
-            "The Semgrep fingerprint changed since the Copilot LLM Scan was run; results may be inconsistent. "
-            "Re-run the Copilot LLM Scan for fresh results.</div>"
+            '<div class="banner stale"><strong>STALE Copilot LLM-as-a-Judge Scan.</strong> '
+            "The Semgrep fingerprint changed since the Copilot LLM-as-a-Judge Scan was run; results may be inconsistent. "
+            "Re-run the Copilot LLM-as-a-Judge Scan for fresh results.</div>"
         )
 
     # 3. D/D/R HERO ROW
@@ -1939,7 +1939,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     )
     parts.append(
         f'<div class="metric">'
-        f'<div class="metric-label">Copilot LLM Scan</div>'
+        f'<div class="metric-label">Copilot LLM-as-a-Judge Scan</div>'
         f'<div class="metric-value">{tier2_total}</div>'
         f'<div class="metric-subtitle">what LLM found</div>'
         f'</div>'
