@@ -46,7 +46,7 @@ OWASP_LLM_UNIVERSE: list[str] = [
 ]
 
 # OWASP Agentic AI Top 10 (T1–T15 as of the late-2025 working draft).
-# https://owasp.org/www-project-agentic-ai-threats/
+# https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
 OWASP_AGENTIC_UNIVERSE: list[str] = [
     "T1",   # Memory Poisoning
     "T2",   # Tool Misuse
