@@ -367,7 +367,38 @@ _VERDICT_BADGE = {
     "FP": "⚠ FP",
 }
 
-# Hover tooltip + legend text for the Copilot cross-check verdicts on
+# Hover tooltip text for severity pills. Severity is curated per-rule
+# by the rule author (no dynamic CVSS-style score) — these strings
+# explain the implicit rubric so a reader knows what each level means
+# without leaving the report. Surfaced on every `pill <sev>` element:
+# header dashboard, severity distribution bar, D/D/R section headers,
+# per-finding card, Reference tab rule cards.
+_SEVERITY_MEANINGS = {
+    "critical": (
+        "Critical — opens a path to running attacker-controlled code "
+        "on the agent host. Fix before ship."
+    ),
+    "high": (
+        "High — Exploitable with bounded impact (data leak, role "
+        "takeover, attacker-driven tool calls)."
+    ),
+    "medium": (
+        "Medium — Missing safety net (timeout / input validation / "
+        "permission check). Fix it now; future bugs will hit this "
+        "guard instead of going past it."
+    ),
+    "low": (
+        "Low — Observability or hygiene gap. Helps detection / "
+        "response after an incident, not prevention."
+    ),
+    "info": (
+        "Info — Best-practice nudge. Doesn't increase attack "
+        "surface on its own."
+    ),
+}
+
+
+# Hover tooltip text for the Copilot cross-check verdicts on
 # Tier 1 findings. Three states by design — collapsing CD into TP causes
 # alert fatigue ("you fix 100 'TPs' but 60 were already mitigated");
 # collapsing it into FP hides real risk ("we said FP but the mitigation
@@ -1937,7 +1968,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             for sev in ("critical", "high", "medium", "low", "info"):
                 n = sev_counts.get(sev, 0)
                 if n:
-                    parts.append(f'<span class="pill {sev}">{sev} {n}</span>')
+                    parts.append(
+                        f'<span class="pill {sev}" '
+                        f'title="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
+                        f'{sev} {n}</span>'
+                    )
         parts.append("</div>")
         parts.append("</div>")
     parts.append("</div>")
@@ -1995,7 +2030,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">')
         parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
         sev_text = " &middot; ".join(
-            f'<span class="pill {sev}">{sev_total.get(sev, 0)} {sev}</span>'
+            f'<span class="pill {sev}" '
+            f'title="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
+            f'{sev_total.get(sev, 0)} {sev}</span>'
             for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
         )
         parts.append(f"<span>{sev_text}</span>")
@@ -2134,7 +2171,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             n = sev_counts_section.get(sev_key, 0)
             if n:
                 parts.append(
-                    f'<span class="sev-mini {sev_key}" data-section-sev="{sev_key}">'
+                    f'<span class="sev-mini {sev_key}" '
+                    f'data-section-sev="{sev_key}" '
+                    f'title="{_html_escape(_SEVERITY_MEANINGS[sev_key])}">'
                     f'{n} {sev_key}</span>'
                 )
         parts.append("</span>")
@@ -2188,7 +2227,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 )
                 parts.append('<div class="finding-header">')
                 parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
-                parts.append(f'<span class="pill {sev}">{sev}</span>')
+                sev_meaning = _SEVERITY_MEANINGS.get(sev, "")
+                parts.append(
+                    f'<span class="pill {sev}" '
+                    f'title="{_html_escape(sev_meaning)}">{sev}</span>'
+                )
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
                 if origin == "tier1" and f.get("_tier2_verdict"):
                     v_raw = f["_tier2_verdict"]
@@ -2336,8 +2379,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         "owasp_llm": (
             "Curated to the 6 call-site / agent-layer items (LLM01, LLM02, "
             "LLM05, LLM06, LLM07, LLM10). LLM03 / LLM04 / LLM08 / LLM09 are "
-            "model-layer or data-pipeline concerns better covered by "
-            "ML-Ops or ATLAS scanners than by a code-side tool."
+            "model-layer."
         ),
         "mitre_atlas": (
             "MITRE ATLAS is too large to enumerate in full; the universe "
@@ -2686,7 +2728,11 @@ def _render_reference_card(parts: list[str], ref: Any) -> None:
             f'<span class="ref-legacy" title="Pre-rename ID(s)">'
             f'was {_html_escape(legacy_str)}</span>'
         )
-    parts.append(f'<span class="pill {sev}">{_html_escape(sev)}</span>')
+    parts.append(
+        f'<span class="pill {sev}" '
+        f'title="{_html_escape(_SEVERITY_MEANINGS.get(sev, ""))}">'
+        f'{_html_escape(sev)}</span>'
+    )
     if ref.languages:
         parts.append(
             f'<span class="ref-langs">{_html_escape(ref.languages)}</span>'
