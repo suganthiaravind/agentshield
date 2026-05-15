@@ -479,7 +479,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     # 1. Title
     lines.append("# AgentShield Pre-Production Review")
     lines.append("")
-    lines.append(f"_Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM-as-a-Judge Scan not run)'}_")
+    lines.append(f"_Rules-engine Static Scan + Copilot LLM-as-a-Judge Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM-as-a-Judge Scan not run)'}_")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -488,7 +488,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     if not result.tier2_present:
         lines.append(
             "> ⚠ **INCOMPLETE: Copilot LLM-as-a-Judge Scan not run.** This report contains "
-            "Semgrep Rules-engine Scan findings only. Run the Copilot LLM-as-a-Judge Scan "
+            "Rules-engine Static Scan findings only. Run the Copilot LLM-as-a-Judge Scan "
             "against this repo and re-merge for full coverage. See "
             "`.agentshield/tier2-bootstrap.md` for the prompt."
         )
@@ -496,7 +496,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     elif result.schema_errors:
         lines.append(
             "> ❌ **Copilot LLM-as-a-Judge Scan output failed schema validation.** Showing "
-            "Semgrep Rules-engine Scan only. Validation errors below — "
+            "Rules-engine Static Scan only. Validation errors below — "
             "re-prompt Copilot to fix and re-merge."
         )
         lines.append("")
@@ -558,7 +558,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append("")
     lines.append("| Metric | Count |")
     lines.append("|---|---|")
-    lines.append(f"| Semgrep Rules-engine Scan findings | {tier1_total} |")
+    lines.append(f"| Rules-engine Static Scan findings | {tier1_total} |")
     lines.append(f"| Copilot LLM-as-a-Judge Scan net-new findings | {tier2_total} |")
     if result.tier2_present and not result.schema_errors:
         lines.append(f"| Semgrep findings marked True Positive by Copilot | {tp_marked} |")
@@ -913,6 +913,19 @@ h3 { font-size: 15px; }
   font-size: 13px; color: var(--text-muted); margin-top: 6px;
   font-style: italic; line-height: 1.45;
 }
+/* v4: small per-source subtotal under the metric value (e.g. the
+   Copilot card's "5 code · 1 skill" split). Keep visually quieter
+   than the main value but louder than the subtitle so it reads as
+   data, not commentary. */
+.metric .metric-breakdown {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-top: 4px;
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.metric .metric-bd-sep { color: var(--text-muted); font-weight: 400; }
+.metric .metric-bd-item { white-space: nowrap; }
 /* F.33: hero treatment for the Net Actionable card. Bigger value,
    accent border, accent-tinted background — the conclusion card. */
 .metric.metric-hero {
@@ -1202,7 +1215,7 @@ footer {
   box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.18);
 }
 
-/* F.22: tabbed layout — D/D/R + Coverage + Frameworks panels. */
+/* F.22: tabbed layout — D/D/R + Coverage + Reference panels. */
 .tab-nav {
   display: flex;
   flex-wrap: wrap;
@@ -1214,8 +1227,7 @@ footer {
 .tab-btn {
   background: transparent;
   border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: 8px;
   padding: 9px 16px;
   font-size: 13px;
   font-weight: 600;
@@ -1225,15 +1237,36 @@ footer {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: -1px;
+  margin-bottom: 2px;
   transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
-.tab-btn:hover { color: var(--text); background: rgba(0,0,0,0.02); }
+.tab-btn:hover { color: var(--text); background: rgba(0,0,0,0.03); }
+/* Active tab: soft accent-tinted background, no border, no card-pull-up
+   chrome. Linear / Notion-style. Tint is a low-opacity wash of the
+   accent colour so it reads as "this tab is on" without competing
+   with the panel content below. */
 .tab-btn.active {
   color: var(--accent);
-  background: var(--panel);
-  border-color: var(--border);
-  border-bottom-color: var(--panel);
+  background: rgba(44, 95, 126, 0.10);
+  border-color: transparent;
+}
+.tab-btn.active:hover { background: rgba(44, 95, 126, 0.14); }
+
+/* Inline SVG tab icons (e.g. the Coverage grid) inherit the tab's
+   text colour — muted by default, accent when active — and align
+   on the button's text baseline. */
+.tab-btn .tab-icon {
+  display: inline-block;
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+
+/* Reference tab pushes to the far right via auto margin — it's
+   tool-level reference material, conceptually distinct from anything
+   tied to this scan. Coverage sits flush with the D/D/R cluster on
+   the left. */
+.tab-btn[data-tab="reference"] {
+  margin-left: auto;
 }
 .tab-btn .tab-count {
   display: inline-flex;
@@ -1250,6 +1283,45 @@ footer {
   letter-spacing: 0.02em;
 }
 .tab-btn.active .tab-count { background: var(--accent); color: white; }
+
+/* Instant CSS tooltip — fires on hover with no delay, styled to match
+   the report. Used wherever `data-tip="..."` is present (severity
+   pills, verdict pills, etc.). The native `title` tooltip is dropped
+   in favour of this — `aria-label` carries the same text for screen
+   readers, so accessibility is preserved. */
+[data-tip] { position: relative; }
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  min-width: 200px; max-width: 320px;
+  padding: 8px 12px;
+  background: #1f2933;
+  color: #f5f0e6;
+  font-size: 12px; font-weight: 400; line-height: 1.5;
+  text-transform: none; letter-spacing: 0;
+  white-space: normal; text-align: left;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(31, 41, 51, 0.22);
+  pointer-events: none;
+}
+/* Small downward arrow under the tooltip pointing at the target. */
+[data-tip]:hover::before,
+[data-tip]:focus-visible::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  border: 6px solid transparent;
+  border-top-color: #1f2933;
+  pointer-events: none;
+}
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
@@ -1908,7 +1980,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield Pre-Production Review</h1>")
     parts.append(
-        '<div class="subtitle">Semgrep Rules-engine Scan + Copilot LLM-as-a-Judge Scan'
+        '<div class="subtitle">Rules-engine Static Scan + Copilot LLM-as-a-Judge Scan'
         + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM-as-a-Judge Scan not run")
         + "</div>"
     )
@@ -1918,13 +1990,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     if not result.tier2_present:
         parts.append(
             '<div class="banner warn"><strong>INCOMPLETE — Copilot LLM-as-a-Judge Scan not run.</strong> '
-            "This report shows Semgrep Rules-engine Scan findings only. Run the "
+            "This report shows Rules-engine Static Scan findings only. Run the "
             "Copilot LLM-as-a-Judge Scan and re-merge for full coverage.</div>"
         )
     elif result.schema_errors:
         parts.append(
             '<div class="banner error"><strong>Copilot LLM-as-a-Judge Scan output failed schema validation.</strong> '
-            "Showing Semgrep Rules-engine Scan only. Re-prompt Copilot to fix the validation errors below.</div>"
+            "Showing Rules-engine Static Scan only. Re-prompt Copilot to fix the validation errors below.</div>"
         )
         parts.append('<div class="section"><h2>Schema errors</h2><ul>')
         for err in result.schema_errors:
@@ -1968,9 +2040,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             for sev in ("critical", "high", "medium", "low", "info"):
                 n = sev_counts.get(sev, 0)
                 if n:
+                    meaning = _html_escape(_SEVERITY_MEANINGS[sev])
                     parts.append(
                         f'<span class="pill {sev}" '
-                        f'title="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
+                        f'data-tip="{meaning}" aria-label="{meaning}">'
                         f'{sev} {n}</span>'
                     )
         parts.append("</div>")
@@ -1981,6 +2054,29 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     tier1_total = len(r.tier1_findings)
     tier2_total = len(r.tier2_findings)
     fp_marked = sum(1 for f in r.tier1_findings if f.tier2_verdict == "FP")
+    # v4: split each tier's count by source file. Findings on agent-
+    # loaded markdown (SKILL.md, AGENT.md, AGENTS.md, INSTRUCTION(S).md,
+    # PROMPT(S).md, CLAUDE.md) come from the markdown-side scanner
+    # (Tier 1) or the LLM judging the same files (Tier 2). Everything
+    # else (.py / .java / ...) is code-side. Surfaced as a small
+    # subtotal inside each metric card so the reader sees at a glance
+    # how much of the scan landed where.
+    from agentshield.manifest_scanner.scanner import RECOGNIZED_AGENT_MD_FILENAMES
+
+    def _is_markdown_file(path: str) -> bool:
+        name = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+        return name in RECOGNIZED_AGENT_MD_FILENAMES
+
+    def _markdown_count(findings, file_getter):
+        return sum(
+            1 for f in findings
+            if _is_markdown_file(str(file_getter(f) or ""))
+        )
+
+    tier1_markdown = _markdown_count(r.tier1_findings, lambda f: f.finding.get("file"))
+    tier1_code = tier1_total - tier1_markdown
+    tier2_markdown = _markdown_count(r.tier2_findings, lambda f: f.get("file"))
+    tier2_code = tier2_total - tier2_markdown
     # F.33: redesigned metrics row.
     # 3 input cards (left of divider) -> 1 hero "Net Actionable" card
     # (right). Each card carries a one-line subtitle so the number is
@@ -1990,8 +2086,16 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('<div class="metrics-row">')
     parts.append(
         f'<div class="metric">'
-        f'<div class="metric-label">Semgrep Rules-engine Scan</div>'
+        f'<div class="metric-label">Rules-engine Static Scan</div>'
         f'<div class="metric-value">{tier1_total}</div>'
+        f'<div class="metric-breakdown" '
+        f'title="Findings on .py / .java source (Semgrep) vs findings '
+        f'on agent-loaded markdown (manifest scanner) — both are Tier '
+        f'1 static rule engines">'
+        f'<span class="metric-bd-item">{tier1_code} code</span>'
+        f'<span class="metric-bd-sep">·</span>'
+        f'<span class="metric-bd-item">{tier1_markdown} markdown</span>'
+        f'</div>'
         f'<div class="metric-subtitle">what static rules caught</div>'
         f'</div>'
     )
@@ -1999,6 +2103,14 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<div class="metric">'
         f'<div class="metric-label">Copilot LLM-as-a-Judge Scan</div>'
         f'<div class="metric-value">{tier2_total}</div>'
+        f'<div class="metric-breakdown" '
+        f'title="Findings on .py / .java source vs findings on agent-'
+        f'loaded markdown (SKILL.md, AGENT.md, AGENTS.md, INSTRUCTION(S).md, '
+        f'PROMPT(S).md, CLAUDE.md)">'
+        f'<span class="metric-bd-item">{tier2_code} code</span>'
+        f'<span class="metric-bd-sep">·</span>'
+        f'<span class="metric-bd-item">{tier2_markdown} markdown</span>'
+        f'</div>'
         f'<div class="metric-subtitle">what LLM found</div>'
         f'</div>'
     )
@@ -2031,7 +2143,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
         sev_text = " &middot; ".join(
             f'<span class="pill {sev}" '
-            f'title="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
+            f'data-tip="{_html_escape(_SEVERITY_MEANINGS[sev])}" '
+            f'aria-label="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
             f'{sev_total.get(sev, 0)} {sev}</span>'
             for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
         )
@@ -2098,9 +2211,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<div id="filter-status" class="filter-status"></div>')
         parts.append("</div>")
 
-        # F.22: tab navigation — D/D/R panels + Coverage + Frameworks. The filter
-        # bar above applies globally; tab counts update live with the filter
-        # state. Initial active tab = Detect.
+        # F.22: tab navigation — D/D/R panels + Coverage + Reference. The
+        # filter bar above applies globally; tab counts update live with
+        # the filter state. Initial active tab = Detect.
         parts.append('<div class="tab-nav" role="tablist">')
         for cat in _DDR_ORDER:
             emoji_label, _sub, _desc, _q = _DDR_LABELS[cat]
@@ -2116,15 +2229,32 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             )
         parts.append(
             '<button type="button" class="tab-btn" role="tab" data-tab="coverage" '
-            'aria-selected="false">Coverage</button>'
-        )
-        parts.append(
-            '<button type="button" class="tab-btn" role="tab" data-tab="frameworks" '
-            'aria-selected="false">Frameworks</button>'
+            'aria-selected="false">'
+            '<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" '
+            'fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            # Lucide-style "Layers" icon — stacked diamonds. Reads as
+            # "framework coverage stratified across layers".
+            '<path d="M12 2 2 7l10 5 10-5-10-5z"/>'
+            '<polyline points="2 17 12 22 22 17"/>'
+            '<polyline points="2 12 12 17 22 12"/>'
+            '</svg>'
+            'Coverage'
+            '</button>'
         )
         parts.append(
             '<button type="button" class="tab-btn" role="tab" data-tab="reference" '
-            'aria-selected="false">Reference</button>'
+            'aria-selected="false">'
+            '<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" '
+            'fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            # Lucide-style "Info" icon — lowercase "i" inside a circle.
+            '<circle cx="12" cy="12" r="10"/>'
+            '<line x1="12" y1="11" x2="12" y2="17"/>'
+            '<line x1="12" y1="7" x2="12" y2="7.5"/>'
+            '</svg>'
+            'Reference: About AgentShield'
+            '</button>'
         )
         parts.append("</div>")
 
@@ -2170,10 +2300,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         for sev_key in ("critical", "high", "medium", "low", "info"):
             n = sev_counts_section.get(sev_key, 0)
             if n:
+                meaning = _html_escape(_SEVERITY_MEANINGS[sev_key])
                 parts.append(
                     f'<span class="sev-mini {sev_key}" '
                     f'data-section-sev="{sev_key}" '
-                    f'title="{_html_escape(_SEVERITY_MEANINGS[sev_key])}">'
+                    f'data-tip="{meaning}" aria-label="{meaning}">'
                     f'{n} {sev_key}</span>'
                 )
         parts.append("</span>")
@@ -2227,18 +2358,20 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 )
                 parts.append('<div class="finding-header">')
                 parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
-                sev_meaning = _SEVERITY_MEANINGS.get(sev, "")
+                sev_meaning = _html_escape(_SEVERITY_MEANINGS.get(sev, ""))
                 parts.append(
                     f'<span class="pill {sev}" '
-                    f'title="{_html_escape(sev_meaning)}">{sev}</span>'
+                    f'data-tip="{sev_meaning}" aria-label="{sev_meaning}">'
+                    f'{sev}</span>'
                 )
                 parts.append(f'<span class="finding-rule">{_html_escape(rule)}</span>')
                 if origin == "tier1" and f.get("_tier2_verdict"):
                     v_raw = f["_tier2_verdict"]
                     v = v_raw.lower()
-                    meaning = _VERDICT_MEANINGS.get(v_raw, "")
+                    meaning = _html_escape(_VERDICT_MEANINGS.get(v_raw, ""))
                     parts.append(
-                        f'<span class="pill {v}" title="{_html_escape(meaning)}">'
+                        f'<span class="pill {v}" '
+                        f'data-tip="{meaning}" aria-label="{meaning}">'
                         f'Copilot: {v_raw}</span>'
                     )
                 parts.append("</div>")
@@ -2355,7 +2488,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     else:
         parts.append('<div class="tab-panel" role="tabpanel" data-panel="coverage">')
     parts.append('<div class="coverage-card">')
-    parts.append('<h3 class="panel-title">Coverage matrix</h3>')
+    parts.append('<h3 class="panel-title">Coverage by Security Frameworks</h3>')
     parts.append(
         '<p class="panel-subtitle">Per-framework view of what AgentShield '
         '<em>checked</em>, and what it <em>found</em>. Each chip is one '
@@ -2466,13 +2599,23 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             )
         parts.append('<div class="coverage-chips">')
         for item, count in items_issues:
+            # v4: "with issues" chips double as framework filters — same
+            # `data-framework-key` contract as the per-finding tags, so
+            # the existing toggle handler picks them up without changes.
+            # Clicking an issue chip scopes the D/D/R findings to that
+            # item. Clean / gap chips stay informational (no findings to
+            # filter to).
+            fkey = f"{k_key}:{item}"
             parts.append(
-                f'<span class="coverage-chip coverage-chip-issues" '
+                f'<button type="button" '
+                f'class="coverage-chip coverage-chip-issues" '
+                f'data-framework-key="{_html_escape(fkey)}" '
                 f'title="{_html_escape(item)}: {count} finding'
-                f'{"s" if count != 1 else ""} this run">'
+                f'{"s" if count != 1 else ""} this run — click to '
+                f'filter the D/D/R findings to this item.">'
                 f'{_html_escape(item)}'
                 f'<span class="cov-chip-count">{count}</span>'
-                f'</span>'
+                f'</button>'
             )
         for item in items_clean:
             parts.append(
@@ -2514,60 +2657,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append("</div>")  # /coverage-card
     parts.append("</section>" if static else "</div>")  # /tab-panel
 
-    # ---- Frameworks tab panel ----
-    # Per-framework drill-down: each item shows count + clickable chip that
-    # activates the same framework filter the per-finding tags use.
-    if static:
-        parts.append('<section class="static-section" data-panel="frameworks">')
-    else:
-        parts.append('<div class="tab-panel" role="tabpanel" data-panel="frameworks">')
-    parts.append('<div class="coverage-card">')
-    parts.append('<h3 class="panel-title">Findings by Security framework</h3>')
-    parts.append(
-        '<p class="panel-subtitle">The same findings, regrouped per framework '
-        'item, with a per-item count. Click any item to filter the D/D/R '
-        'tabs down to findings tagged with it.</p>'
-    )
-    fw_counts = _framework_finding_counts(r)
-    for k_label, k_key, k_url in (
-        ("OWASP LLM Top 10 v2 (curated)", "owasp_llm",
-         "https://genai.owasp.org/llm-top-10/"),
-        ("OWASP Agentic AI Top 10", "owasp_agentic",
-         "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"),
-        ("MITRE ATLAS", "mitre_atlas", "https://atlas.mitre.org/"),
-        ("CWE first-class", "cwe", "https://cwe.mitre.org/"),
-        ("OWASP Agentic Skills Top 10 (preview)", "ast",
-         "https://github.com/OWASP/www-project-agentic-skills-top-10"),
-    ):
-        items = sorted(getattr(r.coverage, k_key))
-        parts.append('<div class="framework-group">')
-        parts.append(
-            f'<div class="framework-group-header">'
-            f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
-            f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
-            f'target="_blank" rel="noopener">reference &rarr;</a>'
-            f'</div>'
-        )
-        if not items:
-            parts.append('<div class="framework-empty">(no findings hit this framework)</div>')
-        else:
-            parts.append('<div class="framework-items">')
-            for item in items:
-                key = f"{k_key}:{item}"
-                count = fw_counts.get(key, 0)
-                parts.append(
-                    f'<button type="button" class="framework-item" '
-                    f'data-framework-key="{_html_escape(key)}" '
-                    f'title="Filter findings to those tagged {_html_escape(item)}">'
-                    f'<span class="framework-item-id">{_html_escape(item)}</span>'
-                    f'<span class="framework-item-count">{count} '
-                    f'finding{"s" if count != 1 else ""}</span>'
-                    f'</button>'
-                )
-            parts.append("</div>")
-        parts.append("</div>")  # /framework-group
-    parts.append("</div>")  # /coverage-card
-    parts.append("</section>" if static else "</div>")  # /tab-panel
+    # v4: Frameworks tab removed — its per-item click-to-filter
+    # functionality moved onto the Coverage Matrix's "with issues" chips
+    # (they now carry `data-framework-key` and the same toggle handler
+    # picks them up). The redundant "Findings by Security framework"
+    # panel was a near-duplicate of the matrix; this consolidation
+    # gives the Coverage Matrix one job (state + filter) and drops a
+    # tab from the nav.
 
     # ---- Reference tab panel (F.26) ----
     # Renders every check the scanner can fire, grouped by source. Pulled
@@ -2632,9 +2728,18 @@ def _render_reference_panel(parts: list[str]) -> None:
         tier2_checklist_path=_DEFAULT_CHECKLIST_PATH,
     )
 
-    grouped: dict[str, list] = {"Semgrep": [], "Copilot": [], "Manifest": []}
+    grouped: dict[str, list] = {"Semgrep": [], "Copilot": [], "Markdown": []}
     for ref in refs:
         grouped.setdefault(ref.source, []).append(ref)
+
+    # Long-form display labels mirror the metric-card naming: each
+    # source group header reads as a complete scanner description so
+    # the Reference tab is self-explanatory without the dashboard.
+    source_display = {
+        "Semgrep": "Semgrep Rules-engine Static Scan",
+        "Copilot": "Copilot LLM-as-a-Judge Scan",
+        "Markdown": "Manifest Static Scanner",
+    }
 
     parts.append('<div class="reference-card">')
     parts.append('<h3 class="panel-title">What AgentShield checks for</h3>')
@@ -2658,20 +2763,23 @@ def _render_reference_panel(parts: list[str]) -> None:
             "via Copilot Chat. Catches cross-function and absence-of-"
             "control patterns the static rules can't see."
         ),
-        "Manifest": (
-            "SKILL.md manifest scan (preview). Checks the skill-package "
-            "distribution layer for malicious content, over-broad "
-            "permissions, and missing integrity metadata. Maps to OWASP "
-            "Agentic Skills Top 10 (AST10)."
+        "Markdown": (
+            "Agent-loaded markdown scan (preview). Checks SKILL.md, "
+            "AGENT.md, AGENTS.md, INSTRUCTION(S).md, PROMPT(S).md, and "
+            "CLAUDE.md for malicious content, over-broad permissions, "
+            "missing integrity metadata, and jailbreak / concealment "
+            "markers in body prose. Maps to OWASP Agentic Skills Top "
+            "10 (AST10)."
         ),
     }
 
-    for source in ("Semgrep", "Copilot", "Manifest"):
+    for source in ("Semgrep", "Copilot", "Markdown"):
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')
         parts.append(
-            f'<span class="ref-source-name">{_html_escape(source)} '
+            f'<span class="ref-source-name">'
+            f'{_html_escape(source_display.get(source, source))} '
             f'<span class="ref-source-count">{len(bucket)} '
             f'check{"s" if len(bucket) != 1 else ""}</span></span>'
         )
@@ -2728,9 +2836,10 @@ def _render_reference_card(parts: list[str], ref: Any) -> None:
             f'<span class="ref-legacy" title="Pre-rename ID(s)">'
             f'was {_html_escape(legacy_str)}</span>'
         )
+    sev_meaning = _html_escape(_SEVERITY_MEANINGS.get(sev, ""))
     parts.append(
         f'<span class="pill {sev}" '
-        f'title="{_html_escape(_SEVERITY_MEANINGS.get(sev, ""))}">'
+        f'data-tip="{sev_meaning}" aria-label="{sev_meaning}">'
         f'{_html_escape(sev)}</span>'
     )
     if ref.languages:

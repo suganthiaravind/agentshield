@@ -1,8 +1,17 @@
-"""Scan a target directory for SKILL.md files and run the AST rule set.
+"""Scan a target directory for agent-loaded markdown files and run the
+AST rule set.
 
 Public entry point: `scan_manifests(target)` returns a list of Finding
 objects in the same shape as the Tier 1 (Semgrep) scanner — they merge
 into the same emitter dict / merger pipeline / report.
+
+The scanner originally only matched `SKILL.md`. v4 broadens the
+discovery glob to every filename that agent runtimes / skill loaders
+commonly read — SKILL.md, AGENT.md, AGENTS.md, INSTRUCTION(S).md,
+PROMPT(S).md, CLAUDE.md. The frontmatter-based rules (AST03 / 04 / 07)
+gracefully no-op on prose-only files (no frontmatter → nothing to
+check); AST01 (body markers — jailbreak / concealment / exfil) fires
+on every file it discovers.
 """
 
 from __future__ import annotations
@@ -34,22 +43,48 @@ _SKIPPED_DIRS = {
     "_retired_v2",
 }
 
+# Filenames the scanner recognises as agent-loaded markdown.
+# Case-insensitive match on the bare filename (no path).
+#
+#   SKILL.md / AGENT.md / AGENTS.md   — manifest-shaped; full AST sweep
+#   INSTRUCTION(S).md / PROMPT(S).md  — prose-only; AST01 body markers
+#   CLAUDE.md                          — Claude Code project instructions
+#
+# Excluded by design: README.md, CHANGELOG.md, LICENSE.md, anything
+# under the standard ignore dirs above (node_modules, .venv, etc.).
+RECOGNIZED_AGENT_MD_FILENAMES = frozenset({
+    "skill.md",
+    "agent.md",
+    "agents.md",
+    "instruction.md",
+    "instructions.md",
+    "prompt.md",
+    "prompts.md",
+    "claude.md",
+})
+
 
 def discover_skill_md_files(target: Path) -> list[Path]:
-    """Return every `SKILL.md` (case-insensitive) under `target`,
-    excluding standard ignore dirs.
+    """Return every agent-loaded markdown file (SKILL.md / AGENT.md /
+    AGENTS.md / INSTRUCTION(S).md / PROMPT(S).md / CLAUDE.md) under
+    `target`, excluding standard ignore dirs. Match is case-insensitive
+    on the bare filename.
+
+    Function name kept for backward compat — other callers / tests
+    import it as `discover_skill_md_files`; the broader contract is
+    documented in `RECOGNIZED_AGENT_MD_FILENAMES`.
     """
     target = Path(target)
     if not target.exists():
         return []
     if target.is_file():
-        return [target] if target.name.lower() == "skill.md" else []
+        return [target] if target.name.lower() in RECOGNIZED_AGENT_MD_FILENAMES else []
 
     found: list[Path] = []
     for path in target.rglob("*"):
         if not path.is_file():
             continue
-        if path.name.lower() != "skill.md":
+        if path.name.lower() not in RECOGNIZED_AGENT_MD_FILENAMES:
             continue
         if any(part in _SKIPPED_DIRS for part in path.parts):
             continue

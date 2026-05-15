@@ -732,21 +732,28 @@ Use the `owasp_agentic` array to mark T1–T11.
   controlled descriptions misdirect the agent.
 - **Remediation:** Tool descriptions are code-shipped constants.
 
-### AS-C-R-AGENTIC_T7-001 — No alignment evaluation hook
+### AS-C-R-AGENTIC_T7-001 — No alignment evaluation hook (LLM-as-a-judge)
 - **Severity:** info
 - **Category:** respond
 - **Legacy ID:** TIER2-AGENTIC-T7-01
 - **Languages:** any
 - **Frameworks:** owasp_agentic=[T7]
-- **Look for:** Agent loop with no callback / hook for alignment
-  evaluation (no langsmith trace, no eval-agent step, no "did the
-  agent's actions match the user's intent" check). Hard to detect
-  statically; flag in high-stakes contexts.
-- **Skip if:** A second LLM is used to evaluate the agent's plan/output.
-- **Why it matters:** Agents drift. Without an alignment check you
-  won't notice until users complain.
-- **Remediation:** Add an evaluation pass per agent run. Sample
-  outputs to a manual review queue.
+- **Look for:** Agent loop with no internal evaluation hook — no
+  LLM-as-a-judge step, no eval-agent callback, no langsmith / langfuse
+  trace, no rubric-scored regression set, no "did the agent's actions
+  match the user's intent" check. Hard to detect statically; flag in
+  high-stakes contexts.
+- **Skip if:** An internal LLM-as-a-judge (or second LLM / classifier)
+  scores the agent's plan or output before it is acted on, OR a
+  scheduled offline eval set is run pre-deploy.
+- **Why it matters:** Agents drift. Without an internal judge or eval
+  pass, regressions ship silently and you only learn about them from
+  user complaints.
+- **Remediation:** Add an internal LLM-as-a-judge (a second LLM that
+  scores each agent run against an intent/safety rubric), or stand up
+  a scheduled offline eval suite. If neither exists yet, plan for one
+  — even sampling outputs into a manual review queue is a valid first
+  step.
 
 ### AS-C-R-AGENTIC_T8-001 — No audit trail of agent decisions
 - **Severity:** medium

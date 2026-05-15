@@ -1119,16 +1119,16 @@ NARRATIVES: dict[str, AttackScenario] = {
 
     # ---------- Copilot — Respond ----------
     "R-AGENTIC_T7-001": AttackScenario(
-        title="No alignment evaluation hook — drift goes unnoticed",
+        title="No internal LLM-as-a-judge / eval hook — drift goes unnoticed",
         attacker_input=(
             "(Attack is operational over time: model updates, prompt "
             "tweaks, or fine-tunes silently change behaviour.)"
         ),
         code_path=(
-            "There is no scheduled / pre-deploy eval that compares "
-            "current outputs against a frozen benchmark of expected "
-            "behaviour. Regressions are detected (if at all) by user "
-            "complaints."
+            "There is no internal LLM-as-a-judge scoring each agent "
+            "run, and no scheduled / pre-deploy eval that compares "
+            "current outputs against a frozen benchmark. Regressions "
+            "are detected (if at all) by user complaints."
         ),
         impact=(
             "Slow rot in agent quality and policy adherence. By the "

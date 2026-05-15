@@ -674,7 +674,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
 
     SAIGE classification (e.g. 'Classified as: Tier 2') is the only place
     'Tier' may appear in user-visible text. AgentShield's phases show as
-    'Semgrep Rules-engine Scan' / 'Copilot LLM-as-a-Judge Scan' (long form in headers)
+    'Rules-engine Static Scan' / 'Copilot LLM-as-a-Judge Scan' (long form in headers)
     or 'Semgrep' / 'Copilot' (short form in pills)."""
     _write_tier1(repo, _tier1_payload())
     payload = _tier2_payload()
@@ -696,7 +696,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     # visually separable from AgentShield's own scan-phase labels.
     assert "**Classified as:** Agentic Tier 2" in md
     # New labels present.
-    assert "Semgrep Rules-engine Scan" in md
+    assert "Rules-engine Static Scan" in md
     assert "Copilot LLM-as-a-Judge Scan" in md
     assert "[Semgrep]" in md
     assert "[Copilot]" in md
@@ -712,7 +712,7 @@ def test_no_tier_label_collision_with_saige(repo: Path) -> None:
     # dedicated saige-tier element — verify it rendered correctly.
     assert 'class="saige-tier">Agentic Tier 2</div>' in html
     # New labels present.
-    assert "Semgrep Rules-engine Scan" in html
+    assert "Rules-engine Static Scan" in html
     assert "Copilot LLM-as-a-Judge Scan" in html
     assert '<span class="pill tier1">Semgrep</span>' in html
     assert '<span class="pill tier2">Copilot</span>' in html
@@ -869,11 +869,14 @@ def test_html_static_mode_renders_all_six_panels_as_sections(repo: Path) -> None
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     static_html = render_combined_html(merge(repo), static=True)
-    for panel in ("detect", "defend", "respond", "coverage", "frameworks", "reference"):
+    # v4: Frameworks tab removed; static layout no longer renders a
+    # `data-panel="frameworks"` section.
+    for panel in ("detect", "defend", "respond", "coverage", "reference"):
         assert (
             f'<section class="static-section" data-panel="{panel}">'
             in static_html
         ), f"Static mode missing panel: {panel}"
+    assert 'data-panel="frameworks"' not in static_html
 
 
 def test_html_static_mode_preserves_finding_data_attrs(repo: Path) -> None:
@@ -914,8 +917,11 @@ def test_html_has_tab_navigation(repo: Path) -> None:
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
     assert 'class="tab-nav"' in html
-    for tab in ("detect", "defend", "respond", "coverage", "frameworks", "reference"):
+    # v4: Frameworks tab removed (its click-to-filter role moved onto
+    # the Coverage Matrix's issue chips).
+    for tab in ("detect", "defend", "respond", "coverage", "reference"):
         assert f'data-tab="{tab}"' in html
+    assert 'data-tab="frameworks"' not in html
     # Detect is the default-active tab.
     assert 'class="tab-btn active" role="tab" data-tab="detect"' in html
     assert 'aria-selected="true"' in html
@@ -930,8 +936,14 @@ def test_html_reference_tab_renders_cards_from_three_sources(repo: Path) -> None
     assert 'data-panel="reference"' in html
     assert 'class="reference-card"' in html
     # All three source groups present.
-    for source in ("Semgrep", "Copilot", "Manifest"):
-        assert f">{source} " in html or f">{source}<" in html, f"missing source: {source}"
+    # v4: Reference tab uses long-form engine names (parallel to the
+    # metric-card labels), e.g. "Semgrep Rules-engine Static Scan".
+    for source_phrase in (
+        "Semgrep Rules-engine Static Scan",
+        "Copilot LLM-as-a-Judge Scan",
+        "Manifest Static Scanner",
+    ):
+        assert source_phrase in html, f"missing source: {source_phrase}"
     # At least one card from each tier.
     assert "AS-D-001" in html  # Tier 1 D001
     assert "TIER2-LLM01-01" in html  # Tier 2
@@ -944,7 +956,8 @@ def test_html_tab_panels_wrap_each_section(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
-    for panel in ("detect", "defend", "respond", "coverage", "frameworks"):
+    # v4: Frameworks tab dropped from the nav.
+    for panel in ("detect", "defend", "respond", "coverage", "reference"):
         assert f'data-panel="{panel}"' in html
     # Detect panel is initially visible.
     assert 'class="tab-panel active" role="tabpanel" data-panel="detect"' in html
@@ -960,20 +973,28 @@ def test_html_tab_count_pill_carries_data_attrs(repo: Path) -> None:
         assert f'data-tab-count="{cat}"' in html
 
 
-def test_html_frameworks_tab_lists_clickable_items(repo: Path) -> None:
-    """Frameworks tab renders one .framework-group per framework with
-    clickable .framework-item buttons that share the same
-    data-framework-key the per-finding tags use."""
+def test_coverage_issue_chips_are_clickable_filters(repo: Path) -> None:
+    """v4: the Frameworks tab was removed and its click-to-filter role
+    moved onto the Coverage Matrix's 'with issues' chips. Each red chip
+    must carry `data-framework-key="<axis>:<id>"` so the existing toggle
+    handler picks it up — same contract the per-finding tags use."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
-    assert 'class="framework-group"' in html
-    assert 'class="framework-item"' in html
-    # Tier 1 fixture has owasp_llm=LLM01; Tier 2 fixture has owasp_llm=LLM02.
-    # Both should appear as clickable items in the Frameworks tab.
+    # The frameworks panel itself is gone.
+    assert 'data-panel="frameworks"' not in html
+    # The Coverage Matrix still uses .framework-group for its per-axis
+    # layout, but the Frameworks-tab-unique .framework-item buttons are
+    # gone — clickability moved to .coverage-chip.
+    assert 'class="framework-item"' not in html
+    # Coverage chips with issues now expose the framework filter key.
+    assert 'coverage-chip-issues' in html
+    # Tier 1 fixture tags LLM01; Tier 2 fixture tags LLM02 — both should
+    # appear as clickable issue chips in the Coverage Matrix.
     assert 'data-framework-key="owasp_llm:LLM01"' in html
     assert 'data-framework-key="owasp_llm:LLM02"' in html
-    # Reference URLs to the framework specs.
+    # Reference URLs (still attached to the per-framework group header
+    # in the Coverage Matrix).
     assert "genai.owasp.org" in html
     assert "atlas.mitre.org" in html
     assert "cwe.mitre.org" in html
@@ -990,18 +1011,18 @@ def test_html_tab_js_wired(repo: Path) -> None:
 
 
 def test_html_coverage_matrix_lives_inside_coverage_tab(repo: Path) -> None:
-    """The pre-F.22 layout had a stand-alone Coverage section. F.22 moves
-    that matrix into the Coverage tab panel — its chip row should sit
-    between the coverage tab and frameworks tab markers in the markup."""
+    """The pre-F.22 layout had a stand-alone Coverage section. F.22 moved
+    that matrix into the Coverage tab panel. v4 dropped the Frameworks
+    tab — the matrix chip row must sit between the coverage panel start
+    and the Reference panel start (the next tab in the nav)."""
     _write_tier1(repo, _tier1_payload())
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
     coverage_panel_start = html.find('data-panel="coverage"')
-    coverage_panel_end = html.find('data-panel="frameworks"')
+    coverage_panel_end = html.find('data-panel="reference"')
     assert coverage_panel_start != -1
     assert coverage_panel_end != -1 and coverage_panel_end > coverage_panel_start
-    # The 3-state chip row must sit between the coverage panel start and
-    # the frameworks panel start.
+    # The 3-state chip row must sit inside the coverage panel.
     chips_pos = html.find('class="coverage-chips"')
     assert coverage_panel_start < chips_pos < coverage_panel_end
 
@@ -1022,10 +1043,11 @@ def test_coverage_matrix_includes_ast_axis(repo: Path) -> None:
     assert cov_dict["ast"] == ["AST01", "AST03"]
 
 
-def test_html_frameworks_tab_includes_ast10_group(repo: Path) -> None:
-    """When any finding has an `ast` mapping, the HTML Frameworks tab
-    must render the new "OWASP Agentic Skills Top 10" group with a
-    clickable item that uses the same data-framework-key contract."""
+def test_coverage_matrix_includes_ast10_clickable_chip(repo: Path) -> None:
+    """v4: when any finding has an `ast` mapping, the Coverage Matrix
+    must surface a clickable AST10 chip with the same `data-framework-
+    key` contract the per-finding tags use. (Replaces the F.24 test
+    that checked the now-removed Frameworks tab group.)"""
     payload = _tier1_payload()
     payload["findings"][0]["framework_mappings"]["ast"] = ["AST01"]
     _write_tier1(repo, payload)
@@ -1033,6 +1055,8 @@ def test_html_frameworks_tab_includes_ast10_group(repo: Path) -> None:
     html = render_combined_html(merge(repo))
     assert "OWASP Agentic Skills Top 10" in html
     assert 'data-framework-key="ast:AST01"' in html
+    # It's a clickable chip (button-shaped issue chip), not a plain span.
+    assert 'class="coverage-chip coverage-chip-issues"' in html
 
 
 def test_tier2_schema_accepts_optional_ast_array(repo: Path) -> None:

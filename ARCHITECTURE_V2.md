@@ -244,6 +244,30 @@ Examples:
 
 Every `Finding` carries `legacy_ids: list[str]` so customer suppress-comments / SARIF dashboards / GRC docs that reference an older ID still resolve. Tier 2 schema validator accepts both `AS-C-` and legacy `TIER2-` prefixes during transition.
 
+### Choosing the canonical anchor
+
+A rule typically maps to several frameworks at once — OWASP LLM, OWASP Agentic, MITRE ATLAS, CWE — but its AgentShield ID encodes only **one** of them in the `<anchor>` slot. That single token is the rule's *canonical* anchor; the rest live in `metadata.framework_mappings` as cross-references.
+
+The anchor is chosen editorially by the rule author and committed to the rule's YAML in `metadata.agentshield_id`. The selection rule: **pick the framework entry where this rule is the textbook example of that control** — not the highest severity, not alphabetical, not the first listed.
+
+A few worked examples from the live rule pack:
+
+| Rule | All mappings | Anchor | Reasoning |
+|---|---|---|---|
+| D001 — unsanitised input → LLM | LLM01, T6, AML.T0051 | **LLM01** | LLM01 *is* prompt injection; this rule is its canonical detector |
+| D003 — code-execution tool registered | LLM05, LLM06, T2, T11 | **LLM06** | LLM06 *is* excessive agency; registering an eval tool is the textbook case |
+| D004 — LLM output → eval sink | LLM05, LLM06, T2, T11 | **LLM05** | LLM05 *is* improper output handling; output→sink is its textbook case |
+| D005 — hardcoded credentials | LLM02, T3, CWE-798 | **CWE_798** | CWE-798 is more precise than LLM02; secrets-in-code is older than the LLM Top 10 |
+
+Notice D003 and D004 share an identical mapping set but anchor at different tokens — the discriminator is *which* control a reader would open first to understand why this code is wrong. There is no automated policy or scoring function; the anchor is curated at rule-authoring time and enforced by code review.
+
+Two structural guardrails keep this honest:
+
+- Each rule's `message` field usually names the anchor in plain text (e.g. D001's message ends *"This is the canonical prompt-injection surface (OWASP LLM01)."*).
+- The `agentshield_id` namespace is unique per `(source, DDR, anchor, seq)`, so adding a near-duplicate rule under the wrong anchor surfaces an ID collision in the rule loader.
+
+Once written, the anchor is read verbatim by the merger and the Reference tab — neither component re-derives it. The Reference-tab card you see in the HTML report shows three independent pieces of metadata: the **title** is a descriptive English name derived from the rule's filename slug, the **AgentShield ID** carries the canonical anchor, and the **framework chips** below list every taxonomy this finding maps into.
+
 ---
 
 ## 5. Skill files emitted into `.agentshield/`

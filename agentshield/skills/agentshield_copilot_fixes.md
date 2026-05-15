@@ -611,17 +611,17 @@ Total rules in this skill: **62**
 
 ## 🔵 Respond (13)
 
-### `AS-C-R-AGENTIC_T7-001` — No alignment evaluation hook
+### `AS-C-R-AGENTIC_T7-001` — No alignment evaluation hook (LLM-as-a-judge)
 
 **Severity:** info · **Languages:** any · **Legacy ID:** `TIER2-AGENTIC-T7-01`
 
 **Frameworks:** `OWASP Agentic T7`
 
-**What it flags:** Agent loop with no callback / hook for alignment evaluation (no langsmith trace, no eval-agent step, no "did the agent's actions match the user's intent" check). Hard to detect statically; flag in high-stakes contexts.
+**What it flags:** Agent loop with no internal evaluation hook — no LLM-as-a-judge step, no eval-agent callback, no langsmith / langfuse trace, no rubric-scored regression set, no "did the agent's actions match the user's intent" check. Hard to detect statically; flag in high-stakes contexts.
 
-**Skip if:** A second LLM is used to evaluate the agent's plan/output.
+**Skip if:** An internal LLM-as-a-judge (or second LLM / classifier) scores the agent's plan or output before it is acted on, OR a scheduled offline eval set is run pre-deploy.
 
-**Remediation:** Add an evaluation pass per agent run. Sample outputs to a manual review queue.
+**Remediation:** Add an internal LLM-as-a-judge (a second LLM that scores each agent run against an intent/safety rubric), or stand up a scheduled offline eval suite. If neither exists yet, plan for one — even sampling outputs into a manual review queue is a valid first step.
 
 ### `AS-C-R-AGENTIC_T8-001` — No audit trail of agent decisions
 

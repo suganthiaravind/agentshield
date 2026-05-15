@@ -1,12 +1,12 @@
 ---
 name: agentshield-manifest-fixes
 description: |
-  Help developers fix AgentShield AST10 manifest-scanner findings — checks on `SKILL.md` packages with rule IDs starting `AS-M-`. Maps to OWASP Agentic Skills Top 10 (AST10).
+  Help developers fix AgentShield AST10 findings on agent-loaded markdown files (SKILL.md, AGENT.md, AGENTS.md, INSTRUCTION(S).md, PROMPT(S).md, CLAUDE.md) — rule IDs start with `AS-M-`. Maps to OWASP Agentic Skills Top 10 (AST10).
 
   Use this skill when:
     - the user pastes a finding ID starting with `AS-M-` (e.g. `AS-M-D-AST03-001`) into chat
-    - the user asks how to fix an AgentShield manifest / SKILL.md finding
-    - the user references an AST10 risk (`AST01` … `AST07`) on a skill package they're building or auditing
+    - the user asks how to fix an AgentShield finding on a SKILL.md / AGENT.md / CLAUDE.md / instructions file
+    - the user references an AST10 risk (`AST01` … `AST07`) on a skill / agent / prompt markdown they're building or auditing
     - the user references a legacy `AS-AST-NNN` ID — those alias to current `AS-M-*` IDs
 author:
   name: AgentShield
@@ -25,9 +25,9 @@ permissions:
 risk_tier: L0
 ---
 
-# AgentShield AST10 Manifest Remediation Skill
+# AgentShield AST10 Agent-Markdown Remediation Skill
 
-Help developers fix AgentShield AST10 manifest-scanner findings — checks on `SKILL.md` packages with rule IDs starting `AS-M-`. Maps to OWASP Agentic Skills Top 10 (AST10).
+Help developers fix AgentShield AST10 findings on agent-loaded markdown files (SKILL.md, AGENT.md, AGENTS.md, INSTRUCTION(S).md, PROMPT(S).md, CLAUDE.md) — rule IDs start with `AS-M-`. Maps to OWASP Agentic Skills Top 10 (AST10).
 
 When a user pastes an `AS-M-…` finding ID or asks about one of the rules below, walk them through the remediation. Cite the canonical rule ID and the framework mappings; if the user pasted a legacy ID, mention it once and carry on with the current ID.
 

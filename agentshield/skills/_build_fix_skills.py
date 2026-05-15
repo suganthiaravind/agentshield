@@ -34,7 +34,10 @@ SKILLS_DIR = REPO / "agentshield" / "skills"
 OUTPUTS = {
     "Semgrep": "agentshield_semgrep_fixes.md",
     "Copilot": "agentshield_copilot_fixes.md",
-    "Manifest": "agentshield_manifest_fixes.md",
+    # Source key is "Markdown" (the new user-facing label); file name
+    # stays "manifest" to keep the bundled artifact's identity stable
+    # for anything keyed on the old name.
+    "Markdown": "agentshield_manifest_fixes.md",
 }
 
 

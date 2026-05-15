@@ -164,7 +164,7 @@ def test_build_all_references_unions_all_three_sources() -> None:
         tier2_checklist_path=CHECKLIST_PATH,
     )
     sources = {r.source for r in refs}
-    assert sources == {"Semgrep", "Copilot", "Manifest"}
+    assert sources == {"Semgrep", "Copilot", "Markdown"}
     # Lower bound: at least 6 Tier 1 + 50 Tier 2 + 5 Manifest.
     assert len(refs) >= 60
 
@@ -177,7 +177,7 @@ def test_build_all_references_skips_missing_checklist(tmp_path: Path) -> None:
         tier2_checklist_path=tmp_path / "missing.md",
     )
     sources = {r.source for r in refs}
-    assert sources == {"Semgrep", "Manifest"}
+    assert sources == {"Semgrep", "Markdown"}
 
 
 # ---------- F.34: fix-skill SKILL.md generator ----------
@@ -191,7 +191,7 @@ def test_render_fix_skill_emits_owasp_uf_frontmatter() -> None:
         tier1_rules_path=RULES_PATH,
         tier2_checklist_path=CHECKLIST_PATH,
     )
-    for source in ("Semgrep", "Copilot", "Manifest"):
+    for source in ("Semgrep", "Copilot", "Markdown"):
         md = render_fix_skill(source, refs)
         # Frontmatter shape.
         assert md.startswith("---\n"), f"{source}: missing frontmatter open"
@@ -203,7 +203,7 @@ def test_render_fix_skill_emits_owasp_uf_frontmatter() -> None:
         # Must be read-only by construction (no shell, no writes).
         assert "shell: false" in md
         # Must list at least one trigger phrase ("AS-S-" / "AS-C-" / "AS-M-").
-        prefix = {"Semgrep": "AS-S-", "Copilot": "AS-C-", "Manifest": "AS-M-"}[source]
+        prefix = {"Semgrep": "AS-S-", "Copilot": "AS-C-", "Markdown": "AS-M-"}[source]
         assert prefix in md
 
 
@@ -221,7 +221,8 @@ def test_fix_skill_files_on_disk_match_fresh_render() -> None:
     expected = {
         "Semgrep": REPO / "agentshield" / "skills" / "agentshield_semgrep_fixes.md",
         "Copilot": REPO / "agentshield" / "skills" / "agentshield_copilot_fixes.md",
-        "Manifest": REPO / "agentshield" / "skills" / "agentshield_manifest_fixes.md",
+        # Source key was "Manifest" pre-v4; file name unchanged.
+        "Markdown": REPO / "agentshield" / "skills" / "agentshield_manifest_fixes.md",
     }
     for source, path in expected.items():
         assert path.exists(), (

@@ -29,7 +29,7 @@ class RuleReference:
     """One row in the Reference tab. Source-agnostic shape so the renderer
     can group/filter without caring about provenance."""
 
-    source: str  # "Semgrep" | "Copilot" | "Manifest"
+    source: str  # "Semgrep" | "Copilot" | "Markdown"
     rule_id: str  # short id: file slug or AS-C-* identifier
     agentshield_id: str  # current canonical id, AS-<source>-<DDR>-<anchor>-<seq>
     title: str
@@ -264,7 +264,7 @@ def load_manifest_scanner_references() -> list[RuleReference]:
     for entry in RULE_DESCRIPTIONS:
         refs.append(
             RuleReference(
-                source="Manifest",
+                source="Markdown",
                 rule_id=entry["rule_id"],
                 agentshield_id=entry["agentshield_id"],
                 title=entry["title"],
@@ -350,23 +350,24 @@ _FIX_SKILL_META = {
             "Tier 2 entries in the report",
         ],
     },
-    "Manifest": {
+    "Markdown": {
         "name": "agentshield-manifest-fixes",
-        "title": "AgentShield AST10 Manifest Remediation Skill",
+        "title": "AgentShield AST10 Agent-Markdown Remediation Skill",
         "id_prefix": "AS-M-",
         "blurb": (
-            "Help developers fix AgentShield AST10 manifest-scanner "
-            "findings — checks on `SKILL.md` packages with rule IDs "
-            "starting `AS-M-`. Maps to OWASP Agentic Skills Top 10 "
+            "Help developers fix AgentShield AST10 findings on agent-"
+            "loaded markdown files (SKILL.md, AGENT.md, AGENTS.md, "
+            "INSTRUCTION(S).md, PROMPT(S).md, CLAUDE.md) — rule IDs "
+            "start with `AS-M-`. Maps to OWASP Agentic Skills Top 10 "
             "(AST10)."
         ),
         "triggers": [
             "the user pastes a finding ID starting with `AS-M-` "
             "(e.g. `AS-M-D-AST03-001`) into chat",
-            "the user asks how to fix an AgentShield manifest / SKILL.md"
-            " finding",
+            "the user asks how to fix an AgentShield finding on a "
+            "SKILL.md / AGENT.md / CLAUDE.md / instructions file",
             "the user references an AST10 risk (`AST01` … `AST07`) on a "
-            "skill package they're building or auditing",
+            "skill / agent / prompt markdown they're building or auditing",
             "the user references a legacy `AS-AST-NNN` ID — those alias "
             "to current `AS-M-*` IDs",
         ],
