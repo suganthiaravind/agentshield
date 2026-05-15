@@ -1932,13 +1932,43 @@ def _slugify_title(title: str) -> str:
     return s.strip("-")
 
 
-def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
+def _render_saige_block(r: Any, parts: list[str]) -> None:
+    """Render the JPMC SAIGE Agent Tier classification card if present.
+
+    Extracted so both the standard (after metrics) and saige-first (top of
+    report) layouts use the same markup.
+    """
+    if not r.saige_tier:
+        return
+    tier_label = "Non Agent" if r.saige_tier == "non-agent" else f"Agentic Tier {r.saige_tier}"
+    parts.append('<div class="saige-card">')
+    parts.append('<div class="saige-label">JPMC SAIGE Agent Tier classification</div>')
+    parts.append(f'<div class="saige-tier">{_html_escape(tier_label)}</div>')
+    parts.append(f'<div class="saige-rationale">{_html_escape(r.saige_tier_reasoning or "(no reasoning provided)")}</div>')
+    parts.append(
+        '<div class="saige-footer">Informational only — AgentShield does not '
+        "filter or prioritise findings based on this classification.</div>"
+    )
+    parts.append("</div>")
+
+
+def render_combined_html(
+    result: MergeResult,
+    *,
+    static: bool = False,
+    saige_first: bool = False,
+) -> str:
     """Standalone HTML report — single file, embedded CSS, no external deps.
 
     F.29: when `static=True`, drops the filter bar and the tab navigation;
     every panel renders as a stacked `<section>` with its own heading. Use
     this mode for distribution-ready (printable / emailable / read-without-
     clicking) reports. Default `static=False` keeps the interactive UX.
+
+    When `saige_first=True`, the JPMC SAIGE Agent Tier classification card
+    is hoisted to the top of the report (immediately after the header /
+    banners) so the agent's autonomy tier frames every subsequent section.
+    Useful as an executive-summary variant where business context leads.
 
     Layout (F.17):
       1. Report header (title + scan timestamp)
@@ -2008,6 +2038,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             "The Semgrep fingerprint changed since the Copilot LLM-as-a-Judge Scan was run; results may be inconsistent. "
             "Re-run the Copilot LLM-as-a-Judge Scan for fresh results.</div>"
         )
+
+    # SAIGE-first variant: hoist the classification card above D/D/R so
+    # the agent's autonomy tier frames everything that follows.
+    if saige_first:
+        _render_saige_block(r, parts)
 
     # 3. D/D/R HERO ROW
     parts.append('<div class="ddr-row">')
@@ -2158,18 +2193,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 parts.append(f'<div class="{sev}" style="width:{pct:.1f}%"></div>')
         parts.append("</div></div>")
 
-    # 6. SAIGE classification
-    if r.saige_tier:
-        tier_label = "Non Agent" if r.saige_tier == "non-agent" else f"Agentic Tier {r.saige_tier}"
-        parts.append('<div class="saige-card">')
-        parts.append('<div class="saige-label">JPMC SAIGE Agent Tier classification</div>')
-        parts.append(f'<div class="saige-tier">{_html_escape(tier_label)}</div>')
-        parts.append(f'<div class="saige-rationale">{_html_escape(r.saige_tier_reasoning or "(no reasoning provided)")}</div>')
-        parts.append(
-            '<div class="saige-footer">Informational only — AgentShield does not '
-            "filter or prioritise findings based on this classification.</div>"
-        )
-        parts.append("</div>")
+    # 6. SAIGE classification (default position — skipped when hoisted above)
+    if not saige_first:
+        _render_saige_block(r, parts)
 
     # 7. Findings — D/D/R-led
     # F.21: filter bar — sits above the three findings sections, drives the

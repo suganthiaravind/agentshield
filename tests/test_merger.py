@@ -623,6 +623,33 @@ def test_html_omits_saige_when_unclassified(repo: Path) -> None:
     assert 'class="saige-card"' not in html
 
 
+def test_html_saige_first_variant_hoists_classification_above_ddr(repo: Path) -> None:
+    """When `saige_first=True`, the SAIGE card renders ABOVE the D/D/R hero
+    row instead of below the metrics. Same markup, different position."""
+    _write_tier1(repo, _tier1_payload())
+    payload = _tier2_payload()
+    payload["saige_tier"] = "2"
+    payload["saige_tier_reasoning"] = "Autonomous + state-changing internal calls only."
+    _write_tier2(repo, payload)
+    html = render_combined_html(merge(repo), saige_first=True)
+    saige_idx = html.find('class="saige-card"')
+    ddr_idx = html.find('class="ddr-row"')
+    assert saige_idx != -1, "SAIGE card must still render in the saige-first variant"
+    assert ddr_idx != -1, "D/D/R hero row must still render in the saige-first variant"
+    assert saige_idx < ddr_idx, "SAIGE card must precede the D/D/R hero row when saige_first=True"
+    # And it must appear exactly once — not duplicated at both positions.
+    assert html.count('class="saige-card"') == 1
+
+
+def test_html_saige_first_variant_without_classification_is_a_no_op(repo: Path) -> None:
+    """If Tier 2 didn't classify, saige_first=True produces no SAIGE card —
+    same as the default layout. The variant must not invent an empty card."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())  # no saige_tier
+    html = render_combined_html(merge(repo), saige_first=True)
+    assert 'class="saige-card"' not in html
+
+
 def test_html_shows_incomplete_banner_when_tier2_missing(repo: Path) -> None:
     _write_tier1(repo, _tier1_payload())
     html = render_combined_html(merge(repo))
