@@ -1983,12 +1983,7 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     parts.append("</div>")
 
 
-def render_combined_html(
-    result: MergeResult,
-    *,
-    static: bool = False,
-    saige_first: bool = False,
-) -> str:
+def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     """Standalone HTML report — single file, embedded CSS, no external deps.
 
     F.29: when `static=True`, drops the filter bar and the tab navigation;
@@ -1996,18 +1991,16 @@ def render_combined_html(
     this mode for distribution-ready (printable / emailable / read-without-
     clicking) reports. Default `static=False` keeps the interactive UX.
 
-    When `saige_first=True`, the JPMC SAIGE Agent Tier classification card
-    is hoisted to the top of the report (immediately after the header /
-    banners) so the agent's autonomy tier frames every subsequent section.
-    Useful as an executive-summary variant where business context leads.
-
-    Layout (F.17):
+    Layout:
       1. Report header (title + scan timestamp)
       2. Status banner if applicable (incomplete / schema-error / stale)
-      3. **D/D/R hero row** — three cards, one per category, with severity pills
-      4. Metrics row — Tier 1 / Tier 2 / FP-marked / Net actionable
-      5. Stacked severity bar
-      6. SAIGE classification card (if Tier 2 classified)
+      3. **SAIGE Agent Tier classification card** (if Tier 2 classified) —
+         hoisted to the top so the agent's autonomy tier frames every
+         subsequent section
+      4. Stacked severity-distribution bar — at-a-glance "how bad is it",
+         paired with SAIGE as the exec-summary header
+      5. **D/D/R hero row** — three cards, one per category, with severity pills
+      6. Metrics row — Tier 1 / Tier 2 / FP-marked / Net actionable
       7. Findings — three sections led by 🔴 Detect / 🟡 Defend / 🔵 Respond,
          each finding showing a [Tier 1]/[Tier 2] pill + severity pill +
          file:line + framework chips + remediation
@@ -2070,12 +2063,11 @@ def render_combined_html(
             "Re-run the Copilot LLM-as-a-Judge Scan for fresh results.</div>"
         )
 
-    # SAIGE-first variant: hoist the classification card AND the severity
-    # distribution above D/D/R so the agent's autonomy tier + at-a-glance
-    # "how bad is it" framing leads everything that follows.
-    if saige_first:
-        _render_saige_block(r, parts)
-        _render_severity_bar(sev_total, parts)
+    # Exec-summary header: SAIGE classification card + severity-distribution
+    # bar above D/D/R so the agent's autonomy tier + at-a-glance "how bad
+    # is it" framing leads everything that follows.
+    _render_saige_block(r, parts)
+    _render_severity_bar(sev_total, parts)
 
     # 3. D/D/R HERO ROW
     parts.append('<div class="ddr-row">')
@@ -2203,13 +2195,8 @@ def render_combined_html(
     )
     parts.append("</div>")
 
-    # 5. Stacked severity bar (default position — skipped when hoisted above)
-    if not saige_first:
-        _render_severity_bar(sev_total, parts)
-
-    # 6. SAIGE classification (default position — skipped when hoisted above)
-    if not saige_first:
-        _render_saige_block(r, parts)
+    # SAIGE card + severity bar were already rendered above (exec-summary
+    # header); nothing more to emit at the post-metrics position.
 
     # 7. Findings — D/D/R-led
     # F.21: filter bar — sits above the three findings sections, drives the

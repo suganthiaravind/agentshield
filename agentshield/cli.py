@@ -546,16 +546,14 @@ def cmd_merge(args: argparse.Namespace) -> int:
         )
         written.append(args.output_sarif)
     if args.output_html:
-        # F.29: emit three HTML reports for one --output-html flag:
+        # F.29: emit two HTML reports for one --output-html flag:
         #   <name>.html        — interactive (tabs, filters, search)
         #   <name>-print.html  — stacked, all sections visible, print-friendly
-        #   <name>-saige.html  — interactive, JPMC SAIGE Agent Tier
-        #                        classification hoisted to the top so the
-        #                        autonomy-tier business context leads.
-        # All three files are fully self-contained (CSS+JS inlined). The print
+        # Both files are fully self-contained (CSS+JS inlined). The print
         # variant is the one to email / attach to a JIRA / save as PDF; the
-        # interactive variant is for live review; the saige variant frames
-        # findings under the agent's classification for exec / risk readers.
+        # interactive variant is for live review. Both layouts now lead with
+        # the JPMC SAIGE Agent Tier classification + severity distribution
+        # as an exec-summary header above the D/D/R hero row.
         html_path = Path(args.output_html)
         html_path.parent.mkdir(parents=True, exist_ok=True)
         html_path.write_text(render_combined_html(result), encoding="utf-8")
@@ -565,11 +563,6 @@ def cmd_merge(args: argparse.Namespace) -> int:
             render_combined_html(result, static=True), encoding="utf-8"
         )
         written.append(str(print_path))
-        saige_path = html_path.with_name(html_path.stem + "-saige" + html_path.suffix)
-        saige_path.write_text(
-            render_combined_html(result, saige_first=True), encoding="utf-8"
-        )
-        written.append(str(saige_path))
     if written:
         print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")
 
