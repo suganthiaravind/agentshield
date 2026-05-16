@@ -1932,6 +1932,37 @@ def _slugify_title(title: str) -> str:
     return s.strip("-")
 
 
+def _render_severity_bar(sev_total: dict[str, int], parts: list[str]) -> None:
+    """Render the stacked severity-distribution bar (label + counts + bar).
+
+    No-op when there are no findings. Extracted so the SAIGE-first variant
+    can surface it alongside the classification card at the top of the
+    report instead of below the metrics row.
+    """
+    total_findings = sum(sev_total.values())
+    if not total_findings:
+        return
+    parts.append('<div class="section">')
+    parts.append('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">')
+    parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
+    sev_text = " &middot; ".join(
+        f'<span class="pill {sev}" '
+        f'data-tip="{_html_escape(_SEVERITY_MEANINGS[sev])}" '
+        f'aria-label="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
+        f'{sev_total.get(sev, 0)} {sev}</span>'
+        for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
+    )
+    parts.append(f"<span>{sev_text}</span>")
+    parts.append("</div>")
+    parts.append('<div class="severity-bar">')
+    for sev in ("critical", "high", "medium", "low", "info"):
+        n = sev_total.get(sev, 0)
+        if n:
+            pct = (n / total_findings) * 100
+            parts.append(f'<div class="{sev}" style="width:{pct:.1f}%"></div>')
+    parts.append("</div></div>")
+
+
 def _render_saige_block(r: Any, parts: list[str]) -> None:
     """Render the JPMC SAIGE Agent Tier classification card if present.
 
@@ -2039,10 +2070,12 @@ def render_combined_html(
             "Re-run the Copilot LLM-as-a-Judge Scan for fresh results.</div>"
         )
 
-    # SAIGE-first variant: hoist the classification card above D/D/R so
-    # the agent's autonomy tier frames everything that follows.
+    # SAIGE-first variant: hoist the classification card AND the severity
+    # distribution above D/D/R so the agent's autonomy tier + at-a-glance
+    # "how bad is it" framing leads everything that follows.
     if saige_first:
         _render_saige_block(r, parts)
+        _render_severity_bar(sev_total, parts)
 
     # 3. D/D/R HERO ROW
     parts.append('<div class="ddr-row">')
@@ -2170,28 +2203,9 @@ def render_combined_html(
     )
     parts.append("</div>")
 
-    # 5. Stacked severity bar
-    total_findings = sum(sev_total.values())
-    if total_findings:
-        parts.append('<div class="section">')
-        parts.append('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">')
-        parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
-        sev_text = " &middot; ".join(
-            f'<span class="pill {sev}" '
-            f'data-tip="{_html_escape(_SEVERITY_MEANINGS[sev])}" '
-            f'aria-label="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
-            f'{sev_total.get(sev, 0)} {sev}</span>'
-            for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
-        )
-        parts.append(f"<span>{sev_text}</span>")
-        parts.append("</div>")
-        parts.append('<div class="severity-bar">')
-        for sev in ("critical", "high", "medium", "low", "info"):
-            n = sev_total.get(sev, 0)
-            if n:
-                pct = (n / total_findings) * 100
-                parts.append(f'<div class="{sev}" style="width:{pct:.1f}%"></div>')
-        parts.append("</div></div>")
+    # 5. Stacked severity bar (default position — skipped when hoisted above)
+    if not saige_first:
+        _render_severity_bar(sev_total, parts)
 
     # 6. SAIGE classification (default position — skipped when hoisted above)
     if not saige_first:

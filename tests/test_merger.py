@@ -624,8 +624,9 @@ def test_html_omits_saige_when_unclassified(repo: Path) -> None:
 
 
 def test_html_saige_first_variant_hoists_classification_above_ddr(repo: Path) -> None:
-    """When `saige_first=True`, the SAIGE card renders ABOVE the D/D/R hero
-    row instead of below the metrics. Same markup, different position."""
+    """When `saige_first=True`, the SAIGE card AND the severity-distribution
+    bar render ABOVE the D/D/R hero row — the exec-summary view leads with
+    "what kind of agent" + "how bad is it" before drilling into findings."""
     _write_tier1(repo, _tier1_payload())
     payload = _tier2_payload()
     payload["saige_tier"] = "2"
@@ -633,12 +634,16 @@ def test_html_saige_first_variant_hoists_classification_above_ddr(repo: Path) ->
     _write_tier2(repo, payload)
     html = render_combined_html(merge(repo), saige_first=True)
     saige_idx = html.find('class="saige-card"')
+    sev_idx = html.find('class="severity-bar"')
     ddr_idx = html.find('class="ddr-row"')
     assert saige_idx != -1, "SAIGE card must still render in the saige-first variant"
+    assert sev_idx != -1, "Severity-distribution bar must render in the saige-first variant"
     assert ddr_idx != -1, "D/D/R hero row must still render in the saige-first variant"
     assert saige_idx < ddr_idx, "SAIGE card must precede the D/D/R hero row when saige_first=True"
-    # And it must appear exactly once — not duplicated at both positions.
+    assert sev_idx < ddr_idx, "Severity bar must precede the D/D/R hero row when saige_first=True"
+    # Each must appear exactly once — not duplicated at both positions.
     assert html.count('class="saige-card"') == 1
+    assert html.count('class="severity-bar"') == 1
 
 
 def test_html_saige_first_variant_without_classification_is_a_no_op(repo: Path) -> None:
