@@ -3914,9 +3914,23 @@ def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
 
 
 def _iso_to_hms(iso: str) -> str:
-    """Best-effort 'YYYY-MM-DDTHH:MM:SSZ' → 'HH:MM:SS'."""
+    """Per-line probe timestamp formatter.
+
+    - ISO with trailing Z  → 'YYYY-MM-DD HH:MM:SS UTC' (full date + zone).
+    - ISO without Z        → 'YYYY-MM-DD HH:MM:SS' (zone unknown).
+    - Anything else        → returned verbatim (canned narratives in
+      attack_narratives.py emit pre-formatted 'HH:MM:SS' strings; those
+      have no real wall-clock and aren't a Live trace).
+
+    Surfacing the full timestamp per line means a reader doesn't have
+    to glance back at the panel header to confirm WHEN the probe ran —
+    forensically more useful, and the extra ~14 chars fit comfortably
+    in the terminal panel's width.
+    """
+    if "T" in iso and len(iso) >= 19 and iso.endswith("Z"):
+        return f"{iso[:10]} {iso[11:19]} UTC"
     if "T" in iso and len(iso) >= 19:
-        return iso[11:19]
+        return f"{iso[:10]} {iso[11:19]}"
     return iso
 
 
