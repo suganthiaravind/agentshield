@@ -1103,6 +1103,19 @@ h3 { font-size: 15px; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 600; color: var(--accent);
 }
+/* Path B+: static-only finding — no probe was attached because the
+   rule has no runtime attack vector (at-rest disclosure, manifest
+   config, observability gap). Painted neutral-informational so it
+   reads as "by design" rather than "we forgot to build this." */
+.finding-attack-scenario .attack-disclaimer-static {
+  color: var(--text); font-style: normal;
+  background: #f4f1e8;
+  border-left: 3px solid var(--info);
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
 /* v4: attack walkthrough — ordered steps with ▶ Play animation. */
 .finding-attack-scenario .attack-steps-section {
   padding-top: 10px;
@@ -3461,11 +3474,15 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             )
                         parts.append('</ol>')
                         parts.append('</div>')
-                    # Disclaimer wording follows the actual state of the
-                    # block: if a live probe ran for this finding, the
-                    # block isn't "no payloads were sent" — payloads WERE
-                    # sent. Keep the simulated-walkthrough caveat for the
-                    # animation up top, but be honest about the probe.
+                    # Disclaimer has three states, matching the actual
+                    # provenance of the block:
+                    #   (a) live probe ran          → payloads WERE sent
+                    #   (b) canned probe attached   → simulated walkthrough
+                    #   (c) no probe at all         → static-only finding
+                    # The (c) case applies to at-rest disclosure rules
+                    # (hardcoded credentials), manifest-config rules, and
+                    # observability gaps — anything without a runtime
+                    # attack vector the HTTP-probe model can exercise.
                     if is_live_probe and effective_probe is not None:
                         parts.append(
                             f'<div class="attack-disclaimer attack-disclaimer-live">'
@@ -3476,11 +3493,22 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'captured.'
                             f'</div>'
                         )
-                    else:
+                    elif effective_probe is not None:
                         parts.append(
                             '<div class="attack-disclaimer">'
                             'Simulated walkthrough &mdash; no payloads were '
                             'sent to your system.'
+                            '</div>'
+                        )
+                    else:
+                        parts.append(
+                            '<div class="attack-disclaimer attack-disclaimer-static">'
+                            '&#8505; Static-only finding &mdash; no runtime '
+                            'probe attached for this rule. The finding above '
+                            'comes from static analysis; this attack class '
+                            '(at-rest disclosure, manifest config, or '
+                            'observability gap) doesn\'t have a runtime '
+                            'vector AgentShield\'s HTTP probe can exercise.'
                             '</div>'
                         )
                     parts.append('</div>')  # /attack-body
