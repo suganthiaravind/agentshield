@@ -1,0 +1,37 @@
+# Demo-agent skill bundle config — intentionally vulnerable for
+# AgentShield's AST06 (credentials in skill bundles) rule fixture.
+#
+# In a real skill bundle, this YAML would carry runtime config that
+# the loader passes to the skill. Putting secrets in here is the
+# anti-pattern AST06 catches — the bundle ships verbatim to every
+# consumer (registry, build cache, developer clones).
+
+skill:
+  name: customer-support
+  version: 3.2.0
+
+providers:
+  # Anti-pattern: API key hard-coded in a bundled config file.
+  # AgentShield AST06 should flag this.
+  anthropic:
+    api_key: sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefghijklm
+    model: claude-opus-4-7
+
+  openai:
+    api_key: sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefghijklm
+    model: gpt-4o-mini
+
+  aws:
+    access_key_id: AKIAIOSFODNN7EXAMPLE
+    region: us-east-1
+
+# Generic credential assignment — should also match the regex.
+support_db_password: 2v8XyZ4qPmA9rT6wKn3eRfBhJ5sLcGdU
+slack_webhook_secret: xoxb-1234567890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx
+
+# Settings without credentials — must NOT trip the rule.
+timeouts:
+  llm_call: 30
+  tool_call: 10
+logging:
+  level: info

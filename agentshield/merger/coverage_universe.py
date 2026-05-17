@@ -251,27 +251,40 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
     # unrestricted egress channel is the agent-side SSRF surface;
     # runtime probe validates the request actually leaves the network.
 
-    # OWASP Agentic Skills Top 10 — gaps are mostly runtime concerns the
-    # manifest scanner can't observe from a static SKILL.md.
+    # OWASP Agentic Skills Top 10 — mostly runtime concerns the manifest
+    # scanner can't observe from a static SKILL.md. AST06 now covered.
     ("ast", "AST02"): (
-        "Runtime substitution of a SKILL.md — detection requires monitoring "
-        "the skill loader, not the manifest contents."
+        "Runtime substitution of a SKILL.md. Path B can detect this IF "
+        "the target exposes a `/api/agentshield/loaded-skills` endpoint "
+        "returning the hash of each currently-loaded skill — AgentShield "
+        "compares against the hash captured at scan time and flags drift. "
+        "Requires target cooperation (the endpoint isn't part of any "
+        "standard runtime); listed as out-of-scope until a host runtime "
+        "ships that telemetry."
     ),
-    ("ast", "AST06"): (
-        "Manifest scanner could be extended to scan bundled files for "
-        "credential patterns; not yet implemented."
-    ),
+    # AST06 covered by check_ast06_credentials_in_bundle — scans non-code
+    # files in the skill bundle (YAML / .env / JSON / config) for
+    # credential patterns. Released alongside the demo fixture
+    # testbed/demo-agent/config.yaml.
     ("ast", "AST08"): (
-        "Requires multi-skill correlation (skill A grants perm → skill B "
-        "uses it). Single-manifest static check can't model this."
+        "Multi-skill correlation — skill A grants permission, skill B "
+        "uses it. Doable statically when a repo contains ≥2 skill "
+        "manifests; needs a cross-skill permission graph plus a usage "
+        "extractor. Demo target ships one skill, so the fixture work "
+        "(multi-skill testbed) isn't done yet. Not a Path B problem."
     ),
     ("ast", "AST09"): (
-        "Logging is a runtime concern; the manifest declares logging config "
-        "but enforcement happens in the host runtime."
+        "Logging enforcement is runtime. Path B can check IF the target "
+        "exposes a recent-log query endpoint or mirror — probe an action, "
+        "then verify it was logged with the required fields. Same target-"
+        "cooperation pattern as AST02. Out of scope until that telemetry "
+        "is standardised."
     ),
     ("ast", "AST10"): (
-        "Behavior drift is a runtime / version-comparison concern; static "
-        "manifest scan can't observe behavior change over time."
+        "Behaviour drift needs persistent baselines and version-to-"
+        "version comparison. A single scan / probe run can't observe "
+        "drift by definition. Genuinely out of scope for AgentShield's "
+        "one-shot model — handled by continuous-monitoring tools."
     ),
 }
 

@@ -51,7 +51,118 @@ _RULE_IDS: dict[str, tuple[str, list[str]]] = {
     "ast05-unsafe-deserialization":  ("AS-M-D-AST05-001", ["AS-AST-005"]),
     "ast07-missing-signature":       ("AS-M-D-AST07-001", ["AS-AST-007"]),
     "ast07-missing-content-hash":    ("AS-M-D-AST07-002", ["AS-AST-007"]),
+    "ast06-credential-in-bundle":    ("AS-M-D-AST06-001", ["AS-AST-006"]),
 }
+
+
+# AST06 — non-code companion files that ship with a skill bundle can
+# carry credentials Semgrep won't see (Semgrep targets .py / .java).
+# Credential regex set tuned to the common provider shapes plus generic
+# `KEY=VALUE` patterns. Tight enough that random YAML config doesn't
+# false-positive, broad enough to catch the obvious cases.
+_AST06_FILE_EXTS = frozenset({
+    ".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".config",
+    ".properties", ".env", ".cfg", ".txt",
+})
+
+_AST06_CRED_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # Provider-prefixed keys — high confidence.
+    (re.compile(r"sk-ant-api[0-9]{2}-[A-Za-z0-9_\-]{32,}"), "Anthropic API key"),
+    (re.compile(r"sk-proj-[A-Za-z0-9_\-]{32,}"), "OpenAI project key"),
+    (re.compile(r"(?<![A-Za-z0-9_])sk-[A-Za-z0-9]{20,}"), "OpenAI-style API key"),
+    (re.compile(r"AKIA[0-9A-Z]{16}"), "AWS access-key ID"),
+    (re.compile(r"AIza[0-9A-Za-z_\-]{35}"), "Google API key"),
+    (re.compile(r"xox[abp]-[0-9A-Za-z\-]{10,}"), "Slack token"),
+    (re.compile(r"gh[pous]_[0-9A-Za-z]{30,}"), "GitHub token"),
+    # KEY=VALUE with strong key names. Length floor on the value keeps
+    # placeholder strings like `password=changeme` quiet but catches
+    # real-looking secrets.
+    (
+        re.compile(
+            r"(?i)(?:api[_-]?key|api[_-]?secret|access[_-]?key|"
+            r"secret[_-]?key|password|passwd|auth[_-]?token|"
+            r"bearer[_-]?token)\s*[=:]\s*['\"]?[A-Za-z0-9+/=_\-]{16,}['\"]?"
+        ),
+        "Generic credential assignment",
+    ),
+]
+
+# Skip binary / huge files outright — manifest bundles shouldn't carry
+# anything close to this size.
+_AST06_MAX_FILE_BYTES = 1_000_000
+
+
+def check_ast06_credentials_in_bundle(manifest: ParsedManifest) -> list[Finding]:
+    """AST06 — credentials hard-coded in non-code files shipped with the skill.
+
+    Walks the manifest's directory and scans every non-markdown text file
+    for credential patterns. Catches the credential class that Semgrep
+    misses (the code scanner only sees `.py` / `.java`); a skill bundle
+    routinely ships YAML / .env / JSON config alongside its prose, and
+    secrets pasted into those files ship to every consumer of the bundle
+    in the clear.
+    """
+    findings: list[Finding] = []
+    manifest_path = getattr(manifest, "path", None)
+    if manifest_path is None:
+        return findings
+    bundle_dir = manifest_path.parent
+    if not bundle_dir.is_dir():
+        return findings
+
+    for entry in sorted(bundle_dir.iterdir()):
+        if not entry.is_file():
+            continue
+        if entry.suffix.lower() not in _AST06_FILE_EXTS:
+            continue
+        if entry.name.lower() in RECOGNIZED_SKILL_MD_NAMES:
+            # The MD body is AST01's domain.
+            continue
+        try:
+            if entry.stat().st_size > _AST06_MAX_FILE_BYTES:
+                continue
+            text = entry.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        for line_num, line in enumerate(text.splitlines(), start=1):
+            for pattern, kind in _AST06_CRED_PATTERNS:
+                if pattern.search(line):
+                    findings.append(
+                        _build_finding(
+                            rule_short="ast06-credential-in-bundle",
+                            path=entry,
+                            line=line_num,
+                            snippet=line.strip()[:200],
+                            message=(
+                                f"{kind} hard-coded in skill-bundle file "
+                                f"`{entry.name}`. Skill bundles ship "
+                                f"verbatim to every consumer — anyone who "
+                                f"can read the bundle (registry, cache, "
+                                f"developer clone) reads the secret. "
+                                f"AST06 — Secrets in Skill Bundles. Move "
+                                f"to a secrets manager or runtime-injected "
+                                f"env var; never ship secrets inside the "
+                                f"bundle itself."
+                            ),
+                            severity="high",
+                            ast_id="AST06",
+                            owasp_llm=["LLM06"],
+                            owasp_agentic=["T2"],
+                            cwe=["CWE-798"],  # Use of hard-coded credentials
+                        )
+                    )
+                    break  # one finding per line — don't double-fire
+    return findings
+
+
+# Convenience — used inside check_ast06 to skip the manifest's own MD
+# files (which AST01 already inspects).
+RECOGNIZED_SKILL_MD_NAMES = frozenset({
+    "skill.md", "agent.md", "agents.md",
+    "instruction.md", "instructions.md",
+    "prompt.md", "prompts.md", "claude.md",
+})
 
 # --- AST01 markers (re-uses D009 / D010 vocabulary applied to .md body) ---
 
@@ -523,6 +634,7 @@ ALL_RULES = [
     check_ast03_overprivileged,
     check_ast04_metadata,
     check_ast05_unsafe_deserialization,
+    check_ast06_credentials_in_bundle,
     check_ast07_update_drift,
 ]
 
@@ -728,6 +840,35 @@ RULE_DESCRIPTIONS = [
         "remediation": (
             "Add `content_hash: sha256:<digest>` over the canonical "
             "skill payload."
+        ),
+    },
+    {
+        "rule_id": "ast06-credential-in-bundle",
+        "agentshield_id": "AS-M-D-AST06-001",
+        "legacy_ids": ['AS-AST-006'],
+        "title": "AST06 — credential in skill bundle",
+        "category": "detect",
+        "severity": "high",
+        "description": (
+            "A non-code file in the skill bundle (YAML / JSON / .env / "
+            "config) contains a credential pattern. Bundle files ship "
+            "verbatim to every consumer — anyone with read access to "
+            "the registry, the cache, or a developer's clone reads the "
+            "secret. Semgrep's code-pattern rules miss this because "
+            "they target `.py` / `.java`, not bundled config."
+        ),
+        "frameworks": {
+            "ast": ["AST06"],
+            "owasp_llm": ["LLM06"],
+            "owasp_agentic": ["T2"],
+            "cwe": ["CWE-798"],
+        },
+        "remediation": (
+            "Move secrets to a secrets manager (AWS Secrets Manager, "
+            "HashiCorp Vault, Azure Key Vault) and reference them by "
+            "name from the manifest. If runtime injection isn't an "
+            "option, at minimum keep credentials in a separate file "
+            "outside the bundle and load them via environment variable."
         ),
     },
 ]
