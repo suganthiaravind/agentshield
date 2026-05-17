@@ -16,3 +16,5 @@
 !synthetic-vuln-python-app/**
 !demo-agent/
 !demo-agent/**
+!mock-agent/
+!mock-agent/**

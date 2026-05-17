@@ -163,6 +163,62 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # ---------- probe (Path B — runtime red-team) ----------
+    prb = subparsers.add_parser(
+        "probe",
+        help=(
+            "Run canned attack payloads against a configured target agent "
+            "(Path B — runtime red-team). Reads findings, sends payloads, "
+            "classifies responses, writes .agentshield/probe-results.json."
+        ),
+    )
+    prb.add_argument("path", help="Path to target repository (containing .agentshield/)")
+    prb.add_argument(
+        "--target",
+        required=True,
+        help="Base URL of the agent to probe, e.g. http://localhost:8765",
+    )
+    prb.add_argument(
+        "--endpoint",
+        default="/api/agent",
+        help="Endpoint path appended to --target (default: /api/agent)",
+    )
+    prb.add_argument(
+        "--profile",
+        choices=("safe", "destructive"),
+        default="safe",
+        help=(
+            "safe (default) skips destructive payloads. destructive "
+            "requires --confirm and may mutate target state."
+        ),
+    )
+    prb.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Required with --profile destructive. Acknowledges the risk.",
+    )
+    prb.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="Per-request timeout in seconds (default: 10).",
+    )
+    prb.add_argument(
+        "--max-probes",
+        type=int,
+        default=100,
+        help="Maximum number of probes per run (default: 100).",
+    )
+    prb.add_argument(
+        "--auth-env",
+        default="AGENTSHIELD_PROBE_AUTH",
+        help=(
+            "Env var name to read the Authorization header from "
+            "(default: AGENTSHIELD_PROBE_AUTH). Leave unset for "
+            "unauthenticated probes against local mocks."
+        ),
+    )
+
     return parser
 
 
@@ -630,6 +686,80 @@ def _print_merge_summary(result: MergeResult) -> None:
     )
 
 
+# ---------- probe ----------
+
+def cmd_probe(args: argparse.Namespace) -> int:
+    """Run the runtime red-team probe against the configured target.
+
+    Reads tier1+tier2 findings from <path>/.agentshield/, looks up canned
+    payloads per rule, sends each, classifies the response, and writes
+    <path>/.agentshield/probe-results.json. Returns 0 on success
+    (regardless of verdict spread), non-zero on hard config errors.
+    """
+    import os
+
+    from agentshield.probe.orchestrator import run_probes, write_report
+    from agentshield.probe.profiles import is_valid
+    from agentshield.probe.schema import ProbeConfig
+
+    if not is_valid(args.profile):
+        print(f"error: unknown profile '{args.profile}'", file=sys.stderr)
+        return 2
+    if args.profile == "destructive" and not args.confirm:
+        print(
+            "error: --profile destructive requires --confirm. "
+            "Destructive probes may mutate target state.",
+            file=sys.stderr,
+        )
+        return 2
+
+    target_root = Path(args.path).resolve()
+    if not (target_root / ".agentshield").is_dir():
+        print(
+            f"error: no .agentshield/ directory under {target_root}. "
+            "Run `agentshield scan` first.",
+            file=sys.stderr,
+        )
+        return 2
+
+    auth_header = os.environ.get(args.auth_env) if args.auth_env else None
+
+    config = ProbeConfig(
+        target=args.target.rstrip("/"),
+        endpoint_path=args.endpoint,
+        auth_header=auth_header,
+        profile=args.profile,
+        timeout_seconds=args.timeout,
+        max_probes=args.max_probes,
+    )
+
+    print(f"[probe] target:  {config.target}{config.endpoint_path}")
+    print(f"[probe] profile: {config.profile}")
+    if auth_header:
+        print(f"[probe] auth:    header from ${args.auth_env}")
+    print()
+
+    report = run_probes(target_root, config)
+    out_path = write_report(report, target_root)
+
+    landed = sum(1 for r in report.results if r.verdict == "landed")
+    blocked = sum(1 for r in report.results if r.verdict == "blocked")
+    inconclusive = sum(1 for r in report.results if r.verdict == "inconclusive")
+    errored = sum(1 for r in report.results if r.verdict == "error")
+
+    print(f"[probe] probed:       {len(report.results)} finding(s)")
+    print(f"[probe]   landed:     {landed}")
+    print(f"[probe]   blocked:    {blocked}")
+    print(f"[probe]   inconclusive: {inconclusive}")
+    if errored:
+        print(f"[probe]   errored:    {errored}")
+    print(f"[probe] skipped:      {len(report.skipped)} (no payload / quota)")
+    if report.errors:
+        print(f"[probe] errors:       {len(report.errors)}")
+    print(f"[probe] written:      {out_path}")
+    return 0
+
+
 # ---------- entry ----------
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -639,6 +769,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_scan(args)
     if args.command == "merge":
         return cmd_merge(args)
+    if args.command == "probe":
+        return cmd_probe(args)
     return 0
 
 

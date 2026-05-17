@@ -31,7 +31,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from agentshield.merger.attack_narratives import narrative_for
+from agentshield.merger.attack_narratives import (
+    ProbeLine,
+    ProbeRun,
+    narrative_for,
+)
 from agentshield.merger.schema import SchemaError, validate_tier2_findings
 
 
@@ -1321,6 +1325,15 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
 .attack-probe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .attack-probe-btn .probe-mode {
   font-weight: 500; opacity: 0.8; font-size: 10px;
+}
+/* Path B: LIVE mode badge — the probe data came from a real run, not the
+   canned narratives library. Bright green to clearly distinguish from
+   the (simulated) tag. */
+.attack-probe-btn .probe-mode-live {
+  font-weight: 700; opacity: 1;
+  background: #2f5a2f; color: white;
+  padding: 1px 6px; border-radius: 3px;
+  letter-spacing: 0.05em;
 }
 .probe-panel {
   margin-top: 14px;
@@ -2663,6 +2676,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # finding card shows `indirect-prompt-injection-via-document-loader`
     # instead of `AS-C-D-LLM01-002`. Built once per render.
     tier2_slugs = _tier2_display_slugs()
+    # Path B: when `.agentshield/probe-results.json` exists, real probe
+    # runs override the canned `scenario.probe` per finding. Index keyed
+    # on (agentshield_id, file, line). Empty when no real probe has run.
+    live_probe_index = _load_live_probe_index(r)
     sev_total: dict[str, int] = {}
     for bucket in grouped.values():
         for f in bucket:
@@ -3152,6 +3169,21 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 scenario = narrative_for(
                     f.get("agentshield_id") or f.get("rule_id") or ""
                 )
+                # Path B: if a real probe ran for this finding, swap its
+                # ProbeRun in for the canned one. Match key is
+                # (agentshield_id, file, line) — same shape the
+                # orchestrator emitted.
+                effective_probe = scenario.probe if scenario else None
+                is_live_probe = False
+                if scenario is not None and live_probe_index:
+                    _key = (
+                        f.get("agentshield_id") or f.get("rule_id") or "",
+                        f.get("file") or "",
+                        int(f.get("line", 0) or 0),
+                    )
+                    if _key in live_probe_index:
+                        effective_probe = live_probe_index[_key]
+                        is_live_probe = True
                 if scenario is not None:
                     open_attr = " open" if static else ""
                     parts.append(
@@ -3198,12 +3230,19 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             '<button type="button" class="attack-play-btn" '
                             'data-action="play">▶ Play simulation</button>'
                         )
-                        if scenario.probe is not None:
+                        if effective_probe is not None:
+                            mode_label = (
+                                'LIVE' if is_live_probe else '(simulated)'
+                            )
+                            mode_class = (
+                                'probe-mode probe-mode-live'
+                                if is_live_probe else 'probe-mode'
+                            )
                             parts.append(
-                                '<button type="button" class="attack-probe-btn" '
-                                'data-action="probe">🎯 Run probe '
-                                '<span class="probe-mode">(simulated)</span>'
-                                '</button>'
+                                f'<button type="button" class="attack-probe-btn" '
+                                f'data-action="probe">🎯 Run probe '
+                                f'<span class="{mode_class}">{mode_label}</span>'
+                                f'</button>'
                             )
                         parts.append('</div>')
                         parts.append('<div class="attack-sim-list">')
@@ -3272,11 +3311,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         # that streams a canned trace and ends with a
                         # verdict badge. Looks like watching a live
                         # probe; client-side script-only.
-                        if scenario.probe is not None:
-                            probe = scenario.probe
+                        if effective_probe is not None:
+                            probe = effective_probe
+                            live_attr = ' data-live="true"' if is_live_probe else ''
                             parts.append(
                                 '<div class="probe-panel" hidden '
-                                f'data-verdict="{_html_escape(probe.verdict)}">'
+                                f'data-verdict="{_html_escape(probe.verdict)}"'
+                                f'{live_attr}>'
                             )
                             parts.append('<div class="probe-meta">')
                             parts.append(
@@ -3627,6 +3668,66 @@ _FRAMEWORK_LABEL = {
     "cwe": "CWE",
     "ast": "AST10",
 }
+
+
+def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
+    """Load `.agentshield/probe-results.json` if present and key it by
+    (agentshield_id, finding_file, finding_line) so the renderer can swap
+    real probe data in place of the curated `scenario.probe`.
+
+    Returns an empty dict when the file doesn't exist or fails to parse —
+    the canned `ProbeRun` from attack_narratives.py then renders as-is.
+    """
+    if r.tier1_path is None:
+        return {}
+    probe_path = r.tier1_path.parent / "probe-results.json"
+    if not probe_path.exists():
+        return {}
+    try:
+        raw = json.loads(probe_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    index: dict[tuple[str, str, int], ProbeRun] = {}
+    for result in raw.get("results", []):
+        asid = result.get("agentshield_id") or ""
+        file_ = result.get("finding_file") or ""
+        try:
+            line_ = int(result.get("finding_line") or 0)
+        except (TypeError, ValueError):
+            line_ = 0
+        if not asid:
+            continue
+        # The live trace uses ISO timestamps + dict-shaped attempts; the
+        # renderer expects HH:MM:SS + ProbeLine. Convert here.
+        trace = tuple(
+            ProbeLine(
+                timestamp=_iso_to_hms(att.get("timestamp", "")),
+                level=att.get("level", "info"),
+                message=att.get("message", ""),
+            )
+            for att in result.get("attempts", [])
+        )
+        ttc_ms = result.get("time_to_compromise_ms")
+        ttc_str = ""
+        if isinstance(ttc_ms, int) and ttc_ms >= 0:
+            ttc_str = f"{ttc_ms / 1000:.1f}s" if ttc_ms >= 1000 else f"{ttc_ms}ms"
+        index[(asid, file_, line_)] = ProbeRun(
+            target=result.get("target", ""),
+            profile=result.get("profile", ""),
+            trace=trace,
+            verdict=result.get("verdict", "inconclusive"),
+            time_to_compromise=ttc_str,
+            summary=result.get("summary", ""),
+        )
+    return index
+
+
+def _iso_to_hms(iso: str) -> str:
+    """Best-effort 'YYYY-MM-DDTHH:MM:SSZ' → 'HH:MM:SS'."""
+    if "T" in iso and len(iso) >= 19:
+        return iso[11:19]
+    return iso
 
 
 def _findings_per_file(r: Any) -> dict[str, int]:
