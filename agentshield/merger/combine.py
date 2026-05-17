@@ -3664,7 +3664,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         ),
         "cwe": (
             "CWE has 1000+ weaknesses; the universe below is a curated "
-            "subset most relevant to LLM/agent app code."
+            "subset most relevant to LLM/agent app code. Generic AppSec "
+            "items (path traversal, TLS validation, credential transit) "
+            "are out of scope by design — they belong to a general-"
+            "purpose static scanner (semgrep-pro, CodeQL, Snyk)."
         ),
     }
 

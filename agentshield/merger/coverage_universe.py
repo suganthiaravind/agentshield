@@ -125,13 +125,18 @@ MITRE_ATLAS_UNIVERSE: list[str] = [
 ]
 
 # CWE — curated subset most relevant to LLM/agent app code surfaces.
-# Full CWE is 1000+ weaknesses; we list ones that show up commonly in
-# the kinds of code AgentShield scans (request handlers, tool wrappers,
-# secret handling, config, logging). MUST be a superset of every CWE
-# the bundled rule pack references — `test_universe_contains_all_scanner_ids`
-# enforces this.
+# Full CWE is 1000+ weaknesses; we list the ones that show up in the
+# kinds of code AgentShield actually targets (request handlers, tool
+# wrappers, secret handling, agent config, agent logging). The list
+# is deliberately tight: generic AppSec CWEs (CWE-22 path traversal,
+# CWE-295 cert validation, CWE-522 credential transit, etc.) are
+# OUT of scope by design — a general-purpose static scanner
+# (semgrep-pro, CodeQL, Snyk) covers those better than we would. The
+# Coverage tab's CWE matrix should read as "what AgentShield can speak
+# to in the agent's threat model," not "everything in CWE."
+# MUST be a superset of every CWE the bundled rule pack references —
+# `test_universe_contains_all_scanner_ids` enforces this.
 CWE_UNIVERSE: list[str] = [
-    "CWE-22",   # Path Traversal
     "CWE-78",   # OS Command Injection
     "CWE-79",   # XSS
     "CWE-89",   # SQL Injection
@@ -139,7 +144,6 @@ CWE_UNIVERSE: list[str] = [
     "CWE-200",  # Information Exposure
     "CWE-269",  # Improper Privilege Management
     "CWE-287",  # Improper Authentication
-    "CWE-295",  # Improper Certificate Validation
     "CWE-319",  # Cleartext Transmission
     "CWE-322",  # Key Exchange Without Entity Authentication
     "CWE-345",  # Insufficient Verification of Authenticity
@@ -147,12 +151,12 @@ CWE_UNIVERSE: list[str] = [
     "CWE-489",  # Active Debug Code
     "CWE-494",  # Download of Code Without Integrity Check
     "CWE-502",  # Deserialization of Untrusted Data
-    "CWE-522",  # Insufficiently Protected Credentials
     "CWE-532",  # Insertion of Sensitive Information into Log File
     "CWE-732",  # Incorrect Permission Assignment for Critical Resource
+    "CWE-778",  # Insufficient Logging
     "CWE-798",  # Use of Hard-coded Credentials
     "CWE-829",  # Inclusion of Functionality from Untrusted Control Sphere
-    "CWE-918",  # SSRF
+    "CWE-918",  # SSRF (agent-side: LLM-derived URL into unrestricted egress)
 ]
 
 
@@ -231,21 +235,11 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
         "monitoring."
     ),
 
-    # CWE — gaps are generic-web weaknesses where a general-purpose
-    # scanner (semgrep-pro / CodeQL / Snyk) is the better tool.
-    ("cwe", "CWE-22"): (
-        "Path Traversal — generic web-app weakness; AgentShield focuses on "
-        "LLM/agent-specific patterns. Use a general-purpose static scanner "
-        "for breadth."
-    ),
-    ("cwe", "CWE-295"): (
-        "TLS / cert validation bypass — generic, not LLM-specific. Belongs "
-        "to a general-purpose scanner."
-    ),
-    ("cwe", "CWE-522"): (
-        "Insufficiently Protected Credentials — overlaps CWE-798 hardcoded "
-        "creds (covered). CWE-522's in-flight protection angle is generic."
-    ),
+    # CWE — generic AppSec items (CWE-22 path traversal, CWE-295 cert
+    # validation, CWE-522 credential transit) are no longer in the
+    # CWE_UNIVERSE list above — they're out of scope by design.
+    # Anything still listed below is genuinely gapped within
+    # AgentShield's domain and explains why.
     # CWE-918 now mapped onto AST03 (manifest unrestricted network) +
     # D-LLM01-005 (agent comm poisoning). LLM-derived URLs reaching an
     # unrestricted egress channel is the agent-side SSRF surface;
