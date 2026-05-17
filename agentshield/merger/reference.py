@@ -42,6 +42,73 @@ class RuleReference:
     remediation: str | None = None
     section: str | None = None  # Tier 2 sub-section ("§1 OWASP LLM Top 10")
     legacy_ids: list[str] = field(default_factory=list)  # F.27 — pre-rename IDs
+    sdks_covered: list[str] = field(default_factory=list)  # SDKs whose
+        # call-site patterns this rule's `patterns` block matches. Populated
+        # from a keyword scan of the rule's YAML text; surfaced as a
+        # "Covers:" footnote on the Reference card. Tier 1 (Semgrep) only.
+
+
+# Keywords to look for in rule YAMLs (patterns + comments), mapped to the
+# display label. Multiple keywords can map to the same label so we
+# tolerate spelling / dotting variants without duplicating the display.
+_SDK_KEYWORDS: dict[str, str] = {
+    # Python LLM provider SDKs
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "cohere": "Cohere",
+    "mistral": "Mistral",
+    "together": "Together",
+    "groq": "Groq",
+    "huggingface": "HuggingFace",
+    "google.generativeai": "Google Generative AI",
+    "google generative ai": "Google Generative AI",
+    "vertexai": "Vertex AI",
+    "vertex ai": "Vertex AI",
+    # NB: don't add bare "boto3" — it's a general AWS SDK keyword and
+    # would false-positive on rules that use boto3 for SNS/S3/etc. The
+    # bedrock-specific patterns already contain "bedrock" itself.
+    "bedrock": "AWS Bedrock",
+    # Agent / orchestration frameworks
+    "langchain4j": "langchain4j",
+    "langchain": "LangChain",
+    "llama_index": "LlamaIndex",
+    "llama-index": "LlamaIndex",
+    "llamaindex": "LlamaIndex",
+    "google.adk": "Google ADK",
+    "google adk": "Google ADK",
+    # Java-side
+    "spring ai": "Spring AI",
+    "spring-ai": "Spring AI",
+    "spring.ai": "Spring AI",
+    "org.springframework.ai": "Spring AI",
+    "azure openai": "Azure OpenAI",
+    "azure-openai": "Azure OpenAI",
+    # Internal SDK wrappers
+    "smartsdk": "SMARTSDK",
+    "radsdk": "RADSDK",
+}
+
+
+def _detect_sdks(raw_yaml_text: str) -> list[str]:
+    """Return the unique display labels for SDKs whose keywords appear in
+    `raw_yaml_text`. Order is the iteration order of `_SDK_KEYWORDS` so
+    the rendered list is stable across runs.
+
+    Note: the scan is intentionally coarse. A rule that pattern-matches
+    `openai.OpenAI(api_key="...")` and mentions OpenAI in a comment both
+    count as covering OpenAI — that's fine, we only want the union. False
+    positives are possible (a comment that says "unlike OpenAI..." would
+    falsely tag the rule) but in practice the rule YAMLs are tight enough
+    that the union is accurate.
+    """
+    text = raw_yaml_text.lower()
+    seen: set[str] = set()
+    out: list[str] = []
+    for keyword, label in _SDK_KEYWORDS.items():
+        if keyword in text and label not in seen:
+            seen.add(label)
+            out.append(label)
+    return out
 
 
 # ---------- Tier 1 (Semgrep) ----------
@@ -60,9 +127,13 @@ def load_tier1_references(rules_path: Path) -> list[RuleReference]:
     refs: list[RuleReference] = []
     for yaml_path in sorted(rules_path.rglob("*.yaml")):
         try:
-            data = yaml.safe_load(yaml_path.read_text()) or {}
+            raw_text = yaml_path.read_text()
+            data = yaml.safe_load(raw_text) or {}
         except yaml.YAMLError:
             continue
+        # Detect SDKs from the YAML text once per file (rules in the same
+        # file share the same patterns and comments).
+        sdks = _detect_sdks(raw_text)
         for rule in data.get("rules") or []:
             metadata = rule.get("metadata") or {}
             category = metadata.get("category")
@@ -103,6 +174,7 @@ def load_tier1_references(rules_path: Path) -> list[RuleReference]:
                     remediation=_squash_whitespace(metadata.get("remediation") or "")
                     or None,
                     legacy_ids=list(metadata.get("legacy_ids") or []),
+                    sdks_covered=sdks,
                 )
             )
     refs.sort(key=lambda r: (r.agentshield_id, r.languages))

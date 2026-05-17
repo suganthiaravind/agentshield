@@ -2227,6 +2227,16 @@ footer {
   margin: 4px 0 6px;
 }
 .ref-desc { font-size: 12px; color: var(--text); line-height: 1.5; margin-bottom: 8px; }
+/* Path B+: SDK coverage footnote — "Covers: OpenAI, Anthropic, …" */
+.ref-sdks {
+  font-size: 11px; color: var(--text-muted);
+  margin-bottom: 8px; line-height: 1.5;
+}
+.ref-sdks-label {
+  font-weight: 700; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 10px; margin-right: 4px;
+}
 .ref-fw { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .ref-skip { margin-bottom: 8px; }
 .ref-skip summary {
@@ -4352,6 +4362,16 @@ def _render_reference_card(parts: list[str], ref: Any) -> None:
     parts.append("</div>")
     parts.append(f'<div class="ref-title">{_html_escape(ref.title)}</div>')
     parts.append(f'<div class="ref-desc">{_html_escape(ref.description)}</div>')
+    # Path B+: list the SDKs whose call-site patterns this rule covers,
+    # so readers don't have to wonder whether SMARTSDK / Spring AI /
+    # LangChain etc. are in scope. Auto-detected from the rule's YAML
+    # text; empty list for rules without SDK-specific patterns
+    # (manifest rules, generic checks).
+    if getattr(ref, "sdks_covered", None):
+        parts.append(
+            f'<div class="ref-sdks"><span class="ref-sdks-label">Covers:</span> '
+            f'{_html_escape(", ".join(ref.sdks_covered))}</div>'
+        )
     if ref.frameworks:
         parts.append('<div class="ref-fw">')
         for k_field, items in ref.frameworks.items():
