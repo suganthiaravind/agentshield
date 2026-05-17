@@ -77,6 +77,13 @@ class ProbeResult:
     the final classification; `attempts` is the trace the report
     surfaces verbatim. `time_to_compromise_ms` is only meaningful when
     verdict == "landed".
+
+    `verdict_source` is one of "heuristic" | "llm" | "harness". When
+    "llm", `verdict_reasoning` carries the LLM judge's plain-text
+    explanation and `verdict_confidence` is 0..1. When "harness" the
+    response was synthesised rather than fetched from the target — the
+    verdict still applies, but the renderer flags it as harness-derived
+    so reviewers can weight it accordingly.
     """
 
     rule_id: str
@@ -90,6 +97,10 @@ class ProbeResult:
     attempts: tuple[ProbeAttempt, ...]
     time_to_compromise_ms: int | None = None
     summary: str = ""
+    verdict_source: str = "heuristic"
+    verdict_reasoning: str = ""
+    verdict_confidence: float | None = None
+    harness_used: str = ""  # "" | "mock"
 
 
 @dataclass(frozen=True)
@@ -114,6 +125,11 @@ class ProbeConfig:
     timeout_seconds: float = 10.0
     max_probes: int = 100
     inter_probe_delay_ms: int = 200
+    harness: str = ""  # "" | "mock" — when set, destructive payloads
+                       # are routed through the harness instead of the
+                       # real target.
+    classifier: str = "heuristic"  # "heuristic" | "llm" — both run; the
+                                   # named one wins the headline verdict.
 
 
 @dataclass
@@ -152,6 +168,10 @@ def _result_to_dict(r: ProbeResult) -> dict:
         "verdict": r.verdict,
         "time_to_compromise_ms": r.time_to_compromise_ms,
         "summary": r.summary,
+        "verdict_source": r.verdict_source,
+        "verdict_reasoning": r.verdict_reasoning,
+        "verdict_confidence": r.verdict_confidence,
+        "harness_used": r.harness_used,
         "attempts": [
             {
                 "timestamp": a.timestamp,

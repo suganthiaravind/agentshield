@@ -1433,6 +1433,38 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Path B+: LLM judge reasoning + harness marker, only rendered when
+   the verdict came from a real probe run that used one or both. */
+.probe-llm-reasoning {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #f0f4f8;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  text-align: left;
+}
+.probe-llm-label {
+  font-size: 11px; font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.probe-llm-text {
+  font-size: 12px; color: var(--text); line-height: 1.55;
+}
+.probe-harness-note {
+  margin-top: 10px;
+  padding: 8px 14px;
+  background: #fbf3dc;
+  border-left: 3px solid var(--defend);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px; color: #5a3f00;
+  text-align: left;
+}
+.probe-harness-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+}
 
 .coverage-grid {
   display: grid;
@@ -3367,6 +3399,35 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                                     f'<div class="probe-verdict-summary">'
                                     f'{_html_escape(probe.summary)}</div>'
                                 )
+                            # Path B+: surface the LLM judge's reasoning
+                            # + confidence when the verdict came from
+                            # the LLM classifier; surface the harness
+                            # marker when the response was synthesised
+                            # rather than fetched.
+                            if probe.verdict_source == "llm" and probe.verdict_reasoning:
+                                conf_str = ""
+                                if probe.verdict_confidence is not None:
+                                    conf_str = (
+                                        f' &middot; confidence '
+                                        f'<strong>{probe.verdict_confidence:.2f}</strong>'
+                                    )
+                                parts.append(
+                                    f'<div class="probe-llm-reasoning">'
+                                    f'<div class="probe-llm-label">'
+                                    f'🤖 LLM judge{conf_str}</div>'
+                                    f'<div class="probe-llm-text">'
+                                    f'{_html_escape(probe.verdict_reasoning)}'
+                                    f'</div></div>'
+                                )
+                            if probe.harness_used:
+                                parts.append(
+                                    f'<div class="probe-harness-note">'
+                                    f'🛡️ Response synthesised by '
+                                    f'<code>{_html_escape(probe.harness_used)}</code> '
+                                    f'harness — no HTTP traffic left the '
+                                    f'process for this payload.'
+                                    f'</div>'
+                                )
                             parts.append('</div>')  # /probe-verdict
                             parts.append('</div>')  # /probe-panel
 
@@ -3712,6 +3773,13 @@ def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
         ttc_str = ""
         if isinstance(ttc_ms, int) and ttc_ms >= 0:
             ttc_str = f"{ttc_ms / 1000:.1f}s" if ttc_ms >= 1000 else f"{ttc_ms}ms"
+        confidence_raw = result.get("verdict_confidence")
+        try:
+            confidence: float | None = (
+                float(confidence_raw) if confidence_raw is not None else None
+            )
+        except (TypeError, ValueError):
+            confidence = None
         index[(asid, file_, line_)] = ProbeRun(
             target=result.get("target", ""),
             profile=result.get("profile", ""),
@@ -3719,6 +3787,10 @@ def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
             verdict=result.get("verdict", "inconclusive"),
             time_to_compromise=ttc_str,
             summary=result.get("summary", ""),
+            verdict_source=result.get("verdict_source", "heuristic"),
+            verdict_reasoning=result.get("verdict_reasoning", "") or "",
+            verdict_confidence=confidence,
+            harness_used=result.get("harness_used", "") or "",
         )
     return index
 

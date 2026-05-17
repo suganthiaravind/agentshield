@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentshield.probe.classifier import classify, summarize
+from agentshield.probe.harness import MockHarness
+from agentshield.probe.llm_classifier import classify as classify_with_llm
 from agentshield.probe.payloads import payloads_for
 from agentshield.probe.runner import send_payload
 from agentshield.probe.schema import (
@@ -50,7 +52,13 @@ def run_probes(
             continue
 
         rule_id = finding["agentshield_id"]
-        payloads = payloads_for(rule_id, profile=config.profile)
+        # When the harness is active we deliberately include destructive
+        # payloads — they'll be intercepted before any HTTP traffic
+        # leaves the process, so the safe-profile guard isn't needed.
+        effective_profile = (
+            "destructive" if config.harness == "mock" else config.profile
+        )
+        payloads = payloads_for(rule_id, profile=effective_profile)
         if not payloads:
             skipped.append({
                 "reason": "no_payload_for_rule",
@@ -114,15 +122,34 @@ def _probe_with_variants(
     flat trace, with each variant prefixed by a "Variant N/M" info line.
     The final verdict is the most-successful outcome encountered:
     landed > blocked > inconclusive > error.
+
+    When `config.harness == 'mock'` AND a payload is `destructive=True`,
+    the request is intercepted by the harness and a synthetic response
+    is returned — no HTTP traffic leaves the process. When
+    `config.classifier == 'llm'`, both the heuristic and the LLM
+    classifier run; the LLM verdict wins the headline and its reasoning
+    is recorded for the report.
     """
     target_url = config.target.rstrip("/") + config.endpoint_path
     attempts: list[ProbeAttempt] = []
+    harness = MockHarness() if config.harness == "mock" else None
 
     attempts.append(_attempt(
         "info",
         f"agentshield probe --rule {finding['agentshield_id']} --target {config.target}",
     ))
     attempts.append(_attempt("info", f"Probe profile: {config.profile}"))
+    if harness is not None:
+        attempts.append(_attempt(
+            "info",
+            f"Harness active: {harness.name} — destructive payloads "
+            f"intercepted, no traffic leaves the process for those.",
+        ))
+    if config.classifier == "llm":
+        attempts.append(_attempt(
+            "info",
+            "Classifier: LLM-assisted (copilot-mock backend) + heuristic",
+        ))
     attempts.append(_attempt(
         "info",
         f"Loaded {len(payloads)} payload variant(s) for {finding['agentshield_id']}",
@@ -133,25 +160,43 @@ def _probe_with_variants(
     best_payload = payloads[0]
     final_summary = ""
     landed_elapsed_ms: int | None = None
+    best_llm_reasoning = ""
+    best_llm_confidence: float | None = None
+    best_source = "heuristic"
+    best_harness_used = ""
 
     for i, payload in enumerate(payloads, start=1):
         attempts.append(_attempt(
             "info",
-            f"Variant {i}/{len(payloads)}: {payload.name}",
-        ))
-        attempts.append(_attempt(
-            "request",
-            f'POST {config.endpoint_path} {{ "message": '
-            f'"{_truncate(payload.template, 80)}" }}',
+            f"Variant {i}/{len(payloads)}: {payload.name}"
+            + (" [destructive]" if payload.destructive else ""),
         ))
 
-        response = send_payload(
-            target_url,
-            payload.template,
-            timeout_seconds=config.timeout_seconds,
-            auth_header=config.auth_header,
-            extra_headers=config.extra_headers,
-        )
+        # Harness routing — destructive payloads never leave the runner
+        # when the harness is active. Non-destructive payloads always
+        # use the real target.
+        used_harness = ""
+        if harness is not None and payload.destructive and harness.can_intercept(payload):
+            attempts.append(_attempt(
+                "info",
+                f"→ intercepted by {harness.name} harness "
+                f"(synthetic response, no HTTP egress)",
+            ))
+            response = harness.intercept(payload)
+            used_harness = harness.name
+        else:
+            attempts.append(_attempt(
+                "request",
+                f'POST {config.endpoint_path} {{ "message": '
+                f'"{_truncate(payload.template, 80)}" }}',
+            ))
+            response = send_payload(
+                target_url,
+                payload.template,
+                timeout_seconds=config.timeout_seconds,
+                auth_header=config.auth_header,
+                extra_headers=config.extra_headers,
+            )
 
         if response.error is not None or response.status == 0:
             attempts.append(_attempt(
@@ -161,30 +206,56 @@ def _probe_with_variants(
         else:
             attempts.append(_attempt(
                 "response",
-                f"HTTP {response.status}  ({response.elapsed_ms}ms)",
+                f"HTTP {response.status}  ({response.elapsed_ms}ms)"
+                + (f"  [{used_harness}]" if used_harness else ""),
             ))
             attempts.append(_attempt(
                 "response",
                 _truncate(response.body, 200),
             ))
 
-        verdict = classify(response, payload)
+        heuristic_verdict = classify(response, payload)
+        verdict = heuristic_verdict
+        source = "harness" if used_harness else "heuristic"
+        llm_reasoning = ""
+        llm_confidence: float | None = None
+
+        if config.classifier == "llm":
+            llm = classify_with_llm(response, payload, finding)
+            attempts.append(_attempt(
+                "info",
+                f"LLM classifier: {llm.verdict}  "
+                f"(confidence {llm.confidence:.2f}, backend {llm.backend})",
+            ))
+            attempts.append(_attempt(
+                "info",
+                f"LLM reasoning: {_truncate(llm.reasoning, 240)}",
+            ))
+            verdict = llm.verdict  # LLM verdict wins the headline
+            llm_reasoning = llm.reasoning
+            llm_confidence = llm.confidence
+            source = "llm"
+
         attempts.append(_attempt(
             "info",
-            f"Variant {i} verdict: {verdict}",
+            f"Variant {i} verdict: {verdict}"
+            + (f"  [{source}]" if source != "heuristic" else ""),
         ))
 
-        # Update "best" outcome if this variant is more successful.
         if _verdict_rank(verdict) > _verdict_rank(best_verdict):
             best_verdict = verdict
             best_response = response
             best_payload = payload
+            best_llm_reasoning = llm_reasoning
+            best_llm_confidence = llm_confidence
+            best_source = source
+            best_harness_used = used_harness
             final_summary = summarize(verdict, payload, response)
             if verdict == "landed":
                 landed_elapsed_ms = response.elapsed_ms
 
         if verdict == "landed":
-            break  # No need to try more variants once one has landed.
+            break
 
     verdict_label = {
         "landed": "Attack landed — at least one variant succeeded",
@@ -209,6 +280,10 @@ def _probe_with_variants(
         attempts=tuple(attempts),
         time_to_compromise_ms=landed_elapsed_ms,
         summary=final_summary,
+        verdict_source=best_source,
+        verdict_reasoning=best_llm_reasoning,
+        verdict_confidence=best_llm_confidence,
+        harness_used=best_harness_used,
     )
 
 

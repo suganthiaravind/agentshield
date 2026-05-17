@@ -76,6 +76,13 @@ class ProbeRun:
     Target / profile / time_to_compromise are metadata shown at the top
     of the panel (and don't change between runs because the trace is
     canned client-side).
+
+    Path B extension: when the renderer substitutes a live probe result
+    in place of the canned ProbeRun, it can additionally populate
+    `verdict_source` (heuristic / llm / harness), `verdict_reasoning`
+    (LLM judge's plain-text explanation), `verdict_confidence` (0..1),
+    and `harness_used` (mock / ""). The canned narratives leave these
+    at their defaults so the existing report keeps rendering unchanged.
     """
 
     target: str  # e.g. "staging.customer-support.internal"
@@ -84,6 +91,10 @@ class ProbeRun:
     verdict: str  # 'landed' | 'blocked' | 'inconclusive'
     time_to_compromise: str = ""  # e.g. "3.8s" — only shown when landed
     summary: str = ""  # one-line verdict explanation
+    verdict_source: str = "heuristic"
+    verdict_reasoning: str = ""
+    verdict_confidence: float | None = None
+    harness_used: str = ""
 
 
 @dataclass(frozen=True)

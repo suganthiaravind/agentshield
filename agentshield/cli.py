@@ -230,6 +230,31 @@ def build_parser() -> argparse.ArgumentParser:
             "containing '=' are split on the first '='."
         ),
     )
+    prb.add_argument(
+        "--harness",
+        choices=("none", "mock"),
+        default="none",
+        help=(
+            "Safe-mode interception harness. 'mock' (default off) routes "
+            "destructive payloads through an in-process harness that "
+            "synthesises responses — no HTTP traffic leaves the process "
+            "for those. Use against staging / prod when you want to "
+            "probe destructive surfaces without risking state."
+        ),
+    )
+    prb.add_argument(
+        "--classifier",
+        choices=("heuristic", "llm"),
+        default="heuristic",
+        help=(
+            "Verdict classifier. 'heuristic' (default) uses substring + "
+            "JSON-path matching. 'llm' invokes a Copilot-shaped LLM "
+            "judge (mock backend today; designed for boto3-Bedrock "
+            "swap) that returns verdict + plain-text reasoning + "
+            "confidence. The LLM verdict wins the headline; the "
+            "heuristic verdict is still recorded for reference."
+        ),
+    )
 
     return parser
 
@@ -750,6 +775,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
             return 2
         extra_headers.append((name.strip(), value))
 
+    harness = "" if args.harness == "none" else args.harness
     config = ProbeConfig(
         target=args.target.rstrip("/"),
         endpoint_path=args.endpoint,
@@ -758,15 +784,20 @@ def cmd_probe(args: argparse.Namespace) -> int:
         profile=args.profile,
         timeout_seconds=args.timeout,
         max_probes=args.max_probes,
+        harness=harness,
+        classifier=args.classifier,
     )
 
-    print(f"[probe] target:  {config.target}{config.endpoint_path}")
-    print(f"[probe] profile: {config.profile}")
+    print(f"[probe] target:    {config.target}{config.endpoint_path}")
+    print(f"[probe] profile:   {config.profile}")
+    if harness:
+        print(f"[probe] harness:   {harness} — destructive payloads intercepted")
+    print(f"[probe] classifier: {config.classifier}")
     if auth_header:
-        print(f"[probe] auth:    Authorization header from ${args.auth_env}")
+        print(f"[probe] auth:      Authorization header from ${args.auth_env}")
     if extra_headers:
         names = ", ".join(name for name, _ in extra_headers)
-        print(f"[probe] headers: {names}")
+        print(f"[probe] headers:   {names}")
     print()
 
     report = run_probes(target_root, config)
