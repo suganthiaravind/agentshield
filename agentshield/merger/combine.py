@@ -886,6 +886,10 @@ h3 { font-size: 15px; }
 .pill.tp       { background: #d6e7d6; color: #2f5a2f; }
 .pill.cd       { background: #fbf3dc; color: var(--defend); }
 .pill.fp       { background: var(--high-bg); color: var(--high); }
+/* v4: 0-count severity pills — visually dimmed so a reader can tell
+   "low: 0" apart from active pills without losing the signal that
+   that severity bucket exists. */
+.pill.pill-zero { opacity: 0.45; }
 
 .metrics-row {
   /* F.33: 3 input cards (1fr each) + a thin separator + 1 hero card
@@ -2703,12 +2707,18 @@ def _render_severity_bar(sev_total: dict[str, int], parts: list[str]) -> None:
     parts.append('<div class="section">')
     parts.append('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">')
     parts.append('<span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Severity distribution</span>')
+    # Always emit a pill for every severity bucket — readers expect to
+    # see all five (critical / high / medium / low / info) and a
+    # zero count is informative ("low: 0" reads as "we have a story
+    # about lows; there just aren't any this run"). The 0-count pills
+    # render slightly dimmed via the .pill-zero modifier.
     sev_text = " &middot; ".join(
-        f'<span class="pill {sev}" '
+        f'<span class="pill {sev}'
+        f'{" pill-zero" if not sev_total.get(sev, 0) else ""}" '
         f'data-tip="{_html_escape(_SEVERITY_MEANINGS[sev])}" '
         f'aria-label="{_html_escape(_SEVERITY_MEANINGS[sev])}">'
         f'{sev_total.get(sev, 0)} {sev}</span>'
-        for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
+        for sev in ("critical", "high", "medium", "low", "info")
     )
     # v4: prefix the breakdown with the total so the reader doesn't have
     # to add four numbers in their head.
