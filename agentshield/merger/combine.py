@@ -1116,6 +1116,28 @@ h3 { font-size: 15px; }
   font-size: 12px;
   line-height: 1.5;
 }
+/* Path B+: inline probe-state badge inside the <summary>, visible
+   while the attack-scenario is collapsed. Three variants mirror the
+   three disclaimer states. */
+.finding-attack-scenario .attack-probe-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin: 0 4px;
+  vertical-align: 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.finding-attack-scenario .attack-probe-badge-live {
+  background: #2f5a2f; color: white;
+}
+.finding-attack-scenario .attack-probe-badge-simulated {
+  background: #ebe7d8; color: #5a4413;
+}
+.finding-attack-scenario .attack-probe-badge-static {
+  background: #c5d4dd; color: #2c4250;
+}
 /* v4: attack walkthrough — ordered steps with ▶ Play animation. */
 .finding-attack-scenario .attack-steps-section {
   padding-top: 10px;
@@ -3244,10 +3266,30 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(
                         f'<details class="finding-attack-scenario"{open_attr}>'
                     )
+                    # Path B+: visible-while-collapsed probe-state badge,
+                    # so the reader sees at a glance whether expanding will
+                    # reveal a LIVE probe, a Simulated walkthrough, or a
+                    # Static-only finding.
+                    if is_live_probe and effective_probe is not None:
+                        badge_html = (
+                            '<span class="attack-probe-badge '
+                            'attack-probe-badge-live">[ LIVE probe ]</span>'
+                        )
+                    elif effective_probe is not None:
+                        badge_html = (
+                            '<span class="attack-probe-badge '
+                            'attack-probe-badge-simulated">'
+                            '[ Simulated probe ]</span>'
+                        )
+                    else:
+                        badge_html = (
+                            '<span class="attack-probe-badge '
+                            'attack-probe-badge-static">[ Static only ]</span>'
+                        )
                     parts.append(
                         f'<summary><span class="attack-icon" aria-hidden="true">'
-                        f'&#9888;</span> Attack scenario &mdash; '
-                        f'{_html_escape(scenario.title)}</summary>'
+                        f'&#9888;</span> Attack scenario {badge_html} '
+                        f'&mdash; {_html_escape(scenario.title)}</summary>'
                     )
                     parts.append('<div class="attack-body">')
                     parts.append(
