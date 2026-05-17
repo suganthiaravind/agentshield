@@ -60,14 +60,16 @@ def run_probes(
             })
             continue
 
-        # MVP: pick the first payload per rule. Future: iterate variants
-        # until one lands or all exhausted.
-        payload = payloads[0]
+        # Multi-variant: iterate payloads in order. Stop on first
+        # "landed" (the rest are redundant); continue past "blocked" /
+        # "inconclusive" / "error" since a later variant may succeed
+        # where an earlier one was caught. All attempts are merged into
+        # a single ProbeResult trace.
         try:
-            result = _probe_one(finding, payload, config)
+            result = _probe_with_variants(finding, payloads, config)
             results.append(result)
             probe_count += 1
-        except Exception as e:  # noqa: BLE001 — catch-all so one finding doesn't kill the run
+        except Exception as e:  # noqa: BLE001 — one finding shouldn't kill the run
             errors.append({
                 "agentshield_id": rule_id,
                 "file": finding["file"],
@@ -101,7 +103,18 @@ def write_report(report: ProbeRunReport, target_root: Path) -> Path:
 # ----- internals -----
 
 
-def _probe_one(finding: dict, payload, config: ProbeConfig) -> ProbeResult:
+def _probe_with_variants(
+    finding: dict,
+    payloads: tuple,
+    config: ProbeConfig,
+) -> ProbeResult:
+    """Run payload variants in order, stop on first 'landed'.
+
+    The returned ProbeResult carries every variant's attempts in a single
+    flat trace, with each variant prefixed by a "Variant N/M" info line.
+    The final verdict is the most-successful outcome encountered:
+    landed > blocked > inconclusive > error.
+    """
     target_url = config.target.rstrip("/") + config.endpoint_path
     attempts: list[ProbeAttempt] = []
 
@@ -109,67 +122,102 @@ def _probe_one(finding: dict, payload, config: ProbeConfig) -> ProbeResult:
         "info",
         f"agentshield probe --rule {finding['agentshield_id']} --target {config.target}",
     ))
+    attempts.append(_attempt("info", f"Probe profile: {config.profile}"))
     attempts.append(_attempt(
         "info",
-        f"Probe profile: {config.profile}",
-    ))
-    attempts.append(_attempt(
-        "info",
-        f"Payload: {payload.name}",
+        f"Loaded {len(payloads)} payload variant(s) for {finding['agentshield_id']}",
     ))
 
-    request_summary = (
-        f'POST {config.endpoint_path} {{ "message": "'
-        f'{_truncate(payload.template, 80)}" }}'
-    )
-    attempts.append(_attempt("request", request_summary))
+    best_verdict: str = "inconclusive"
+    best_response = None
+    best_payload = payloads[0]
+    final_summary = ""
+    landed_elapsed_ms: int | None = None
 
-    response = send_payload(
-        target_url,
-        payload.template,
-        timeout_seconds=config.timeout_seconds,
-        auth_header=config.auth_header,
-    )
-
-    if response.error is not None or response.status == 0:
+    for i, payload in enumerate(payloads, start=1):
         attempts.append(_attempt(
-            "error",
-            f"Transport error: {response.error or 'no response'}",
-        ))
-    else:
-        attempts.append(_attempt(
-            "response",
-            f"HTTP {response.status}  ({response.elapsed_ms}ms)",
+            "info",
+            f"Variant {i}/{len(payloads)}: {payload.name}",
         ))
         attempts.append(_attempt(
-            "response",
-            _truncate(response.body, 200),
+            "request",
+            f'POST {config.endpoint_path} {{ "message": '
+            f'"{_truncate(payload.template, 80)}" }}',
         ))
 
-    verdict = classify(response, payload)
-    summary = summarize(verdict, payload, response)
+        response = send_payload(
+            target_url,
+            payload.template,
+            timeout_seconds=config.timeout_seconds,
+            auth_header=config.auth_header,
+            extra_headers=config.extra_headers,
+        )
+
+        if response.error is not None or response.status == 0:
+            attempts.append(_attempt(
+                "error",
+                f"Transport error: {response.error or 'no response'}",
+            ))
+        else:
+            attempts.append(_attempt(
+                "response",
+                f"HTTP {response.status}  ({response.elapsed_ms}ms)",
+            ))
+            attempts.append(_attempt(
+                "response",
+                _truncate(response.body, 200),
+            ))
+
+        verdict = classify(response, payload)
+        attempts.append(_attempt(
+            "info",
+            f"Variant {i} verdict: {verdict}",
+        ))
+
+        # Update "best" outcome if this variant is more successful.
+        if _verdict_rank(verdict) > _verdict_rank(best_verdict):
+            best_verdict = verdict
+            best_response = response
+            best_payload = payload
+            final_summary = summarize(verdict, payload, response)
+            if verdict == "landed":
+                landed_elapsed_ms = response.elapsed_ms
+
+        if verdict == "landed":
+            break  # No need to try more variants once one has landed.
 
     verdict_label = {
-        "landed": "Attack landed — indicator present in response body",
-        "blocked": "Attack blocked — target rejected the request",
-        "inconclusive": "Inconclusive — indicator not found, status not in blocked set",
-        "error": "Probe errored — transport failure",
-    }.get(verdict, verdict)
+        "landed": "Attack landed — at least one variant succeeded",
+        "blocked": "Attack blocked — defensive layer caught every variant",
+        "inconclusive": "Inconclusive — no variant landed or was clearly blocked",
+        "error": "Probe errored — transport failures only",
+    }.get(best_verdict, best_verdict)
     attempts.append(_attempt("verdict", verdict_label))
+
+    if not final_summary and best_response is not None:
+        final_summary = summarize(best_verdict, best_payload, best_response)
 
     return ProbeResult(
         rule_id=finding["rule_id"],
         agentshield_id=finding["agentshield_id"],
         finding_file=finding["file"],
         finding_line=finding["line"],
-        payload_name=payload.name,
+        payload_name=best_payload.name,
         target=config.target,
         profile=config.profile,
-        verdict=verdict,
+        verdict=best_verdict,  # type: ignore[arg-type]  # narrowed to Verdict
         attempts=tuple(attempts),
-        time_to_compromise_ms=response.elapsed_ms if verdict == "landed" else None,
-        summary=summary,
+        time_to_compromise_ms=landed_elapsed_ms,
+        summary=final_summary,
     )
+
+
+# landed > blocked > inconclusive > error
+_VERDICT_PRIORITY = {"landed": 3, "blocked": 2, "inconclusive": 1, "error": 0}
+
+
+def _verdict_rank(v: str) -> int:
+    return _VERDICT_PRIORITY.get(v, 0)
 
 
 def _attempt(level, message: str) -> ProbeAttempt:

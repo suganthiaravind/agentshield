@@ -21,21 +21,35 @@ class ProbePayload:
 
     `template` is the raw payload string; if it contains `{placeholders}`
     they get substituted from the finding's context before the request is
-    sent. `indicator` is the substring whose presence in the response
-    body classifies the attempt as "landed" — a naive default that more
-    sophisticated classifiers can override.
+    sent.
+
+    `indicators` is a tuple of substrings — if ANY of them appears in the
+    response body (case-insensitive), the attempt is classified as
+    "landed". Multiple indicators support classifiers that need to look
+    at several response fields without parsing structurally.
+
+    `json_indicators` is a tuple of dotted JSON paths
+    (e.g. "tool_calls[].name=cancel_subscription"). When set, the
+    classifier parses the response as JSON and walks the path. More
+    precise than substring matching — falls back to `indicators` if the
+    response isn't JSON.
 
     `destructive=True` flags payloads that could change state on the
-    target (e.g. cancel_subscription with a real ID). These are skipped
-    under the default `safe` profile.
+    target. Skipped under the default `safe` profile.
     """
 
     rule_id: str
     name: str
     template: str
-    indicator: str = ""
+    indicators: tuple[str, ...] = ()
+    json_indicators: tuple[str, ...] = ()
     destructive: bool = False
     notes: str = ""
+
+    @property
+    def indicator(self) -> str:
+        """Back-compat: first indicator string. Used for summaries."""
+        return self.indicators[0] if self.indicators else ""
 
 
 @dataclass(frozen=True)
@@ -84,13 +98,18 @@ class ProbeConfig:
 
     `target` is the base URL of the agent under test (no trailing slash).
     `endpoint_path` is appended for requests (e.g. "/api/support").
-    `auth_header` is an optional `Authorization` header — set via env
-    var `AGENTSHIELD_PROBE_AUTH` (kept out of code).
+
+    `auth_header` is shorthand for the `Authorization` header (typically
+    a Bearer token), populated from an env var so secrets stay out of
+    the command line. `extra_headers` is the general escape hatch — set
+    any header (X-API-Key, Cookie, X-Tenant-ID, …) without changing the
+    runner.
     """
 
     target: str
     endpoint_path: str = "/api/agent"
     auth_header: str | None = None
+    extra_headers: tuple[tuple[str, str], ...] = ()
     profile: str = "safe"
     timeout_seconds: float = 10.0
     max_probes: int = 100

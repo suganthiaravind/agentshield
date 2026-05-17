@@ -32,6 +32,7 @@ def send_payload(
     *,
     timeout_seconds: float = 10.0,
     auth_header: str | None = None,
+    extra_headers: tuple[tuple[str, str], ...] = (),
     message_field: str = "message",
 ) -> RawResponse:
     """Send `payload_text` as a JSON POST to `target_url`.
@@ -39,6 +40,11 @@ def send_payload(
     The payload is wrapped as `{"<message_field>": payload_text}` because
     that matches the customer-support-agent style most demo agents
     expose. Future: support templated request bodies per rule.
+
+    `extra_headers` is a tuple of (name, value) pairs added to the
+    request — caller's escape hatch for API keys, cookies, tenancy
+    headers, etc. `auth_header` is the convenience override for the
+    Authorization header specifically.
 
     Network / transport failures (timeout, refused, DNS) are caught and
     returned as `RawResponse(status=0, error=...)` rather than raised,
@@ -49,6 +55,8 @@ def send_payload(
         "Content-Type": "application/json",
         "User-Agent": "agentshield-probe/0.1",
     }
+    for name, value in extra_headers:
+        headers[name] = value
     if auth_header:
         headers["Authorization"] = auth_header
     req = urllib.request.Request(

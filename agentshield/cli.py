@@ -218,6 +218,18 @@ def build_parser() -> argparse.ArgumentParser:
             "unauthenticated probes against local mocks."
         ),
     )
+    prb.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help=(
+            "Extra request header (repeatable). Use for API keys, "
+            "cookies, tenancy headers, etc. Example: --header "
+            "X-API-Key=secret --header X-Tenant-ID=acme. Values "
+            "containing '=' are split on the first '='."
+        ),
+    )
 
     return parser
 
@@ -724,10 +736,25 @@ def cmd_probe(args: argparse.Namespace) -> int:
 
     auth_header = os.environ.get(args.auth_env) if args.auth_env else None
 
+    extra_headers: list[tuple[str, str]] = []
+    for raw in args.header:
+        if "=" not in raw:
+            print(
+                f"error: --header expects NAME=VALUE, got {raw!r}",
+                file=sys.stderr,
+            )
+            return 2
+        name, _, value = raw.partition("=")
+        if not name.strip():
+            print(f"error: empty header name in {raw!r}", file=sys.stderr)
+            return 2
+        extra_headers.append((name.strip(), value))
+
     config = ProbeConfig(
         target=args.target.rstrip("/"),
         endpoint_path=args.endpoint,
         auth_header=auth_header,
+        extra_headers=tuple(extra_headers),
         profile=args.profile,
         timeout_seconds=args.timeout,
         max_probes=args.max_probes,
@@ -736,7 +763,10 @@ def cmd_probe(args: argparse.Namespace) -> int:
     print(f"[probe] target:  {config.target}{config.endpoint_path}")
     print(f"[probe] profile: {config.profile}")
     if auth_header:
-        print(f"[probe] auth:    header from ${args.auth_env}")
+        print(f"[probe] auth:    Authorization header from ${args.auth_env}")
+    if extra_headers:
+        names = ", ".join(name for name, _ in extra_headers)
+        print(f"[probe] headers: {names}")
     print()
 
     report = run_probes(target_root, config)
