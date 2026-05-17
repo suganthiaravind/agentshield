@@ -72,12 +72,27 @@ def load_tier1_references(rules_path: Path) -> list[RuleReference]:
             short = _shorten_tier1_id(canonical)
             languages = rule.get("languages") or []
             lang_str = ", ".join(languages) if languages else "any"
+            title = _humanize_rule_id(short)
+            # Path B+: keep titles symmetric across language variants.
+            # Java rules already inherit a "Java" suffix from their
+            # rule_id (e.g. `hardcoded-llm-credentials-java`); Python
+            # rules don't, which made the Reference tab read
+            # asymmetrically. Append the language suffix when missing
+            # so siblings line up: "Hardcoded LLM Credentials Python"
+            # next to "Hardcoded LLM Credentials Java".
+            if (
+                languages
+                and len(languages) == 1
+                and not title.endswith(("Python", "Java"))
+            ):
+                lang_suffix = languages[0].title()  # python → Python
+                title = f"{title} {lang_suffix}"
             refs.append(
                 RuleReference(
                     source="Semgrep",
                     rule_id=short,
                     agentshield_id=metadata.get("agentshield_id") or short,
-                    title=_humanize_rule_id(short),
+                    title=title,
                     category=category,
                     severity=metadata.get("severity_normalized") or "medium",
                     languages=lang_str,
