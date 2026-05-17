@@ -59,7 +59,11 @@ rules:
         owasp_llm: ["LLM10"]
         owasp_agentic: ["T4"]
         nist_ai_rmf: ["MEASURE-2.6", "MANAGE-2.4"]
-        mitre_atlas: []
+        # AML.T0029 — Denial of ML Service. Missing timeout/token cap
+        # is the static surface; the runtime side (adversarial loops,
+        # rate-limit verification) needs Path B traffic instrumentation
+        # to confirm enforcement.
+        mitre_atlas: ["AML.T0029"]
         cwe: ["CWE-400"]
         agentshield_v1: []
       languages: [python]

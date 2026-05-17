@@ -116,7 +116,11 @@ MITRE_ATLAS_UNIVERSE: list[str] = [
     "AML.T0029",  # Denial of ML Service
     "AML.T0050",  # Command and Scripting Interpreter
     "AML.T0051",  # LLM Prompt Injection
-    "AML.T0052",  # Phishing (LLM-aided)
+    # AML.T0052 (Phishing — LLM-aided) is OUT of scope by design.
+    # Defenses live at the output-handling / human-review layer (email
+    # gateways, content classifiers), not in the LLM call site. The
+    # attacker's LLM is producing content for someone else's inbox —
+    # AgentShield scans the defender's agent code.
     "AML.T0053",  # LLM Plugin Compromise
     "AML.T0054",  # LLM Jailbreak
     "AML.T0055",  # Unsecured Credentials
@@ -210,30 +214,21 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
         "Model-supply-chain attack; detection lives in the model training / "
         "serving pipeline, not in app code."
     ),
-    ("mitre_atlas", "AML.T0029"): (
-        "Partial overlap with LLM10 / CWE-400 (timeouts, covered); DoS-"
-        "specific patterns (e.g. adversarial loops) need traffic-level "
-        "instrumentation."
-    ),
-    ("mitre_atlas", "AML.T0052"): (
-        "LLM-aided phishing is delivered to end-users — defenses belong to "
-        "output handling / human review, not the LLM call site."
-    ),
-    # AML.T0054 now mapped onto D-LLM01-001 (prompt injection) — the
-    # static rule finds the path, the Path B runtime probe confirms the
-    # jailbreak actually lands at the LLM.
-    ("mitre_atlas", "AML.T0055"): (
-        "Overlaps CWE-798 hardcoded credentials (covered); ATLAS framing "
-        "focuses on broker / vault misconfig outside the app."
-    ),
-    # AML.T0056 now covered by rule D013 + Path B probe — static rule
-    # finds the error-path leak surface, runtime probe extracts the
-    # prompt + embedded escalation key to confirm the leakage.
-    ("mitre_atlas", "AML.T0057"): (
-        "Partial coverage via LLM02 (sensitive data in prompt / I/O); ATLAS "
-        "framing focuses on exfiltration via inference, which needs runtime "
-        "monitoring."
-    ),
+    # AML.T0029 now cross-mapped onto DF003 (no-timeout-or-token-cap).
+    # The static rule finds missing caps; the runtime side (rate-limit
+    # verification, adversarial-loop testing) needs Path B traffic
+    # instrumentation that's not built yet.
+    # AML.T0052 (LLM-aided phishing) is removed from the curated
+    # universe entirely — out of scope by design, defenses live at the
+    # output-handling layer.
+    # AML.T0054 now mapped onto D-LLM01-001 (prompt injection).
+    # AML.T0055 now cross-mapped onto D005 (hardcoded credentials).
+    # The in-app angle is covered; broker / vault misconfig stays an
+    # infra-layer concern.
+    # AML.T0056 now covered by rule D013 + Path B probe.
+    # AML.T0057 now cross-mapped onto R-LLM02-002 (PII exfil via SNS).
+    # Static side flags the exfil channel; the inference-extraction
+    # angle could grow a Path B probe (similar to T0056) later.
 
     # CWE — generic AppSec items (CWE-22 path traversal, CWE-295 cert
     # validation, CWE-522 credential transit) are no longer in the
