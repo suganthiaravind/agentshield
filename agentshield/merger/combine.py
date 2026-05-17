@@ -4057,20 +4057,58 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     """
     from os.path import basename
 
-    # ---- Input: code + markdown files, sorted by finding-count desc ----
-    code_files = sorted(
-        {f for f in (r.tier2_scanned_files or []) if not f.endswith(".md")}
-    )
-    md_files: set[str] = set()
+    # ---- Input: scanned files grouped by kind, sorted by finding-count
+    # desc within each group. The set of "scanned" files is the union of
+    # `tier2_scanned_files` (the canonical list) and any file path
+    # referenced by a Tier 1 finding — that way new rules with new code
+    # fixtures (orchestrator.py for T12/T13, config.yaml for AST06)
+    # appear here without needing a tier2 rescan. ----
+    _CODE_EXTS = {".py", ".java", ".ts", ".tsx", ".js", ".go", ".rb"}
+    _BUNDLE_CONFIG_EXTS = {
+        ".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".config",
+        ".properties", ".env", ".cfg",
+    }
+    # Tier 2 reports bare basenames, Tier 1 reports full paths. Dedupe
+    # by path-suffix: bare `config.py` is dropped when
+    # `testbed/.../config.py` also exists (same file, two reporters),
+    # but `testbed/.../SKILL.md` and `testbed/.../skills/billing/SKILL.md`
+    # both survive (distinct files that happen to share a basename).
+    _all_paths: set[str] = set()
+    for p in r.tier2_scanned_files or []:
+        if p:
+            _all_paths.add(p.strip())
     for f in r.tier1_findings:
-        path = f.finding.get("file") or ""
-        if path.endswith(".md"):
-            md_files.add(path)
-    md_sorted = sorted(md_files)
+        p = (f.finding.get("file") or "").strip()
+        if p:
+            _all_paths.add(p)
+    scanned_paths: set[str] = {
+        p for p in _all_paths
+        if not any(other != p and other.endswith("/" + p) for other in _all_paths)
+    }
+
+    code_files: list[str] = []
+    md_files: list[str] = []
+    bundle_files: list[str] = []
+    for path in scanned_paths:
+        bn = basename(path).lower()
+        suffix = "." + bn.rsplit(".", 1)[-1] if "." in bn else ""
+        if suffix == ".md":
+            md_files.append(path)
+        elif suffix in _CODE_EXTS:
+            code_files.append(path)
+        elif suffix in _BUNDLE_CONFIG_EXTS:
+            bundle_files.append(path)
+        else:
+            # Anything else still belongs in the Code group as the
+            # most likely default — keeps mystery files visible.
+            code_files.append(path)
+
     file_counts = _findings_per_file(r)
     code_files.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
-    md_sorted.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
-    total_input = len(code_files) + len(md_sorted)
+    md_files.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
+    bundle_files.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
+    md_sorted = md_files  # back-compat alias for the rendering loop
+    total_input = len(code_files) + len(md_sorted) + len(bundle_files)
 
     # ---- Output: fixed by writer naming convention. Fix-files carry the
     # per-file targets they address (count + which input files); HTML
@@ -4142,10 +4180,13 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     parts.append('<div class="io-pipeline-col">')
     parts.append('<div class="io-col-title">Input</div>')
     parts.append('<div class="io-col-subtitle">scanned files</div>')
+    summary_bits = [f"{len(code_files)} code", f"{len(md_sorted)} markdown"]
+    if bundle_files:
+        summary_bits.append(f"{len(bundle_files)} bundle config")
     parts.append(
         f'<div class="io-col-summary">{total_input} files '
-        f'<span class="io-col-summary-sub">&middot; {len(code_files)} code '
-        f'&middot; {len(md_sorted)} markdown</span></div>'
+        f'<span class="io-col-summary-sub">&middot; '
+        f'{" &middot; ".join(summary_bits)}</span></div>'
     )
     parts.append(f'<div class="io-col-section">Python source ({len(code_files)})</div>')
     parts.append('<ul class="io-col-list">')
@@ -4162,6 +4203,18 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     else:
         parts.append('<li><span class="io-desc">No markdown files scanned</span></li>')
     parts.append('</ul>')
+    # Path B+ AST06: bundled config files (YAML / JSON / .env / etc.)
+    # are now in scope when there's a SKILL.md in the same directory.
+    # Only render the section when something was actually scanned.
+    if bundle_files:
+        parts.append(
+            f'<div class="io-col-section">Bundle config '
+            f'({len(bundle_files)})</div>'
+        )
+        parts.append('<ul class="io-col-list">')
+        for path in bundle_files:
+            parts.append(_file_li(path))
+        parts.append('</ul>')
     parts.append('</div>')  # /io-pipeline-col input
 
     # ===== Arrow =====

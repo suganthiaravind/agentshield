@@ -29,14 +29,16 @@ rules:
           - pattern-either:
               # Any outbound HTTP call whose JSON body carries a tainted
               # field — `requests`, `httpx`, `aiohttp`, urllib3.
-              - pattern: requests.post($URL, json={..., $K: $X, ...}, ...)
-              - pattern: requests.put($URL, json={..., $K: $X, ...}, ...)
-              - pattern: httpx.post($URL, json={..., $K: $X, ...}, ...)
-              - pattern: httpx.put($URL, json={..., $K: $X, ...}, ...)
-              - pattern: $CLIENT.post($URL, json={..., $K: $X, ...}, ...)
-              - pattern: $CLIENT.put($URL, json={..., $K: $X, ...}, ...)
-              # aiohttp form
-              - pattern: aiohttp.ClientSession().post($URL, json={..., $K: $X, ...}, ...)
+              # Patterns are quoted because the `$K: $X` inside the
+              # dict literal would otherwise look like a YAML
+              # key/value pair to the loader.
+              - pattern: "requests.post($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "requests.put($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "httpx.post($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "httpx.put($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "$CLIENT.post($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "$CLIENT.put($URL, json={..., $K: $X, ...}, ...)"
+              - pattern: "aiohttp.ClientSession().post($URL, json={..., $K: $X, ...}, ...)"
     metadata:
       category: detect
       agentshield_id: AS-S-D-LLM01-005

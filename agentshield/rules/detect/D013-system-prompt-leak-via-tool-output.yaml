@@ -15,21 +15,23 @@ rules:
     patterns:
       - pattern-either:
           # Returning the prompt in a Flask/FastAPI/Starlette response.
-          - pattern: jsonify({..., "active_system_prompt": $PROMPT, ...})
-          - pattern: jsonify({..., "system_prompt": $PROMPT, ...})
-          - pattern: jsonify({..., "prompt_template": $PROMPT, ...})
-          - pattern: jsonify({..., "prompt": $PROMPT, ...})
-          - pattern: return {"...": ..., "system_prompt": $PROMPT, ...}
-          - pattern: Response(json.dumps({..., "system_prompt": $PROMPT, ...}), ...)
+          # Patterns are quoted because the `"key": $VAR` inside the
+          # dict literal would otherwise look like a YAML mapping key.
+          - pattern: 'jsonify({..., "active_system_prompt": $PROMPT, ...})'
+          - pattern: 'jsonify({..., "system_prompt": $PROMPT, ...})'
+          - pattern: 'jsonify({..., "prompt_template": $PROMPT, ...})'
+          - pattern: 'jsonify({..., "prompt": $PROMPT, ...})'
+          - pattern: 'return {"...": ..., "system_prompt": $PROMPT, ...}'
+          - pattern: 'Response(json.dumps({..., "system_prompt": $PROMPT, ...}), ...)'
           # Echoing the prompt into a logged error or message.
-          - pattern: logging.error(f"... {$PROMPT_VAR} ...", ...)
-          - pattern: logging.exception(f"... {$PROMPT_VAR} ...", ...)
+          - pattern: 'logging.error(f"... {$PROMPT_VAR} ...", ...)'
+          - pattern: 'logging.exception(f"... {$PROMPT_VAR} ...", ...)'
           # Re-raising with the prompt embedded.
-          - pattern: raise Exception(f"... {SYSTEM_PROMPT} ...")
-          - pattern: raise ValueError(f"... {SYSTEM_PROMPT} ...")
+          - pattern: 'raise Exception(f"... {SYSTEM_PROMPT} ...")'
+          - pattern: 'raise ValueError(f"... {SYSTEM_PROMPT} ...")'
     metadata:
       category: detect
-      agentshield_id: AS-S-D-LLM07-001
+      agentshield_id: AS-S-D-LLM07-002
       legacy_ids: []
       severity_normalized: high
       framework_mappings:
