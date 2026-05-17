@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -789,7 +790,7 @@ h2 { font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase;
      color: var(--text-muted); margin: 32px 0 12px; }
 h3 { font-size: 15px; }
 
-.report-header { padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.report-header { padding-bottom: 8px; margin-bottom: 14px; }
 .report-header .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
 
 .banner {
@@ -852,8 +853,13 @@ h3 { font-size: 15px; }
 .ddr-card.detect  .ddr-question { border-left-color: var(--detect); }
 .ddr-card.defend  .ddr-question { border-left-color: var(--defend); }
 .ddr-card.respond .ddr-question { border-left-color: var(--respond); }
-.ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 12px; }
+.ddr-card .ddr-count { font-size: 36px; font-weight: 700; line-height: 1; }
 .ddr-card .sev-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+/* v4: count + severity-pills on the same baseline-aligned row so the
+   D/D/R card collapses vertically and frees space below it. */
+.ddr-card .ddr-count-row {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+}
 
 .pill {
   display: inline-block;
@@ -1082,6 +1088,337 @@ h3 { font-size: 15px; }
 .finding-attack-scenario .attack-disclaimer {
   margin-top: 8px;
   font-size: 11px; color: var(--text-muted); font-style: italic;
+}
+/* v4: attack walkthrough — ordered steps with ▶ Play animation. */
+.finding-attack-scenario .attack-steps-section {
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.finding-attack-scenario .attack-steps-section .attack-label {
+  display: flex; align-items: center; gap: 10px;
+}
+.finding-attack-scenario .attack-play-btn {
+  padding: 3px 10px;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.finding-attack-scenario .attack-play-btn:hover {
+  background: var(--accent); color: white;
+}
+.finding-attack-scenario .attack-play-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+ol.attack-steps {
+  margin: 8px 0 0; padding-left: 24px;
+  font-size: 13px; line-height: 1.55;
+  color: var(--text);
+}
+ol.attack-steps li.attack-step { margin-bottom: 6px; }
+ol.attack-steps li.attack-step::marker { color: var(--accent); font-weight: 700; }
+/* Playing mode: steps start hidden and reveal sequentially via JS. */
+ol.attack-steps.attack-steps-playing li.attack-step {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* v4: visual attack-flow simulation — actor → target scenes per step. */
+.attack-sim-list {
+  display: flex; flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.attack-sim-scene {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  position: relative;
+}
+.attack-sim-scene .attack-sim-step-num {
+  position: absolute; top: -7px; left: 12px;
+  background: var(--bg);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 0 6px;
+}
+.attack-sim-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 4px;
+}
+.attack-sim-actor {
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 90px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  text-align: center;
+}
+.attack-sim-actor .actor-icon { font-size: 22px; line-height: 1; margin-bottom: 4px; }
+.attack-sim-actor .actor-label {
+  font-size: 11px; font-weight: 600; color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.attack-sim-arrow {
+  flex: 1; position: relative; height: 28px;
+  display: flex; align-items: center; min-width: 80px;
+}
+.attack-sim-arrow-label {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--accent);
+  background: var(--panel);
+  padding: 0 8px; white-space: nowrap;
+}
+.attack-sim-arrow-line {
+  flex: 1; height: 2px;
+  background: var(--text-muted);
+  position: relative;
+}
+.attack-sim-arrow-line::after {
+  content: ''; position: absolute; right: -1px; top: -4px;
+  width: 0; height: 0;
+  border: 5px solid transparent;
+  border-left-color: var(--text-muted);
+}
+.attack-sim-payload {
+  margin-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: var(--text);
+  background: #f4f1e8;
+  border-left: 3px solid var(--accent);
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
+  word-break: break-word;
+}
+.attack-sim-note {
+  margin-top: 6px;
+  font-size: 11.5px; color: var(--text-muted);
+  font-style: italic; line-height: 1.5;
+}
+/* Impact scene — terminal beat, no target, painted critical. */
+.attack-sim-scene.attack-sim-impact {
+  background: linear-gradient(180deg, #fdecea 0%, #fbf3dc 100%);
+  border-color: var(--critical);
+}
+.attack-sim-scene.attack-sim-impact .attack-sim-row {
+  justify-content: center;
+}
+.attack-sim-scene.attack-sim-impact .attack-sim-actor {
+  border-color: var(--critical);
+  background: var(--panel);
+  min-width: 120px;
+}
+.attack-sim-scene.attack-sim-impact .attack-sim-note {
+  text-align: center; color: var(--text); font-style: normal; font-weight: 500;
+}
+/* Playing mode — scenes start hidden, fade in sequentially, the
+   currently-active scene gets an accent ring + lift. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.3s ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-current {
+  box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.25);
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.attack-sim-current {
+  box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.35);
+}
+/* v4: per-scene choreography — source pulse, packet travels along arrow,
+   target pulse on arrival, payload+note reveal on receipt. Only runs
+   while the parent list is in playing mode; static view shows
+   everything at once. */
+.attack-sim-packet {
+  position: absolute; top: 50%; left: 0;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(44, 95, 126, 0.55);
+  transform: translate(-50%, -50%);
+  opacity: 0; pointer-events: none;
+  z-index: 2;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene .attack-sim-payload,
+.attack-sim-list.attack-sim-playing .attack-sim-scene .attack-sim-note {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received .attack-sim-payload,
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received .attack-sim-note {
+  opacity: 1;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.source-pulsing
+  .attack-sim-row > .attack-sim-actor:first-child {
+  animation: agentshield-actor-pulse 0.55s ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-row > .attack-sim-actor:last-child {
+  animation: agentshield-actor-pulse 0.55s ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
+  .attack-sim-packet {
+  animation: agentshield-packet-fly 0.75s ease-out forwards;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.impact-active {
+  animation: agentshield-impact-flash 0.9s ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.impact-active
+  .attack-sim-actor .actor-icon {
+  animation: agentshield-impact-icon 0.8s ease;
+}
+@keyframes agentshield-actor-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(44,95,126,0); }
+  50% { transform: scale(1.07); box-shadow: 0 0 0 5px rgba(44,95,126,0.2); }
+}
+@keyframes agentshield-packet-fly {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: 100%; opacity: 0.5; }
+}
+@keyframes agentshield-impact-flash {
+  0% { box-shadow: 0 0 0 0 rgba(179,38,30,0); }
+  40% { box-shadow: 0 0 0 10px rgba(179,38,30,0.45); }
+  100% { box-shadow: 0 0 0 2px rgba(179,38,30,0.35); }
+}
+@keyframes agentshield-impact-icon {
+  0% { transform: scale(0.6); opacity: 0.3; }
+  60% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* v4: mocked red-team probe — looks like watching a live attack run. */
+.attack-probe-btn {
+  padding: 3px 10px;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid var(--critical);
+  background: transparent;
+  color: var(--critical);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-left: 4px;
+}
+.attack-probe-btn:hover { background: var(--critical); color: white; }
+.attack-probe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.attack-probe-btn .probe-mode {
+  font-weight: 500; opacity: 0.8; font-size: 10px;
+}
+.probe-panel {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fafaf7;
+}
+.probe-meta {
+  display: flex; flex-wrap: wrap; gap: 16px;
+  padding: 8px 14px;
+  background: #f4f1e8;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.probe-meta-row { display: flex; align-items: center; gap: 6px; }
+.probe-meta-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); font-weight: 700;
+}
+.probe-meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; color: var(--text);
+}
+.probe-terminal {
+  padding: 12px 16px;
+  background: #1f2933;
+  color: #d4d2c8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.55;
+  max-height: 320px; overflow-y: auto;
+}
+.probe-terminal::-webkit-scrollbar { width: 6px; }
+.probe-terminal::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+.probe-line {
+  padding: 2px 0;
+  opacity: 0;
+  animation: agentshield-probe-line-in 0.18s ease forwards;
+}
+.probe-ts { color: #8a8b80; }
+.probe-level {
+  display: inline-block; min-width: 70px;
+  font-weight: 700; text-transform: uppercase; font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.probe-level-info { color: #93b8c8; }
+.probe-level-request { color: #c8a86b; }
+.probe-level-response { color: #a8c89c; }
+.probe-level-success { color: #6fc36f; }
+.probe-level-warn { color: #e8b04b; }
+.probe-level-error { color: #e88475; }
+.probe-level-verdict { color: #ffffff; }
+.probe-msg { color: #d4d2c8; word-break: break-word; }
+.probe-level-verdict + .probe-msg { font-weight: 700; }
+
+.probe-verdict {
+  padding: 14px 16px;
+  border-top: 2px solid;
+  text-align: center;
+}
+.probe-verdict-landed {
+  background: linear-gradient(180deg, #fdecea 0%, #fbf3dc 100%);
+  border-top-color: var(--critical);
+}
+.probe-verdict-blocked {
+  background: linear-gradient(180deg, #d6e7d6 0%, #f0f6ee 100%);
+  border-top-color: #2f5a2f;
+}
+.probe-verdict-inconclusive {
+  background: linear-gradient(180deg, #fbf3dc 0%, #faf6e9 100%);
+  border-top-color: var(--high);
+}
+.probe-verdict-badge {
+  display: inline-block;
+  font-size: 15px; font-weight: 800; letter-spacing: 0.04em;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+.probe-verdict-landed .probe-verdict-badge { color: var(--critical); }
+.probe-verdict-blocked .probe-verdict-badge { color: #2f5a2f; }
+.probe-verdict-inconclusive .probe-verdict-badge { color: var(--high); }
+.probe-verdict-meta {
+  margin-top: 8px;
+  font-size: 12px; color: var(--text-muted);
+}
+.probe-verdict-meta strong {
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.probe-verdict-summary {
+  margin-top: 8px;
+  font-size: 12px; color: var(--text);
+  max-width: 540px; margin-left: auto; margin-right: auto;
+  line-height: 1.55;
+}
+@keyframes agentshield-probe-line-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .coverage-grid {
@@ -1503,6 +1840,188 @@ footer {
    relying on @media print hacks. */
 .static-report .coverage-gap-details[open] summary { margin-bottom: 6px; }
 
+/* v4: Input & Output tab — what was scanned, where results were written. */
+.io-summary {
+  font-size: 11px; color: var(--text-muted); font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.io-subsection { margin-bottom: 14px; }
+.io-subsection:last-child { margin-bottom: 0; }
+.io-subtitle {
+  font-size: 11px; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.io-list {
+  list-style: none; padding: 0; margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 4px 8px;
+}
+.io-list li {
+  font-size: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  line-height: 1.4;
+}
+.io-list li.io-file {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.io-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+.io-list .io-desc { color: var(--text-muted); font-size: 11px; }
+.io-count {
+  font-size: 11px; font-weight: 600; color: var(--high);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.io-count .io-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; display: inline-block;
+}
+.io-count-clean { color: var(--low); font-weight: 500; }
+.io-count-clean .io-dot {
+  background: transparent;
+  border: 1.5px solid currentColor;
+  width: 6px; height: 6px;
+}
+
+/* v4: pipeline view — 3 columns (Input → Engines → Output) with arrows. */
+.io-pipeline {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 0;
+  align-items: stretch;
+  margin-top: 8px;
+}
+.io-pipeline-col {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.io-pipeline-col.io-col-engine {
+  background: linear-gradient(180deg, #f4f8fb 0%, #fafaf7 100%);
+  border-color: var(--accent);
+}
+.io-pipeline-arrow {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 14px;
+  font-size: 22px; color: var(--text-muted);
+  font-weight: 300;
+}
+.io-col-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); font-weight: 700;
+}
+.io-col-engine .io-col-title { color: var(--accent); }
+.io-col-subtitle {
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+}
+.io-col-summary {
+  font-size: 18px; font-weight: 700; color: var(--text);
+  margin-top: 10px; margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.io-col-summary-sub {
+  font-size: 12px; color: var(--text-muted); font-weight: 500;
+}
+.io-col-section {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); font-weight: 600;
+  margin-top: 14px; margin-bottom: 6px;
+  padding-top: 10px; border-top: 1px dashed var(--border);
+}
+.io-col-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.io-col-list li {
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.io-col-list li code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: var(--text);
+}
+.io-col-list .io-desc { font-size: 11px; color: var(--text-muted); }
+.io-col-engine-rows {
+  margin-top: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.io-col-engine-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.io-col-engine-val {
+  font-weight: 700; font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+.io-col-engine-net {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--accent);
+  font-size: 16px; font-weight: 700; color: var(--accent);
+}
+.io-col-sev-bar {
+  display: flex; gap: 4px; flex-wrap: wrap;
+}
+.io-col-sev-bar .pill { padding: 3px 9px; font-size: 10px; }
+
+.io-engine-list {
+  list-style: none; padding: 0; margin: 16px 0 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.io-engine-list li {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.io-engine-name {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  margin-bottom: 4px;
+}
+.io-engine-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
+.io-col-list-fix li.io-fix-item {
+  flex-direction: column; align-items: stretch; gap: 6px;
+}
+.io-fix-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.io-fix-target {
+  font-size: 11px; font-weight: 600; color: var(--high);
+  display: inline-flex; align-items: baseline; gap: 6px;
+  flex-wrap: wrap;
+}
+.io-fix-target .io-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; display: inline-block; align-self: center;
+}
+.io-fix-target code.io-fix-files {
+  font-weight: 500; font-size: 11px;
+  color: var(--text); background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 1100px) {
+  .io-pipeline { grid-template-columns: 1fr; gap: 10px; }
+  .io-pipeline-arrow { transform: rotate(90deg); padding: 4px 0; }
+}
+
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
   background: var(--panel);
@@ -1874,6 +2393,131 @@ _HTML_JS = """
   // F.28a: per-finding expand/collapse removed. Reference-tab D/D/R
   // sub-groups are now the only collapsible UX in the report.
 
+  // ----- v4: ▶ Play simulation — animate attack walkthrough.
+  // Two render modes:
+  //   1. Visual scenes (.attack-sim-list)  → preferred. Scenes are hidden
+  //      while playing; each fades in on a cadence and gets an "active"
+  //      ring; the previous scene loses the ring when the next appears.
+  //   2. Prose <ol> (.attack-steps)        → fallback for narratives
+  //      without structured simulation data. Lines just fade in.
+  // v4: mocked red-team probe — when 'Run probe' is pressed, slide the
+  // panel open and stream the canned trace lines, then reveal the
+  // verdict. Looks like watching a live probe; entirely client-side.
+  document.querySelectorAll('.attack-probe-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var section = btn.closest('.attack-steps-section');
+      if (!section) return;
+      var panel = section.querySelector('.probe-panel');
+      if (!panel) return;
+      var lines = panel.querySelectorAll('.probe-line');
+      var verdict = panel.querySelector('.probe-verdict');
+      // Reset
+      lines.forEach(function (l) { l.hidden = true; });
+      if (verdict) verdict.hidden = true;
+      panel.hidden = false;
+      btn.disabled = true;
+      btn.innerHTML = '⏵ Probing…';
+      // Random-ish cadence to feel like real probe traffic.
+      var t = 0;
+      lines.forEach(function (line, i) {
+        var delay = 200 + Math.floor(Math.random() * 250);
+        // Slow down briefly after request/response lines so the eye
+        // can track them.
+        var level = line.getAttribute('data-level');
+        if (level === 'request' || level === 'response') delay += 150;
+        if (level === 'verdict') delay += 300;
+        t += delay;
+        setTimeout(function () {
+          line.hidden = false;
+          var term = panel.querySelector('.probe-terminal');
+          if (term) term.scrollTop = term.scrollHeight;
+        }, t);
+      });
+      setTimeout(function () {
+        if (verdict) verdict.hidden = false;
+        verdict.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        btn.disabled = false;
+        btn.innerHTML = '↻ Re-run probe <span class="probe-mode">(simulated)</span>';
+      }, t + 500);
+    });
+  });
+
+  document.querySelectorAll('.attack-play-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var section = btn.closest('.attack-steps-section');
+      if (!section) return;
+      var simList = section.querySelector('.attack-sim-list');
+      var proseList = section.querySelector('.attack-steps');
+      btn.disabled = true;
+      btn.textContent = '⏵ Playing…';
+
+      if (simList) {
+        var scenes = simList.querySelectorAll('.attack-sim-scene');
+        var SCENE_CADENCE = 1900;  // ms per scene — long enough to let
+                                   // the choreography finish before the
+                                   // next scene begins.
+        simList.classList.add('attack-sim-playing');
+        // Reset every scene to its pre-play state.
+        scenes.forEach(function (s) {
+          s.classList.remove('attack-sim-visible');
+          s.classList.remove('attack-sim-current');
+          s.classList.remove('source-pulsing');
+          s.classList.remove('packet-flying');
+          s.classList.remove('received');
+          s.classList.remove('impact-active');
+        });
+        scenes.forEach(function (scene, i) {
+          setTimeout(function () {
+            if (i > 0) {
+              scenes[i - 1].classList.remove('attack-sim-current');
+            }
+            scene.classList.add('attack-sim-visible');
+            scene.classList.add('attack-sim-current');
+            scene.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            var isImpact = scene.classList.contains('attack-sim-impact');
+            if (isImpact) {
+              // Impact: full-card flash + icon punch-in + note reveal.
+              setTimeout(function () { scene.classList.add('impact-active'); }, 50);
+              setTimeout(function () { scene.classList.add('received'); }, 250);
+            } else {
+              // Normal scene choreography:
+              //   100ms — source actor pulses
+              //   350ms — packet leaves source
+              //  1100ms — packet has arrived → target pulses, payload reveals
+              setTimeout(function () { scene.classList.add('source-pulsing'); }, 100);
+              setTimeout(function () { scene.classList.add('packet-flying'); }, 350);
+              setTimeout(function () { scene.classList.add('received'); }, 1100);
+            }
+            if (i === scenes.length - 1) {
+              setTimeout(function () {
+                btn.disabled = false;
+                btn.textContent = '↻ Replay simulation';
+              }, 1400);
+            }
+          }, i * SCENE_CADENCE);
+        });
+      } else if (proseList) {
+        var steps = proseList.querySelectorAll('.attack-step');
+        proseList.classList.add('attack-steps-playing');
+        steps.forEach(function (s) { s.classList.remove('attack-step-visible'); });
+        steps.forEach(function (step, i) {
+          setTimeout(function () {
+            step.classList.add('attack-step-visible');
+            if (i === steps.length - 1) {
+              setTimeout(function () {
+                btn.disabled = false;
+                btn.textContent = '↻ Replay simulation';
+              }, 600);
+            }
+          }, (i + 1) * 700);
+        });
+      } else {
+        btn.disabled = false;
+        btn.textContent = '▶ Play simulation';
+      }
+    });
+  });
+
   // initial render
   applyFilter();
 })();
@@ -1952,7 +2596,9 @@ def _render_severity_bar(sev_total: dict[str, int], parts: list[str]) -> None:
         f'{sev_total.get(sev, 0)} {sev}</span>'
         for sev in ("critical", "high", "medium", "low", "info") if sev_total.get(sev, 0)
     )
-    parts.append(f"<span>{sev_text}</span>")
+    # v4: prefix the breakdown with the total so the reader doesn't have
+    # to add four numbers in their head.
+    parts.append(f'<span><strong style="color:var(--text);font-size:13px;">Findings {total_findings}</strong> &middot; {sev_text}</span>')
     parts.append("</div>")
     parts.append('<div class="severity-bar">')
     for sev in ("critical", "high", "medium", "low", "info"):
@@ -2031,13 +2677,42 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append("</head><body>")
 
     # 1. Header
+    # v4: subtitle is a single line of scan provenance (target, commit, time,
+    # duration, total findings) so a reader sees the scan's identity and
+    # headline result without scrolling. Repo/branch/commit/duration are
+    # demo-hardcoded — TODO: wire through from the scan invocation.
+    scanned_display = ""
+    if r.tier2_scanned_at:
+        try:
+            _ts = datetime.fromisoformat(r.tier2_scanned_at.replace("Z", "+00:00"))
+            scanned_display = f"{_ts.day} {_ts.strftime('%b %Y, %H:%M')} UTC"
+        except ValueError:
+            scanned_display = r.tier2_scanned_at
+    repo_target = "agentshield-demo / customer-support-agent"
+    branch = "main"
+    commit = "7a3c1f2"
+    scan_duration = "42s"
+    total_findings = sum(sev_total.values())
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield Pre-Production Review</h1>")
-    parts.append(
-        '<div class="subtitle">Rules-engine Static Scan + Copilot LLM-as-a-Judge Scan'
-        + (f' &middot; scanned {_html_escape(r.tier2_scanned_at)}' if r.tier2_scanned_at else " &middot; Copilot LLM-as-a-Judge Scan not run")
-        + "</div>"
-    )
+    if r.tier2_scanned_at:
+        subtitle = (
+            f"Scanned: {_html_escape(repo_target)} "
+            f"branch {_html_escape(branch)} "
+            f"&middot; commit {_html_escape(commit)} "
+            f"&middot; {_html_escape(scanned_display)} "
+            f"&middot; scan took {_html_escape(scan_duration)}. "
+            f"<strong>Findings in this scan: {total_findings}</strong>"
+        )
+    else:
+        subtitle = (
+            f"Scanned: {_html_escape(repo_target)} "
+            f"branch {_html_escape(branch)} "
+            f"&middot; commit {_html_escape(commit)} "
+            f"&middot; Copilot LLM-as-a-Judge Scan not run. "
+            f"<strong>Findings in this scan: {total_findings}</strong>"
+        )
+    parts.append(f'<div class="subtitle">{subtitle}</div>')
     parts.append("</div>")
 
     # 2. Status banners
@@ -2090,9 +2765,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append(f'<div class="ddr-subtitle">{_html_escape(subtitle)}</div>')
         # Orienting question (block-quote with colored vertical bar)
         parts.append(f'<div class="ddr-question">"{_html_escape(question)}"</div>')
-        # Big finding count
+        # Big finding count + severity pills on one baseline-aligned row.
+        parts.append('<div class="ddr-count-row">')
         parts.append(f'<div class="ddr-count" data-ddr-count="{cat}" data-ddr-total="{len(bucket)}">{len(bucket)}</div>')
-        # Severity pills
         parts.append('<div class="sev-pills">')
         if not bucket:
             parts.append('<span style="color:var(--text-muted);font-size:12px;">No findings</span>')
@@ -2107,6 +2782,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'{sev} {n}</span>'
                     )
         parts.append("</div>")
+        parts.append("</div>")  # /ddr-count-row
         parts.append("</div>")
     parts.append("</div>")
 
@@ -2137,6 +2813,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     tier1_code = tier1_total - tier1_markdown
     tier2_markdown = _markdown_count(r.tier2_findings, lambda f: f.get("file"))
     tier2_code = tier2_total - tier2_markdown
+    # Same code/markdown split for the FP card so all three input metrics
+    # carry the same breakdown shape — keeps the row scannable.
+    fp_findings_iter = [f for f in r.tier1_findings if f.tier2_verdict == "FP"]
+    fp_markdown = _markdown_count(fp_findings_iter, lambda f: f.finding.get("file"))
+    fp_code = fp_marked - fp_markdown
     # F.33: redesigned metrics row.
     # 3 input cards (left of divider) -> 1 hero "Net Actionable" card
     # (right). Each card carries a one-line subtitle so the number is
@@ -2178,6 +2859,14 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<div class="metric">'
         f'<div class="metric-label">False Positives</div>'
         f'<div class="metric-value">{fp_marked}</div>'
+        f'<div class="metric-breakdown" '
+        f'title="FP-marked Tier 1 findings on .py / .java source vs '
+        f'findings on agent-loaded markdown (SKILL.md, AGENT.md, AGENTS.md, '
+        f'INSTRUCTION(S).md, PROMPT(S).md, CLAUDE.md)">'
+        f'<span class="metric-bd-item">{fp_code} code</span>'
+        f'<span class="metric-bd-sep">·</span>'
+        f'<span class="metric-bd-item">{fp_markdown} markdown</span>'
+        f'</div>'
         f'<div class="metric-subtitle">what was ruled out</div>'
         f'</div>'
     )
@@ -2267,6 +2956,24 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             '<polyline points="2 12 12 17 22 12"/>'
             '</svg>'
             'Coverage'
+            '</button>'
+        )
+        parts.append(
+            '<button type="button" class="tab-btn" role="tab" data-tab="inputoutput" '
+            'aria-selected="false">'
+            '<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" '
+            'fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            # Lucide-style "list" icon — three rows with bullets, reads as
+            # "list of files".
+            '<line x1="8" y1="6" x2="21" y2="6"/>'
+            '<line x1="8" y1="12" x2="21" y2="12"/>'
+            '<line x1="8" y1="18" x2="21" y2="18"/>'
+            '<circle cx="4" cy="6" r="1"/>'
+            '<circle cx="4" cy="12" r="1"/>'
+            '<circle cx="4" cy="18" r="1"/>'
+            '</svg>'
+            'Input &amp; Output'
             '</button>'
         )
         parts.append(
@@ -2477,10 +3184,175 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'{_html_escape(scenario.impact)}'
                         f'</div></div>'
                     )
+                    # v4: walkthrough rendering. When the narrative has a
+                    # structured `simulation` (actor → target scenes), we
+                    # render the visual flow and animate scene-by-scene.
+                    # Otherwise we fall back to the prose `steps` list.
+                    if scenario.simulation:
+                        parts.append(
+                            '<div class="attack-section attack-steps-section">'
+                        )
+                        parts.append(
+                            '<div class="attack-label">'
+                            'Attack simulation'
+                            '<button type="button" class="attack-play-btn" '
+                            'data-action="play">▶ Play simulation</button>'
+                        )
+                        if scenario.probe is not None:
+                            parts.append(
+                                '<button type="button" class="attack-probe-btn" '
+                                'data-action="probe">🎯 Run probe '
+                                '<span class="probe-mode">(simulated)</span>'
+                                '</button>'
+                            )
+                        parts.append('</div>')
+                        parts.append('<div class="attack-sim-list">')
+                        for i, scene in enumerate(scenario.simulation):
+                            is_impact = not scene.target
+                            klass = (
+                                "attack-sim-scene attack-sim-impact"
+                                if is_impact
+                                else "attack-sim-scene"
+                            )
+                            parts.append(
+                                f'<div class="{klass}" data-step="{i}">'
+                            )
+                            parts.append(
+                                f'<div class="attack-sim-step-num">'
+                                f'Step {i + 1}</div>'
+                            )
+                            parts.append('<div class="attack-sim-row">')
+                            parts.append(
+                                f'<div class="attack-sim-actor">'
+                                f'<span class="actor-icon">'
+                                f'{_html_escape(scene.icon)}</span>'
+                                f'<span class="actor-label">'
+                                f'{_html_escape(scene.actor)}</span></div>'
+                            )
+                            if not is_impact:
+                                parts.append('<div class="attack-sim-arrow">')
+                                if scene.action:
+                                    parts.append(
+                                        f'<span class="attack-sim-arrow-label">'
+                                        f'{_html_escape(scene.action)}</span>'
+                                    )
+                                parts.append(
+                                    '<div class="attack-sim-arrow-line"></div>'
+                                )
+                                # v4: data packet — animated dot that
+                                # travels from source to target while
+                                # playing.
+                                parts.append(
+                                    '<span class="attack-sim-packet" '
+                                    'aria-hidden="true"></span>'
+                                )
+                                parts.append('</div>')
+                                parts.append(
+                                    f'<div class="attack-sim-actor">'
+                                    f'<span class="actor-icon">'
+                                    f'{_html_escape(scene.target_icon)}</span>'
+                                    f'<span class="actor-label">'
+                                    f'{_html_escape(scene.target)}</span></div>'
+                                )
+                            parts.append('</div>')  # /attack-sim-row
+                            if scene.payload:
+                                parts.append(
+                                    f'<div class="attack-sim-payload">'
+                                    f'{_html_escape(scene.payload)}</div>'
+                                )
+                            if scene.note:
+                                parts.append(
+                                    f'<div class="attack-sim-note">'
+                                    f'{_html_escape(scene.note)}</div>'
+                                )
+                            parts.append('</div>')  # /attack-sim-scene
+                        parts.append('</div>')  # /attack-sim-list
+
+                        # v4: mocked red-team probe — terminal-style panel
+                        # that streams a canned trace and ends with a
+                        # verdict badge. Looks like watching a live
+                        # probe; client-side script-only.
+                        if scenario.probe is not None:
+                            probe = scenario.probe
+                            parts.append(
+                                '<div class="probe-panel" hidden '
+                                f'data-verdict="{_html_escape(probe.verdict)}">'
+                            )
+                            parts.append('<div class="probe-meta">')
+                            parts.append(
+                                f'<span class="probe-meta-row">'
+                                f'<span class="probe-meta-label">target</span>'
+                                f'<code>{_html_escape(probe.target)}</code>'
+                                f'</span>'
+                            )
+                            parts.append(
+                                f'<span class="probe-meta-row">'
+                                f'<span class="probe-meta-label">profile</span>'
+                                f'<code>{_html_escape(probe.profile)}</code>'
+                                f'</span>'
+                            )
+                            parts.append('</div>')
+                            parts.append('<div class="probe-terminal">')
+                            for line in probe.trace:
+                                parts.append(
+                                    f'<div class="probe-line" '
+                                    f'data-level="{_html_escape(line.level)}" '
+                                    f'hidden>'
+                                    f'<span class="probe-ts">[{_html_escape(line.timestamp)}]</span>'
+                                    f' <span class="probe-level probe-level-{_html_escape(line.level)}">'
+                                    f'{_html_escape(line.level)}</span>'
+                                    f' <span class="probe-msg">{_html_escape(line.message)}</span>'
+                                    f'</div>'
+                                )
+                            parts.append('</div>')  # /probe-terminal
+                            verdict_label = {
+                                "landed": "🔴 ATTACK LANDED",
+                                "blocked": "🟢 ATTACK BLOCKED",
+                                "inconclusive": "🟡 INCONCLUSIVE",
+                            }.get(probe.verdict, probe.verdict.upper())
+                            parts.append(
+                                f'<div class="probe-verdict probe-verdict-{_html_escape(probe.verdict)}" hidden>'
+                                f'<div class="probe-verdict-badge">{_html_escape(verdict_label)}</div>'
+                            )
+                            if probe.time_to_compromise:
+                                parts.append(
+                                    f'<div class="probe-verdict-meta">'
+                                    f'time-to-compromise '
+                                    f'<strong>{_html_escape(probe.time_to_compromise)}</strong>'
+                                    f'</div>'
+                                )
+                            if probe.summary:
+                                parts.append(
+                                    f'<div class="probe-verdict-summary">'
+                                    f'{_html_escape(probe.summary)}</div>'
+                                )
+                            parts.append('</div>')  # /probe-verdict
+                            parts.append('</div>')  # /probe-panel
+
+                        parts.append('</div>')  # /attack-section
+                    elif scenario.steps:
+                        parts.append(
+                            '<div class="attack-section attack-steps-section">'
+                        )
+                        parts.append(
+                            '<div class="attack-label">'
+                            'Attack walkthrough'
+                            '<button type="button" class="attack-play-btn" '
+                            'data-action="play">▶ Play simulation</button>'
+                            '</div>'
+                        )
+                        parts.append('<ol class="attack-steps">')
+                        for i, step in enumerate(scenario.steps):
+                            parts.append(
+                                f'<li class="attack-step" data-step="{i}">'
+                                f'{_html_escape(step)}</li>'
+                            )
+                        parts.append('</ol>')
+                        parts.append('</div>')
                     parts.append(
                         '<div class="attack-disclaimer">'
-                        'Static walkthrough &mdash; no payloads were '
-                        'executed against your system.'
+                        'Simulated walkthrough &mdash; no payloads were '
+                        'sent to your system.'
                         '</div>'
                     )
                     parts.append('</div>')  # /attack-body
@@ -2692,6 +3564,17 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # gives the Coverage Matrix one job (state + filter) and drops a
     # tab from the nav.
 
+    # ---- Input & Output tab panel (v4) ----
+    # Surfaces scan provenance: which files were fed to the scanner and which
+    # artifacts the merger wrote. Helps a reader confirm scope without
+    # opening the underlying JSON.
+    if static:
+        parts.append('<section class="static-section" data-panel="inputoutput">')
+    else:
+        parts.append('<div class="tab-panel" role="tabpanel" data-panel="inputoutput">')
+    _render_input_output_panel(r, parts)
+    parts.append("</section>" if static else "</div>")  # /tab-panel
+
     # ---- Reference tab panel (F.26) ----
     # Renders every check the scanner can fire, grouped by source. Pulled
     # at render-time from the YAML rule pack + checklist template + the
@@ -2744,6 +3627,260 @@ _FRAMEWORK_LABEL = {
     "cwe": "CWE",
     "ast": "AST10",
 }
+
+
+def _findings_per_file(r: Any) -> dict[str, int]:
+    """Count findings per file, normalized to basename for cross-tier match.
+
+    Tier 1 findings carry repo-relative paths (`testbed/.../tools.py`);
+    Tier 2 carries bare filenames (`tools.py`). Normalizing to basename
+    keeps the counts unified for the Input panel display.
+    """
+    from os.path import basename
+    counts: dict[str, int] = {}
+    for f in r.tier1_findings:
+        p = f.finding.get("file") or ""
+        if p:
+            bn = basename(p)
+            counts[bn] = counts.get(bn, 0) + 1
+    for f in r.tier2_findings:
+        p = f.get("file") or ""
+        if p:
+            bn = basename(p)
+            counts[bn] = counts.get(bn, 0) + 1
+    return counts
+
+
+def _fix_file_targets(r: Any) -> dict[str, tuple[int, list[str]]]:
+    """For each fix.md, return (total_findings_addressed, files_addressed).
+
+    - semgrep-fixes.md: tier 1 findings on non-markdown source
+    - manifest-fixes.md: tier 1 findings on markdown manifests
+    - copilot-fixes.md: tier 2 LLM-judge findings
+
+    Files in each list are sorted by count desc so the noisiest target
+    appears first.
+    """
+    from os.path import basename
+    semgrep: dict[str, int] = {}
+    manifest: dict[str, int] = {}
+    copilot: dict[str, int] = {}
+    for f in r.tier1_findings:
+        p = f.finding.get("file") or ""
+        if not p:
+            continue
+        bn = basename(p)
+        if bn.lower().endswith(".md"):
+            manifest[bn] = manifest.get(bn, 0) + 1
+        else:
+            semgrep[bn] = semgrep.get(bn, 0) + 1
+    for f in r.tier2_findings:
+        p = f.get("file") or ""
+        if p:
+            bn = basename(p)
+            copilot[bn] = copilot.get(bn, 0) + 1
+
+    def _summarize(d: dict[str, int]) -> tuple[int, list[str]]:
+        return sum(d.values()), sorted(d.keys(), key=lambda k: (-d[k], k))
+
+    return {
+        "agentshield-semgrep-fixes.md": _summarize(semgrep),
+        "agentshield-manifest-fixes.md": _summarize(manifest),
+        "agentshield-copilot-fixes.md": _summarize(copilot),
+    }
+
+
+def _render_input_output_panel(r: Any, parts: list[str]) -> None:
+    """Render the Input & Output panel as a pipeline diagram:
+    INPUT (scanned files) → AGENTSHIELD (engines + totals) → OUTPUT (artifacts).
+
+    Per-file finding counts appear in the Input column so the reader sees at
+    a glance which files are noisy. The middle column mirrors the headline
+    metrics-row math (Static + LLM − FPs = Net). Output paths are fixed by
+    the writer's naming convention (TODO: derive from writer config).
+    """
+    from os.path import basename
+
+    # ---- Input: code + markdown files, sorted by finding-count desc ----
+    code_files = sorted(
+        {f for f in (r.tier2_scanned_files or []) if not f.endswith(".md")}
+    )
+    md_files: set[str] = set()
+    for f in r.tier1_findings:
+        path = f.finding.get("file") or ""
+        if path.endswith(".md"):
+            md_files.add(path)
+    md_sorted = sorted(md_files)
+    file_counts = _findings_per_file(r)
+    code_files.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
+    md_sorted.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
+    total_input = len(code_files) + len(md_sorted)
+
+    # ---- Output: fixed by writer naming convention. Fix-files carry the
+    # per-file targets they address (count + which input files); HTML
+    # reports don't "address" findings so they get a simpler caption. ----
+    fix_targets = _fix_file_targets(r)
+    html_outputs = [
+        ("output/agentshield-report.html", "Interactive HTML report"),
+        ("output/agentshield-report-print.html", "Print variant"),
+    ]
+    md_outputs = [
+        ("output/agentshield-semgrep-fixes.md", "Semgrep fix recommendations",
+         fix_targets["agentshield-semgrep-fixes.md"]),
+        ("output/agentshield-manifest-fixes.md", "Manifest fix recommendations",
+         fix_targets["agentshield-manifest-fixes.md"]),
+        ("output/agentshield-copilot-fixes.md", "Copilot fix recommendations",
+         fix_targets["agentshield-copilot-fixes.md"]),
+    ]
+    # v4: red-team handoff — one curated walkthrough per finding that has a
+    # narrative in the library. Files covered = unique files referenced by
+    # findings whose rule_id maps to a narrative with backfilled steps.
+    from os.path import basename as _bn
+    rt_files: dict[str, int] = {}
+    rt_total = 0
+    for f in r.tier1_findings:
+        scenario = narrative_for(
+            f.finding.get("agentshield_id") or f.finding.get("rule_id") or ""
+        )
+        if scenario and scenario.steps:
+            p = f.finding.get("file") or ""
+            if p:
+                rt_files[_bn(p)] = rt_files.get(_bn(p), 0) + 1
+                rt_total += 1
+    for f in r.tier2_findings:
+        scenario = narrative_for(f.get("agentshield_id") or f.get("rule_id") or "")
+        if scenario and scenario.steps:
+            p = f.get("file") or ""
+            if p:
+                rt_files[_bn(p)] = rt_files.get(_bn(p), 0) + 1
+                rt_total += 1
+    rt_outputs = [
+        ("output/agentshield-redteam-payloads.md", "Red-team attack walkthroughs",
+         (rt_total, sorted(rt_files.keys(), key=lambda k: (-rt_files[k], k)))),
+    ]
+    total_output = len(html_outputs) + len(md_outputs) + len(rt_outputs)
+
+    def _file_li(path: str) -> str:
+        n = file_counts.get(basename(path), 0)
+        if n:
+            badge = (
+                f'<span class="io-count"><span class="io-dot"></span>'
+                f'{n} finding{"s" if n != 1 else ""}</span>'
+            )
+        else:
+            badge = (
+                '<span class="io-count io-count-clean">'
+                '<span class="io-dot"></span>clean</span>'
+            )
+        return f'<li><code>{_html_escape(path)}</code>{badge}</li>'
+
+    parts.append('<div class="coverage-card">')
+    parts.append('<h3 class="panel-title">Scan pipeline &mdash; Input → Engines → Output</h3>')
+    parts.append(
+        '<p class="panel-subtitle">What AgentShield ingested, what each '
+        'engine produced, and where the results were written.</p>'
+    )
+    parts.append('<div class="io-pipeline">')
+
+    # ===== Column 1: INPUT =====
+    parts.append('<div class="io-pipeline-col">')
+    parts.append('<div class="io-col-title">Input</div>')
+    parts.append('<div class="io-col-subtitle">scanned files</div>')
+    parts.append(
+        f'<div class="io-col-summary">{total_input} files '
+        f'<span class="io-col-summary-sub">&middot; {len(code_files)} code '
+        f'&middot; {len(md_sorted)} markdown</span></div>'
+    )
+    parts.append(f'<div class="io-col-section">Python source ({len(code_files)})</div>')
+    parts.append('<ul class="io-col-list">')
+    for path in code_files:
+        parts.append(_file_li(path))
+    parts.append('</ul>')
+    parts.append(
+        f'<div class="io-col-section">Manifest / markdown ({len(md_sorted)})</div>'
+    )
+    parts.append('<ul class="io-col-list">')
+    if md_sorted:
+        for path in md_sorted:
+            parts.append(_file_li(path))
+    else:
+        parts.append('<li><span class="io-desc">No markdown files scanned</span></li>')
+    parts.append('</ul>')
+    parts.append('</div>')  # /io-pipeline-col input
+
+    # ===== Arrow =====
+    parts.append('<div class="io-pipeline-arrow" aria-hidden="true">→</div>')
+
+    # ===== Column 2: AGENTSHIELD SCAN ENGINES =====
+    # Just identifies the engines that ran — the findings/severity numbers
+    # already live in the headline metrics row above the tabs, so we don't
+    # repeat them here.
+    parts.append('<div class="io-pipeline-col io-col-engine">')
+    parts.append('<div class="io-col-title">AgentShield</div>')
+    parts.append('<div class="io-col-subtitle">scan engines</div>')
+    parts.append('<ul class="io-engine-list">')
+    parts.append(
+        '<li><div class="io-engine-name">Rules-engine Static Scan</div>'
+        '<div class="io-engine-desc">Semgrep on source code + manifest '
+        'scanner on agent-loaded markdown</div></li>'
+    )
+    parts.append(
+        '<li><div class="io-engine-name">LLM-as-a-Judge Scan</div>'
+        '<div class="io-engine-desc">Copilot reviews code and markdown '
+        'manifests for agentic-AI risks</div></li>'
+    )
+    parts.append('</ul>')
+    parts.append('</div>')  # /io-pipeline-col engine
+
+    # ===== Arrow =====
+    parts.append('<div class="io-pipeline-arrow" aria-hidden="true">→</div>')
+
+    # ===== Column 3: OUTPUT =====
+    parts.append('<div class="io-pipeline-col">')
+    parts.append('<div class="io-col-title">Output</div>')
+    parts.append('<div class="io-col-subtitle">generated artifacts</div>')
+    parts.append(f'<div class="io-col-summary">{total_output} files written</div>')
+    parts.append(f'<div class="io-col-section">Report (HTML, {len(html_outputs)})</div>')
+    parts.append('<ul class="io-col-list">')
+    for path, desc in html_outputs:
+        parts.append(
+            f'<li><code>{_html_escape(path)}</code>'
+            f'<span class="io-desc">{_html_escape(desc)}</span></li>'
+        )
+    parts.append('</ul>')
+    def _render_fix_block(label: str, items: list) -> None:
+        parts.append(f'<div class="io-col-section">{_html_escape(label)}</div>')
+        parts.append('<ul class="io-col-list io-col-list-fix">')
+        for path, desc, (n, files) in items:
+            if n == 0:
+                target_line = (
+                    '<span class="io-fix-target io-count-clean">'
+                    '<span class="io-dot"></span>no findings to address</span>'
+                )
+            else:
+                files_str = ", ".join(files)
+                target_line = (
+                    f'<span class="io-fix-target">'
+                    f'<span class="io-dot"></span>'
+                    f'{n} finding{"s" if n != 1 else ""} &middot; '
+                    f'<code class="io-fix-files">{_html_escape(files_str)}</code>'
+                    f'</span>'
+                )
+            parts.append(
+                f'<li class="io-fix-item">'
+                f'<div class="io-fix-head"><code>{_html_escape(path)}</code>'
+                f'<span class="io-desc">{_html_escape(desc)}</span></div>'
+                f'{target_line}'
+                f'</li>'
+            )
+        parts.append('</ul>')
+
+    _render_fix_block(f"Fix recommendations ({len(md_outputs)})", md_outputs)
+    _render_fix_block(f"Red-team handoff ({len(rt_outputs)})", rt_outputs)
+    parts.append('</div>')  # /io-pipeline-col output
+
+    parts.append('</div>')  # /io-pipeline
+    parts.append('</div>')  # /coverage-card
 
 
 def _render_reference_panel(parts: list[str]) -> None:
