@@ -1093,6 +1093,16 @@ h3 { font-size: 15px; }
   margin-top: 8px;
   font-size: 11px; color: var(--text-muted); font-style: italic;
 }
+/* Path B+: live-probe disclaimer reads as "payloads were sent" rather
+   than "no payloads were sent", so style it as informational
+   (accent-toned) rather than purely cautionary. */
+.finding-attack-scenario .attack-disclaimer-live {
+  color: var(--accent); font-style: normal; font-weight: 500;
+}
+.finding-attack-scenario .attack-disclaimer-live code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600; color: var(--accent);
+}
 /* v4: attack walkthrough — ordered steps with ▶ Play animation. */
 .finding-attack-scenario .attack-steps-section {
   padding-top: 10px;
@@ -3451,12 +3461,28 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             )
                         parts.append('</ol>')
                         parts.append('</div>')
-                    parts.append(
-                        '<div class="attack-disclaimer">'
-                        'Simulated walkthrough &mdash; no payloads were '
-                        'sent to your system.'
-                        '</div>'
-                    )
+                    # Disclaimer wording follows the actual state of the
+                    # block: if a live probe ran for this finding, the
+                    # block isn't "no payloads were sent" — payloads WERE
+                    # sent. Keep the simulated-walkthrough caveat for the
+                    # animation up top, but be honest about the probe.
+                    if is_live_probe and effective_probe is not None:
+                        parts.append(
+                            f'<div class="attack-disclaimer attack-disclaimer-live">'
+                            f'Walkthrough above is illustrative; the probe '
+                            f'panel reflects an actual run against '
+                            f'<code>{_html_escape(effective_probe.target)}</code>'
+                            f' &mdash; payloads were sent and responses '
+                            f'captured.'
+                            f'</div>'
+                        )
+                    else:
+                        parts.append(
+                            '<div class="attack-disclaimer">'
+                            'Simulated walkthrough &mdash; no payloads were '
+                            'sent to your system.'
+                            '</div>'
+                        )
                     parts.append('</div>')  # /attack-body
                     parts.append('</details>')
                 parts.append("</div>")  # /finding-body
