@@ -3429,6 +3429,17 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                                 f'<code>{_html_escape(probe.profile)}</code>'
                                 f'</span>'
                             )
+                            # Path B+: surface the absolute date/time/TZ
+                            # of the probe run. Per-line timestamps in
+                            # the terminal stay HH:MM:SS for readability;
+                            # the date + TZ live here once.
+                            if probe.ran_at:
+                                parts.append(
+                                    f'<span class="probe-meta-row">'
+                                    f'<span class="probe-meta-label">ran at</span>'
+                                    f'<code>{_html_escape(probe.ran_at)}</code>'
+                                    f'</span>'
+                                )
                             parts.append('</div>')
                             parts.append('<div class="probe-terminal">')
                             for line in probe.trace:
@@ -3876,6 +3887,16 @@ def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
             )
         except (TypeError, ValueError):
             confidence = None
+        # "ran at" — use the first attempt's ISO timestamp. Falls back
+        # to the run-level started_at if attempts are empty for any
+        # reason. UTC because the orchestrator emits datetime.now(utc).
+        first_ts = ""
+        attempts_list = result.get("attempts") or []
+        if attempts_list:
+            first_ts = attempts_list[0].get("timestamp", "")
+        if not first_ts:
+            first_ts = raw.get("started_at", "")
+        ran_at_display = _iso_to_display(first_ts) if first_ts else ""
         index[(asid, file_, line_)] = ProbeRun(
             target=result.get("target", ""),
             profile=result.get("profile", ""),
@@ -3887,6 +3908,7 @@ def _load_live_probe_index(r: Any) -> dict[tuple[str, str, int], ProbeRun]:
             verdict_reasoning=result.get("verdict_reasoning", "") or "",
             verdict_confidence=confidence,
             harness_used=result.get("harness_used", "") or "",
+            ran_at=ran_at_display,
         )
     return index
 
@@ -3895,6 +3917,21 @@ def _iso_to_hms(iso: str) -> str:
     """Best-effort 'YYYY-MM-DDTHH:MM:SSZ' → 'HH:MM:SS'."""
     if "T" in iso and len(iso) >= 19:
         return iso[11:19]
+    return iso
+
+
+def _iso_to_display(iso: str) -> str:
+    """'YYYY-MM-DDTHH:MM:SSZ' → 'YYYY-MM-DD HH:MM:SS UTC'.
+
+    The probe orchestrator always emits UTC (datetime.now(timezone.utc)),
+    so attaching the literal 'UTC' is honest. If the input doesn't match
+    the expected shape, return it verbatim — the renderer will surface
+    whatever's there.
+    """
+    if "T" in iso and len(iso) >= 19 and iso.endswith("Z"):
+        return f"{iso[:10]} {iso[11:19]} UTC"
+    if "T" in iso and len(iso) >= 19:
+        return f"{iso[:10]} {iso[11:19]}"
     return iso
 
 

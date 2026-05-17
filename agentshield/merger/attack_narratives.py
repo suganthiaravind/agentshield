@@ -95,6 +95,10 @@ class ProbeRun:
     verdict_reasoning: str = ""
     verdict_confidence: float | None = None
     harness_used: str = ""
+    ran_at: str = ""  # "YYYY-MM-DD HH:MM:SS UTC" — populated for LIVE
+                      # probes from the captured ISO timestamp; empty
+                      # for canned narratives (their timestamps are
+                      # synthetic so a wall-clock date would be a lie).
 
 
 @dataclass(frozen=True)
