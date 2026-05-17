@@ -1129,11 +1129,8 @@ h3 { font-size: 15px; }
   vertical-align: 1px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.finding-attack-scenario .attack-probe-badge-live {
-  background: #2f5a2f; color: white;
-}
-.finding-attack-scenario .attack-probe-badge-simulated {
-  background: #ebe7d8; color: #5a4413;
+.finding-attack-scenario .attack-probe-badge-probe {
+  background: var(--accent); color: white;
 }
 .finding-attack-scenario .attack-probe-badge-static {
   background: #c5d4dd; color: #2c4250;
@@ -2507,6 +2504,12 @@ _HTML_JS = """
       panel.hidden = false;
       btn.disabled = true;
       btn.innerHTML = '⏵ Probing…';
+      // v4 (Path B+): scroll the panel into view so the streaming
+      // terminal is visible immediately. Defer one frame so the
+      // browser registers `hidden=false` before measuring layout.
+      requestAnimationFrame(function () {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       // Random-ish cadence to feel like real probe traffic.
       var t = 0;
       lines.forEach(function (line, i) {
@@ -3266,25 +3269,37 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(
                         f'<details class="finding-attack-scenario"{open_attr}>'
                     )
-                    # Path B+: visible-while-collapsed probe-state badge,
-                    # so the reader sees at a glance whether expanding will
-                    # reveal a LIVE probe, a Simulated walkthrough, or a
-                    # Static-only finding.
-                    if is_live_probe and effective_probe is not None:
-                        badge_html = (
-                            '<span class="attack-probe-badge '
-                            'attack-probe-badge-live">[ LIVE probe ]</span>'
+                    # Path B+: visible-while-collapsed probe-state badge.
+                    # Two states, framed from the report-viewer's POV:
+                    #   [ Static scan ]    — no probe attached; finding
+                    #                        is from static analysis.
+                    #   [ Simulated Probe ]— probe data attached (live
+                    #                        OR canned). The click-time
+                    #                        experience is always a
+                    #                        playback, so "simulated"
+                    #                        accurately describes what
+                    #                        the user sees. The live vs
+                    #                        canned distinction stays
+                    #                        inside the panel itself.
+                    if effective_probe is not None:
+                        badge_title = (
+                            "Click 🎯 Run probe to play back the captured "
+                            "trace. The data is "
+                            + ("from a real probe run."
+                               if is_live_probe else "canned narrative data.")
                         )
-                    elif effective_probe is not None:
                         badge_html = (
-                            '<span class="attack-probe-badge '
-                            'attack-probe-badge-simulated">'
-                            '[ Simulated probe ]</span>'
+                            f'<span class="attack-probe-badge '
+                            f'attack-probe-badge-probe" '
+                            f'title="{_html_escape(badge_title)}">'
+                            f'[ Simulated Probe ]</span>'
                         )
                     else:
                         badge_html = (
                             '<span class="attack-probe-badge '
-                            'attack-probe-badge-static">[ Static only ]</span>'
+                            'attack-probe-badge-static" '
+                            'title="Static analysis only — no runtime probe '
+                            'attached for this rule">[ Static scan ]</span>'
                         )
                     parts.append(
                         f'<summary><span class="attack-icon" aria-hidden="true">'
