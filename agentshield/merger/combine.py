@@ -2070,9 +2070,19 @@ footer {
 .io-col-sev-bar .pill { padding: 3px 9px; font-size: 10px; }
 
 .io-engine-list {
-  list-style: none; padding: 0; margin: 16px 0 0;
+  list-style: none; padding: 0; margin: 8px 0 0;
   display: flex; flex-direction: column; gap: 10px;
 }
+.io-engine-phase {
+  margin-top: 16px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent);
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
+}
+.io-engine-phase:first-of-type { margin-top: 12px; }
+.io-engine-phase-probe { color: var(--critical); }
 .io-engine-list li {
   padding: 12px 14px;
   border: 1px solid var(--border);
@@ -4157,13 +4167,20 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     # ===== Arrow =====
     parts.append('<div class="io-pipeline-arrow" aria-hidden="true">→</div>')
 
-    # ===== Column 2: AGENTSHIELD SCAN ENGINES =====
-    # Just identifies the engines that ran — the findings/severity numbers
-    # already live in the headline metrics row above the tabs, so we don't
-    # repeat them here.
+    # ===== Column 2: AGENTSHIELD ENGINES =====
+    # Two phases, surfaced separately so the dual role of Copilot's LLM
+    # (judges findings in phase 1, classifies probe verdicts in phase 2)
+    # is visible at a glance. Phase 2 only renders when a probe actually
+    # ran for this scan — detected by probe-results.json presence.
+    probe_ran = (
+        r.tier1_path is not None
+        and (r.tier1_path.parent / "probe-results.json").exists()
+    )
     parts.append('<div class="io-pipeline-col io-col-engine">')
     parts.append('<div class="io-col-title">AgentShield</div>')
-    parts.append('<div class="io-col-subtitle">scan engines</div>')
+    parts.append('<div class="io-col-subtitle">engines</div>')
+
+    parts.append('<div class="io-engine-phase">Phase 1 &middot; Static analysis</div>')
     parts.append('<ul class="io-engine-list">')
     parts.append(
         '<li><div class="io-engine-name">Rules-engine Static Scan</div>'
@@ -4173,9 +4190,30 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     parts.append(
         '<li><div class="io-engine-name">LLM-as-a-Judge Scan</div>'
         '<div class="io-engine-desc">Copilot reviews code and markdown '
-        'manifests for agentic-AI risks</div></li>'
+        'manifests for agentic-AI risks (judges what static rules flagged + '
+        'finds new ones)</div></li>'
     )
     parts.append('</ul>')
+
+    if probe_ran:
+        parts.append(
+            '<div class="io-engine-phase io-engine-phase-probe">'
+            'Phase 2 &middot; Runtime probe (red-team)</div>'
+        )
+        parts.append('<ul class="io-engine-list">')
+        parts.append(
+            '<li><div class="io-engine-name">HTTP probe execution</div>'
+            '<div class="io-engine-desc">Real payloads sent against the '
+            'configured target; per-finding HTTP responses, timing, and '
+            'verdicts captured</div></li>'
+        )
+        parts.append(
+            '<li><div class="io-engine-name">LLM-assisted probe classifier</div>'
+            '<div class="io-engine-desc">Copilot judges each probe response '
+            '&mdash; verdict + plain-text reasoning + confidence per finding '
+            '(same LLM as Phase 1, different role)</div></li>'
+        )
+        parts.append('</ul>')
     parts.append('</div>')  # /io-pipeline-col engine
 
     # ===== Arrow =====
