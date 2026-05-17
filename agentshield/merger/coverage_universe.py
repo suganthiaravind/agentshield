@@ -222,10 +222,9 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
         "Overlaps CWE-798 hardcoded credentials (covered); ATLAS framing "
         "focuses on broker / vault misconfig outside the app."
     ),
-    ("mitre_atlas", "AML.T0056"): (
-        "Defense lives at the system-prompt protection layer. Plausible "
-        "Tier 2 add: 'system prompt leaked via tool output / error path'."
-    ),
+    # AML.T0056 now covered by rule D013 + Path B probe — static rule
+    # finds the error-path leak surface, runtime probe extracts the
+    # prompt + embedded escalation key to confirm the leakage.
     ("mitre_atlas", "AML.T0057"): (
         "Partial coverage via LLM02 (sensitive data in prompt / I/O); ATLAS "
         "framing focuses on exfiltration via inference, which needs runtime "
