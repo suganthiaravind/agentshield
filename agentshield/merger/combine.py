@@ -2269,6 +2269,128 @@ footer {
   padding-left: 12px; border-left: 2px solid var(--border);
   line-height: 1.5;
 }
+
+/* v4: "How AgentShield works" flowchart at the bottom of the
+   Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
+   numbered stage cards stacked vertically with chevron arrows
+   between them. Stages 2 and 3 split into two parallel sub-boxes
+   for the rules / LLM and orchestrator / classifier pairs. */
+.how-it-works {
+  margin-top: 32px; padding-top: 24px;
+  border-top: 2px dashed var(--border);
+}
+.how-title {
+  font-size: 18px; font-weight: 700;
+  color: var(--text); margin: 0 0 4px;
+}
+.how-subtitle {
+  font-size: 13px; color: var(--text-muted);
+  margin: 0 0 20px; line-height: 1.55;
+}
+.how-subtitle code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; padding: 1px 5px;
+  background: #f4f1e8; border-radius: 3px;
+}
+.how-stages {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 0;
+}
+.how-stage {
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.how-stage-input   { border-left-color: var(--info); }
+.how-stage-static  { border-left-color: var(--accent); }
+.how-stage-runtime { border-left-color: var(--critical); }
+.how-stage-merge   { border-left-color: var(--low); }
+.how-stage-output  { border-left-color: var(--text-muted); }
+.how-stage-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 8px;
+}
+.how-stage-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--accent); color: white;
+  font-weight: 700; font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.how-stage-input   .how-stage-num { background: var(--info); }
+.how-stage-runtime .how-stage-num { background: var(--critical); }
+.how-stage-merge   .how-stage-num { background: var(--low); }
+.how-stage-output  .how-stage-num { background: var(--text-muted); }
+.how-stage-title {
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+  display: inline-flex; align-items: baseline; gap: 10px;
+}
+.how-stage-phase {
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px; border-radius: 3px;
+  background: rgba(44, 95, 126, 0.10);
+}
+.how-stage-phase-optional {
+  color: var(--critical);
+  background: rgba(179, 38, 30, 0.10);
+}
+.how-stage-body { padding-left: 38px; }
+.how-list {
+  margin: 0; padding-left: 18px;
+  font-size: 12.5px; color: var(--text); line-height: 1.65;
+}
+.how-list li { margin-bottom: 4px; }
+.how-list code, .how-sub-list code, .how-sub-out code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: #f4f1e8; padding: 1px 5px; border-radius: 3px;
+  color: var(--text);
+}
+.how-substages {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.how-sub-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.how-sub-title {
+  font-size: 12px; font-weight: 700;
+  color: var(--text); margin-bottom: 6px;
+}
+.how-sub-list {
+  margin: 0; padding-left: 16px;
+  font-size: 12px; color: var(--text); line-height: 1.55;
+}
+.how-sub-list li { margin-bottom: 3px; }
+.how-sub-out {
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-muted);
+  font-style: italic;
+}
+.how-arrow {
+  align-self: center;
+  margin: 4px 0;
+  font-size: 18px;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.how-arrow-optional { color: var(--critical); opacity: 0.7; }
+
+@media (max-width: 800px) {
+  .how-substages { grid-template-columns: 1fr; }
+  .how-stage-body { padding-left: 0; }
+}
 """
 
 
@@ -4432,6 +4554,175 @@ def _render_reference_panel(parts: list[str]) -> None:
             parts.append("</details>")  # /ref-group
         parts.append("</div>")  # /ref-source-group
     parts.append("</div>")  # /reference-card
+    _render_how_it_works(parts)
+
+
+def _render_how_it_works(parts: list[str]) -> None:
+    """Render the "How AgentShield works" staged flowchart.
+
+    Lives at the bottom of the Reference tab so a reader who's just
+    scanned the rule catalogue gets the end-to-end mental model in the
+    same place. Pure HTML/CSS — no SVG dependency, prints cleanly.
+    """
+    parts.append('<div class="how-it-works">')
+    parts.append('<h3 class="how-title">How AgentShield works</h3>')
+    parts.append(
+        '<p class="how-subtitle">End-to-end pipeline. Phase 1 (static) '
+        'always runs; Phase 2 (runtime probe) is opt-in via '
+        '<code>agentshield probe</code> when a target endpoint is '
+        'available.</p>'
+    )
+    parts.append('<div class="how-stages">')
+
+    # Stage 1 — Input
+    parts.append(
+        '<div class="how-stage how-stage-input">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">1</span>'
+        '<span class="how-stage-title">Input &mdash; target repository</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<ul class="how-list">'
+        '<li>Source code &mdash; <code>.py</code>, <code>.java</code>, '
+        '<code>.ts</code>, <code>.js</code></li>'
+        '<li>Skill manifests &mdash; <code>SKILL.md</code>, '
+        '<code>AGENT.md</code>, <code>AGENTS.md</code>, '
+        '<code>CLAUDE.md</code>, &hellip;</li>'
+        '<li>Bundled config &mdash; <code>.yaml</code>, <code>.json</code>, '
+        '<code>.toml</code>, <code>.env</code> in the same directory as '
+        'a skill manifest</li>'
+        '</ul>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="how-arrow" aria-hidden="true">&#9660;</div>')
+
+    # Stage 2 — Static analysis
+    parts.append(
+        '<div class="how-stage how-stage-static">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">2</span>'
+        '<span class="how-stage-title">Static analysis '
+        '<span class="how-stage-phase">Phase 1 &mdash; always runs</span>'
+        '</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<div class="how-substages">'
+        '<div class="how-sub-box">'
+        '<div class="how-sub-title">Rules-engine Scan</div>'
+        '<ul class="how-sub-list">'
+        '<li>Semgrep against <code>.py</code> / <code>.java</code> '
+        'with the bundled rule pack</li>'
+        '<li>Manifest scanner (AST01&ndash;AST09) against agent '
+        '<code>.md</code> + bundled config</li>'
+        '<li>Cross-skill correlation pass (AST08) when ≥2 manifests</li>'
+        '</ul>'
+        '<div class="how-sub-out">&rarr; '
+        '<code>.agentshield/tier1-results.json</code></div>'
+        '</div>'
+        '<div class="how-sub-box">'
+        '<div class="how-sub-title">LLM-as-a-Judge Scan (Copilot)</div>'
+        '<ul class="how-sub-list">'
+        '<li>Reviews Tier 1 findings &mdash; verdict + reasoning</li>'
+        '<li>Adds Tier 2 findings the static rules missed</li>'
+        '<li>Reads code and markdown manifests as a domain expert</li>'
+        '</ul>'
+        '<div class="how-sub-out">&rarr; '
+        '<code>.agentshield/tier2-findings.json</code></div>'
+        '</div>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="how-arrow how-arrow-optional" aria-hidden="true">&#9660;</div>')
+
+    # Stage 3 — Runtime probe (optional)
+    parts.append(
+        '<div class="how-stage how-stage-runtime">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">3</span>'
+        '<span class="how-stage-title">Runtime probe '
+        '<span class="how-stage-phase how-stage-phase-optional">'
+        'Phase 2 &mdash; opt-in (Path B)</span>'
+        '</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<div class="how-substages">'
+        '<div class="how-sub-box">'
+        '<div class="how-sub-title">Probe orchestrator</div>'
+        '<ul class="how-sub-list">'
+        '<li>Reads each finding, looks up payloads by rule_id</li>'
+        '<li>Walks payload variants until one lands</li>'
+        '<li>Mock harness intercepts destructive payloads &mdash; '
+        'no HTTP egress for those</li>'
+        '<li>Telemetry probes (AST02 / AST09) use GET against '
+        'opt-in target endpoints</li>'
+        '</ul>'
+        '</div>'
+        '<div class="how-sub-box">'
+        '<div class="how-sub-title">Classifier</div>'
+        '<ul class="how-sub-list">'
+        '<li>Heuristic: JSON-path + substring on response</li>'
+        '<li>LLM judge (Copilot-shaped, swappable Bedrock backend) '
+        '&mdash; verdict + reasoning + confidence</li>'
+        '<li>Defensive HTTP codes (401/403/429/451) &rarr; blocked</li>'
+        '</ul>'
+        '<div class="how-sub-out">&rarr; '
+        '<code>.agentshield/probe-results.json</code></div>'
+        '</div>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="how-arrow" aria-hidden="true">&#9660;</div>')
+
+    # Stage 4 — Merge & render
+    parts.append(
+        '<div class="how-stage how-stage-merge">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">4</span>'
+        '<span class="how-stage-title">Merge &amp; render</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<ul class="how-list">'
+        '<li>Combines Tier 1 + Tier 2 findings; tags Tier 1 with '
+        'Tier 2 verdicts (TP / CD / FP)</li>'
+        '<li>Reads <code>probe-results.json</code> if present and '
+        'attaches the live trace to each finding (LIVE badge)</li>'
+        '<li>D/D/R categorisation &mdash; Detect (surfaces) / Defend '
+        '(missing controls) / Respond (observability gaps)</li>'
+        '<li>Builds the framework-coverage matrix &mdash; OWASP LLM, '
+        'OWASP Agentic, MITRE ATLAS, CWE, AST10</li>'
+        '</ul>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="how-arrow" aria-hidden="true">&#9660;</div>')
+
+    # Stage 5 — Outputs
+    parts.append(
+        '<div class="how-stage how-stage-output">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">5</span>'
+        '<span class="how-stage-title">Output artifacts</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<ul class="how-list">'
+        '<li><code>output/agentshield-report.html</code> &mdash; '
+        'interactive dashboard (this page)</li>'
+        '<li><code>output/agentshield-report-print.html</code> &mdash; '
+        'static / printable variant</li>'
+        '<li><code>output/agentshield-{semgrep,manifest,copilot}-fixes.md</code> '
+        '&mdash; per-tier remediation handoffs</li>'
+        '<li><code>output/agentshield-redteam-payloads.md</code> &mdash; '
+        'attack walkthroughs for red-team engagement</li>'
+        '</ul>'
+        '</div>'
+        '</div>'
+    )
+
+    parts.append('</div>')  # /how-stages
+    parts.append('</div>')  # /how-it-works
 
 
 def _render_reference_card(parts: list[str], ref: Any) -> None:
