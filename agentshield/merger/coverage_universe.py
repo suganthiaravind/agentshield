@@ -185,20 +185,31 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
     # OWASP Agentic AI Top 10 — the tail (T12–T15) shifts from code-level
     # patterns into multi-agent orchestration and operator-layer threats.
     ("owasp_agentic", "T12"): (
-        "Inter-agent protocol layer; needs cross-service trace context not "
-        "visible to single-repo static analysis. Plausible Tier 2 add."
+        "Agent Communication Poisoning. Static analysis can't see the "
+        "inter-agent protocol's trust assumptions. Now addressable via "
+        "Path B runtime probe — chain a payload through agent A and "
+        "observe whether agent B receives it unsanitised. Needs a "
+        "multi-agent target fixture; no rule yet."
     ),
     ("owasp_agentic", "T13"): (
-        "Multi-agent orchestration is configured at deploy / runtime, not in "
-        "source. Out of scope for a code scanner."
+        "Rogue Agents in Multi-Agent Systems. Multi-agent orchestration "
+        "is configured at deploy / runtime, not in source. Trust-boundary "
+        "tests (does agent X validate input from agent Y?) are runtime-"
+        "probe-addressable post-Path B. Detecting that an agent IS rogue "
+        "in production still needs behavioural baselines beyond a single-"
+        "shot probe."
     ),
     ("owasp_agentic", "T14"): (
-        "Operator-layer threat (social engineering of human-in-the-loop). "
-        "No static code signature."
+        "Human Attacks on Multi-Agent Systems (social engineering of "
+        "human-in-the-loop). Operator-layer threat with no code-level "
+        "signature. Path B's LLM-judge could flag deceptive response "
+        "patterns as a partial signal, but real coverage is operator "
+        "training + UX guardrails, not a scanner."
     ),
     ("owasp_agentic", "T15"): (
-        "Operator-layer threat with no code-level signal — addressed via "
-        "operator training and UX guardrails, not scanners."
+        "Human Manipulation. Operator-layer threat — addressed via "
+        "operator training and UX guardrails, not scanners or probes. "
+        "Remains out of scope by design."
     ),
 
     # MITRE ATLAS — most gaps are runtime / pipeline concerns rather than
