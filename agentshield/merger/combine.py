@@ -2237,6 +2237,7 @@ footer {
   text-transform: uppercase; letter-spacing: 0.05em;
   font-size: 10px; margin-right: 4px;
 }
+.ref-sdks-agnostic { font-style: italic; }
 .ref-fw { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .ref-skip { margin-bottom: 8px; }
 .ref-skip summary {
@@ -4362,15 +4363,26 @@ def _render_reference_card(parts: list[str], ref: Any) -> None:
     parts.append("</div>")
     parts.append(f'<div class="ref-title">{_html_escape(ref.title)}</div>')
     parts.append(f'<div class="ref-desc">{_html_escape(ref.description)}</div>')
-    # Path B+: list the SDKs whose call-site patterns this rule covers,
-    # so readers don't have to wonder whether SMARTSDK / Spring AI /
-    # LangChain etc. are in scope. Auto-detected from the rule's YAML
-    # text; empty list for rules without SDK-specific patterns
-    # (manifest rules, generic checks).
+    # Path B+: list the SDKs whose call-site patterns this rule covers.
+    # Three states:
+    #   non-empty list   → comma-separated names
+    #   empty + Tier 1   → SDK-agnostic note (the rule matches string
+    #                      literals or generic patterns rather than
+    #                      specific SDK constructors)
+    #   empty + Copilot  → skip entirely (no patterns to scan)
     if getattr(ref, "sdks_covered", None):
         parts.append(
             f'<div class="ref-sdks"><span class="ref-sdks-label">Covers:</span> '
             f'{_html_escape(", ".join(ref.sdks_covered))}</div>'
+        )
+    elif ref.source == "Semgrep":
+        parts.append(
+            '<div class="ref-sdks ref-sdks-agnostic">'
+            '<span class="ref-sdks-label">Covers:</span> '
+            'SDK-agnostic &mdash; matches string-literal content / '
+            'generic patterns, fires on any code path regardless of '
+            'which LLM SDK or framework wraps it.'
+            '</div>'
         )
     if ref.frameworks:
         parts.append('<div class="ref-fw">')
