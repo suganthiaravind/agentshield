@@ -1046,6 +1046,174 @@ NARRATIVES: dict[str, AttackScenario] = {
             ),
         ),
     ),
+    "D-AST02-001": AttackScenario(
+        title="Runtime SKILL.md substitution — drift between scan and runtime",
+        attacker_input=(
+            "(No prompt payload — the attack happens at the skill loader."
+            " AgentShield's probe verifies it from outside the process.)"
+        ),
+        code_path=(
+            "The host runtime loads skill bundles from disk at startup "
+            "(and on hot-reload). Without a content_hash verified at "
+            "load time, an attacker who can write to the skill directory "
+            "or proxy the registry response swaps in a malicious bundle. "
+            "AgentShield can't see this statically; the bundle on disk "
+            "may match the audited manifest, but the running runtime is "
+            "serving something different."
+        ),
+        impact=(
+            "Audited manifest doesn't match the running behaviour. Every "
+            "control AgentShield validated statically (permissions, "
+            "tool descriptions, content rules) is now bypassed at runtime "
+            "by a substituted bundle the scan never saw."
+        ),
+        steps=(
+            "Attacker (with write access to the skill cache OR ability "
+            "to intercept the registry fetch) swaps in a modified "
+            "bundle while the host runtime is loading skills.",
+            "Runtime loads the substituted bundle without verifying its "
+            "hash against the audited manifest.",
+            "Substituted bundle declares the same permissions on paper "
+            "but its body / tool implementations diverge — e.g. an "
+            "extra prompt-injection marker, a wider tool catalogue.",
+            "AgentShield's runtime probe queries "
+            "`/api/agentshield/loaded-skills` and compares the "
+            "reported hash to the SHA-256 of the on-disk SKILL.md "
+            "captured at scan time.",
+            "Drift detected — the runtime is serving a different bundle "
+            "than the audited manifest. Probe verdict: landed.",
+        ),
+        simulation=(
+            SimulationStep(
+                actor="AgentShield probe", icon="🎯",
+                target="Host runtime", target_icon="🖥️",
+                action="GET /loaded-skills",
+                payload="(read-only telemetry query)",
+                note="Probe asks the runtime which skills it has loaded and their hashes.",
+            ),
+            SimulationStep(
+                actor="Host runtime", icon="🖥️",
+                target="Probe response", target_icon="📤",
+                action="serialise",
+                payload="skills: [..., {name: billing-tools, loaded_hash: DRIFT-..., drift_detected: true}]",
+                note="Runtime reports a hash that doesn't match the on-disk SKILL.md.",
+            ),
+            SimulationStep(
+                actor="Probe classifier", icon="🤖",
+                target="Verdict", target_icon="📋",
+                action="compare",
+                payload="loaded_hash != scan_hash → drift confirmed",
+                note="Classifier matches drift_detected=true and reports a hash mismatch.",
+            ),
+            SimulationStep(
+                actor="Impact", icon="💥",
+                note="The running runtime is serving a different skill bundle than the audited manifest. AST02 confirmed.",
+            ),
+        ),
+        probe=ProbeRun(
+            target="staging.customer-support.internal",
+            profile="safe-mode (read-only telemetry; no state change)",
+            verdict="landed",
+            time_to_compromise="0.3s",
+            summary=(
+                "Loaded-skill telemetry reports drift for billing-tools "
+                "— runtime hash does not match the scan-time SHA-256."
+            ),
+            trace=(
+                ProbeLine("11:42:01", "info", "agentshield probe --rule AS-M-D-AST02-001 --target staging.customer-support.internal"),
+                ProbeLine("11:42:01", "info", "Probe profile: safe-mode (telemetry only)"),
+                ProbeLine("11:42:01", "request", "GET /api/agentshield/loaded-skills"),
+                ProbeLine("11:42:01", "response", "HTTP 200 OK"),
+                ProbeLine("11:42:01", "response", '{"skills": [{"name": "demo-agent-helper", "loaded_hash": "sha256:MATCH"}, {"name": "billing-tools", "loaded_hash": "sha256:DRIFT-...", "drift_detected": true}]}'),
+                ProbeLine("11:42:01", "warn", "Hash drift on billing-tools: runtime is serving a different bundle than the audited manifest"),
+                ProbeLine("11:42:01", "verdict", "Attack landed — AST02 confirmed (runtime substitution detected)"),
+            ),
+        ),
+    ),
+    "D-AST09-001": AttackScenario(
+        title="Logging policy unenforced — destructive actions not audited",
+        attacker_input=(
+            "(No prompt payload — the attack is the *absence* of logs."
+            " AgentShield's probe verifies enforcement from outside.)"
+        ),
+        code_path=(
+            "The skill manifest declares logging requirements but the "
+            "host runtime enforces them outside the manifest's reach. "
+            "AgentShield can't see at scan time whether destructive "
+            "tools are actually being logged with the required fields. "
+            "A static finding can only say 'logging policy declared'; "
+            "verification needs runtime cooperation."
+        ),
+        impact=(
+            "Incidents go unattributable. A destructive tool fires, the "
+            "audit log doesn't have the user identity / request ID / "
+            "tool args, and forensic reconstruction has no chain of "
+            "custody. The agent is a black box from a compliance "
+            "standpoint."
+        ),
+        steps=(
+            "AgentShield's probe queries the runtime's recent-logs "
+            "telemetry endpoint.",
+            "Runtime returns its recent log entries and its current "
+            "policy state.",
+            "Classifier checks the policy state for required-field "
+            "coverage (timestamp, actor, request_id, tool, args) and "
+            "destructive-tool inclusion.",
+            "Returned state admits `destructive_tools_logged: false` — "
+            "every cancel_subscription / delete_customer_record call "
+            "happens silently.",
+            "Probe verdict: landed. AST09 enforcement gap confirmed by "
+            "the runtime itself.",
+        ),
+        simulation=(
+            SimulationStep(
+                actor="AgentShield probe", icon="🎯",
+                target="Host runtime", target_icon="🖥️",
+                action="GET /recent-logs",
+                payload="(read-only telemetry query)",
+                note="Probe asks the runtime for its recent action log and policy state.",
+            ),
+            SimulationStep(
+                actor="Host runtime", icon="🖥️",
+                target="Probe response", target_icon="📤",
+                action="serialise",
+                payload="logging_config: { destructive_tools_logged: false, fields_logged: [...] }",
+                note="Runtime admits its own policy gap — destructive tools never reach the log.",
+            ),
+            SimulationStep(
+                actor="Probe classifier", icon="🤖",
+                target="Verdict", target_icon="📋",
+                action="evaluate",
+                payload="destructive_tools_logged=false → enforcement gap",
+                note="Classifier matches on the policy admission.",
+            ),
+            SimulationStep(
+                actor="Impact", icon="💥",
+                note="Destructive actions execute without an audit trail. AST09 confirmed.",
+            ),
+        ),
+        probe=ProbeRun(
+            target="staging.customer-support.internal",
+            profile="safe-mode (read-only telemetry; no state change)",
+            verdict="landed",
+            time_to_compromise="0.2s",
+            summary=(
+                "Runtime policy state admits destructive_tools_logged=false. "
+                "Every cancel_subscription / delete_customer_record fires "
+                "without an audit entry."
+            ),
+            trace=(
+                ProbeLine("11:48:07", "info", "agentshield probe --rule AS-M-D-AST09-001 --target staging.customer-support.internal"),
+                ProbeLine("11:48:07", "info", "Probe profile: safe-mode (telemetry only)"),
+                ProbeLine("11:48:07", "request", "GET /api/agentshield/recent-logs"),
+                ProbeLine("11:48:07", "response", "HTTP 200 OK"),
+                ProbeLine("11:48:07", "response", '{"logs": [...], "logging_config": {"destructive_tools_logged": false, "fields_required_by_policy": [...], "fields_logged": [...]}}'),
+                ProbeLine("11:48:07", "warn", "Policy admits destructive_tools_logged=false"),
+                ProbeLine("11:48:07", "warn", "fields_logged is a subset of fields_required_by_policy (request_id, args missing)"),
+                ProbeLine("11:48:07", "verdict", "Attack landed — AST09 confirmed (logging policy not enforced)"),
+            ),
+        ),
+    ),
     "D-AST07-001": AttackScenario(
         title="Unsigned skill bundle — supply-chain swap",
         attacker_input=(

@@ -52,6 +52,7 @@ _RULE_IDS: dict[str, tuple[str, list[str]]] = {
     "ast07-missing-signature":       ("AS-M-D-AST07-001", ["AS-AST-007"]),
     "ast07-missing-content-hash":    ("AS-M-D-AST07-002", ["AS-AST-007"]),
     "ast06-credential-in-bundle":    ("AS-M-D-AST06-001", ["AS-AST-006"]),
+    "ast08-permission-combo-across-skills": ("AS-M-D-AST08-001", ["AS-AST-008"]),
 }
 
 
@@ -639,6 +640,138 @@ ALL_RULES = [
 ]
 
 
+# Dangerous permission pairs — when both appear (in one skill OR split
+# across two skills loaded together), the combo creates an attack class
+# that neither half exhibits alone. Names are the canonical
+# permission tokens read off the manifest frontmatter.
+_AST08_DANGEROUS_COMBOS: list[tuple[frozenset[str], str]] = [
+    (
+        frozenset({"network_egress", "files_write"}),
+        "Network egress paired with arbitrary file write is the textbook "
+        "exfiltration chain — read sensitive files, POST them anywhere.",
+    ),
+    (
+        frozenset({"network_egress", "shell"}),
+        "Shell access paired with network egress turns the agent into a "
+        "general-purpose attack tool — exec anything, send results out.",
+    ),
+    (
+        frozenset({"files_write", "shell"}),
+        "Shell access paired with file write means the agent can drop "
+        "arbitrary scripts onto the host and run them.",
+    ),
+    (
+        frozenset({"network_egress", "files_read_wildcard"}),
+        "Wildcard file read + network egress allows broad credential / "
+        "secret harvesting and exfiltration.",
+    ),
+]
+
+
+def _summarise_permissions(manifest: ParsedManifest) -> set[str]:
+    """Reduce a manifest's frontmatter permissions to canonical tokens.
+
+    Tokens align with the dangerous-combo set above. Intentionally
+    over-approximate — if a manifest grants something that maps to one
+    of these tokens, count it. False positives are fine here; the
+    finding is informational ("audit this combo"), not a hard block.
+    """
+    fm = manifest.frontmatter or {}
+    perms = fm.get("permissions") or {}
+    tokens: set[str] = set()
+    if not isinstance(perms, dict):
+        return tokens
+
+    # network
+    net = perms.get("network")
+    if net is True:
+        tokens.add("network_egress")
+    elif isinstance(net, dict):
+        allow = net.get("allow") or []
+        if isinstance(allow, list) and any(a == "*" for a in allow):
+            tokens.add("network_egress")
+        elif isinstance(allow, list) and allow:
+            tokens.add("network_egress")  # any explicit allow still counts
+
+    # shell
+    if perms.get("shell") is True:
+        tokens.add("shell")
+
+    # files
+    files = perms.get("files") or {}
+    if isinstance(files, dict):
+        for action in ("write", "read"):
+            v = files.get(action)
+            if isinstance(v, list) and v:
+                # wildcards specifically
+                if any(isinstance(p, str) and ("*" in p or "**" in p) for p in v):
+                    tokens.add(f"files_{action}_wildcard")
+                tokens.add(f"files_{action}")
+            elif v is True:
+                tokens.add(f"files_{action}_wildcard")
+                tokens.add(f"files_{action}")
+
+    return tokens
+
+
+def check_ast08_cross_skill(
+    manifests: list[ParsedManifest],
+) -> list[Finding]:
+    """AST08 — Permission Bleed across multi-skill manifests.
+
+    Runs once per scan, not once per manifest, so it sees every skill
+    in the target. When two or more skills are loaded together and
+    their combined permissions hit a known-dangerous combo, emit one
+    finding per (combo, skill pair).
+
+    Single-skill targets short-circuit out — AST08 is by definition a
+    multi-skill concern. The single-manifest AST03 rule already covers
+    the "one skill grants too much" case.
+    """
+    if len(manifests) < 2:
+        return []
+
+    findings: list[Finding] = []
+    summarised = [(m, _summarise_permissions(m)) for m in manifests]
+
+    for i, (mi, ti) in enumerate(summarised):
+        for j in range(i + 1, len(summarised)):
+            mj, tj = summarised[j]
+            combined = ti | tj
+            for combo, reason in _AST08_DANGEROUS_COMBOS:
+                if combo.issubset(combined) and not combo.issubset(ti) and not combo.issubset(tj):
+                    # Combo emerges only when both skills are loaded —
+                    # neither skill exhibits it alone. That's the AST08
+                    # bleed signature.
+                    pi = mi.path.as_posix()
+                    pj = mj.path.as_posix()
+                    findings.append(
+                        _build_finding(
+                            rule_short="ast08-permission-combo-across-skills",
+                            path=mi.path,
+                            line=1,
+                            snippet=(
+                                f"Cross-skill combo: {sorted(combo)} "
+                                f"across {pi} + {pj}"
+                            ),
+                            message=(
+                                f"Two skills loaded together grant a "
+                                f"dangerous permission combination that "
+                                f"neither holds alone. {pi} contributes "
+                                f"{sorted(ti & combo)}, {pj} contributes "
+                                f"{sorted(tj & combo)}. {reason} "
+                                f"AST08 — Permission Bleed."
+                            ),
+                            severity="high",
+                            ast_id="AST08",
+                            owasp_llm=["LLM06"],
+                            owasp_agentic=["T2", "T6"],
+                            cwe=["CWE-269"],  # Improper privilege management
+                        )
+                    )
+    return findings
+
+
 # --- public reference data (used by the Reference tab in HTML reports) ---
 #
 # One entry per *user-visible rule* — multiple sub-rules under a single
@@ -840,6 +973,38 @@ RULE_DESCRIPTIONS = [
         "remediation": (
             "Add `content_hash: sha256:<digest>` over the canonical "
             "skill payload."
+        ),
+    },
+    {
+        "rule_id": "ast08-permission-combo-across-skills",
+        "agentshield_id": "AS-M-D-AST08-001",
+        "legacy_ids": ['AS-AST-008'],
+        "title": "AST08 — dangerous permission combo across skills",
+        "category": "detect",
+        "severity": "high",
+        "description": (
+            "Two or more skill manifests in the target grant a "
+            "permission combination that is dangerous in aggregate, "
+            "even though no single skill exhibits the combo alone. "
+            "Example: skill A grants network egress, skill B grants "
+            "filesystem write — together they form an exfiltration "
+            "chain. A compromise of any one skill leaks the combined "
+            "blast radius across all of them. AST08 — Permission Bleed."
+        ),
+        "frameworks": {
+            "ast": ["AST08"],
+            "owasp_llm": ["LLM06"],
+            "owasp_agentic": ["T2", "T6"],
+            "cwe": ["CWE-269"],
+        },
+        "remediation": (
+            "Audit the cross-skill permission set. Either tighten each "
+            "skill's grant so the dangerous combo no longer materialises "
+            "(e.g. remove network from the skill that doesn't need it), "
+            "or isolate the skills into separate runtime contexts so a "
+            "compromise of one can't leverage the other's privileges. "
+            "Document the intentional combo in the manifest if it's "
+            "load-bearing — silent privilege bleed is the failure mode."
         ),
     },
     {

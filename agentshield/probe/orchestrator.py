@@ -199,17 +199,25 @@ def _probe_with_variants(
                     + ", ".join(f"{n}: {v}" for n, v in payload.extra_headers)
                     + "]"
                 )
-            attempts.append(_attempt(
-                "request",
-                f'POST {endpoint_path} {{ "message": '
-                f'"{_truncate(payload.template, 80)}" }}{extras_note}',
-            ))
+            method = (payload.http_method or "POST").upper()
+            if method == "GET":
+                attempts.append(_attempt(
+                    "request",
+                    f"GET {endpoint_path}{extras_note}",
+                ))
+            else:
+                attempts.append(_attempt(
+                    "request",
+                    f'POST {endpoint_path} {{ "message": '
+                    f'"{_truncate(payload.template, 80)}" }}{extras_note}',
+                ))
             response = send_payload(
                 target_url,
                 payload.template,
                 timeout_seconds=config.timeout_seconds,
                 auth_header=config.auth_header,
                 extra_headers=merged_headers,
+                method=method,
             )
 
         if response.error is not None or response.status == 0:

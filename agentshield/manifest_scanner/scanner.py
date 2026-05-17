@@ -103,6 +103,7 @@ def scan_manifests(target: Path) -> list[Finding]:
     """
     target = Path(target).resolve()
     findings: list[Finding] = []
+    parsed_manifests: list = []
     for path in discover_skill_md_files(target):
         try:
             manifest = parse_skill_md(path)
@@ -112,6 +113,7 @@ def scan_manifests(target: Path) -> list[Finding]:
                 file=sys.stderr,
             )
             continue
+        parsed_manifests.append(manifest)
         for rule in ALL_RULES:
             for finding in rule(manifest):
                 # Rewrite absolute path to repo-relative POSIX path so the
@@ -124,6 +126,20 @@ def scan_manifests(target: Path) -> list[Finding]:
                 except ValueError:
                     finding.location.file_path = p.as_posix()
                 findings.append(finding)
+
+    # v4 (Path B): AST08 is a cross-manifest rule — runs once with the
+    # full list of parsed manifests so it can see permission combos that
+    # only emerge when ≥2 skills are loaded together.
+    from agentshield.manifest_scanner.rules import check_ast08_cross_skill
+    for finding in check_ast08_cross_skill(parsed_manifests):
+        p = Path(finding.location.file_path)
+        try:
+            rel = p.resolve().relative_to(target)
+            finding.location.file_path = rel.as_posix()
+        except ValueError:
+            finding.location.file_path = p.as_posix()
+        findings.append(finding)
+
     findings.sort(
         key=lambda f: (f.location.file_path, f.location.start_line, f.rule_id)
     )

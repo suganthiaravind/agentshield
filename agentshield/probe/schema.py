@@ -54,6 +54,11 @@ class ProbePayload:
                                   # merged on top of config.extra_headers.
                                   # T13 needs to spoof X-Internal-Caller;
                                   # other payloads typically leave empty.
+    http_method: str = "POST"  # "GET" | "POST". GET probes (AST02 /
+                                # AST09 telemetry endpoints) skip the
+                                # request body entirely; the template
+                                # is recorded in the trace as context
+                                # for the human reader, not sent.
 
     @property
     def indicator(self) -> str:

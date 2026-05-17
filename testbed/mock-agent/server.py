@@ -78,6 +78,16 @@ class MockAgentHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler API
+        """Read endpoints — AST02 + AST09 telemetry probes target these."""
+        if self.path.startswith("/api/agentshield/loaded-skills"):
+            self._handle_loaded_skills()
+            return
+        if self.path.startswith("/api/agentshield/recent-logs"):
+            self._handle_recent_logs()
+            return
+        self._respond(404, {"error": "unknown path", "path": self.path})
+
     def do_POST(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler API
         # Path B / T12 + T13 demo endpoints. The orchestrator routes here.
         if self.path == "/api/orchestrator/delegate":
@@ -218,6 +228,81 @@ class MockAgentHandler(BaseHTTPRequestHandler):
             "error": "downstream LLM unavailable; surfacing context",
             "active_system_prompt": system_prompt,
             "user_input_received": message,
+        })
+
+    # ----- AST02 / AST09 telemetry endpoints -----
+    #
+    # These are the "cooperation" surface a host runtime exposes so
+    # AgentShield can validate runtime behaviour from outside the
+    # process. They don't have to be these specific paths in production
+    # — the convention is "expose loaded-skill hashes + recent
+    # action logs", and AgentShield matches against the captured scan-
+    # time state.
+
+    def _handle_loaded_skills(self) -> None:
+        """AST02 — loaded-skills telemetry.
+
+        Returns the hash of every skill the runtime currently has
+        loaded. AgentShield's probe compares against the SHA-256 of
+        each SKILL.md captured at scan time. A mismatch means the
+        on-disk skill has been replaced or the running agent loaded
+        something different than the audited manifest.
+
+        Demo mode: deliberately returns a *drifted* hash for the
+        billing skill so the probe lands with verdict=landed (runtime
+        substitution detected).
+        """
+        self._respond(200, {
+            "skills": [
+                {
+                    "name": "demo-agent-helper",
+                    "path": "SKILL.md",
+                    # Matches the scan-time hash of testbed/demo-agent/SKILL.md.
+                    "loaded_hash": "sha256:MATCH",
+                },
+                {
+                    "name": "billing-tools",
+                    "path": "skills/billing/SKILL.md",
+                    # Drifted — runtime is serving a different bundle
+                    # than the manifest on disk. AST02 confirmed.
+                    "loaded_hash": "sha256:DRIFT-fb12a7e9b3c5d8e1f0a4b6c7d8e9f0a1",
+                    "drift_detected": True,
+                },
+            ],
+        })
+
+    def _handle_recent_logs(self) -> None:
+        """AST09 — recent-logs telemetry.
+
+        Returns the agent's recent action log. AgentShield's probe
+        sends an action then queries this endpoint to verify the
+        action was logged with required fields (user_id, tool_name,
+        timestamp, request_id).
+
+        Demo mode: simulates the partial-logging failure — destructive
+        tool calls happen but no log entry is recorded. The returned
+        list intentionally omits the cancel_subscription call the
+        probe just made.
+        """
+        self._respond(200, {
+            "logs": [
+                {
+                    "timestamp": "2026-05-17T05:00:00Z",
+                    "actor": "user_42",
+                    "request_id": "req-abc-001",
+                    "tool": "summarise_ticket",
+                    "args": {"ticket_id": "TICK-1234"},
+                },
+                # Notably MISSING: any record of recent cancel_subscription /
+                # delete_customer_record calls. The AST09 gap.
+            ],
+            "logging_config": {
+                "destructive_tools_logged": False,
+                "fields_logged": ["timestamp", "actor", "tool"],
+                "fields_required_by_policy": [
+                    "timestamp", "actor", "request_id", "tool", "args",
+                ],
+            },
         })
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
