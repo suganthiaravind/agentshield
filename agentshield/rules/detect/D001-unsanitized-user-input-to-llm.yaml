@@ -96,7 +96,10 @@ rules:
         owasp_llm: ["LLM01"]
         owasp_agentic: ["T6"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        mitre_atlas: ["AML.T0051"]
+        # Path B: AML.T0054 (Jailbreak) added — runtime probe validates
+        # the injection actually lands at the LLM. The static surface
+        # finds the path; the probe confirms the model accepts it.
+        mitre_atlas: ["AML.T0051", "AML.T0054"]
         agentshield_v1: []
       languages: [python]
       remediation: >-

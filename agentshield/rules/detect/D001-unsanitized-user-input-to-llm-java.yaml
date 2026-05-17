@@ -114,7 +114,9 @@ rules:
         owasp_llm: ["LLM01"]
         owasp_agentic: ["T6"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        mitre_atlas: ["AML.T0051"]
+        # Path B: AML.T0054 (Jailbreak) added — runtime probe confirms
+        # the injection lands at the LLM.
+        mitre_atlas: ["AML.T0051", "AML.T0054"]
         agentshield_v1: []
       languages: [java]
       remediation: >-

@@ -1,0 +1,65 @@
+rules:
+  - id: agentshield.detect.unvalidated-peer-agent-input
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Handler accepts a request claiming to come from a trusted internal
+      agent (via a header signal like X-Internal-Caller / X-Agent-Source)
+      and forwards the payload to an LLM without per-call authentication
+      or input validation. Any peer on the internal network that can set
+      the header is implicitly trusted — there is no cryptographic proof
+      the caller is the agent it claims to be (OWASP Agentic T13 — Rogue
+      Agents in Multi-Agent Systems). Pair with a runtime probe to
+      confirm the LLM acts on attacker-controlled "peer" input.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              # Body of an "internal" handler — the source.
+              - pattern: request.json[$KEY]
+              - pattern: request.json.get(...)
+              - pattern: $REQ.json()
+              - pattern: await $REQ.json()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $LLM.invoke($X, ...)
+              - pattern: $LLM.ainvoke($X, ...)
+              - pattern: $CHAIN.invoke($X, ...)
+              - pattern: $CHAIN.run($X, ...)
+              - pattern: $AGENT.invoke($X, ...)
+              - pattern: $AGENT.run($X, ...)
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              # If the handler verifies a signed token before invoking
+              # the LLM, treat that as sanitisation. Common patterns:
+              - pattern: jwt.decode($TOKEN, $KEY, ...)
+              - pattern: $V.verify($TOKEN, ...)
+              - pattern: $V.verify_signature(...)
+              # Or any guardrail call.
+              - pattern: $G.guard($X, ...)
+              - pattern: $G.scan($X, ...)
+    metadata:
+      category: detect
+      agentshield_id: AS-S-D-LLM01-006
+      legacy_ids: []
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        owasp_agentic: ["T13", "T6"]
+        nist_ai_rmf: ["GOVERN-1.5", "MAP-3.1"]
+        mitre_atlas: ["AML.T0051"]
+        cwe: ["CWE-345"]  # Insufficient verification of data authenticity
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Require cryptographic proof that the caller is the agent it claims
+        to be — a short-lived signed token (JWT with mTLS-anchored claims
+        or a peer-key HMAC) carried per request, not a static header.
+        Treat peer input the same way you treat user input: route through
+        a guardrail and a structural validator before it reaches the LLM
+        prompt. Log the verified caller identity on every invocation so
+        a rogue agent's traffic is attributable later.
+      references:
+        - "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"

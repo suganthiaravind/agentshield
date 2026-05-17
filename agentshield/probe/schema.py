@@ -45,6 +45,15 @@ class ProbePayload:
     json_indicators: tuple[str, ...] = ()
     destructive: bool = False
     notes: str = ""
+    endpoint_override: str = ""  # When set, this payload hits this path
+                                  # instead of config.endpoint_path. Used
+                                  # for rules whose attack surface is a
+                                  # specific endpoint (T12 → /delegate,
+                                  # T13 → /receive).
+    extra_headers: tuple[tuple[str, str], ...] = ()  # Per-payload headers
+                                  # merged on top of config.extra_headers.
+                                  # T13 needs to spoof X-Internal-Caller;
+                                  # other payloads typically leave empty.
 
     @property
     def indicator(self) -> str:

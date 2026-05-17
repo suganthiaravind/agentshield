@@ -79,6 +79,13 @@ class MockAgentHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_POST(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler API
+        # Path B / T12 + T13 demo endpoints. The orchestrator routes here.
+        if self.path == "/api/orchestrator/delegate":
+            self._handle_delegate()
+            return
+        if self.path == "/api/orchestrator/receive":
+            self._handle_receive_from_peer()
+            return
         if self.path not in ("/api/agent", "/api/support"):
             self._respond(404, {"error": "unknown path", "path": self.path})
             return
@@ -118,6 +125,71 @@ class MockAgentHandler(BaseHTTPRequestHandler):
             response["sns_publishes"] = publishes
 
         self._respond(200, response)
+
+    # ----- T12 / T13 multi-agent surface -----
+
+    def _handle_delegate(self) -> None:
+        """T12 — orchestrator forwards user input to a downstream agent.
+
+        Models the vulnerable orchestrator: it accepts the user message,
+        forwards it verbatim to the downstream specialist agent, and
+        returns the downstream reply. The "downstream" call is simulated
+        inline (we don't actually spawn a second process); the response
+        is shaped as if it came back from a peer agent that took the
+        injection at face value.
+        """
+        body = self._read_body()
+        message = body.get("message", "")
+        if not isinstance(message, str):
+            self._respond(400, {"error": "message must be a string"})
+            return
+        # Inline-simulated downstream call. The downstream agent's
+        # observed response reflects T12: it accepted the relayed
+        # message as if it were a trusted internal request, and ran the
+        # injected tool call.
+        _planned_tool_calls = _fake_llm_planner(message)[1]
+        # The forwarded-payload echo lets the classifier see that the
+        # downstream agent received attacker-controlled instructions
+        # unsanitised — this is the indicator the T12 probe matches on.
+        self._respond(200, {
+            "reply": (
+                "Downstream agent processed the relayed request."
+            ),
+            "forwarded_to": "downstream-agent.internal/api/agent",
+            "downstream_received": {
+                "message": message,
+                "claimed_caller": "orchestrator",
+            },
+            "downstream_tool_calls": _planned_tool_calls,
+            "trust_boundary_bypassed": True,
+        })
+
+    def _handle_receive_from_peer(self) -> None:
+        """T13 — handler that trusts an X-Internal-Caller header.
+
+        No cryptographic proof of the caller — any peer that knows the
+        header name can impersonate any agent. The handler then passes
+        the body straight to the (simulated) LLM, executing instructions
+        the supposed-peer carried.
+        """
+        caller = self.headers.get("X-Internal-Caller")
+        if not caller:
+            self._respond(403, {"error": "internal callers only"})
+            return
+        body = self._read_body()
+        message = body.get("message", "")
+        if not isinstance(message, str):
+            self._respond(400, {"error": "message must be a string"})
+            return
+        _, tool_calls = _fake_llm_planner(message)
+        self._respond(200, {
+            "reply": (
+                f"Treated request from claimed peer '{caller}' as trusted."
+            ),
+            "claimed_caller": caller,
+            "peer_authenticated": False,  # the whole point of T13
+            "tool_calls": tool_calls,
+        })
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         sys.stderr.write(f"[mock-agent] {self.command} {self.path}\n")

@@ -184,21 +184,9 @@ FRAMEWORK_UNIVERSES: dict[str, list[str]] = {
 COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
     # OWASP Agentic AI Top 10 — the tail (T12–T15) shifts from code-level
     # patterns into multi-agent orchestration and operator-layer threats.
-    ("owasp_agentic", "T12"): (
-        "Agent Communication Poisoning. Static analysis can't see the "
-        "inter-agent protocol's trust assumptions. Now addressable via "
-        "Path B runtime probe — chain a payload through agent A and "
-        "observe whether agent B receives it unsanitised. Needs a "
-        "multi-agent target fixture; no rule yet."
-    ),
-    ("owasp_agentic", "T13"): (
-        "Rogue Agents in Multi-Agent Systems. Multi-agent orchestration "
-        "is configured at deploy / runtime, not in source. Trust-boundary "
-        "tests (does agent X validate input from agent Y?) are runtime-"
-        "probe-addressable post-Path B. Detecting that an agent IS rogue "
-        "in production still needs behavioural baselines beyond a single-"
-        "shot probe."
-    ),
+    # T12 and T13 now covered by rules D-LLM01-005 / D-LLM01-006 plus
+    # the Path B runtime probes (orchestrator → downstream-agent fixture
+    # in testbed/mock-agent). Left here as reference for the journey.
     ("owasp_agentic", "T14"): (
         "Human Attacks on Multi-Agent Systems (social engineering of "
         "human-in-the-loop). Operator-layer threat with no code-level "
@@ -227,10 +215,9 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
         "LLM-aided phishing is delivered to end-users — defenses belong to "
         "output handling / human review, not the LLM call site."
     ),
-    ("mitre_atlas", "AML.T0054"): (
-        "Jailbreak attempts are caught at runtime by guardrail / classifier "
-        "services, not by static patterns in the app."
-    ),
+    # AML.T0054 now mapped onto D-LLM01-001 (prompt injection) — the
+    # static rule finds the path, the Path B runtime probe confirms the
+    # jailbreak actually lands at the LLM.
     ("mitre_atlas", "AML.T0055"): (
         "Overlaps CWE-798 hardcoded credentials (covered); ATLAS framing "
         "focuses on broker / vault misconfig outside the app."
@@ -260,10 +247,10 @@ COVERAGE_GAP_REASONS: dict[tuple[str, str], str] = {
         "Insufficiently Protected Credentials — overlaps CWE-798 hardcoded "
         "creds (covered). CWE-522's in-flight protection angle is generic."
     ),
-    ("cwe", "CWE-918"): (
-        "SSRF — generic web weakness. Plausible Tier 2 add: 'tool fetches "
-        "URL derived from LLM output without allowlist'."
-    ),
+    # CWE-918 now mapped onto AST03 (manifest unrestricted network) +
+    # D-LLM01-005 (agent comm poisoning). LLM-derived URLs reaching an
+    # unrestricted egress channel is the agent-side SSRF surface;
+    # runtime probe validates the request actually leaves the network.
 
     # OWASP Agentic Skills Top 10 — gaps are mostly runtime concerns the
     # manifest scanner can't observe from a static SKILL.md.

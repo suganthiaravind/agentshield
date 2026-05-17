@@ -130,7 +130,6 @@ def _probe_with_variants(
     classifier run; the LLM verdict wins the headline and its reasoning
     is recorded for the report.
     """
-    target_url = config.target.rstrip("/") + config.endpoint_path
     attempts: list[ProbeAttempt] = []
     harness = MockHarness() if config.harness == "mock" else None
 
@@ -172,6 +171,14 @@ def _probe_with_variants(
             + (" [destructive]" if payload.destructive else ""),
         ))
 
+        # Per-payload endpoint + headers override the config-level
+        # defaults. Used for rules whose attack surface is a specific
+        # endpoint (T12 → /delegate, T13 → /receive) or that require
+        # spoofed headers (T13 → X-Internal-Caller).
+        endpoint_path = payload.endpoint_override or config.endpoint_path
+        target_url = config.target.rstrip("/") + endpoint_path
+        merged_headers = tuple(config.extra_headers) + tuple(payload.extra_headers)
+
         # Harness routing — destructive payloads never leave the runner
         # when the harness is active. Non-destructive payloads always
         # use the real target.
@@ -185,17 +192,24 @@ def _probe_with_variants(
             response = harness.intercept(payload)
             used_harness = harness.name
         else:
+            extras_note = ""
+            if payload.extra_headers:
+                extras_note = (
+                    " [+ "
+                    + ", ".join(f"{n}: {v}" for n, v in payload.extra_headers)
+                    + "]"
+                )
             attempts.append(_attempt(
                 "request",
-                f'POST {config.endpoint_path} {{ "message": '
-                f'"{_truncate(payload.template, 80)}" }}',
+                f'POST {endpoint_path} {{ "message": '
+                f'"{_truncate(payload.template, 80)}" }}{extras_note}',
             ))
             response = send_payload(
                 target_url,
                 payload.template,
                 timeout_seconds=config.timeout_seconds,
                 auth_header=config.auth_header,
-                extra_headers=config.extra_headers,
+                extra_headers=merged_headers,
             )
 
         if response.error is not None or response.status == 0:

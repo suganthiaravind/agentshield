@@ -1,0 +1,69 @@
+rules:
+  - id: agentshield.detect.agent-communication-poisoning
+    languages: [python]
+    severity: ERROR
+    message: >-
+      User-controlled input is forwarded verbatim to another agent's HTTP
+      endpoint without sanitisation or trust-boundary enforcement. The
+      downstream agent receives the attacker's payload as if it came from
+      a trusted internal caller — the upstream agent's authority is
+      laundered onto the downstream call (OWASP Agentic T12 — Agent
+      Communication Poisoning). Pair this rule with a runtime probe
+      (Path B) to verify the downstream agent actually accepts and acts
+      on the forwarded payload.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.json[$KEY]
+              - pattern: request.json.get(...)
+              - pattern: request.form[$KEY]
+              - pattern: request.form.get(...)
+              - pattern: request.args.get(...)
+              - pattern: request.args[$KEY]
+              - pattern: request.data
+              - pattern: $REQ.json()
+              - pattern: await $REQ.json()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # Any outbound HTTP call whose JSON body carries a tainted
+              # field — `requests`, `httpx`, `aiohttp`, urllib3.
+              - pattern: requests.post($URL, json={..., $K: $X, ...}, ...)
+              - pattern: requests.put($URL, json={..., $K: $X, ...}, ...)
+              - pattern: httpx.post($URL, json={..., $K: $X, ...}, ...)
+              - pattern: httpx.put($URL, json={..., $K: $X, ...}, ...)
+              - pattern: $CLIENT.post($URL, json={..., $K: $X, ...}, ...)
+              - pattern: $CLIENT.put($URL, json={..., $K: $X, ...}, ...)
+              # aiohttp form
+              - pattern: aiohttp.ClientSession().post($URL, json={..., $K: $X, ...}, ...)
+    metadata:
+      category: detect
+      agentshield_id: AS-S-D-LLM01-005
+      legacy_ids: []
+      severity_normalized: high
+      framework_mappings:
+        owasp_llm: ["LLM01"]
+        # T12 (Agent Communication Poisoning) is the headline mapping.
+        # T6 stays in scope because this is still a prompt-injection
+        # vector — the injection just lands one hop downstream.
+        owasp_agentic: ["T12", "T6"]
+        nist_ai_rmf: ["MAP-2.3", "GOVERN-1.5"]
+        mitre_atlas: ["AML.T0051", "AML.T0054"]
+        cwe: ["CWE-918"]  # SSRF-adjacent — the agent fetches at the
+                          # request of an attacker, even though the
+                          # request target is fixed; the body is what's
+                          # attacker-controlled.
+        agentshield_v1: []
+      languages: [python]
+      remediation: >-
+        Sanitise or structurally validate inter-agent payloads before
+        forwarding. Strip instruction-shaped content from the user
+        message (e.g. via a guardrail) before placing it in the
+        downstream request body. Authenticate the downstream call with
+        a signed token that binds the request to a specific user
+        identity, so the downstream agent can apply per-user policy
+        instead of trusting the upstream agent unconditionally.
+      references:
+        - "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+        - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

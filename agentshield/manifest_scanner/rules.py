@@ -161,7 +161,11 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                 ast_id="AST03",
                 owasp_llm=["LLM06"],
                 owasp_agentic=["T2", "T3"],
-                cwe=["CWE-732"],
+                # Path B: CWE-918 (SSRF) added — when an LLM-derived URL
+                # can be passed to the skill's network egress, this is
+                # the textbook agent-side SSRF surface. Runtime probe
+                # validates it by triggering an outbound fetch.
+                cwe=["CWE-732", "CWE-918"],
             )
         )
     elif isinstance(network, dict):
@@ -182,7 +186,7 @@ def check_ast03_overprivileged(manifest: ParsedManifest) -> list[Finding]:
                     ast_id="AST03",
                     owasp_llm=["LLM06"],
                     owasp_agentic=["T2", "T3"],
-                    cwe=["CWE-732"],
+                    cwe=["CWE-732", "CWE-918"],  # Path B: SSRF surface
                 )
             )
 
