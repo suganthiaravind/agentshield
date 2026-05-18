@@ -1558,6 +1558,19 @@ footer {
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-muted); font-weight: 600; margin-right: 4px;
 }
+/* v4: leading "FILTER" badge — funnel icon + label so the row
+   reads as a filter bar at a glance. Matches the .filter-label
+   typography so it sits on the same baseline as Severity / Origin. */
+.filter-bar-icon {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding-right: 8px; margin-right: 4px;
+  border-right: 1px solid var(--border);
+  color: var(--accent);
+}
+.filter-bar-icon-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); font-weight: 700;
+}
 .filter-chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px;
@@ -3144,6 +3157,19 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # F.29: skip in static mode — no JS, no filtering, just stacked sections.
     if not static:
         parts.append('<div class="filter-bar" id="filter-bar">')
+        # v4: leading funnel icon so the row reads as "this is a filter
+        # bar" at a glance, not as a row of decorative pills.
+        parts.append(
+            '<span class="filter-bar-icon" aria-hidden="true" '
+            'title="Filter findings">'
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            'stroke-linejoin="round">'
+            '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>'
+            '</svg>'
+            '<span class="filter-bar-icon-label">FILTER</span>'
+            '</span>'
+        )
         parts.append('<div class="filter-group">')
         parts.append('<span class="filter-label">Severity</span>')
         for sev in ("critical", "high", "medium", "low", "info"):
