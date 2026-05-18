@@ -2706,6 +2706,18 @@ footer {
   font-size: 11px; color: var(--text-muted);
   font-style: italic;
 }
+/* Mirror of `.how-step-files` for the Stage 2 sub-boxes — tucks the
+   technical code/file reference under the plain-language list without
+   competing with the primary prose. */
+.how-sub-files {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #f7f4ec;
+  border-left: 2px solid var(--text-muted);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px; line-height: 1.55;
+  color: var(--text-muted);
+}
 .how-arrow {
   align-self: center;
   margin: 4px 0;
@@ -5413,22 +5425,50 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<div class="how-sub-box">'
         '<div class="how-sub-title">Rules-engine Scan</div>'
         '<ul class="how-sub-list">'
-        '<li>Semgrep against <code>.py</code> / <code>.java</code> '
-        'with the bundled rule pack</li>'
-        '<li>Manifest scanner (AST01&ndash;AST09) against agent '
-        '<code>.md</code> + bundled config</li>'
-        '<li>Cross-skill correlation pass (AST08) when ≥2 manifests</li>'
+        '<li>AgentShield walks through every code file in your project '
+        'looking for known-bad patterns &mdash; like a spell-checker, '
+        'but for security bugs in Python and Java.</li>'
+        '<li>It also reads your agent\'s setup files '
+        '(<code>SKILL.md</code>, <code>AGENT.md</code>, etc.) and '
+        'looks for risky permissions, missing safety markers, or '
+        'jailbreak text hidden inside them.</li>'
+        '<li>When your agent has more than one skill, AgentShield '
+        'checks for <em>dangerous combinations</em> &mdash; for '
+        'example, one skill that can read customer data plus another '
+        'that can send messages out is risky <em>together</em> even '
+        'if each is fine on its own.</li>'
         '</ul>'
+        '<div class="how-sub-files">'
+        '<span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/runner.py</code> + '
+        '<code>agentshield/manifest_scanner/*</code>'
+        '</div>'
         '<div class="how-sub-out">&rarr; '
         '<code>.agentshield/tier1-results.json</code></div>'
         '</div>'
         '<div class="how-sub-box">'
         '<div class="how-sub-title">LLM-as-a-Judge Scan (Copilot)</div>'
         '<ul class="how-sub-list">'
-        '<li>Reviews Tier 1 findings &mdash; verdict + reasoning</li>'
-        '<li>Adds Tier 2 findings the static rules missed</li>'
-        '<li>Reads code and markdown manifests as a domain expert</li>'
+        '<li>An AI reviewer reads your code from start to finish like '
+        'a senior security engineer would &mdash; spotting problems '
+        'the strict pattern rules can\'t see, like a missing safety '
+        'check several functions away from where the danger actually '
+        'lives.</li>'
+        '<li>It also double-checks every issue the Rules-engine Scan '
+        'found and gives each one a verdict in plain English: real '
+        'problem, context-dependent, or false alarm &mdash; with the '
+        'reasoning attached.</li>'
+        '<li>It reads both code and the agent\'s setup files together, '
+        'so it can catch problems that only show up when you look at '
+        'the whole picture.</li>'
         '</ul>'
+        '<div class="how-sub-files">'
+        '<span class="how-step-files-label">Runs in:</span> '
+        'your IDE (Copilot Chat) &mdash; you paste the prompt printed '
+        'by <code>agentshield scan</code>, Copilot does the review '
+        'and writes the answer to '
+        '<code>.agentshield/tier2-findings.json</code>.'
+        '</div>'
         '<div class="how-sub-out">&rarr; '
         '<code>.agentshield/tier2-findings.json</code></div>'
         '</div>'
