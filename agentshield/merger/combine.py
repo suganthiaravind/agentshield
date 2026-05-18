@@ -848,8 +848,7 @@ h3 { font-size: 15px; }
 .ddr-card .ddr-question {
   font-size: 13px;
   font-style: italic;
-  font-weight: 700;
-  color: var(--text);
+  color: var(--text-muted);
   border-left: 3px solid;
   padding: 2px 0 2px 12px;
   margin: 0 0 18px 12px;
