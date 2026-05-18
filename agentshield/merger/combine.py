@@ -2399,6 +2399,60 @@ footer {
   line-height: 1;
 }
 .how-arrow-optional { color: var(--critical); opacity: 0.7; }
+/* Stage 3 step-by-step list. Each <li> is one numbered action with a
+   short label + a body that can carry nested sub-steps. CSS counter
+   so the numbering survives nesting + responsive layout. */
+.how-steps {
+  counter-reset: howstep;
+  list-style: none;
+  margin: 4px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.how-steps > .how-step {
+  counter-increment: howstep;
+  position: relative;
+  padding: 10px 12px 10px 44px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.how-steps > .how-step::before {
+  content: counter(howstep);
+  position: absolute; left: 12px; top: 10px;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--critical); color: white;
+  font-size: 11px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.how-step-label {
+  display: block;
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.how-step-label em {
+  font-weight: 500; font-style: normal;
+  color: var(--text-muted); font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+.how-step-body {
+  font-size: 12.5px; color: var(--text);
+  line-height: 1.6;
+}
+.how-step-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: #f4f1e8; padding: 1px 5px; border-radius: 3px;
+}
+.how-step-substeps {
+  margin: 6px 0 0 0; padding-left: 20px;
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12.5px; line-height: 1.55;
+}
+.how-step-substeps li::marker { color: var(--critical); font-weight: 600; }
+.how-step-body > ul.how-sub-list { margin-top: 4px; }
 
 @media (max-width: 800px) {
   .how-substages { grid-template-columns: 1fr; }
@@ -4677,60 +4731,113 @@ def _render_how_it_works(parts: list[str]) -> None:
         '</span>'
         '</div>'
         '<div class="how-stage-body">'
-        '<div class="how-substages">'
 
-        '<div class="how-sub-box">'
-        '<div class="how-sub-title">① Payload lookup &amp; send</div>'
-        '<ul class="how-sub-list">'
-        '<li>Each finding\'s <code>rule_id</code> &rarr; entry in the '
-        'bundled payload library (<code>agentshield/probe/payloads.py</code>) '
-        '&mdash; same rule pack that drives Phase 1, hand-curated per rule</li>'
-        '<li>Multiple payload variants per rule (e.g. canonical '
-        'injection + role-play framing); orchestrator walks them in '
-        'order, stops on first <code>landed</code></li>'
-        '<li>Per-payload overrides: endpoint path (T12 &rarr; '
-        '<code>/delegate</code>, T13 &rarr; <code>/receive</code>), '
-        'extra headers (T13 spoofs <code>X-Internal-Caller</code>), '
-        'HTTP method (POST for attacks; GET reserved for future '
-        'opt-in telemetry probes)</li>'
-        '<li>Real HTTP roundtrip against <code>--target</code>; '
-        'captures status, body, headers, <code>elapsed_ms</code></li>'
-        '<li><strong>Mock harness</strong> intercepts <code>destructive=True'
-        '</code> payloads &mdash; synthesises a target-shaped response, '
-        'no real egress, so probe coverage works without putting prod '
-        'state at risk</li>'
-        '</ul>'
-        '</div>'
+        '<ol class="how-steps">'
 
-        '<div class="how-sub-box">'
-        '<div class="how-sub-title">② Classify &amp; write</div>'
+        '<li class="how-step">'
+        '<span class="how-step-label">Read findings</span>'
+        '<div class="how-step-body">Orchestrator loads <code>.agentshield/'
+        'tier1-results.json</code> + <code>tier2-findings.json</code>, '
+        'dedupes by <code>(agentshield_id, file, line)</code>.</div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Look up payload template</span>'
+        '<div class="how-step-body">For each finding\'s <code>rule_id</code>, '
+        'fetch the entry from the bundled payload library '
+        '(<code>agentshield/probe/payloads.py</code>) &mdash; '
+        '<code>template</code> string with <code>{placeholders}</code>, '
+        '<code>template_vars</code> defaults, indicators, per-payload '
+        'endpoint override + extra headers + HTTP method.</div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Build target context '
+        '<em>(the dynamic-payload layer)</em></span>'
+        '<div class="how-step-body">'
+        'Merge values in priority order, lowest to highest:'
+        '<ol class="how-step-substeps">'
+        '<li><strong>Payload defaults</strong> &mdash; '
+        '<code>template_vars</code> baked into the rule. Always present; '
+        'keeps probes running with no operator setup.</li>'
+        '<li><strong>Manual overrides</strong> &mdash; '
+        '<code>.agentshield/probe-targets.yaml</code> if the operator '
+        'has filled it in (<code>{rule_id: {var: value}}</code>). '
+        'Useful for deterministic golden-output tests.</li>'
+        '<li><strong>LLM-synthesised values</strong> &mdash; when '
+        '<code>--synthesize</code> is set, the synthesiser reads every '
+        '<code>SKILL.md</code> under the target, extracts the tool '
+        'catalogue from <code>tools:</code> frontmatter, and produces '
+        'per-rule context (e.g. picks the actually-destructive tool '
+        'name for <code>{tool_name}</code>, the agent\'s role for '
+        '<code>{role_to_assume}</code>, etc.). Backend is a swappable '
+        'Protocol &mdash; Copilot (Chat API for headless, IDE for '
+        'interactive), boto3-Bedrock, Anthropic, OpenAI, or any '
+        'programmatic LLM API.</li>'
+        '</ol>'
+        'Provenance is tracked per-key so the trace shows whether each '
+        'value came from <code>default</code>, <code>manual</code>, '
+        'or <code>llm</code>.</div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Render the payload</span>'
+        '<div class="how-step-body">Substitute every <code>{placeholder}</code> '
+        'in the template with the merged context value. Unknown '
+        'placeholders pass through verbatim so partial fills never '
+        'crash the run. The rendered text is what goes on the wire.</div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Route &amp; send</span>'
+        '<div class="how-step-body">'
         '<ul class="how-sub-list">'
-        '<li><strong>Heuristic layer:</strong> JSON-path assertions '
+        '<li>If <code>destructive=True</code> AND '
+        '<code>--harness mock</code> is active &rarr; the mock harness '
+        'returns a synthesised target-shaped response. No HTTP egress.</li>'
+        '<li>Otherwise &rarr; real HTTP roundtrip against '
+        '<code>--target + endpoint_override</code> with merged '
+        '<code>extra_headers</code>. Captures status, body, headers, '
+        '<code>elapsed_ms</code>.</li>'
+        '<li>Multi-variant: orchestrator walks payload variants in '
+        'order, stops on first <code>landed</code>; merges every '
+        'attempt into one trace.</li>'
+        '</ul></div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Classify the response</span>'
+        '<div class="how-step-body">Two layers, the LLM verdict wins '
+        'the headline when both run:'
+        '<ol class="how-step-substeps">'
+        '<li><strong>Heuristic</strong> (always runs) &mdash; defensive '
+        'HTTP codes (401/403/429/451) &rarr; <code>blocked</code> '
+        'unconditionally; otherwise JSON-path assertions '
         '(<code>tool_calls[].name=cancel_subscription</code>) beat '
-        'substring grep beat defensive HTTP codes</li>'
-        '<li><strong>LLM judge</strong> (when <code>--classifier llm</code>): '
-        'a swappable backend gets payload + response + rule context, '
-        'returns verdict + plain-text reasoning + <code>confidence</code> '
-        '(0&hellip;1). LLM verdict wins the headline; heuristic verdict '
-        'is recorded for reference. Backend is a one-class swap &mdash; '
-        'Copilot (Chat API for headless, IDE for interactive — same '
-        'model Tier 2 uses), boto3-Bedrock, Anthropic direct, OpenAI, '
-        'or any other LLM API.</li>'
-        '<li><strong>Verdict taxonomy:</strong> '
-        '<code>landed</code> / <code>blocked</code> / '
-        '<code>inconclusive</code> / <code>error</code>. Defensive '
-        'HTTP codes (401/403/429/451) always classify as blocked, '
-        'overriding indicator matches.</li>'
-        '<li>One <code>ProbeResult</code> per finding: target, profile, '
-        'payload name, verdict, full attempts trace, '
-        '<code>time_to_compromise_ms</code>, classifier reasoning + '
-        'confidence, harness-used flag</li>'
-        '</ul>'
+        'substring grep beat status-code fallback.</li>'
+        '<li><strong>LLM judge</strong> (when <code>--classifier llm</code>) '
+        '&mdash; same Protocol shape as the synthesiser. Gets payload + '
+        'response + rule context; returns verdict + plain-text reasoning + '
+        '<code>confidence</code> (0&hellip;1). Heuristic verdict still '
+        'recorded for reference.</li>'
+        '</ol>'
+        'Verdict taxonomy: <code>landed</code> / <code>blocked</code> / '
+        '<code>inconclusive</code> / <code>error</code>.</div>'
+        '</li>'
+
+        '<li class="how-step">'
+        '<span class="how-step-label">Write the result</span>'
+        '<div class="how-step-body">One <code>ProbeResult</code> per '
+        'finding: target, profile, payload name, verdict, '
+        '<code>time_to_compromise_ms</code>, attempts trace (incl. the '
+        'LLM-synthesised context line and the rendered payload), '
+        'classifier reasoning + confidence, harness-used flag.</div>'
         '<div class="how-sub-out">&rarr; '
         '<code>.agentshield/probe-results.json</code></div>'
-        '</div>'
+        '</li>'
 
-        '</div>'
+        '</ol>'
+
         '</div>'
         '</div>'
     )
