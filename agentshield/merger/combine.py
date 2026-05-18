@@ -2423,6 +2423,15 @@ footer {
   background: var(--accent); color: white;
   letter-spacing: 0.02em; text-transform: none;
 }
+/* Breakdown chip inside the Copilot count pill — "(N static + N probe)".
+   Renders inline, lighter weight so the headline number stays the
+   primary read. */
+.ref-source-count-split {
+  font-weight: 500;
+  opacity: 0.85;
+  margin-left: 4px;
+  font-size: 10.5px;
+}
 .ref-source-blurb {
   display: block; margin-top: 4px;
   font-size: 12px; color: var(--text-muted); font-weight: 400;
@@ -5274,11 +5283,29 @@ def _render_reference_panel(parts: list[str]) -> None:
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')
+        # Copilot bucket is the only one with mixed sources (static-
+        # checklist `Copilot` refs + LLM-adversary `Probe` refs folded
+        # in). Surface the breakdown so a reader sees the static vs
+        # probe split at a glance. Other buckets render a single count.
+        if source == "Copilot":
+            static_n = sum(1 for r in bucket if r.source == "Copilot")
+            probe_n = sum(1 for r in bucket if r.source == "Probe")
+            count_html = (
+                f'<span class="ref-source-count">{len(bucket)} '
+                f'check{"s" if len(bucket) != 1 else ""}'
+                f' <span class="ref-source-count-split">'
+                f'({static_n} static + {probe_n} probe)</span>'
+                f'</span>'
+            )
+        else:
+            count_html = (
+                f'<span class="ref-source-count">{len(bucket)} '
+                f'check{"s" if len(bucket) != 1 else ""}</span>'
+            )
         parts.append(
             f'<span class="ref-source-name">'
             f'{_html_escape(source_display.get(source, source))} '
-            f'<span class="ref-source-count">{len(bucket)} '
-            f'check{"s" if len(bucket) != 1 else ""}</span></span>'
+            f'{count_html}</span>'
         )
         parts.append(
             f'<span class="ref-source-blurb">{_html_escape(source_blurbs[source])}</span>'
