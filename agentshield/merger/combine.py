@@ -3780,7 +3780,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(
                         '<summary>'
                         '<span class="discovered-icon" aria-hidden="true">&#9888;</span>'
-                        'Simulated Probe '
+                        'Attack scenario '
                         '<span class="discovered-badge">'
                         '[ Simulated Probe ]</span>'
                         f' &mdash; {_html_escape(disc_title)}'
