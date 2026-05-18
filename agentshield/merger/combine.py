@@ -2498,6 +2498,18 @@ footer {
   font-size: 10px; color: var(--text-muted);
   font-style: italic; opacity: 0.75;
 }
+/* Probe source tag — flags an entry inside the merged Copilot section
+   as a runtime probe attack class, not a static checklist item. */
+.ref-source-tag {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  vertical-align: 1px;
+}
+.ref-source-tag-probe { background: #fde2e2; color: #8b1f1f; }
 .ref-langs {
   font-size: 11px; color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -5115,18 +5127,23 @@ def _render_reference_panel(parts: list[str]) -> None:
         tier2_checklist_path=_DEFAULT_CHECKLIST_PATH,
     )
 
+    # Probe entries fold into the Copilot bucket so the Reference tab
+    # mirrors how the report itself frames them — both static checklist
+    # and runtime probe are Copilot-LLM outputs. The individual ref's
+    # `source` field stays "Probe" so the card renderer can still tag
+    # probe-only entries inside the merged section.
     grouped: dict[str, list] = {"Semgrep": [], "Copilot": [], "Markdown": []}
     for ref in refs:
-        grouped.setdefault(ref.source, []).append(ref)
+        bucket_key = "Copilot" if ref.source == "Probe" else ref.source
+        grouped.setdefault(bucket_key, []).append(ref)
 
     # Long-form display labels mirror the metric-card naming: each
     # source group header reads as a complete scanner description so
     # the Reference tab is self-explanatory without the dashboard.
     source_display = {
         "Semgrep": "Semgrep Rules-engine Static Scan",
-        "Copilot": "Copilot LLM-as-a-Judge Scan",
+        "Copilot": "Copilot LLM-as-a-Judge (Static & Probe) Scan",
         "Markdown": "Manifest Static Scanner",
-        "Probe": "Runtime Probe — LLM Adversarial Discovery",
     }
 
     parts.append('<div class="reference-card">')
@@ -5147,9 +5164,15 @@ def _render_reference_panel(parts: list[str]) -> None:
             "vulnerabilities."
         ),
         "Copilot": (
-            "LLM-driven checklist. Walks every file in the user's IDE "
-            "via Copilot Chat. Catches cross-function and absence-of-"
-            "control patterns the static rules can't see."
+            "LLM-driven coverage in two modes. Static checklist mode "
+            "walks every file in the user's IDE via Copilot Chat and "
+            "catches cross-function and absence-of-control patterns "
+            "the static rules can't see. Probe mode "
+            "(`agentshield probe --mode explore`) flips the direction "
+            "— Copilot acts as an LLM adversary, brainstorms attacks "
+            "tuned to the target's manifest + tool catalogue, and fires "
+            "them at the running agent. Anything that lands becomes a "
+            "Discovered finding with a live payload/response capture."
         ),
         "Markdown": (
             "Agent-loaded markdown scan (preview). Checks SKILL.md, "
@@ -5159,19 +5182,9 @@ def _render_reference_panel(parts: list[str]) -> None:
             "markers in body prose. Maps to OWASP Agentic Skills Top "
             "10 (AST10)."
         ),
-        "Probe": (
-            "Runs only when you invoke `agentshield probe --mode "
-            "explore`. An LLM adversary reads the target's manifest + "
-            "tool catalogue and brainstorms attacks tuned to this "
-            "specific agent — behavioural classes (authority "
-            "escalation, memory poisoning, tool chaining, tool-"
-            "description injection) the static rule pack can't model. "
-            "Anything that lands becomes a Discovered finding with a "
-            "live payload/response capture."
-        ),
     }
 
-    for source in ("Semgrep", "Copilot", "Markdown", "Probe"):
+    for source in ("Semgrep", "Copilot", "Markdown"):
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')
@@ -5545,6 +5558,15 @@ def _render_reference_card(parts: list[str], ref: Any) -> None:
     parts.append(
         f'<span class="ref-id">{_html_escape(ref.agentshield_id)}</span>'
     )
+    # Probe entries live inside the Copilot section — tag them so the
+    # reader can tell the LLM-adversary attack classes apart from the
+    # static-checklist entries inside the merged group.
+    if ref.source == "Probe":
+        parts.append(
+            '<span class="ref-source-tag ref-source-tag-probe" '
+            'title="LLM-adversary probe attack class — runs in explore mode">'
+            'Probe</span>'
+        )
     if ref.legacy_ids:
         legacy_str = ", ".join(ref.legacy_ids)
         parts.append(
