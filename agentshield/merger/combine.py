@@ -2453,6 +2453,18 @@ footer {
 }
 .how-step-substeps li::marker { color: var(--critical); font-weight: 600; }
 .how-step-body > ul.how-sub-list { margin-top: 4px; }
+.how-verdict-note {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f4f1e8;
+  border-left: 3px solid var(--info);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px; line-height: 1.55;
+  color: var(--text);
+}
+.how-verdict-note em {
+  color: var(--text-muted); font-style: italic;
+}
 
 @media (max-width: 800px) {
   .how-substages { grid-template-columns: 1fr; }
@@ -4810,19 +4822,26 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<div class="how-step-body">Two layers, the LLM verdict wins '
         'the headline when both run:'
         '<ol class="how-step-substeps">'
-        '<li><strong>Heuristic</strong> (always runs) &mdash; defensive '
-        'HTTP codes (401/403/429/451) &rarr; <code>blocked</code> '
-        'unconditionally; otherwise JSON-path assertions '
-        '(<code>tool_calls[].name=cancel_subscription</code>) beat '
-        'substring grep beat status-code fallback.</li>'
+        '<li><strong>Heuristic</strong> (always runs) &mdash; JSON-path '
+        'assertions (<code>tool_calls[].name=cancel_subscription</code>) '
+        'beat substring grep beat status-code fallback. Defensive HTTP '
+        'codes (401/403/429/451) short-circuit to <code>blocked</code> '
+        'without checking indicators.</li>'
         '<li><strong>LLM judge</strong> (when <code>--classifier llm</code>) '
         '&mdash; same Protocol shape as the synthesiser. Gets payload + '
         'response + rule context; returns verdict + plain-text reasoning + '
         '<code>confidence</code> (0&hellip;1). Heuristic verdict still '
         'recorded for reference.</li>'
         '</ol>'
-        'Verdict taxonomy: <code>landed</code> / <code>blocked</code> / '
-        '<code>inconclusive</code> / <code>error</code>.</div>'
+        '<div class="how-verdict-note">Verdict taxonomy: '
+        '<code>landed</code> / <code>blocked</code> / '
+        '<code>inconclusive</code> / <code>error</code>. '
+        '<em>This demo runs against a worst-case mock with no auth '
+        'gate or WAF, so every probe lands. The </em>'
+        '<code>blocked</code><em> / </em><code>inconclusive</code><em> '
+        '/ </em><code>error</code><em> paths exist in the classifier '
+        'code and exercise against real WAF-protected staging '
+        'environments in production.</em></div></div>'
         '</li>'
 
         '<li class="how-step">'
