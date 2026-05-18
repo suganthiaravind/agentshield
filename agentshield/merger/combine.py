@@ -5279,31 +5279,31 @@ def _render_reference_panel(parts: list[str]) -> None:
         ),
     }
 
+    # Every source can contribute probe-equipped checks: Semgrep + Copilot
+    # static checks pick up amber Simulated Probe walkthroughs through
+    # attack_narratives.py; the Probe source (folded into Copilot) is
+    # always probe-equipped. Apply the same breakdown to all three
+    # source rows so the reader sees a consistent picture.
+    from agentshield.merger.attack_narratives import narrative_for
+    def _split(bucket: list) -> tuple[int, int]:
+        probe_n = 0
+        for r in bucket:
+            if r.source == "Probe":
+                probe_n += 1
+                continue
+            scenario = narrative_for(r.agentshield_id)
+            if scenario is not None and (
+                scenario.probe is not None or scenario.simulation
+            ):
+                probe_n += 1
+        return len(bucket) - probe_n, probe_n
+
     for source in ("Semgrep", "Copilot", "Markdown"):
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')
-        # Copilot bucket is the only one with mixed sources (static-
-        # checklist `Copilot` refs + LLM-adversary `Probe` refs folded
-        # in). The "probe" count covers everything that exercises the
-        # running agent: the 4 explore-mode discoveries (pink panel) +
-        # every static Copilot check that ships with a Simulated Probe
-        # walkthrough (amber panel via attack_narratives). The rest are
-        # static-only (no probe attached — at-rest config, hardcoded
-        # secret, observability gap, etc.).
-        if source == "Copilot":
-            from agentshield.merger.attack_narratives import narrative_for
-            probe_n = 0
-            for r in bucket:
-                if r.source == "Probe":
-                    probe_n += 1
-                    continue
-                scenario = narrative_for(r.agentshield_id)
-                if scenario is not None and (
-                    scenario.probe is not None or scenario.simulation
-                ):
-                    probe_n += 1
-            static_n = len(bucket) - probe_n
+        static_n, probe_n = _split(bucket)
+        if probe_n > 0:
             count_html = (
                 f'<span class="ref-source-count">{len(bucket)} '
                 f'check{"s" if len(bucket) != 1 else ""}'
