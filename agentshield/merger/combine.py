@@ -1192,49 +1192,73 @@ h3 { font-size: 15px; }
 .finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
                        padding-left: 12px; border-left: 2px solid var(--border); }
 
-/* Probe-discovered finding capture block — payload, response excerpt,
-   indicators, and LLM-judge reasoning that prove the attack landed.
-   Red-tinted to read as "live attack hit" rather than "static finding". */
+/* Simulated Probe capture (LLM-adversary explore mode) — collapsible
+   panel that mirrors the static-finding Attack scenario shape. Same
+   visual rhythm so a reviewer reads both as "simulated probe", but
+   tinted red rather than amber so the live capture stays
+   distinguishable at a glance. */
 .finding-discovered {
   margin-top: 10px;
   border: 1px solid #f3c8c8;
   border-radius: 8px;
   background: #fff5f5;
-  padding: 10px 12px;
-  font-size: 12px;
+  overflow: hidden;
 }
-.finding-discovered-title {
+.finding-discovered > summary {
+  cursor: pointer; user-select: none;
+  padding: 8px 12px;
+  font-size: 12.5px; font-weight: 600;
   color: #8b1f1f;
-  font-size: 12px;
-  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
 }
-.finding-discovered-row {
+.finding-discovered > summary::marker,
+.finding-discovered > summary::-webkit-details-marker { color: #b84444; }
+.finding-discovered > summary:hover { background: #fbe8e8; }
+.finding-discovered[open] > summary {
+  border-bottom: 1px solid #f3c8c8;
+  background: #fbe8e8;
+}
+.finding-discovered .discovered-icon {
+  display: inline-block;
+  font-size: 13px; color: #b84444;
+  margin-right: 2px;
+}
+.finding-discovered .discovered-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin: 0 4px;
+  vertical-align: 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #b84444; color: white;
+}
+.finding-discovered .discovered-body { padding: 10px 14px 12px; }
+.finding-discovered .discovered-row {
   display: grid;
   grid-template-columns: 130px 1fr;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   align-items: start;
 }
-.finding-discovered-label {
-  font-weight: 700;
-  color: #6b1818;
-  text-transform: uppercase;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  padding-top: 2px;
+.finding-discovered .discovered-row:last-of-type { margin-bottom: 0; }
+.finding-discovered .discovered-label {
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: #6b1818; padding-top: 3px;
 }
-.finding-discovered-code {
+.finding-discovered .discovered-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  background: #fbe8e8;
-  padding: 4px 8px;
+  font-size: 12px;
+  background: #2a1414; color: #f7e6e6;
+  padding: 8px 12px;
   border-radius: 4px;
-  color: #2a1414;
   display: block;
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+  line-height: 1.5;
 }
-.finding-discovered-chip {
+.finding-discovered .discovered-chip {
   display: inline-block;
   background: #fbe8e8;
   color: #6b1818;
@@ -1244,6 +1268,12 @@ h3 { font-size: 15px; }
   font-weight: 600;
   margin-right: 4px;
   margin-bottom: 2px;
+}
+.finding-discovered .discovered-disclaimer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #f3c8c8;
+  font-size: 11px; color: #8b1f1f; font-style: italic;
 }
 
 /* v4: per-finding static attack narrative — collapsed by default in the
@@ -3703,47 +3733,54 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
                     parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
-                # Probe-discovered findings get a dedicated "Live probe
-                # capture" block: the payload sent, the response excerpt
-                # that proved the attack landed, and the indicators
-                # matched. This is the forensic trail — without it the
-                # finding is unactionable.
+                # Probe-discovered findings get a collapsible Simulated
+                # Probe panel — same shape as the static-finding attack
+                # scenario, but the body carries the actual payload sent,
+                # the response that proved the attack landed, indicators
+                # matched, and the LLM judge's reasoning.
                 if is_discovered:
                     payload_sent = f.get("_discovered_payload") or ""
                     resp_excerpt = f.get("_discovered_response") or ""
                     indicators = f.get("_discovered_indicators") or []
                     llm_reason = f.get("_discovered_llm_reasoning") or ""
                     conf = f.get("_discovered_confidence")
-                    parts.append('<div class="finding-discovered">')
+                    disc_title = f.get("_discovered_title") or "Simulated probe"
+                    open_attr = " open" if static else ""
                     parts.append(
-                        '<div class="finding-discovered-title">'
-                        '<strong>Live probe capture</strong> — '
-                        'this attack was generated by an LLM adversary, '
-                        'fired at the agent, and landed. No static rule '
-                        'flagged it.</div>'
+                        f'<details class="finding-discovered"{open_attr}>'
                     )
+                    parts.append(
+                        '<summary>'
+                        '<span class="discovered-icon" aria-hidden="true">&#9888;</span>'
+                        'Simulated Probe '
+                        '<span class="discovered-badge">'
+                        '[ Simulated Probe ]</span>'
+                        f' &mdash; {_html_escape(disc_title)}'
+                        '</summary>'
+                    )
+                    parts.append('<div class="discovered-body">')
                     if payload_sent:
                         parts.append(
-                            f'<div class="finding-discovered-row">'
-                            f'<span class="finding-discovered-label">Payload sent</span>'
-                            f'<code class="finding-discovered-code">{_html_escape(payload_sent)}</code>'
+                            f'<div class="discovered-row">'
+                            f'<span class="discovered-label">Payload sent</span>'
+                            f'<code class="discovered-code">{_html_escape(payload_sent)}</code>'
                             f'</div>'
                         )
                     if resp_excerpt:
                         parts.append(
-                            f'<div class="finding-discovered-row">'
-                            f'<span class="finding-discovered-label">Agent response</span>'
-                            f'<code class="finding-discovered-code">{_html_escape(resp_excerpt)}</code>'
+                            f'<div class="discovered-row">'
+                            f'<span class="discovered-label">Agent response</span>'
+                            f'<code class="discovered-code">{_html_escape(resp_excerpt)}</code>'
                             f'</div>'
                         )
                     if indicators:
                         chips = " ".join(
-                            f'<span class="finding-discovered-chip">{_html_escape(str(i))}</span>'
+                            f'<span class="discovered-chip">{_html_escape(str(i))}</span>'
                             for i in indicators
                         )
                         parts.append(
-                            f'<div class="finding-discovered-row">'
-                            f'<span class="finding-discovered-label">Indicators matched</span>'
+                            f'<div class="discovered-row">'
+                            f'<span class="discovered-label">Indicators matched</span>'
                             f'<span>{chips}</span>'
                             f'</div>'
                         )
@@ -3752,12 +3789,20 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         if isinstance(conf, (int, float)):
                             conf_str = f' &middot; confidence {conf:.2f}'
                         parts.append(
-                            f'<div class="finding-discovered-row">'
-                            f'<span class="finding-discovered-label">LLM judge</span>'
+                            f'<div class="discovered-row">'
+                            f'<span class="discovered-label">LLM judge</span>'
                             f'<span>{_html_escape(llm_reason)}{conf_str}</span>'
                             f'</div>'
                         )
-                    parts.append('</div>')
+                    parts.append(
+                        '<div class="discovered-disclaimer">'
+                        'Generated by an LLM adversary, fired at the agent, '
+                        'and landed against the live target. No static rule '
+                        'flagged this attack class.'
+                        '</div>'
+                    )
+                    parts.append('</div>')  # /.discovered-body
+                    parts.append('</details>')
                 # v4: static attack narrative — what an attack on this
                 # finding looks like in practice. Pure documentation; no
                 # execution. Rendered only when the rule has a curated
