@@ -2627,6 +2627,46 @@ footer {
   color: var(--critical);
   background: rgba(179, 38, 30, 0.10);
 }
+/* CLI command block sitting right under each phase header — shows the
+   exact `agentshield …` invocation the phase corresponds to so a
+   reader can copy-paste without scrolling the prose. */
+.how-stage-cli {
+  margin: 8px 0 12px 38px;
+  padding: 8px 12px;
+  background: #2a2620;
+  color: #f5f0e6;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.how-stage-cli-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: #c5b886;
+}
+.how-stage-cli-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #f5f0e6;
+  background: transparent;
+  padding: 0;
+  white-space: pre-wrap; word-break: break-word;
+}
+.how-stage-cli-then {
+  font-size: 10.5px; font-style: italic;
+  color: #c5b886;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.how-stage-cli-comment {
+  font-style: italic; color: #8d8470;
+}
+.how-stage-cli-note {
+  font-size: 11px; color: #c5b886;
+  font-style: italic;
+  flex-basis: 100%;
+  margin-top: 2px;
+}
 .how-stage-body { padding-left: 38px; }
 .how-list {
   margin: 0; padding-left: 18px;
@@ -5318,6 +5358,16 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<span class="how-stage-phase">Phase 1 &mdash; always runs</span>'
         '</span>'
         '</div>'
+        '<div class="how-stage-cli">'
+        '<span class="how-stage-cli-label">Run:</span>'
+        '<code class="how-stage-cli-cmd">agentshield scan &lt;path&gt;</code>'
+        '<span class="how-stage-cli-then">then</span>'
+        '<code class="how-stage-cli-cmd">'
+        '<span class="how-stage-cli-comment"># paste the Copilot prompt '
+        'in your IDE (writes .agentshield/tier2-findings.json), then:</span>'
+        '<br>agentshield merge &lt;path&gt; '
+        '--output-html report.html</code>'
+        '</div>'
         '<div class="how-stage-body">'
         '<div class="how-substages">'
         '<div class="how-sub-box">'
@@ -5358,6 +5408,19 @@ def _render_how_it_works(parts: list[str]) -> None:
         'Phase 2 &mdash; runs when you ask AgentShield to actually '
         'test your agent</span>'
         '</span>'
+        '</div>'
+        '<div class="how-stage-cli">'
+        '<span class="how-stage-cli-label">Run:</span>'
+        '<code class="how-stage-cli-cmd">'
+        'agentshield probe &lt;path&gt; --target &lt;agent-url&gt; '
+        '\\<br>&nbsp;&nbsp;--mode {verify|explore|both} '
+        '[--classifier llm] [--synthesize]</code>'
+        '<span class="how-stage-cli-then">then re-run</span>'
+        '<code class="how-stage-cli-cmd">agentshield merge &lt;path&gt; '
+        '--output-html report.html</code>'
+        '<span class="how-stage-cli-note">'
+        '&mdash; the report rebuilds with the live probe trace + any '
+        'newly Discovered findings.</span>'
         '</div>'
         '<div class="how-stage-body">'
 
