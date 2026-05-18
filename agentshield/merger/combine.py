@@ -202,8 +202,13 @@ def merge(target_root: Path) -> MergeResult:
             )
         )
 
+    # Probe-discovered findings load up front so the coverage matrix can
+    # include their framework tags alongside tier1+tier2.
+    probe_discovered = _load_probe_discovered_findings(out)
     coverage = _build_coverage(
-        tier1_findings_raw, tier2.get("findings", []) if tier2_present else []
+        tier1_findings_raw,
+        tier2.get("findings", []) if tier2_present else [],
+        probe_discovered,
     )
 
     # F.16: SAIGE classification — only surface if Tier 2 ran AND schema-valid.
@@ -218,11 +223,6 @@ def merge(target_root: Path) -> MergeResult:
         if tier2_present and not schema_errors
         else None
     )
-
-    # Probe-discovered findings (explore mode). Independent of tier1/tier2
-    # so an absent / malformed file silently degrades to "no discovered
-    # findings" — same posture as Tier 2 missing.
-    probe_discovered = _load_probe_discovered_findings(out)
 
     report = CombinedReport(
         tier1_path=tier1_path,
@@ -272,22 +272,52 @@ def _load_probe_discovered_findings(agentshield_dir: Path) -> list[dict]:
     for f in raw.get("findings", []):
         if not isinstance(f, dict):
             continue
-        # Best-effort framework tags from the attack name. Renderer uses
-        # these for the filter chips + per-finding tag rendering.
+        # Map each attack class to the relevant OWASP / ATLAS / CWE entries.
+        # Pulled from the same universes the Coverage tab uses
+        # (coverage_universe.py), so a discovered finding contributes to
+        # the matrix the same way a static finding does.
         name = (f.get("rule_id") or "").lower()
         owasp_agentic: list[str] = []
         owasp_llm: list[str] = []
         mitre_atlas: list[str] = []
+        cwe: list[str] = []
         if "authority" in name or "escalation" in name or "roleplay" in name:
-            owasp_agentic.append("T6")
+            # Convince the agent it's been promoted to admin — the attacker
+            # bends the agent's goal (T6) by impersonating an authority
+            # figure (T9), via prompt injection (LLM01 / AML.T0051), which
+            # bypasses authorization and privilege checks (CWE-269/287).
+            owasp_agentic.extend(["T6", "T9"])
+            owasp_llm.append("LLM01")
+            mitre_atlas.append("AML.T0051")
+            cwe.extend(["CWE-269", "CWE-287"])
         if "memory" in name or "poisoning" in name:
+            # Persistent directive written into long-term memory — exactly
+            # OWASP Agentic T1, the canonical name for this attack class.
+            # ATLAS treats it as a backdoor (T0018) / poisoned-data
+            # planting (T0019). The injected directive functions as
+            # persisted code (CWE-94).
             owasp_agentic.append("T1")
-            mitre_atlas.append("AML.T0018")
+            mitre_atlas.extend(["AML.T0018", "AML.T0019"])
+            cwe.append("CWE-94")
         if "tool-chain" in name or "chaining" in name:
-            owasp_agentic.append("T5")
+            # Read tool chained to a write/exfil tool without a per-step
+            # policy check — tool misuse (T2) + cascading consequence
+            # (T5), excessive agency (LLM06) emitting sensitive data
+            # (LLM02), plugin-chain compromise in ATLAS terms (T0053),
+            # and an exfil-via-inference path (T0024). The egress to
+            # attacker@evil.example is the SSRF flavour of CWE-918.
+            owasp_agentic.extend(["T2", "T5"])
+            owasp_llm.extend(["LLM02", "LLM06"])
+            mitre_atlas.extend(["AML.T0024", "AML.T0053"])
+            cwe.extend(["CWE-200", "CWE-918"])
         if "tool-description" in name:
+            # Attacker rewrites the meaning of a tool — tool misuse (T2)
+            # via prompt-injected spec text (LLM01 / AML.T0051), which
+            # changes how downstream code is generated/executed (CWE-94).
             owasp_agentic.append("T2")
             owasp_llm.append("LLM01")
+            mitre_atlas.append("AML.T0051")
+            cwe.append("CWE-94")
         target = f.get("target") or ""
         out.append({
             "rule_id": f.get("rule_id") or "",
@@ -303,7 +333,7 @@ def _load_probe_discovered_findings(agentshield_dir: Path) -> list[dict]:
                 "owasp_llm": owasp_llm,
                 "owasp_agentic": owasp_agentic,
                 "mitre_atlas": mitre_atlas,
-                "cwe": [],
+                "cwe": cwe,
                 "nist_ai_rmf": [],
                 "ast": [],
             },
@@ -349,11 +379,15 @@ def _ddr_counts(report: CombinedReport) -> dict[str, dict[str, int]]:
 
 
 def _build_coverage(
-    tier1_findings: list[dict], tier2_findings: list[dict]
+    tier1_findings: list[dict],
+    tier2_findings: list[dict],
+    probe_discovered: list[dict] | None = None,
 ) -> CoverageMatrix:
-    """Aggregate framework IDs from both tiers."""
+    """Aggregate framework IDs from both tiers + probe-discovered."""
     cov = CoverageMatrix()
-    for f in tier1_findings:
+    # Tier 1 + probe-discovered share the same nested framework_mappings
+    # shape, so they go through one loop.
+    for f in list(tier1_findings) + list(probe_discovered or []):
         # Tier 1 findings store framework_mappings as a nested object (per
         # agentshield.normalize.Finding) when written via the JSON writer.
         # Fall back to flat keys if Copilot or a hand-edit reshapes them.
@@ -401,6 +435,14 @@ def _framework_finding_counts(report: CombinedReport) -> dict[str, int]:
     for f in report.tier2_findings:
         for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast"):
             for v in (f.get(k_field) or []):
+                counts[f"{k_field}:{v}"] += 1
+    # Probe-discovered findings carry framework_mappings in the same
+    # nested shape as Tier 1 — include them so the Coverage tab chips
+    # reflect attack classes the LLM-adversary surfaced.
+    for f in report.probe_discovered:
+        fm = f.get("framework_mappings") or f
+        for k_field in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast"):
+            for v in (fm.get(k_field) or []):
                 counts[f"{k_field}:{v}"] += 1
     return dict(counts)
 
@@ -543,11 +585,13 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
         if cat in grouped:
             grouped[cat].append(ff)
     # Probe-discovered findings — landed in the agent during explore-mode
-    # probing. Distinct `_origin = "probe-discovered"` drives a red
-    # "Discovered" badge and the per-finding payload/response trace.
+    # probing. These are LLM-adversary output, so they group under the
+    # Copilot (tier2) origin for filtering. The `_discovered` flag drives
+    # the secondary "Probe" pill + the per-finding payload/response trace.
     for f in report.probe_discovered:
         ff = dict(f)
-        ff["_origin"] = "probe-discovered"
+        ff["_origin"] = "tier2"
+        ff["_discovered"] = True
         cat = ff.get("category")
         if cat in grouped:
             grouped[cat].append(ff)
@@ -984,10 +1028,10 @@ h3 { font-size: 15px; }
 .pill.info     { background: var(--info-bg);     color: var(--info); }
 .pill.tier1    { background: #efe7d7; color: #5a4413; }
 .pill.tier2    { background: #d8e5ed; color: #1f4a63; }
-/* Probe-discovered findings — vulnerabilities the LLM-driven explore mode
-   surfaced that the static scan missed. Red-on-cream to read as "active
-   probe hit", distinct from Semgrep (tan) and Copilot (blue). */
-.pill.probe-discovered { background: #fde2e2; color: #8b1f1f; }
+/* Probe sub-badge: sits next to the Copilot pill on findings the
+   LLM-adversary explore mode surfaced. Red-on-cream signals "active
+   probe landed" without breaking the tier2 grouping. */
+.pill.probe-sub { background: #fde2e2; color: #8b1f1f; }
 .pill.tp       { background: #d6e7d6; color: #2f5a2f; }
 .pill.cd       { background: #fbf3dc; color: var(--defend); }
 .pill.fp       { background: var(--high-bg); color: var(--high); }
@@ -1756,7 +1800,6 @@ footer {
 .filter-chip.cat-respond.active { background: var(--respond-bg); color: var(--respond); }
 .filter-chip.tier1.active    { background: #efe7d7; color: #5a4413; }
 .filter-chip.tier2.active    { background: #d8e5ed; color: #1f4a63; }
-.filter-chip.probe-discovered.active { background: #fde2e2; color: #8b1f1f; }
 
 .filter-search {
   flex: 1;
@@ -3412,10 +3455,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         # `isChecked` fallback, so findings of any category pass through.
         parts.append('<div class="filter-group">')
         parts.append('<span class="filter-label">Origin</span>')
-        origin_options = [("tier1", "Semgrep"), ("tier2", "Copilot")]
-        if r.probe_discovered:
-            origin_options.append(("probe-discovered", "Discovered"))
-        for origin_key, origin_label in origin_options:
+        for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
             parts.append(
                 f'<label class="filter-chip {origin_key}"><input type="checkbox" '
                 f'data-filter="origin" value="{origin_key}" checked>'
@@ -3596,13 +3636,20 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     f'data-search="{_html_escape(search_blob)}">'
                 )
                 parts.append('<div class="finding-header">')
-                if origin == "probe-discovered":
-                    origin_label = "Discovered"
-                elif origin == "tier1":
-                    origin_label = "Semgrep"
-                else:
-                    origin_label = "Copilot"
+                is_discovered = bool(f.get("_discovered"))
+                origin_label = "Semgrep" if origin == "tier1" else "Copilot"
                 parts.append(f'<span class="pill {origin}">{origin_label}</span>')
+                # Probe sub-badge: surfaces that this Copilot finding came
+                # from the LLM-adversary explore mode rather than the
+                # static-checklist LLM-as-a-Judge pass.
+                if is_discovered:
+                    parts.append(
+                        '<span class="pill probe-sub" '
+                        'data-tip="LLM-adversary explore mode: this attack '
+                        'was generated by Copilot, fired at the agent, and '
+                        'landed — no static rule flagged it." '
+                        'aria-label="Probe (LLM adversary)">Probe</span>'
+                    )
                 sev_meaning = _html_escape(_SEVERITY_MEANINGS.get(sev, ""))
                 parts.append(
                     f'<span class="pill {sev}" '
@@ -3620,7 +3667,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'Copilot: {v_raw}</span>'
                     )
                 parts.append("</div>")
-                if origin == "probe-discovered":
+                if is_discovered:
                     parts.append(
                         f'<div class="finding-meta">Probed endpoint: '
                         f'{_html_escape(file_)}</div>'
@@ -3661,7 +3708,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 # that proved the attack landed, and the indicators
                 # matched. This is the forensic trail — without it the
                 # finding is unactionable.
-                if origin == "probe-discovered":
+                if is_discovered:
                     payload_sent = f.get("_discovered_payload") or ""
                     resp_excerpt = f.get("_discovered_response") or ""
                     indicators = f.get("_discovered_indicators") or []
