@@ -2738,6 +2738,38 @@ footer {
 .how-verdict-note em {
   color: var(--text-muted); font-style: italic;
 }
+/* Technical-reference footnote under each runtime-probe step. Lets a
+   technical reader jump to the underlying file/code path without
+   cluttering the plain-language prose above it. Reads as a dim aside
+   rather than primary content. */
+.how-step-files {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #f7f4ec;
+  border-left: 2px solid var(--text-muted);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px; line-height: 1.6;
+  color: var(--text-muted);
+}
+.how-step-files-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.how-step-files-note {
+  font-style: italic;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.how-step-files-inline {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 2px;
+}
 
 @media (max-width: 800px) {
   .how-substages { grid-template-columns: 1fr; }
@@ -5350,6 +5382,14 @@ def _render_how_it_works(parts: list[str]) -> None:
         'findings show up in the report with a red '
         '<strong>Discovered</strong> badge alongside the static findings.</li>'
         '</ul>'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">CLI:</span> '
+        '<code>agentshield probe &lt;path&gt; --target &lt;url&gt; '
+        '--mode {verify|explore|both}</code>'
+        '<br><span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/cli.py</code> &rarr; '
+        '<code>agentshield/probe/orchestrator.py</code>'
+        '</div>'
         '</div>'
         '</li>'
 
@@ -5361,6 +5401,13 @@ def _render_how_it_works(parts: list[str]) -> None:
         'Duplicates get filtered out so the same issue isn\'t probed twice. '
         '<em>(Verify mode only &mdash; explore mode skips this and goes '
         'straight to brainstorming new attacks.)</em>'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">Reads:</span> '
+        '<code>.agentshield/tier1-results.json</code> + '
+        '<code>.agentshield/tier2-findings.json</code>'
+        '<br><span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/probe/orchestrator.py::_load_findings</code>'
+        '</div>'
         '</div>'
         '</li>'
 
@@ -5372,6 +5419,12 @@ def _render_how_it_works(parts: list[str]) -> None:
         'of vulnerability. Each script has a template (the wording of '
         'the attack) plus some default fill-in values that worked '
         'against past targets.'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">Attack library:</span> '
+        '<code>agentshield/probe/payloads.py</code> '
+        '<span class="how-step-files-note">(template + default '
+        '<code>template_vars</code> per rule)</span>'
+        '</div>'
         '</div>'
         '</li>'
 
@@ -5387,18 +5440,32 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<ol class="how-step-substeps">'
         '<li><strong>Defaults</strong> &mdash; sensible values baked '
         'into the attack script. Always there; probes work even with '
-        'no extra setup.</li>'
+        'no extra setup. '
+        '<span class="how-step-files-inline">'
+        '(<code>template_vars</code> on each <code>ProbePayload</code> '
+        'in <code>agentshield/probe/payloads.py</code>)</span></li>'
         '<li><strong>Your manual settings</strong> &mdash; values you '
         'wrote into a config file by hand. Useful when you want '
-        'repeatable, predictable runs.</li>'
+        'repeatable, predictable runs. '
+        '<span class="how-step-files-inline">'
+        '(<code>.agentshield/probe-targets.yaml</code> &mdash; shape: '
+        '<code>{rule_id: {var: value}}</code>)</span></li>'
         '<li><strong>AI-suggested values</strong> (when you opt in '
         'with the <code>--synthesize</code> flag) &mdash; an AI helper '
         'reads your agent\'s setup files, learns what tools and roles '
         'the agent has, and fills in the customisation values '
-        'automatically.</li>'
+        'automatically. '
+        '<span class="how-step-files-inline">'
+        '(reads target\'s <code>SKILL.md</code> / <code>AGENT.md</code> '
+        '/ <code>AGENTS.md</code> / <code>CLAUDE.md</code>; logic in '
+        '<code>agentshield/probe/synthesis.py</code>)</span></li>'
         '</ol>'
         'Each value carries a tag showing where it came from '
         '(default / manual / AI) so you can audit what the AI chose.'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/probe/synthesis.py::build_target_context</code>'
+        '</div>'
         '</div>'
         '</li>'
 
@@ -5408,6 +5475,10 @@ def _render_how_it_works(parts: list[str]) -> None:
         'The customisation values get slotted into the attack script\'s '
         'template wherever it has a blank marker. Anything the AI '
         'didn\'t fill in stays blank rather than crashing the run.'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/probe/synthesis.py::render_template</code>'
+        '</div>'
         '</div>'
         '</li>'
 
@@ -5419,14 +5490,23 @@ def _render_how_it_works(parts: list[str]) -> None:
         '(delete records, transfer money, etc.) &mdash; AgentShield '
         'uses a "safety net": a mock layer that pretends to deliver '
         'the attack and reports what <em>would</em> have happened, '
-        'without anything real leaving the process.</li>'
+        'without anything real leaving the process. '
+        '<span class="how-step-files-inline">'
+        '(enabled with <code>--harness mock</code>; code: '
+        '<code>agentshield/probe/harness.py</code>)</span></li>'
         '<li><strong>For everything else</strong> &mdash; AgentShield '
         'sends a real network request to your agent and watches what '
         'comes back (the agent\'s response, how long it took, the '
-        'response code).</li>'
+        'response code). '
+        '<span class="how-step-files-inline">'
+        '(HTTP runner: <code>agentshield/probe/runner.py</code>, stdlib '
+        '<code>urllib</code> only &mdash; no external deps)</span></li>'
         '<li><strong>Multiple wordings</strong> &mdash; each attack '
         'has several phrasings. AgentShield tries them in order and '
-        'stops at the first one that succeeds.</li>'
+        'stops at the first one that succeeds. '
+        '<span class="how-step-files-inline">'
+        '(driven by <code>_probe_with_variants</code> in '
+        '<code>orchestrator.py</code>)</span></li>'
         '</ul>'
         '</div>'
         '</li>'
@@ -5452,13 +5532,19 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<li><strong>Quick pattern check</strong> (always runs) &mdash; '
         'looks for known signals in the response, e.g. did the agent '
         'mention calling a destructive tool? Did the response carry '
-        'a defensive HTTP code?</li>'
+        'a defensive HTTP code? '
+        '<span class="how-step-files-inline">'
+        '(code: <code>agentshield/probe/classifier.py</code>)</span></li>'
         '<li><strong>AI judge</strong> (when you opt in with '
         '<code>--classifier llm</code>) &mdash; an AI reads the full '
         'response in context, gives a verdict plus plain-text reasoning '
         'plus a confidence score (0 to 1). The AI\'s judgement is what '
         'the report headline shows; the quick check stays recorded for '
-        'reference.</li>'
+        'reference. '
+        '<span class="how-step-files-inline">'
+        '(code: <code>agentshield/probe/llm_classifier.py</code>; '
+        'pluggable backend &mdash; Copilot / Bedrock / Anthropic / OpenAI)'
+        '</span></li>'
         '</ol>'
         '<div class="how-verdict-note">'
         '<em>This demo deliberately runs against a weak test agent with '
@@ -5481,11 +5567,16 @@ def _render_how_it_works(parts: list[str]) -> None:
         'are read in and each finding\'s panel shows the real probe trace '
         'instead of canned narrative.'
         '<ul class="how-sub-list">'
-        '<li><code>probe-results.json</code> &mdash; verify-mode runs '
-        '(verdicts on static findings).</li>'
-        '<li><code>probe-discovered.json</code> &mdash; explore-mode '
-        'runs (new findings the LLM adversary surfaced).</li>'
+        '<li><code>.agentshield/probe-results.json</code> &mdash; '
+        'verify-mode runs (verdicts on static findings).</li>'
+        '<li><code>.agentshield/probe-discovered.json</code> &mdash; '
+        'explore-mode runs (new findings the LLM adversary surfaced).</li>'
         '</ul>'
+        '<div class="how-step-files">'
+        '<span class="how-step-files-label">Code:</span> '
+        '<code>agentshield/probe/orchestrator.py::write_report</code> + '
+        '<code>agentshield/probe/explore.py::write_discovered_findings</code>'
+        '</div>'
         '</div>'
         '<div class="how-sub-out">&rarr; '
         '<code>.agentshield/probe-results.json</code> + '
