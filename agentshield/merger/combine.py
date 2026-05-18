@@ -3848,6 +3848,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         'Attack simulation'
                         '<button type="button" class="attack-play-btn" '
                         'data-action="play">&#9654; Play simulation</button>'
+                        '<button type="button" class="attack-probe-btn" '
+                        'data-action="probe">&#127919; Run probe '
+                        '<span class="probe-mode">(simulated)</span>'
+                        '</button>'
                         '</div>'
                         '<div class="attack-sim-list">'
                     )
@@ -3920,6 +3924,119 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         '</div>'
                     )
                     parts.append('</div>')  # /.attack-sim-list
+
+                    # Run-probe terminal panel — streams a synthesised
+                    # trace built from the captured payload, response,
+                    # and indicators. Same .probe-panel structure as the
+                    # static-finding live-probe panel, so the existing
+                    # .attack-probe-btn click handler streams it without
+                    # new JS. Timestamps increment per line starting
+                    # from _discovered_at if we have it, else "00:00:00".
+                    discovered_at = f.get("_discovered_at") or ""
+                    base_hms = "00:00:00"
+                    if (
+                        "T" in discovered_at
+                        and len(discovered_at) >= 19
+                    ):
+                        base_hms = discovered_at[11:19]
+                    def _bump(hms: str, delta_s: int) -> str:
+                        try:
+                            h, m, s = (int(x) for x in hms.split(":"))
+                        except ValueError:
+                            return hms
+                        total = h * 3600 + m * 60 + s + delta_s
+                        total %= 86400
+                        return (
+                            f"{total // 3600:02d}:"
+                            f"{(total % 3600) // 60:02d}:"
+                            f"{total % 60:02d}"
+                        )
+                    indicators_csv = ", ".join(indicators) if indicators else "(none)"
+                    conf_str = (
+                        f"{conf:.2f}" if isinstance(conf, (int, float)) else "n/a"
+                    )
+                    short_resp_for_trace = (
+                        resp_excerpt[:180]
+                        + ("…" if len(resp_excerpt) > 180 else "")
+                    )
+                    short_payload_for_trace = (
+                        payload_sent[:140]
+                        + ("…" if len(payload_sent) > 140 else "")
+                    )
+                    trace_lines = [
+                        ("info",    0,
+                         f"agentshield probe --mode explore --target {target_url}"),
+                        ("info",    1,
+                         "LLM adversary brainstorming attacks tuned to this agent…"),
+                        ("info",    2,
+                         f"Selected attack: {disc_title}"),
+                        ("request", 3,
+                         f'POST /api/agent {{ "message": "{short_payload_for_trace}" }}'),
+                        ("response", 4,
+                         f"200 OK  {short_resp_for_trace}"),
+                        ("success", 5,
+                         f"Indicators matched: {indicators_csv}"),
+                        ("verdict", 6,
+                         f"Verdict: LANDED  (confidence {conf_str})"),
+                    ]
+                    parts.append(
+                        '<div class="probe-panel" hidden '
+                        'data-verdict="landed">'
+                    )
+                    parts.append('<div class="probe-meta">')
+                    parts.append(
+                        f'<span class="probe-meta-row">'
+                        f'<span class="probe-meta-label">target</span>'
+                        f'<code>{_html_escape(target_url)}</code></span>'
+                    )
+                    parts.append(
+                        '<span class="probe-meta-row">'
+                        '<span class="probe-meta-label">profile</span>'
+                        '<code>explore</code></span>'
+                    )
+                    if discovered_at:
+                        parts.append(
+                            f'<span class="probe-meta-row">'
+                            f'<span class="probe-meta-label">ran at</span>'
+                            f'<code>{_html_escape(discovered_at)}</code>'
+                            f'</span>'
+                        )
+                    parts.append('</div>')
+                    parts.append('<div class="probe-terminal">')
+                    for level, delta, msg in trace_lines:
+                        ts = _bump(base_hms, delta)
+                        parts.append(
+                            f'<div class="probe-line" '
+                            f'data-level="{level}" hidden>'
+                            f'<span class="probe-ts">[{ts}]</span> '
+                            f'<span class="probe-level probe-level-{level}">'
+                            f'{level}</span> '
+                            f'<span class="probe-msg">{_html_escape(msg)}</span>'
+                            f'</div>'
+                        )
+                    parts.append('</div>')  # /probe-terminal
+                    parts.append(
+                        '<div class="probe-verdict probe-verdict-landed" hidden>'
+                        '<div class="probe-verdict-badge">🔴 ATTACK LANDED</div>'
+                    )
+                    if llm_reason:
+                        conf_html = ""
+                        if isinstance(conf, (int, float)):
+                            conf_html = (
+                                f' &middot; confidence '
+                                f'<strong>{conf:.2f}</strong>'
+                            )
+                        parts.append(
+                            f'<div class="probe-llm-reasoning">'
+                            f'<div class="probe-llm-label">'
+                            f'🤖 LLM judge{conf_html}</div>'
+                            f'<div class="probe-llm-text">'
+                            f'{_html_escape(llm_reason)}</div>'
+                            f'</div>'
+                        )
+                    parts.append('</div>')  # /probe-verdict
+                    parts.append('</div>')  # /probe-panel
+
                     parts.append('</div>')  # /.attack-steps-section
                     parts.append('</div>')  # /.discovered-body
                     parts.append('</details>')
