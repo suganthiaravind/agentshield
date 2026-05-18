@@ -5126,6 +5126,7 @@ def _render_reference_panel(parts: list[str]) -> None:
         "Semgrep": "Semgrep Rules-engine Static Scan",
         "Copilot": "Copilot LLM-as-a-Judge Scan",
         "Markdown": "Manifest Static Scanner",
+        "Probe": "Runtime Probe — LLM Adversarial Discovery",
     }
 
     parts.append('<div class="reference-card">')
@@ -5158,9 +5159,19 @@ def _render_reference_panel(parts: list[str]) -> None:
             "markers in body prose. Maps to OWASP Agentic Skills Top "
             "10 (AST10)."
         ),
+        "Probe": (
+            "Runs only when you invoke `agentshield probe --mode "
+            "explore`. An LLM adversary reads the target's manifest + "
+            "tool catalogue and brainstorms attacks tuned to this "
+            "specific agent — behavioural classes (authority "
+            "escalation, memory poisoning, tool chaining, tool-"
+            "description injection) the static rule pack can't model. "
+            "Anything that lands becomes a Discovered finding with a "
+            "live payload/response capture."
+        ),
     }
 
-    for source in ("Semgrep", "Copilot", "Markdown"):
+    for source in ("Semgrep", "Copilot", "Markdown", "Probe"):
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')

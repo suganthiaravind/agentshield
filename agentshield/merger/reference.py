@@ -367,6 +367,79 @@ def load_manifest_scanner_references() -> list[RuleReference]:
     return refs
 
 
+# ---------- Probe (LLM adversarial discovery) ----------
+
+
+# Framework mappings per attack class — same shape the discovered-finding
+# loader in combine.py applies at probe time. Kept here so the Reference
+# tab and the rendered finding agree on what each attack maps to.
+_PROBE_FRAMEWORK_MAP: dict[str, dict[str, list[str]]] = {
+    "authority-escalation-via-roleplay": {
+        "owasp_agentic": ["T6", "T9"],
+        "owasp_llm": ["LLM01"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": ["CWE-269", "CWE-287"],
+    },
+    "memory-poisoning-persistent-directive": {
+        "owasp_agentic": ["T1"],
+        "mitre_atlas": ["AML.T0018", "AML.T0019"],
+        "cwe": ["CWE-94"],
+    },
+    "tool-chaining-unauthorized-exfil": {
+        "owasp_agentic": ["T2", "T5"],
+        "owasp_llm": ["LLM02", "LLM06"],
+        "mitre_atlas": ["AML.T0024", "AML.T0053"],
+        "cwe": ["CWE-200", "CWE-918"],
+    },
+    "tool-description-injection": {
+        "owasp_agentic": ["T2"],
+        "owasp_llm": ["LLM01"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": ["CWE-94"],
+    },
+}
+
+
+def load_probe_references() -> list[RuleReference]:
+    """Pull the LLM-adversary attack catalogue (bundled defaults for the
+    explore mode) and emit one RuleReference per class. These don't
+    correspond to a static rule — they're attack patterns the LLM
+    adversary tries against the running agent — but they belong in the
+    Reference tab so reviewers see the full set of things AgentShield
+    can surface, static and dynamic alike."""
+    from agentshield.probe.explore import MOCK_ATTACK_CATALOGUE
+
+    refs: list[RuleReference] = []
+    for i, atk in enumerate(MOCK_ATTACK_CATALOGUE, start=1):
+        name = atk.get("name") or f"probe-attack-{i}"
+        category = atk.get("category") or "detect"
+        if category not in {"detect", "defend", "respond"}:
+            category = "detect"
+        title = _humanize_rule_id(name)
+        # Synthesise an AgentShield ID in the explore namespace.
+        asid = f"AS-X-{category.upper()[0]}-{i:03d}"
+        refs.append(
+            RuleReference(
+                source="Probe",
+                rule_id=name,
+                agentshield_id=asid,
+                title=title,
+                category=category,
+                severity=atk.get("severity") or "high",
+                languages="runtime",
+                description=_squash_whitespace(atk.get("rationale") or ""),
+                frameworks=_PROBE_FRAMEWORK_MAP.get(name, {}),
+                remediation=(
+                    "Detected only at runtime — no static rule covers this "
+                    "attack class. Patch the agent's prompt / policy to "
+                    "reject the surfaced behaviour, then add a regression "
+                    "test that replays the captured payload."
+                ),
+            )
+        )
+    return refs
+
+
 # ---------- public entry point ----------
 
 
@@ -375,12 +448,13 @@ def build_all_references(
     tier1_rules_path: Path,
     tier2_checklist_path: Path,
 ) -> list[RuleReference]:
-    """Aggregate Tier 1 + Tier 2 + Manifest references in one list."""
+    """Aggregate Tier 1 + Tier 2 + Manifest + Probe references in one list."""
     refs: list[RuleReference] = []
     refs.extend(load_tier1_references(tier1_rules_path))
     if tier2_checklist_path.exists():
         refs.extend(parse_tier2_checklist(tier2_checklist_path.read_text(encoding="utf-8")))
     refs.extend(load_manifest_scanner_references())
+    refs.extend(load_probe_references())
     return refs
 
 
