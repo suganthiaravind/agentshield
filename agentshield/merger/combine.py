@@ -5233,7 +5233,7 @@ def _render_reference_panel(parts: list[str]) -> None:
     }
 
     parts.append('<div class="reference-card">')
-    parts.append('<h3 class="panel-title">What AgentShield checks for</h3>')
+    parts.append('<h3 class="panel-title">What AgentShield checks</h3>')
     parts.append(
         '<p class="panel-subtitle">This page lists everything the scanner '
         "is capable of catching, taken straight from its current ruleset. "
