@@ -2386,6 +2386,19 @@ footer {
   line-height: 1;
 }
 .how-arrow-optional { color: var(--critical); opacity: 0.7; }
+.how-stage-note {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  background: #f4f1e8; border-left: 3px solid var(--info);
+  border-radius: 0 4px 4px 0;
+  font-size: 11.5px; color: var(--text);
+  line-height: 1.55;
+}
+.how-stage-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; padding: 1px 5px;
+  background: var(--panel); border-radius: 3px;
+}
 
 @media (max-width: 800px) {
   .how-substages { grid-template-columns: 1fr; }
@@ -4643,7 +4656,8 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<span class="how-stage-num">3</span>'
         '<span class="how-stage-title">Runtime probe '
         '<span class="how-stage-phase how-stage-phase-optional">'
-        'Phase 2 &mdash; opt-in (Path B)</span>'
+        'Phase 2 &mdash; runs when <code>agentshield probe</code> '
+        'is invoked</span>'
         '</span>'
         '</div>'
         '<div class="how-stage-body">'
@@ -4653,10 +4667,10 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<ul class="how-sub-list">'
         '<li>Reads each finding, looks up payloads by rule_id</li>'
         '<li>Walks payload variants until one lands</li>'
+        '<li>Sends payloads to the agent\'s normal application '
+        'surface &mdash; no target cooperation needed</li>'
         '<li>Mock harness intercepts destructive payloads &mdash; '
         'no HTTP egress for those</li>'
-        '<li>Telemetry probes (AST02 / AST09) use GET against '
-        'opt-in target endpoints</li>'
         '</ul>'
         '</div>'
         '<div class="how-sub-box">'
@@ -4671,6 +4685,13 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<code>.agentshield/probe-results.json</code></div>'
         '</div>'
         '</div>'
+        '<p class="how-stage-note">Rules whose runtime check would '
+        'need the target to expose dedicated introspection endpoints '
+        '(AST02 loaded-skill drift, AST09 logging enforcement) stay '
+        'static-only by default &mdash; standard agent runtimes don\'t '
+        'ship those endpoints, so we don\'t pretend a probe can run. '
+        'If a host runtime adopts the convention, the static rule '
+        'graduates to live verification automatically.</p>'
         '</div>'
         '</div>'
     )

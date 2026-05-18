@@ -1110,25 +1110,11 @@ NARRATIVES: dict[str, AttackScenario] = {
                 note="The running runtime is serving a different skill bundle than the audited manifest. AST02 confirmed.",
             ),
         ),
-        probe=ProbeRun(
-            target="staging.customer-support.internal",
-            profile="safe-mode (read-only telemetry; no state change)",
-            verdict="landed",
-            time_to_compromise="0.3s",
-            summary=(
-                "Loaded-skill telemetry reports drift for billing-tools "
-                "— runtime hash does not match the scan-time SHA-256."
-            ),
-            trace=(
-                ProbeLine("11:42:01", "info", "agentshield probe --rule AS-M-D-AST02-001 --target staging.customer-support.internal"),
-                ProbeLine("11:42:01", "info", "Probe profile: safe-mode (telemetry only)"),
-                ProbeLine("11:42:01", "request", "GET /api/agentshield/loaded-skills"),
-                ProbeLine("11:42:01", "response", "HTTP 200 OK"),
-                ProbeLine("11:42:01", "response", '{"skills": [{"name": "demo-agent-helper", "loaded_hash": "sha256:MATCH"}, {"name": "billing-tools", "loaded_hash": "sha256:DRIFT-...", "drift_detected": true}]}'),
-                ProbeLine("11:42:01", "warn", "Hash drift on billing-tools: runtime is serving a different bundle than the audited manifest"),
-                ProbeLine("11:42:01", "verdict", "Attack landed — AST02 confirmed (runtime substitution detected)"),
-            ),
-        ),
+        # No `probe` here — AST02 runtime verification needs the target
+        # to expose /api/agentshield/loaded-skills, which no standard
+        # agent runtime does. Finding stays static-only; the walkthrough
+        # above documents what the runtime check WOULD look like if a
+        # target opted into the convention.
     ),
     "D-AST09-001": AttackScenario(
         title="Logging policy unenforced — destructive actions not audited",
@@ -1192,27 +1178,10 @@ NARRATIVES: dict[str, AttackScenario] = {
                 note="Destructive actions execute without an audit trail. AST09 confirmed.",
             ),
         ),
-        probe=ProbeRun(
-            target="staging.customer-support.internal",
-            profile="safe-mode (read-only telemetry; no state change)",
-            verdict="landed",
-            time_to_compromise="0.2s",
-            summary=(
-                "Runtime policy state admits destructive_tools_logged=false. "
-                "Every cancel_subscription / delete_customer_record fires "
-                "without an audit entry."
-            ),
-            trace=(
-                ProbeLine("11:48:07", "info", "agentshield probe --rule AS-M-D-AST09-001 --target staging.customer-support.internal"),
-                ProbeLine("11:48:07", "info", "Probe profile: safe-mode (telemetry only)"),
-                ProbeLine("11:48:07", "request", "GET /api/agentshield/recent-logs"),
-                ProbeLine("11:48:07", "response", "HTTP 200 OK"),
-                ProbeLine("11:48:07", "response", '{"logs": [...], "logging_config": {"destructive_tools_logged": false, "fields_required_by_policy": [...], "fields_logged": [...]}}'),
-                ProbeLine("11:48:07", "warn", "Policy admits destructive_tools_logged=false"),
-                ProbeLine("11:48:07", "warn", "fields_logged is a subset of fields_required_by_policy (request_id, args missing)"),
-                ProbeLine("11:48:07", "verdict", "Attack landed — AST09 confirmed (logging policy not enforced)"),
-            ),
-        ),
+        # No `probe` here — same reason as AST02. Runtime verification
+        # would need /api/agentshield/recent-logs; standard runtimes
+        # don't expose it. Finding stays static; the walkthrough shows
+        # the runtime check shape for any target that opts in later.
     ),
     "D-AST07-001": AttackScenario(
         title="Unsigned skill bundle — supply-chain swap",

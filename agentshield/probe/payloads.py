@@ -264,59 +264,13 @@ _PAYLOADS: dict[str, tuple[ProbePayload, ...]] = {
         ),
     ),
 
-    # ---- AST02 (Runtime SKILL.md substitution) — GET loaded-skills ----
-    # Queries the target's loaded-skill hashes via /api/agentshield/
-    # loaded-skills. Verdict comes back landed if any skill reports
-    # drift_detected=true, meaning the running runtime is loading a
-    # different bundle than the audited manifest.
-    "D-AST02-001": (
-        ProbePayload(
-            rule_id="D-AST02-001",
-            name="loaded-skill-hash-drift-check",
-            template="(GET probe — no request body)",
-            indicators=("drift_detected", "DRIFT-"),
-            json_indicators=("skills[].drift_detected=true",),
-            destructive=False,
-            endpoint_override="/api/agentshield/loaded-skills",
-            http_method="GET",
-            notes=(
-                "Queries the target's loaded-skill telemetry endpoint. "
-                "Compares (in the LLM judge / classifier) the reported "
-                "hashes against the on-disk SKILL.md hashes the scan "
-                "captured. Any drift means the running bundle differs "
-                "from the audited manifest — AST02 confirmed."
-            ),
-        ),
-    ),
-
-    # ---- AST09 (Logging enforcement) — GET recent-logs ----
-    # Probe queries the target's recent-logs endpoint and checks for
-    # required fields + completeness. Indicator: the logging_config
-    # admits destructive_tools_logged=false OR the response is
-    # missing the destructive call that should have been logged.
-    "D-AST09-001": (
-        ProbePayload(
-            rule_id="D-AST09-001",
-            name="logging-policy-gap-check",
-            template="(GET probe — no request body)",
-            indicators=(
-                "destructive_tools_logged",
-                "destructive_tools_logged: false",
-            ),
-            json_indicators=(
-                "logging_config.destructive_tools_logged=false",
-            ),
-            destructive=False,
-            endpoint_override="/api/agentshield/recent-logs",
-            http_method="GET",
-            notes=(
-                "Queries the target's recent-logs endpoint. The "
-                "response carries the logging policy state; classifier "
-                "flags policy gaps (destructive_tools_logged=false, "
-                "missing required fields, etc.). AST09 confirmed."
-            ),
-        ),
-    ),
+    # AST02 + AST09 deliberately have NO probe entries. Their runtime
+    # validation would need the target to expose dedicated
+    # introspection endpoints (/api/agentshield/loaded-skills,
+    # /recent-logs), which no standard agent runtime ships today.
+    # Adding a probe here would fire only against the mock — that's
+    # demo theatre, not production coverage. The static findings
+    # stay; the runtime side is documented as an opt-in extension.
 
     # ---- R-LLM02-002: PII exfil via outbound sink (SNS publish) ----
     "R-LLM02-002": (
