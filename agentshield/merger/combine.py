@@ -5285,16 +5285,31 @@ def _render_reference_panel(parts: list[str]) -> None:
         parts.append('<div class="ref-source-header">')
         # Copilot bucket is the only one with mixed sources (static-
         # checklist `Copilot` refs + LLM-adversary `Probe` refs folded
-        # in). Surface the breakdown so a reader sees the static vs
-        # probe split at a glance. Other buckets render a single count.
+        # in). The "probe" count covers everything that exercises the
+        # running agent: the 4 explore-mode discoveries (pink panel) +
+        # every static Copilot check that ships with a Simulated Probe
+        # walkthrough (amber panel via attack_narratives). The rest are
+        # static-only (no probe attached — at-rest config, hardcoded
+        # secret, observability gap, etc.).
         if source == "Copilot":
-            static_n = sum(1 for r in bucket if r.source == "Copilot")
-            probe_n = sum(1 for r in bucket if r.source == "Probe")
+            from agentshield.merger.attack_narratives import narrative_for
+            probe_n = 0
+            for r in bucket:
+                if r.source == "Probe":
+                    probe_n += 1
+                    continue
+                scenario = narrative_for(r.agentshield_id)
+                if scenario is not None and (
+                    scenario.probe is not None or scenario.simulation
+                ):
+                    probe_n += 1
+            static_n = len(bucket) - probe_n
             count_html = (
                 f'<span class="ref-source-count">{len(bucket)} '
                 f'check{"s" if len(bucket) != 1 else ""}'
                 f' <span class="ref-source-count-split">'
-                f'({static_n} static + {probe_n} probe)</span>'
+                f'({static_n} static-only + {probe_n} with simulated probe)'
+                f'</span>'
                 f'</span>'
             )
         else:
