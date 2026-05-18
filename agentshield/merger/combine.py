@@ -1275,6 +1275,34 @@ h3 { font-size: 15px; }
   border-top: 1px dashed #f3c8c8;
   font-size: 11px; color: #8b1f1f; font-style: italic;
 }
+/* Animation panel inside the discovered Simulated Probe — same
+   .attack-steps-section / .attack-play-btn structure as the static-
+   finding scenario, but in red so it stays visually consistent with
+   the parent discovered block. */
+.finding-discovered .attack-steps-section {
+  padding-top: 12px; margin-top: 12px;
+  border-top: 1px dashed #f3c8c8;
+}
+.finding-discovered .attack-steps-section .attack-label {
+  display: flex; align-items: center; gap: 10px;
+  color: #6b1818;
+}
+.finding-discovered .attack-play-btn {
+  padding: 3px 10px;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid #b84444;
+  background: transparent;
+  color: #b84444;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.finding-discovered .attack-play-btn:hover {
+  background: #b84444; color: white;
+}
+.finding-discovered .attack-play-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
 
 /* v4: per-finding static attack narrative — collapsed by default in the
    interactive HTML, forced open in the static / print variant. Tinted
@@ -3801,6 +3829,98 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         'flagged this attack class.'
                         '</div>'
                     )
+                    # Animation block — reuses the same `.attack-sim-list`
+                    # markup the static-finding Attack scenario uses, so
+                    # the existing ▶ Play simulation handler picks it up
+                    # without new JS. Three synthesised scenes per
+                    # discovered attack: adversary → agent (payload), agent
+                    # → adversary (compromised response), impact card
+                    # (landed + indicators).
+                    target_url = f.get("file") or "agent under test"
+                    indicators_note = (
+                        "Indicators matched: " + ", ".join(indicators)
+                        if indicators else
+                        "Attack landed — agent responded as the adversary intended."
+                    )
+                    parts.append(
+                        '<div class="attack-section attack-steps-section">'
+                        '<div class="attack-label">'
+                        'Attack simulation'
+                        '<button type="button" class="attack-play-btn" '
+                        'data-action="play">&#9654; Play simulation</button>'
+                        '</div>'
+                        '<div class="attack-sim-list">'
+                    )
+                    # Scene 1 — attacker payload toward the agent.
+                    parts.append(
+                        '<div class="attack-sim-scene" data-step="0">'
+                        '<div class="attack-sim-step-num">Step 1</div>'
+                        '<div class="attack-sim-row">'
+                        '<div class="attack-sim-actor">'
+                        '<span class="actor-icon">&#129302;</span>'
+                        '<span class="actor-label">LLM adversary</span>'
+                        '</div>'
+                        '<div class="attack-sim-arrow">'
+                        '<span class="attack-sim-arrow-label">crafted payload</span>'
+                        '<div class="attack-sim-arrow-line"></div>'
+                        '<span class="attack-sim-packet" aria-hidden="true"></span>'
+                        '</div>'
+                        '<div class="attack-sim-actor">'
+                        '<span class="actor-icon">&#129351;</span>'
+                        f'<span class="actor-label">{_html_escape(target_url)}</span>'
+                        '</div>'
+                        '</div>'
+                        f'<div class="attack-sim-payload">{_html_escape(payload_sent)}</div>'
+                        '<div class="attack-sim-note">'
+                        'The adversary generates an attack tuned to this '
+                        'specific agent\'s tools and role, then sends it as '
+                        'a normal user message.'
+                        '</div>'
+                        '</div>'
+                    )
+                    # Scene 2 — agent responds, compromised.
+                    short_resp = resp_excerpt[:220] + ("…" if len(resp_excerpt) > 220 else "")
+                    parts.append(
+                        '<div class="attack-sim-scene" data-step="1">'
+                        '<div class="attack-sim-step-num">Step 2</div>'
+                        '<div class="attack-sim-row">'
+                        '<div class="attack-sim-actor">'
+                        '<span class="actor-icon">&#129351;</span>'
+                        f'<span class="actor-label">{_html_escape(target_url)}</span>'
+                        '</div>'
+                        '<div class="attack-sim-arrow">'
+                        '<span class="attack-sim-arrow-label">compromised response</span>'
+                        '<div class="attack-sim-arrow-line"></div>'
+                        '<span class="attack-sim-packet" aria-hidden="true"></span>'
+                        '</div>'
+                        '<div class="attack-sim-actor">'
+                        '<span class="actor-icon">&#129302;</span>'
+                        '<span class="actor-label">LLM adversary</span>'
+                        '</div>'
+                        '</div>'
+                        f'<div class="attack-sim-payload">{_html_escape(short_resp)}</div>'
+                        '<div class="attack-sim-note">'
+                        'The agent executes the adversarial instruction '
+                        'instead of refusing — emitting tool calls or text '
+                        'that confirm the attack landed.'
+                        '</div>'
+                        '</div>'
+                    )
+                    # Scene 3 — impact card (no target, painted critical).
+                    parts.append(
+                        '<div class="attack-sim-scene attack-sim-impact" data-step="2">'
+                        '<div class="attack-sim-step-num">Impact</div>'
+                        '<div class="attack-sim-row">'
+                        '<div class="attack-sim-actor">'
+                        '<span class="actor-icon">&#128165;</span>'
+                        '<span class="actor-label">Attack landed</span>'
+                        '</div>'
+                        '</div>'
+                        f'<div class="attack-sim-note">{_html_escape(indicators_note)}</div>'
+                        '</div>'
+                    )
+                    parts.append('</div>')  # /.attack-sim-list
+                    parts.append('</div>')  # /.attack-steps-section
                     parts.append('</div>')  # /.discovered-body
                     parts.append('</details>')
                 # v4: static attack narrative — what an attack on this
