@@ -120,6 +120,98 @@ def write_report(report: ProbeRunReport, target_root: Path) -> Path:
     return path
 
 
+def run_explore(
+    target_root: Path,
+    config: ProbeConfig,
+) -> list:
+    """Exploratory probe mode — LLM-driven discovery of new vulnerabilities.
+
+    Asks an adversarial generator to brainstorm attacks tuned to this
+    specific target, fires each one, classifies the response, and
+    returns one DiscoveredFinding per attack that landed.
+
+    Returns an empty list if the generator backend is unavailable or
+    every attack came back inconclusive — exploratory mode emits only
+    *new* findings; it doesn't double-report verified ones.
+    """
+    from agentshield.probe.explore import (
+        DiscoveredFinding,
+        generate_attacks,
+    )
+
+    attacks = generate_attacks(target_root)
+    discovered: list[DiscoveredFinding] = []
+    if not attacks:
+        return discovered
+
+    target_url_base = config.target.rstrip("/")
+    discovered_at = _now_iso()
+
+    for i, attack in enumerate(attacks, start=1):
+        endpoint = attack.endpoint_override or config.endpoint_path
+        target_url = target_url_base + endpoint
+        response = send_payload(
+            target_url,
+            attack.payload,
+            timeout_seconds=config.timeout_seconds,
+            auth_header=config.auth_header,
+            extra_headers=config.extra_headers,
+            method="POST",
+        )
+
+        # Re-use the same classify() heuristic. Build a thin ProbePayload-
+        # shaped object so the classifier sees the same interface.
+        from agentshield.probe.schema import ProbePayload
+        shim_payload = ProbePayload(
+            rule_id=f"PROBE-DISCOVERED/{attack.name}",
+            name=attack.name,
+            template=attack.payload,
+            indicators=attack.indicators,
+            json_indicators=attack.json_indicators,
+        )
+        heuristic_verdict = classify(response, shim_payload)
+        # Only landed attacks become discovered findings — the rest are
+        # noise the report shouldn't surface.
+        if heuristic_verdict != "landed":
+            continue
+
+        # When the LLM classifier is on, get its reasoning too — provides
+        # the audit trail for why this novel attack should be trusted.
+        llm_reasoning = ""
+        llm_confidence: float = 0.7  # heuristic-only baseline
+        if config.classifier == "llm":
+            from agentshield.probe.llm_classifier import classify as llm_classify
+            llm_result = llm_classify(
+                response, shim_payload,
+                finding={"file": "(discovered)", "line": 0},
+            )
+            llm_reasoning = llm_result.reasoning
+            llm_confidence = llm_result.confidence
+
+        matched = [
+            ind for ind in attack.indicators
+            if ind.lower() in (response.body or "").lower()
+        ]
+        discovered.append(DiscoveredFinding(
+            rule_id=f"probe-discovered-{attack.name}",
+            agentshield_id=f"AS-X-{i:03d}",
+            category=attack.category,
+            severity=attack.severity,
+            title=attack.name.replace("-", " ").title(),
+            message=attack.rationale,
+            payload_sent=attack.payload,
+            response_excerpt=(response.body or "")[:400],
+            indicators_matched=matched,
+            verdict="landed",
+            confidence=llm_confidence,
+            llm_reasoning=llm_reasoning,
+            target=config.target,
+            discovered_at=discovered_at,
+        ))
+
+    return discovered
+
+
 # ----- internals -----
 
 

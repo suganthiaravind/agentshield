@@ -267,6 +267,20 @@ def build_parser() -> argparse.ArgumentParser:
             "same swap path as --classifier llm."
         ),
     )
+    prb.add_argument(
+        "--mode",
+        choices=("verify", "explore", "both"),
+        default="verify",
+        help=(
+            "Probe mode. 'verify' (default) tests vulnerabilities the "
+            "static scan already found. 'explore' asks an LLM to "
+            "brainstorm attacks tuned to this target and fires them "
+            "against the agent — any that land become NEW findings the "
+            "static scan missed. 'both' runs verify then explore in "
+            "one invocation. Discovered findings get written to "
+            ".agentshield/probe-discovered.json."
+        ),
+    )
 
     return parser
 
@@ -799,10 +813,12 @@ def cmd_probe(args: argparse.Namespace) -> int:
         harness=harness,
         classifier=args.classifier,
         synthesize=args.synthesize,
+        mode=args.mode,
     )
 
     print(f"[probe] target:    {config.target}{config.endpoint_path}")
     print(f"[probe] profile:   {config.profile}")
+    print(f"[probe] mode:      {config.mode}")
     if harness:
         print(f"[probe] harness:   {harness} — destructive payloads intercepted")
     print(f"[probe] classifier: {config.classifier}")
@@ -815,24 +831,44 @@ def cmd_probe(args: argparse.Namespace) -> int:
         print(f"[probe] headers:   {names}")
     print()
 
-    report = run_probes(target_root, config)
-    out_path = write_report(report, target_root)
+    run_verify = config.mode in ("verify", "both")
+    run_explore_mode = config.mode in ("explore", "both")
 
-    landed = sum(1 for r in report.results if r.verdict == "landed")
-    blocked = sum(1 for r in report.results if r.verdict == "blocked")
-    inconclusive = sum(1 for r in report.results if r.verdict == "inconclusive")
-    errored = sum(1 for r in report.results if r.verdict == "error")
+    if run_verify:
+        report = run_probes(target_root, config)
+        out_path = write_report(report, target_root)
 
-    print(f"[probe] probed:       {len(report.results)} finding(s)")
-    print(f"[probe]   landed:     {landed}")
-    print(f"[probe]   blocked:    {blocked}")
-    print(f"[probe]   inconclusive: {inconclusive}")
-    if errored:
-        print(f"[probe]   errored:    {errored}")
-    print(f"[probe] skipped:      {len(report.skipped)} (no payload / quota)")
-    if report.errors:
-        print(f"[probe] errors:       {len(report.errors)}")
-    print(f"[probe] written:      {out_path}")
+        landed = sum(1 for r in report.results if r.verdict == "landed")
+        blocked = sum(1 for r in report.results if r.verdict == "blocked")
+        inconclusive = sum(1 for r in report.results if r.verdict == "inconclusive")
+        errored = sum(1 for r in report.results if r.verdict == "error")
+
+        print(f"[probe/verify] probed:       {len(report.results)} finding(s)")
+        print(f"[probe/verify]   landed:     {landed}")
+        print(f"[probe/verify]   blocked:    {blocked}")
+        print(f"[probe/verify]   inconclusive: {inconclusive}")
+        if errored:
+            print(f"[probe/verify]   errored:    {errored}")
+        print(f"[probe/verify] skipped:      {len(report.skipped)} (no payload / quota)")
+        if report.errors:
+            print(f"[probe/verify] errors:       {len(report.errors)}")
+        print(f"[probe/verify] written:      {out_path}")
+
+    if run_explore_mode:
+        from agentshield.probe.explore import write_discovered_findings
+        from agentshield.probe.orchestrator import run_explore
+
+        if run_verify:
+            print()
+        print("[probe/explore] LLM-driven adversarial discovery — brainstorming attacks tuned to this target...")
+        discovered = run_explore(target_root, config)
+        disc_path = write_discovered_findings(discovered, target_root)
+        print(f"[probe/explore] attacks fired:   (LLM-generated)")
+        print(f"[probe/explore] new findings:    {len(discovered)} landed")
+        for f in discovered:
+            print(f"[probe/explore]   - [{f.severity}] {f.title} ({f.rule_id})")
+        print(f"[probe/explore] written:         {disc_path}")
+
     return 0
 
 

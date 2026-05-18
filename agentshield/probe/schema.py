@@ -155,6 +155,10 @@ class ProbeConfig:
                               # context values before rendering each
                               # payload template. Off by default — the
                               # bundled defaults work for the demo.
+    mode: str = "verify"  # "verify" | "explore" | "both"
+                          # verify  → probe known findings (default)
+                          # explore → LLM-driven discovery of new issues
+                          # both    → both modes in one run
 
 
 @dataclass

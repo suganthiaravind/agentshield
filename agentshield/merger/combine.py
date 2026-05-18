@@ -98,6 +98,12 @@ class CombinedReport:
     tier2_scanned_files: list[str]
     saige_tier: str | None = None  # F.16: optional JPMC SAIGE classification
     saige_tier_reasoning: str | None = None
+    # LLM-driven adversarial discovery results — populated when
+    # `.agentshield/probe-discovered.json` exists (emitted by
+    # `agentshield probe --mode explore`). Distinct from tier1/tier2 because
+    # these findings were neither detected statically nor cross-checked by
+    # Copilot — they came back from live attacks the probe brainstormed.
+    probe_discovered: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -117,11 +123,16 @@ class MergeResult:
 
     @property
     def actionable_finding_count(self) -> int:
-        """Findings the user should act on: Tier 1 (excluding FP-marked) + Tier 2."""
+        """Findings the user should act on: Tier 1 (excluding FP-marked) +
+        Tier 2 + probe-discovered (LLM-driven explore mode landed attacks)."""
         tier1_actionable = sum(
             1 for f in self.report.tier1_findings if f.tier2_verdict != "FP"
         )
-        return tier1_actionable + len(self.report.tier2_findings)
+        return (
+            tier1_actionable
+            + len(self.report.tier2_findings)
+            + len(self.report.probe_discovered)
+        )
 
 
 # ---------- core merge ----------
@@ -208,6 +219,11 @@ def merge(target_root: Path) -> MergeResult:
         else None
     )
 
+    # Probe-discovered findings (explore mode). Independent of tier1/tier2
+    # so an absent / malformed file silently degrades to "no discovered
+    # findings" — same posture as Tier 2 missing.
+    probe_discovered = _load_probe_discovered_findings(out)
+
     report = CombinedReport(
         tier1_path=tier1_path,
         tier2_path=tier2_path if tier2_present else None,
@@ -222,6 +238,7 @@ def merge(target_root: Path) -> MergeResult:
         tier2_scanned_files=tier2.get("scanned_files", []) if tier2_present else [],
         saige_tier=saige_tier,
         saige_tier_reasoning=saige_tier_reasoning,
+        probe_discovered=probe_discovered,
     )
 
     return MergeResult(
@@ -230,6 +247,81 @@ def merge(target_root: Path) -> MergeResult:
         fingerprint_match=fingerprint_match,
         schema_errors=schema_errors,
     )
+
+
+def _load_probe_discovered_findings(agentshield_dir: Path) -> list[dict]:
+    """Load `.agentshield/probe-discovered.json` and convert each
+    DiscoveredFinding into the finding-dict shape the renderer expects
+    (rule_id / agentshield_id / category / severity / file / line /
+    message / framework_mappings).
+
+    `file` is synthesized as the probe target URL since explore-mode
+    findings don't have a source-file location — the vulnerability is in
+    the agent's behaviour, not in a specific line of code. `line` is 0.
+    Framework mappings are best-effort tags chosen from the attack
+    category (authority escalation, memory poisoning, etc.).
+    """
+    path = agentshield_dir / "probe-discovered.json"
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    out: list[dict] = []
+    for f in raw.get("findings", []):
+        if not isinstance(f, dict):
+            continue
+        # Best-effort framework tags from the attack name. Renderer uses
+        # these for the filter chips + per-finding tag rendering.
+        name = (f.get("rule_id") or "").lower()
+        owasp_agentic: list[str] = []
+        owasp_llm: list[str] = []
+        mitre_atlas: list[str] = []
+        if "authority" in name or "escalation" in name or "roleplay" in name:
+            owasp_agentic.append("T6")
+        if "memory" in name or "poisoning" in name:
+            owasp_agentic.append("T1")
+            mitre_atlas.append("AML.T0018")
+        if "tool-chain" in name or "chaining" in name:
+            owasp_agentic.append("T5")
+        if "tool-description" in name:
+            owasp_agentic.append("T2")
+            owasp_llm.append("LLM01")
+        target = f.get("target") or ""
+        out.append({
+            "rule_id": f.get("rule_id") or "",
+            "rule_id_short": f.get("rule_id") or "",
+            "agentshield_id": f.get("agentshield_id") or "",
+            "category": f.get("category") or "detect",
+            "severity": f.get("severity") or "high",
+            "file": target,
+            "line": 0,
+            "message": f.get("message") or f.get("title") or "",
+            "language": "n/a",
+            "framework_mappings": {
+                "owasp_llm": owasp_llm,
+                "owasp_agentic": owasp_agentic,
+                "mitre_atlas": mitre_atlas,
+                "cwe": [],
+                "nist_ai_rmf": [],
+                "ast": [],
+            },
+            "remediation": (
+                "Discovered via live adversarial probe — no static rule covers "
+                "this attack class. Patch the agent's prompt/policy to reject "
+                "the surfaced behaviour, then add a regression test that "
+                "replays the captured payload."
+            ),
+            "_discovered_title": f.get("title") or "",
+            "_discovered_payload": f.get("payload_sent") or "",
+            "_discovered_response": f.get("response_excerpt") or "",
+            "_discovered_indicators": f.get("indicators_matched") or [],
+            "_discovered_llm_reasoning": f.get("llm_reasoning") or "",
+            "_discovered_confidence": f.get("confidence"),
+            "_discovered_at": f.get("discovered_at") or "",
+        })
+    return out
 
 
 def _ddr_counts(report: CombinedReport) -> dict[str, dict[str, int]]:
@@ -447,6 +539,15 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
     for f in report.tier2_findings:
         ff = dict(f)
         ff["_origin"] = "tier2"
+        cat = ff.get("category")
+        if cat in grouped:
+            grouped[cat].append(ff)
+    # Probe-discovered findings — landed in the agent during explore-mode
+    # probing. Distinct `_origin = "probe-discovered"` drives a red
+    # "Discovered" badge and the per-finding payload/response trace.
+    for f in report.probe_discovered:
+        ff = dict(f)
+        ff["_origin"] = "probe-discovered"
         cat = ff.get("category")
         if cat in grouped:
             grouped[cat].append(ff)
@@ -883,6 +984,10 @@ h3 { font-size: 15px; }
 .pill.info     { background: var(--info-bg);     color: var(--info); }
 .pill.tier1    { background: #efe7d7; color: #5a4413; }
 .pill.tier2    { background: #d8e5ed; color: #1f4a63; }
+/* Probe-discovered findings — vulnerabilities the LLM-driven explore mode
+   surfaced that the static scan missed. Red-on-cream to read as "active
+   probe hit", distinct from Semgrep (tan) and Copilot (blue). */
+.pill.probe-discovered { background: #fde2e2; color: #8b1f1f; }
 .pill.tp       { background: #d6e7d6; color: #2f5a2f; }
 .pill.cd       { background: #fbf3dc; color: var(--defend); }
 .pill.fp       { background: var(--high-bg); color: var(--high); }
@@ -1042,6 +1147,60 @@ h3 { font-size: 15px; }
                    border-radius: 4px; margin: 6px 0; color: #2a2620; overflow-x: auto; }
 .finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
                        padding-left: 12px; border-left: 2px solid var(--border); }
+
+/* Probe-discovered finding capture block — payload, response excerpt,
+   indicators, and LLM-judge reasoning that prove the attack landed.
+   Red-tinted to read as "live attack hit" rather than "static finding". */
+.finding-discovered {
+  margin-top: 10px;
+  border: 1px solid #f3c8c8;
+  border-radius: 8px;
+  background: #fff5f5;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.finding-discovered-title {
+  color: #8b1f1f;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.finding-discovered-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+  margin-bottom: 6px;
+  align-items: start;
+}
+.finding-discovered-label {
+  font-weight: 700;
+  color: #6b1818;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+.finding-discovered-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: #fbe8e8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #2a1414;
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.finding-discovered-chip {
+  display: inline-block;
+  background: #fbe8e8;
+  color: #6b1818;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
 
 /* v4: per-finding static attack narrative — collapsed by default in the
    interactive HTML, forced open in the static / print variant. Tinted
@@ -1597,6 +1756,7 @@ footer {
 .filter-chip.cat-respond.active { background: var(--respond-bg); color: var(--respond); }
 .filter-chip.tier1.active    { background: #efe7d7; color: #5a4413; }
 .filter-chip.tier2.active    { background: #d8e5ed; color: #1f4a63; }
+.filter-chip.probe-discovered.active { background: #fde2e2; color: #8b1f1f; }
 
 .filter-search {
   flex: 1;
@@ -3252,7 +3412,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         # `isChecked` fallback, so findings of any category pass through.
         parts.append('<div class="filter-group">')
         parts.append('<span class="filter-label">Origin</span>')
-        for origin_key, origin_label in (("tier1", "Semgrep"), ("tier2", "Copilot")):
+        origin_options = [("tier1", "Semgrep"), ("tier2", "Copilot")]
+        if r.probe_discovered:
+            origin_options.append(("probe-discovered", "Discovered"))
+        for origin_key, origin_label in origin_options:
             parts.append(
                 f'<label class="filter-chip {origin_key}"><input type="checkbox" '
                 f'data-filter="origin" value="{origin_key}" checked>'
@@ -3433,7 +3596,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     f'data-search="{_html_escape(search_blob)}">'
                 )
                 parts.append('<div class="finding-header">')
-                parts.append(f'<span class="pill {origin}">{"Semgrep" if origin == "tier1" else "Copilot"}</span>')
+                if origin == "probe-discovered":
+                    origin_label = "Discovered"
+                elif origin == "tier1":
+                    origin_label = "Semgrep"
+                else:
+                    origin_label = "Copilot"
+                parts.append(f'<span class="pill {origin}">{origin_label}</span>')
                 sev_meaning = _html_escape(_SEVERITY_MEANINGS.get(sev, ""))
                 parts.append(
                     f'<span class="pill {sev}" '
@@ -3451,7 +3620,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'Copilot: {v_raw}</span>'
                     )
                 parts.append("</div>")
-                parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
+                if origin == "probe-discovered":
+                    parts.append(
+                        f'<div class="finding-meta">Probed endpoint: '
+                        f'{_html_escape(file_)}</div>'
+                    )
+                else:
+                    parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
                 if f.get("message"):
                     parts.append(f'<div class="finding-message">{_html_escape(f["message"])}</div>')
                 # Body: collapsible. Frameworks + snippet + remediation +
@@ -3481,6 +3656,61 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
                     parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                # Probe-discovered findings get a dedicated "Live probe
+                # capture" block: the payload sent, the response excerpt
+                # that proved the attack landed, and the indicators
+                # matched. This is the forensic trail — without it the
+                # finding is unactionable.
+                if origin == "probe-discovered":
+                    payload_sent = f.get("_discovered_payload") or ""
+                    resp_excerpt = f.get("_discovered_response") or ""
+                    indicators = f.get("_discovered_indicators") or []
+                    llm_reason = f.get("_discovered_llm_reasoning") or ""
+                    conf = f.get("_discovered_confidence")
+                    parts.append('<div class="finding-discovered">')
+                    parts.append(
+                        '<div class="finding-discovered-title">'
+                        '<strong>Live probe capture</strong> — '
+                        'this attack was generated by an LLM adversary, '
+                        'fired at the agent, and landed. No static rule '
+                        'flagged it.</div>'
+                    )
+                    if payload_sent:
+                        parts.append(
+                            f'<div class="finding-discovered-row">'
+                            f'<span class="finding-discovered-label">Payload sent</span>'
+                            f'<code class="finding-discovered-code">{_html_escape(payload_sent)}</code>'
+                            f'</div>'
+                        )
+                    if resp_excerpt:
+                        parts.append(
+                            f'<div class="finding-discovered-row">'
+                            f'<span class="finding-discovered-label">Agent response</span>'
+                            f'<code class="finding-discovered-code">{_html_escape(resp_excerpt)}</code>'
+                            f'</div>'
+                        )
+                    if indicators:
+                        chips = " ".join(
+                            f'<span class="finding-discovered-chip">{_html_escape(str(i))}</span>'
+                            for i in indicators
+                        )
+                        parts.append(
+                            f'<div class="finding-discovered-row">'
+                            f'<span class="finding-discovered-label">Indicators matched</span>'
+                            f'<span>{chips}</span>'
+                            f'</div>'
+                        )
+                    if llm_reason:
+                        conf_str = ""
+                        if isinstance(conf, (int, float)):
+                            conf_str = f' &middot; confidence {conf:.2f}'
+                        parts.append(
+                            f'<div class="finding-discovered-row">'
+                            f'<span class="finding-discovered-label">LLM judge</span>'
+                            f'<span>{_html_escape(llm_reason)}{conf_str}</span>'
+                            f'</div>'
+                        )
+                    parts.append('</div>')
                 # v4: static attack narrative — what an attack on this
                 # finding looks like in practice. Pure documentation; no
                 # execution. Rendered only when the rule has a curated
@@ -4749,11 +4979,35 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<ol class="how-steps">'
 
         '<li class="how-step">'
+        '<span class="how-step-label">Pick a mode: verify, explore, or both</span>'
+        '<div class="how-step-body">'
+        'AgentShield can run the probe in two complementary ways:'
+        '<ul class="how-sub-list">'
+        '<li><strong>Verify mode</strong> (default) &mdash; takes the '
+        'issues the static scan already found and tries to exploit each '
+        'one. Confirms whether a finding is real or theoretical.</li>'
+        '<li><strong>Explore mode</strong> (<code>--mode explore</code>) '
+        '&mdash; an AI adversary reads your agent\'s setup and '
+        '<em>invents</em> attacks tuned to it (authority escalation, '
+        'memory poisoning, tool-chaining exfil, tool-description '
+        'injection, etc.). Any attack that lands becomes a brand-new '
+        'finding the static scan missed.</li>'
+        '<li><strong>Both</strong> (<code>--mode both</code>) &mdash; '
+        'runs verify, then explore, in one invocation. Discovered '
+        'findings show up in the report with a red '
+        '<strong>Discovered</strong> badge alongside the static findings.</li>'
+        '</ul>'
+        '</div>'
+        '</li>'
+
+        '<li class="how-step">'
         '<span class="how-step-label">Pick up the list of issues</span>'
         '<div class="how-step-body">'
         'AgentShield gathers every issue it spotted during the static '
         'scan &mdash; each one is a place the agent could be vulnerable. '
-        'Duplicates get filtered out so the same issue isn\'t probed twice.'
+        'Duplicates get filtered out so the same issue isn\'t probed twice. '
+        '<em>(Verify mode only &mdash; explore mode skips this and goes '
+        'straight to brainstorming new attacks.)</em>'
         '</div>'
         '</li>'
 
@@ -4867,15 +5121,22 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<li class="how-step">'
         '<span class="how-step-label">Save the results</span>'
         '<div class="how-step-body">'
-        'Everything gets written to a results file: which finding was '
+        'Everything gets written to results files: which finding was '
         'probed, which attack wording was used, what verdict came back, '
         'how long it took, what the AI thought, and whether the safety '
-        'net was used. The next time the report is built, this file is '
-        'read in and each finding\'s panel shows the real probe trace '
+        'net was used. The next time the report is built, these files '
+        'are read in and each finding\'s panel shows the real probe trace '
         'instead of canned narrative.'
+        '<ul class="how-sub-list">'
+        '<li><code>probe-results.json</code> &mdash; verify-mode runs '
+        '(verdicts on static findings).</li>'
+        '<li><code>probe-discovered.json</code> &mdash; explore-mode '
+        'runs (new findings the LLM adversary surfaced).</li>'
+        '</ul>'
         '</div>'
         '<div class="how-sub-out">&rarr; '
-        '<code>.agentshield/probe-results.json</code></div>'
+        '<code>.agentshield/probe-results.json</code> + '
+        '<code>.agentshield/probe-discovered.json</code></div>'
         '</li>'
 
         '</ol>'

