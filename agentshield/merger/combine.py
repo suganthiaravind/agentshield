@@ -2590,6 +2590,7 @@ footer {
   padding: 14px 18px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
+.how-stage-install { border-left-color: var(--text-muted); }
 .how-stage-input   { border-left-color: var(--info); }
 .how-stage-static  { border-left-color: var(--accent); }
 .how-stage-runtime { border-left-color: var(--critical); }
@@ -2607,6 +2608,7 @@ footer {
   font-weight: 700; font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+.how-stage-install .how-stage-num { background: var(--text-muted); }
 .how-stage-input   .how-stage-num { background: var(--info); }
 .how-stage-runtime .how-stage-num { background: var(--critical); }
 .how-stage-merge   .how-stage-num { background: var(--low); }
@@ -5326,6 +5328,38 @@ def _render_how_it_works(parts: list[str]) -> None:
     )
     parts.append('<div class="how-stages">')
 
+    # Stage 0 — Install AgentShield
+    parts.append(
+        '<div class="how-stage how-stage-install">'
+        '<div class="how-stage-head">'
+        '<span class="how-stage-num">0</span>'
+        '<span class="how-stage-title">Install AgentShield '
+        '<span class="how-stage-phase">Prerequisite &mdash; one-time</span>'
+        '</span>'
+        '</div>'
+        '<div class="how-stage-cli">'
+        '<span class="how-stage-cli-label">Install:</span>'
+        '<code class="how-stage-cli-cmd">pip install agentshield</code>'
+        '<span class="how-stage-cli-then">or, from source</span>'
+        '<code class="how-stage-cli-cmd">'
+        'git clone https://github.com/suganthiaravind/agentshield.git'
+        '<br>cd agentshield &amp;&amp; pip install -e .</code>'
+        '<span class="how-stage-cli-note">'
+        '&mdash; installs the <code>agentshield</code> CLI plus the '
+        'bundled Semgrep rule pack, manifest scanner, runtime probe, '
+        'and Copilot-prompt templates.</span>'
+        '</div>'
+        '<div class="how-stage-body">'
+        '<ul class="how-list">'
+        '<li>Requires Python 3.10+; everything else (Semgrep, etc.) is '
+        'pulled in as a dependency.</li>'
+        '<li>Verify with <code>agentshield --version</code>.</li>'
+        '</ul>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="how-arrow" aria-hidden="true">&#9660;</div>')
+
     # Stage 1 — Input
     parts.append(
         '<div class="how-stage how-stage-input">'
@@ -5361,12 +5395,14 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<div class="how-stage-cli">'
         '<span class="how-stage-cli-label">Run:</span>'
         '<code class="how-stage-cli-cmd">agentshield scan &lt;path&gt;</code>'
-        '<span class="how-stage-cli-then">then</span>'
+        '<span class="how-stage-cli-then">then in your IDE</span>'
         '<code class="how-stage-cli-cmd">'
         '<span class="how-stage-cli-comment"># paste the Copilot prompt '
-        'in your IDE (writes .agentshield/tier2-findings.json), then:</span>'
-        '<br>agentshield merge &lt;path&gt; '
-        '--output-html report.html</code>'
+        'printed by `scan` &mdash; Copilot writes '
+        '.agentshield/tier2-findings.json</span></code>'
+        '<span class="how-stage-cli-note">'
+        '&mdash; the actual report is produced later, in Stage 4 '
+        '(<code>agentshield merge</code>).</span>'
         '</div>'
         '<div class="how-stage-body">'
         '<div class="how-substages">'
@@ -5415,12 +5451,11 @@ def _render_how_it_works(parts: list[str]) -> None:
         'agentshield probe &lt;path&gt; --target &lt;agent-url&gt; '
         '\\<br>&nbsp;&nbsp;--mode {verify|explore|both} '
         '[--classifier llm] [--synthesize]</code>'
-        '<span class="how-stage-cli-then">then re-run</span>'
-        '<code class="how-stage-cli-cmd">agentshield merge &lt;path&gt; '
-        '--output-html report.html</code>'
         '<span class="how-stage-cli-note">'
-        '&mdash; the report rebuilds with the live probe trace + any '
-        'newly Discovered findings.</span>'
+        '&mdash; writes <code>.agentshield/probe-results.json</code> '
+        'and/or <code>probe-discovered.json</code>. Re-run '
+        '<code>agentshield merge</code> in Stage 4 to fold them into '
+        'the HTML report.</span>'
         '</div>'
         '<div class="how-stage-body">'
 
@@ -5660,12 +5695,29 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<span class="how-stage-num">4</span>'
         '<span class="how-stage-title">Merge &amp; render</span>'
         '</div>'
+        '<div class="how-stage-cli">'
+        '<span class="how-stage-cli-label">Run:</span>'
+        '<code class="how-stage-cli-cmd">'
+        'agentshield merge &lt;path&gt; --output-html report.html '
+        '[--open]</code>'
+        '<span class="how-stage-cli-note">'
+        '&mdash; folds every artifact from Stages 2&ndash;3 '
+        '(<code>tier1-results.json</code>, '
+        '<code>tier2-findings.json</code>, '
+        '<code>probe-results.json</code>, '
+        '<code>probe-discovered.json</code>) into one HTML report. '
+        'Re-run any time the underlying files change &mdash; the '
+        'report rebuilds idempotently.</span>'
+        '</div>'
         '<div class="how-stage-body">'
         '<ul class="how-list">'
         '<li>Combines Tier 1 + Tier 2 findings; tags Tier 1 with '
         'Tier 2 verdicts (TP / CD / FP)</li>'
         '<li>Reads <code>probe-results.json</code> if present and '
         'attaches the live trace to each finding (LIVE badge)</li>'
+        '<li>Reads <code>probe-discovered.json</code> if present and '
+        'folds LLM-adversary discoveries in under Copilot with a Probe '
+        'sub-badge</li>'
         '<li>D/D/R categorisation &mdash; Detect (surfaces) / Defend '
         '(missing controls) / Respond (observability gaps)</li>'
         '<li>Builds the framework-coverage matrix &mdash; OWASP LLM, '
