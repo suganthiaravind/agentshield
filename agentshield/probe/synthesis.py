@@ -16,8 +16,12 @@ wins):
   1. LLM synthesis — Copilot reads SKILL.md + Tier 2 / Copilot
      findings + the tool catalogue, generates per-rule context values
      tuned to *this* target's actual surface. Today's backend is a
-     heuristic mock with the same Protocol the real Bedrock client
-     would implement; one class change to swap.
+     heuristic mock; the Protocol below accepts any LLM backend that
+     can be invoked programmatically (Copilot Chat API, GitHub Models,
+     boto3-Bedrock, Anthropic SDK, OpenAI, …). Interactive Copilot-via-
+     IDE — the model Tier 2 uses today — works too when probe runs
+     from a dev workstation; headless / CI runs need one of the
+     programmatic backends.
   2. Manual override — `.agentshield/probe-targets.yaml` if the
      operator has filled it in. Useful when synthesis is wrong or
      unavailable.
@@ -100,9 +104,12 @@ def render_template(template: str, context: TargetContext) -> str:
 
 
 class _SynthesizerBackend(Protocol):
-    """Same shape as the LLM-classifier backend so a real Bedrock client
-    drops in by swapping the implementation. `invoke` takes a prompt
-    and returns a JSON-serialisable string."""
+    """Same shape as the LLM-classifier backend. Implementations swap
+    by class — Copilot Chat API, GitHub Models, boto3-Bedrock,
+    Anthropic SDK, OpenAI, anything that can answer one prompt with
+    one string. `invoke` takes a prompt and returns a JSON-serialisable
+    string. The deployment chooses the implementation; the rest of
+    AgentShield doesn't care."""
 
     name: str
 
@@ -111,14 +118,14 @@ class _SynthesizerBackend(Protocol):
 
 
 class _MockSynthesizerBackend:
-    """Stand-in for boto3-Bedrock / Copilot. Reads the target's
+    """Heuristic stand-in for a real LLM backend. Reads the target's
     SKILL.md (and any Copilot Tier 2 findings if present) to discover
     the tool catalogue + likely endpoint shape, returns target-tuned
     context values per rule_id.
 
     Deterministic: same scan-time inputs always produce the same
-    context. Good for testing; in production the real backend would
-    reason more flexibly.
+    context. Good for testing; in production a real LLM backend
+    (Copilot, Bedrock, …) reasons more flexibly.
     """
 
     name = "copilot-mock"

@@ -6,17 +6,19 @@ LLM judge with the original payload and rule context. The LLM returns
 JSON-path classifier.
 
 Today the backend is a heuristic mock that returns canned reasoning
-patterned on what a real Bedrock / Copilot call would emit. The
-interface deliberately mirrors a Bedrock InvokeModel response shape so
-that swapping in `boto3.client("bedrock-runtime").invoke_model(...)` is
-a one-method change in `_LLMBackend.invoke`. See `_MockLLMBackend` for
-the contract.
+patterned on what a real LLM call would emit. The Protocol below
+accepts any backend that can answer one prompt with one string —
+Copilot (via its Chat API or GitHub Models for headless runs;
+via the IDE for interactive runs, same model Tier 2 uses today),
+boto3-Bedrock for AWS-native deployments, Anthropic SDK directly,
+OpenAI, or anything else. Swap is a one-class change.
 
-Why mock today: AgentShield's scanner-side LLM dep isn't wired in this
-session, and the rest of the probe pipeline is verifiable end-to-end
-without it. The mock returns deterministic, response-shaped reasoning
-so the renderer can prove the data flow before real Bedrock costs
-become a factor.
+Why mock today: AgentShield's probe-time LLM backend isn't wired in
+this session, and the rest of the probe pipeline is verifiable end-
+to-end without it. The mock returns deterministic, response-shaped
+reasoning so the renderer can prove the data flow before any LLM
+call costs (Copilot rate-limit, Bedrock per-token billing, …) become
+a factor.
 """
 
 from __future__ import annotations
@@ -49,9 +51,12 @@ class LLMClassification:
 class _LLMBackend(Protocol):
     """Single-method interface so the backend is hot-swappable.
 
-    `invoke(prompt) -> str` should return the LLM's reply text. The
+    `invoke(prompt) -> str` returns the LLM's reply text. The
     classifier parses that text for the structured fields (verdict /
-    reasoning / confidence) it cares about.
+    reasoning / confidence) it cares about. Implementations: Copilot
+    (Chat API for headless, IDE Chat for interactive — same model
+    Tier 2 uses), boto3-Bedrock for AWS-native deployments, Anthropic
+    SDK direct, OpenAI, or any other LLM API.
     """
 
     name: str
@@ -61,12 +66,12 @@ class _LLMBackend(Protocol):
 
 
 class _MockLLMBackend:
-    """Stand-in for boto3-Bedrock / Copilot.
+    """Heuristic stand-in for a real LLM backend.
 
-    Inspects the prompt's response body and produces a Bedrock-shaped
-    reply with structured verdict + reasoning. Heuristics are
-    deliberately richer than the substring classifier so the LLM verdict
-    visibly carries more nuance than the cheap path.
+    Inspects the prompt's response body and produces a structured
+    reply with verdict + reasoning. Heuristics are deliberately
+    richer than the substring classifier so the LLM verdict visibly
+    carries more nuance than the cheap path.
     """
 
     name = "copilot-mock"
