@@ -255,6 +255,18 @@ def build_parser() -> argparse.ArgumentParser:
             "heuristic verdict is still recorded for reference."
         ),
     )
+    prb.add_argument(
+        "--synthesize",
+        action="store_true",
+        help=(
+            "Run the LLM-driven payload synthesizer. Copilot reads the "
+            "target's SKILL.md + tool catalogue and produces target-"
+            "tuned context values that fill {placeholders} in each "
+            "payload template. Off by default — the bundled payload "
+            "defaults work for the demo target. Mock backend today; "
+            "same swap path as --classifier llm."
+        ),
+    )
 
     return parser
 
@@ -786,6 +798,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
         max_probes=args.max_probes,
         harness=harness,
         classifier=args.classifier,
+        synthesize=args.synthesize,
     )
 
     print(f"[probe] target:    {config.target}{config.endpoint_path}")
@@ -793,6 +806,8 @@ def cmd_probe(args: argparse.Namespace) -> int:
     if harness:
         print(f"[probe] harness:   {harness} — destructive payloads intercepted")
     print(f"[probe] classifier: {config.classifier}")
+    if config.synthesize:
+        print(f"[probe] synthesize: LLM-driven payload context (copilot-mock backend)")
     if auth_header:
         print(f"[probe] auth:      Authorization header from ${args.auth_env}")
     if extra_headers:

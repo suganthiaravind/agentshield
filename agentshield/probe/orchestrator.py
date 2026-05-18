@@ -22,6 +22,11 @@ from agentshield.probe.schema import (
     ProbeResult,
     ProbeRunReport,
 )
+from agentshield.probe.synthesis import (
+    build_target_context,
+    load_manual_overrides,
+    render_template,
+)
 
 
 def run_probes(
@@ -36,6 +41,9 @@ def run_probes(
     """
     started_at = _now_iso()
     findings = _load_findings(target_root)
+    # Manual overrides from probe-targets.yaml — loaded once, indexed
+    # by rule_id. Empty dict if the file doesn't exist; harmless.
+    manual_overrides = load_manual_overrides(target_root)
     results: list[ProbeResult] = []
     skipped: list[dict] = []
     errors: list[dict] = []
@@ -74,7 +82,11 @@ def run_probes(
         # where an earlier one was caught. All attempts are merged into
         # a single ProbeResult trace.
         try:
-            result = _probe_with_variants(finding, payloads, config)
+            result = _probe_with_variants(
+                finding, payloads, config,
+                target_root=target_root,
+                manual_overrides=manual_overrides,
+            )
             results.append(result)
             probe_count += 1
         except Exception as e:  # noqa: BLE001 — one finding shouldn't kill the run
@@ -115,6 +127,8 @@ def _probe_with_variants(
     finding: dict,
     payloads: tuple,
     config: ProbeConfig,
+    target_root: Path | None = None,
+    manual_overrides: dict[str, dict[str, str]] | None = None,
 ) -> ProbeResult:
     """Run payload variants in order, stop on first 'landed'.
 
@@ -171,6 +185,27 @@ def _probe_with_variants(
             + (" [destructive]" if payload.destructive else ""),
         ))
 
+        # Template substitution — defaults < manual < LLM, in order.
+        # The rendered text is what gets sent / shown in the trace.
+        per_rule_overrides = (
+            (manual_overrides or {}).get(finding.get("agentshield_id", ""))
+            or (manual_overrides or {}).get(payload.rule_id)
+            or None
+        )
+        context = build_target_context(
+            target_root or Path("."),
+            payload,
+            use_llm=config.synthesize,
+            manual_overrides=per_rule_overrides,
+        )
+        rendered_template = render_template(payload.template, context)
+        if context.values and any("{" + k + "}" in payload.template for k in context.values):
+            attempts.append(_attempt(
+                "info",
+                f"Template context (source: {context.source}): "
+                + ", ".join(f"{k}={v!r}" for k, v in context.values.items()),
+            ))
+
         # Per-payload endpoint + headers override the config-level
         # defaults. Used for rules whose attack surface is a specific
         # endpoint (T12 → /delegate, T13 → /receive) or that require
@@ -192,6 +227,7 @@ def _probe_with_variants(
             response = harness.intercept(payload)
             used_harness = harness.name
         else:
+            payload_text = rendered_template
             extras_note = ""
             if payload.extra_headers:
                 extras_note = (
@@ -209,11 +245,11 @@ def _probe_with_variants(
                 attempts.append(_attempt(
                     "request",
                     f'POST {endpoint_path} {{ "message": '
-                    f'"{_truncate(payload.template, 80)}" }}{extras_note}',
+                    f'"{_truncate(payload_text, 80)}" }}{extras_note}',
                 ))
             response = send_payload(
                 target_url,
-                payload.template,
+                payload_text,
                 timeout_seconds=config.timeout_seconds,
                 auth_header=config.auth_header,
                 extra_headers=merged_headers,

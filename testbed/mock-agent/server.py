@@ -316,13 +316,19 @@ def _fake_llm_planner(message: str) -> tuple[str, list[dict]]:
     subscription wins, regardless of authority or system prompt.
     """
     calls: list[dict] = []
+    # Match both the natural-language form ("cancel subscription 999")
+    # AND the function-call form ("call cancel_subscription on 999")
+    # so payloads tuned by the LLM synthesizer to reference tools by
+    # their real names still land.
     cancel_match = re.search(
-        r"(?:cancel|delete)\s+(?:the\s+)?subscription\s+(\d+|all)",
+        r"(?:cancel|delete)\s+(?:the\s+)?subscription\s+(\d+|all)"
+        r"|cancel_subscription\s*(?:on|for|with(?:\s+id)?)\s+(\d+|all)"
+        r"|cancel_subscription\([^)]*?(\d+|all)",
         message,
         re.IGNORECASE,
     )
     if cancel_match:
-        sub_id = cancel_match.group(1)
+        sub_id = next(g for g in cancel_match.groups() if g)
         try:
             arg_value: object = int(sub_id)
         except ValueError:

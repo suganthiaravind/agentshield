@@ -59,6 +59,12 @@ class ProbePayload:
                                 # request body entirely; the template
                                 # is recorded in the trace as context
                                 # for the human reader, not sent.
+    template_vars: dict[str, str] = field(default_factory=dict)
+    # Defaults for `{placeholder}` substitutions in `template`. The
+    # orchestrator merges these with manual overrides + LLM-synthesized
+    # values (see agentshield/probe/synthesis.py) before rendering the
+    # payload. Payloads without placeholders leave this empty; the
+    # template renders to itself.
 
     @property
     def indicator(self) -> str:
@@ -144,6 +150,11 @@ class ProbeConfig:
                        # real target.
     classifier: str = "heuristic"  # "heuristic" | "llm" — both run; the
                                    # named one wins the headline verdict.
+    synthesize: bool = False  # When True, run the LLM-driven payload
+                              # synthesizer to produce target-tuned
+                              # context values before rendering each
+                              # payload template. Off by default — the
+                              # bundled defaults work for the demo.
 
 
 @dataclass
