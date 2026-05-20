@@ -397,6 +397,54 @@ _PROBE_FRAMEWORK_MAP: dict[str, dict[str, list[str]]] = {
         "mitre_atlas": ["AML.T0051"],
         "cwe": ["CWE-94"],
     },
+    "path-traversal-via-file-tool": {
+        "owasp_agentic": ["T2"],
+        "owasp_llm": ["LLM06"],
+        "mitre_atlas": ["AML.T0024"],
+        "cwe": ["CWE-22"],
+    },
+    "cross-tenant-data-fishing": {
+        "owasp_agentic": ["T5"],
+        "owasp_llm": ["LLM02", "LLM08"],
+        "mitre_atlas": ["AML.T0024"],
+        "cwe": ["CWE-200", "CWE-285"],
+    },
+    "runaway-tool-loop": {
+        "owasp_agentic": ["T4"],
+        "owasp_llm": ["LLM10"],
+        "mitre_atlas": ["AML.T0029", "AML.T0034"],
+        "cwe": ["CWE-400", "CWE-770"],
+    },
+    "goal-misalignment-redirect": {
+        "owasp_agentic": ["T6", "T7"],
+        "owasp_llm": ["LLM01"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": [],
+    },
+    "repudiation-deny-prior-action": {
+        "owasp_agentic": ["T8"],
+        "owasp_llm": ["LLM07"],
+        "mitre_atlas": ["AML.T0056"],
+        "cwe": ["CWE-778"],
+    },
+    "open-redirect-via-url-fetch": {
+        "owasp_agentic": ["T2"],
+        "owasp_llm": ["LLM06"],
+        "mitre_atlas": ["AML.T0010"],
+        "cwe": ["CWE-601", "CWE-918"],
+    },
+    "overreliance-confident-hallucination": {
+        "owasp_agentic": ["T7"],
+        "owasp_llm": ["LLM09"],
+        "mitre_atlas": [],
+        "cwe": [],
+    },
+    "dynamic-plugin-installation": {
+        "owasp_agentic": ["T2"],
+        "owasp_llm": ["LLM03"],
+        "mitre_atlas": ["AML.T0010"],
+        "cwe": ["CWE-494", "CWE-829"],
+    },
 }
 
 
@@ -407,7 +455,10 @@ def load_probe_references() -> list[RuleReference]:
     adversary tries against the running agent — but they belong in the
     Reference tab so reviewers see the full set of things AgentShield
     can surface, static and dynamic alike."""
-    from agentshield.probe.explore import MOCK_ATTACK_CATALOGUE
+    from agentshield.probe.explore import (
+        MOCK_ATTACK_CATALOGUE,
+        category_role_letter,
+    )
 
     refs: list[RuleReference] = []
     for i, atk in enumerate(MOCK_ATTACK_CATALOGUE, start=1):
@@ -416,8 +467,10 @@ def load_probe_references() -> list[RuleReference]:
         if category not in {"detect", "defend", "respond"}:
             category = "detect"
         title = _humanize_rule_id(name)
-        # Synthesise an AgentShield ID in the explore namespace.
-        asid = f"AS-X-{category.upper()[0]}-{i:03d}"
+        # Synthesise an AgentShield ID in the explore namespace. Uses
+        # the shared category→role-letter mapping so defend correctly
+        # becomes `DF` and matches the orchestrator-written ID.
+        asid = f"AS-X-{category_role_letter(category)}-{i:03d}"
         refs.append(
             RuleReference(
                 source="Probe",

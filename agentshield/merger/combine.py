@@ -272,8 +272,52 @@ def _load_probe_discovered_findings(agentshield_dir: Path) -> list[dict]:
     for f in raw.get("findings", []):
         if not isinstance(f, dict):
             continue
-        # Map each attack class to the relevant OWASP / ATLAS / CWE entries.
-        # Pulled from the same universes the Coverage tab uses
+        # Prefer the explicit `frameworks` field the probe now emits on
+        # every discovered finding — that's the source-of-truth tag the
+        # LLM backend (or mock catalogue) supplied. Fall back to the
+        # keyword heuristic below for legacy probe-discovered.json files
+        # written before the field existed.
+        explicit_fw = f.get("frameworks")
+        if isinstance(explicit_fw, dict) and any(explicit_fw.get(k) for k in (
+            "owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast",
+        )):
+            target = f.get("target") or ""
+            out.append({
+                "rule_id": f.get("rule_id") or "",
+                "rule_id_short": f.get("rule_id") or "",
+                "agentshield_id": f.get("agentshield_id") or "",
+                "category": f.get("category") or "detect",
+                "severity": f.get("severity") or "high",
+                "file": target,
+                "line": 0,
+                "message": f.get("message") or f.get("title") or "",
+                "language": "n/a",
+                "framework_mappings": {
+                    "owasp_llm": list(explicit_fw.get("owasp_llm") or []),
+                    "owasp_agentic": list(explicit_fw.get("owasp_agentic") or []),
+                    "mitre_atlas": list(explicit_fw.get("mitre_atlas") or []),
+                    "cwe": list(explicit_fw.get("cwe") or []),
+                    "nist_ai_rmf": [],
+                    "ast": list(explicit_fw.get("ast") or []),
+                },
+                "remediation": (
+                    "Discovered via live adversarial probe — no static rule covers "
+                    "this attack class. Patch the agent's prompt/policy to reject "
+                    "the surfaced behaviour, then add a regression test that "
+                    "replays the captured payload."
+                ),
+                "_discovered_title": f.get("title") or "",
+                "_discovered_payload": f.get("payload_sent") or "",
+                "_discovered_response": f.get("response_excerpt") or "",
+                "_discovered_indicators": f.get("indicators_matched") or [],
+                "_discovered_llm_reasoning": f.get("llm_reasoning") or "",
+                "_discovered_confidence": f.get("confidence"),
+                "_discovered_at": f.get("discovered_at") or "",
+            })
+            continue
+        # Legacy fallback: map each attack class to the relevant OWASP /
+        # ATLAS / CWE entries via keyword match on the rule_id. Pulled
+        # from the same universes the Coverage tab uses
         # (coverage_universe.py), so a discovered finding contributes to
         # the matrix the same way a static finding does.
         name = (f.get("rule_id") or "").lower()
@@ -1648,6 +1692,10 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
   border-radius: 8px;
   overflow: hidden;
   background: #fafaf7;
+  /* Headroom for the sticky .filter-bar so scrollIntoView leaves the
+     panel's top edge (and the line above it) visible, instead of
+     parking the black terminal one line off-screen. */
+  scroll-margin-top: 90px;
 }
 .probe-meta {
   display: flex; flex-wrap: wrap; gap: 16px;
@@ -2407,6 +2455,119 @@ footer {
 }
 .ref-source-group { margin-bottom: 28px; }
 .ref-source-group:last-child { margin-bottom: 0; }
+
+/* Shared collapsible-section header — used by both "What AgentShield
+   checks" and "How AgentShield works" so their titles render at the
+   exact same size and weight. */
+.ref-section { margin: -22px -24px 0; }
+.ref-section[open] { margin-bottom: 4px; }
+.ref-section-summary {
+  cursor: pointer; user-select: none;
+  padding: 18px 24px;
+  display: flex; align-items: center; gap: 14px;
+  list-style: none;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+.ref-section-summary::-webkit-details-marker { display: none; }
+.ref-section-summary:hover { background: #f7f4ea; }
+.ref-section[open] > .ref-section-summary {
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.ref-section-chevron {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-muted);
+  font-size: 11px; font-weight: 700;
+  transition: transform 0.18s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.ref-section-summary:hover .ref-section-chevron {
+  color: var(--text); border-color: var(--text-muted);
+}
+.ref-section[open] > .ref-section-summary .ref-section-chevron {
+  transform: rotate(90deg);
+  color: var(--text);
+}
+.ref-section-heading {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto; min-width: 0;
+}
+.ref-section-title {
+  font-size: 18px; font-weight: 700;
+  color: var(--text); letter-spacing: 0; line-height: 1.25;
+}
+.ref-section-teaser {
+  font-size: 12.5px; color: var(--text-muted);
+  font-weight: 400; line-height: 1.4;
+}
+.ref-section-hint {
+  flex: 0 0 auto;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 10px; border-radius: 999px;
+  background: #f4f1e8;
+}
+.ref-section[open] > .ref-section-summary .ref-section-hint::before {
+  content: "Collapse";
+}
+.ref-section:not([open]) > .ref-section-summary .ref-section-hint::before {
+  content: "Expand";
+}
+.ref-section-body { padding: 18px 24px 4px; }
+.ref-naming {
+  margin: 8px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfaf6;
+  overflow: hidden;
+}
+.ref-naming-summary {
+  cursor: pointer; user-select: none;
+  padding: 12px 16px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text);
+  display: flex; align-items: center; gap: 10px;
+}
+.ref-naming-summary::-webkit-details-marker { color: var(--text-muted); }
+.ref-naming-summary:hover { background: #f5f1e3; }
+.ref-naming[open] > .ref-naming-summary {
+  border-bottom: 1px solid var(--border);
+  background: #f5f1e3;
+}
+.ref-naming-hint {
+  font-size: 10px; font-weight: 500;
+  letter-spacing: 0.02em; text-transform: none;
+  color: var(--text-muted);
+}
+.ref-naming[open] > .ref-naming-summary > .ref-naming-hint { display: none; }
+.ref-naming-body { padding: 14px 16px; }
+.ref-naming-example {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; margin-bottom: 12px;
+}
+.ref-naming-example code {
+  background: #f0ece0; color: #2a2620;
+  padding: 3px 8px; border-radius: 4px; font-weight: 600;
+}
+.ref-naming-sep { color: var(--text-muted); font-weight: 500; }
+.ref-naming-list {
+  margin: 0; padding-left: 18px;
+  font-size: 12.5px; color: var(--text); line-height: 1.6;
+}
+.ref-naming-list li { margin-bottom: 4px; }
+.ref-naming-list li:last-child { margin-bottom: 0; }
+.ref-naming-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; background: #f0ece0; color: #2a2620;
+  padding: 1px 5px; border-radius: 3px;
+}
 .ref-source-header {
   border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
@@ -2422,15 +2583,6 @@ footer {
   padding: 2px 9px; border-radius: 999px;
   background: var(--accent); color: white;
   letter-spacing: 0.02em; text-transform: none;
-}
-/* Breakdown chip inside the Copilot count pill — "(N static + N probe)".
-   Renders inline, lighter weight so the headline number stays the
-   primary read. */
-.ref-source-count-split {
-  font-weight: 500;
-  opacity: 0.85;
-  margin-left: 4px;
-  font-size: 10.5px;
 }
 .ref-source-blurb {
   display: block; margin-top: 4px;
@@ -2570,10 +2722,76 @@ footer {
    numbered stage cards stacked vertically with chevron arrows
    between them. Stages 2 and 3 split into two parallel sub-boxes
    for the rules / LLM and orchestrator / classifier pairs. */
-.how-it-works {
-  margin-top: 32px; padding-top: 24px;
-  border-top: 2px dashed var(--border);
+.how-it-works,
+.design-card,
+.solution-diagram {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
+.solution-diagram-wrap {
+  margin: 12px 0 16px;
+  overflow-x: auto;       /* horizontal scroll on narrow viewports */
+  -webkit-overflow-scrolling: touch;
+}
+.solution-diagram-svg {
+  width: 100%;
+  min-width: 880px;       /* keep boxes legible; scroll if smaller */
+  height: auto;
+  display: block;
+}
+.design-subhead {
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 22px 0 12px;
+}
+.design-subhead:first-of-type { margin-top: 8px; }
+.design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.design-tile {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #fbfaf6;
+  display: flex; flex-direction: column;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.design-tile:hover {
+  border-color: var(--text-muted);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.design-tile-name {
+  font-size: 13.5px; font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px; line-height: 1.3;
+}
+.design-tile-role {
+  font-size: 12.5px; color: var(--text);
+  line-height: 1.5; flex: 1 1 auto;
+  margin-bottom: 10px;
+}
+.design-tile-link {
+  font-size: 11.5px; font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.design-tile-link:hover { text-decoration: underline; }
+.design-pillars {
+  margin: 0; padding-left: 20px;
+  font-size: 12.5px; color: var(--text);
+  line-height: 1.6;
+}
+.design-pillars li { margin-bottom: 8px; }
+.design-pillars li:last-child { margin-bottom: 0; }
 .how-title {
   font-size: 18px; font-weight: 700;
   color: var(--text); margin: 0 0 4px;
@@ -5242,7 +5460,20 @@ def _render_reference_panel(parts: list[str]) -> None:
     }
 
     parts.append('<div class="reference-card">')
-    parts.append('<h3 class="panel-title">What AgentShield checks</h3>')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">▶</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">What AgentShield checks</span>'
+        '<span class="ref-section-teaser">The full catalogue of controls '
+        'AgentShield can detect &mdash; grouped by engine and by Detect / '
+        'Defend / Respond role.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
     parts.append(
         '<p class="panel-subtitle">This page lists everything the scanner '
         "is capable of catching, taken straight from its current ruleset. "
@@ -5279,44 +5510,14 @@ def _render_reference_panel(parts: list[str]) -> None:
         ),
     }
 
-    # Every source can contribute probe-equipped checks: Semgrep + Copilot
-    # static checks pick up amber Simulated Probe walkthroughs through
-    # attack_narratives.py; the Probe source (folded into Copilot) is
-    # always probe-equipped. Apply the same breakdown to all three
-    # source rows so the reader sees a consistent picture.
-    from agentshield.merger.attack_narratives import narrative_for
-    def _split(bucket: list) -> tuple[int, int]:
-        probe_n = 0
-        for r in bucket:
-            if r.source == "Probe":
-                probe_n += 1
-                continue
-            scenario = narrative_for(r.agentshield_id)
-            if scenario is not None and (
-                scenario.probe is not None or scenario.simulation
-            ):
-                probe_n += 1
-        return len(bucket) - probe_n, probe_n
-
     for source in ("Semgrep", "Copilot", "Markdown"):
         bucket = grouped.get(source) or []
         parts.append('<div class="ref-source-group">')
         parts.append('<div class="ref-source-header">')
-        static_n, probe_n = _split(bucket)
-        if probe_n > 0:
-            count_html = (
-                f'<span class="ref-source-count">{len(bucket)} '
-                f'check{"s" if len(bucket) != 1 else ""}'
-                f' <span class="ref-source-count-split">'
-                f'({static_n} static-only + {probe_n} with simulated probe)'
-                f'</span>'
-                f'</span>'
-            )
-        else:
-            count_html = (
-                f'<span class="ref-source-count">{len(bucket)} '
-                f'check{"s" if len(bucket) != 1 else ""}</span>'
-            )
+        count_html = (
+            f'<span class="ref-source-count">{len(bucket)} '
+            f'check{"s" if len(bucket) != 1 else ""}</span>'
+        )
         parts.append(
             f'<span class="ref-source-name">'
             f'{_html_escape(source_display.get(source, source))} '
@@ -5356,8 +5557,647 @@ def _render_reference_panel(parts: list[str]) -> None:
             parts.append("</div>")  # /ref-cards
             parts.append("</details>")  # /ref-group
         parts.append("</div>")  # /ref-source-group
+
+    parts.append('<details class="ref-naming">')
+    parts.append(
+        '<summary class="ref-naming-summary">'
+        'Control ID naming convention'
+        '<span class="ref-naming-hint">click to expand</span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-naming-body">')
+    parts.append(
+        '<div class="ref-naming-example">'
+        '<code>AS</code>'
+        '<span class="ref-naming-sep">-</span>'
+        '<code>S</code>'
+        '<span class="ref-naming-sep">-</span>'
+        '<code>D</code>'
+        '<span class="ref-naming-sep">-</span>'
+        '<code>LLM01</code>'
+        '<span class="ref-naming-sep">-</span>'
+        '<code>001</code>'
+        '</div>'
+    )
+    parts.append('<ul class="ref-naming-list">')
+    parts.append(
+        '<li><code>AS</code> &mdash; AgentShield (fixed prefix on every control).</li>'
+    )
+    parts.append(
+        '<li><code>S</code> / <code>C</code> / <code>M</code> &mdash; source '
+        'engine: <strong>S</strong>emgrep static rules, <strong>C</strong>opilot '
+        'LLM-as-a-judge, <strong>M</strong>anifest scanner.</li>'
+    )
+    parts.append(
+        '<li><code>D</code> / <code>DF</code> / <code>R</code> &mdash; NIST-aligned '
+        'control role: <strong>D</strong>etect (surface a risk), <strong>DF</strong> '
+        '= Defend (a missing or weak control), <strong>R</strong>espond (handling '
+        'after something fires).</li>'
+    )
+    parts.append(
+        '<li><code>LLM01</code>&hellip;<code>LLM10</code> / <code>AST01</code>'
+        '&hellip;<code>AST10</code> &mdash; OWASP class: LLM Top 10 for code-level '
+        'risks, Agentic Skills Top 10 for manifest-level risks.</li>'
+    )
+    parts.append(
+        '<li><code>001</code>, <code>002</code>, &hellip; &mdash; sequence within '
+        'that class, so multiple distinct controls for the same OWASP entry stay '
+        'individually addressable.</li>'
+    )
+    parts.append('</ul>')
+    parts.append('</div>')  # /ref-naming-body
+    parts.append('</details>')  # /ref-naming
+
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
+    _render_design_basis(parts)
     _render_how_it_works(parts)
+    _render_solution_diagram(parts)
+
+
+def _render_design_basis(parts: list[str]) -> None:
+    """Render the "What AgentShield is designed on" section.
+
+    Sits between the rule catalogue and the pipeline diagram so a reader
+    sees the foundations the controls are anchored to before tracing how
+    they're applied. Uses the same collapsible-card shape as the two
+    neighbouring sections.
+    """
+    frameworks = [
+        (
+            "OWASP LLM Top 10 v2",
+            "Code-level LLM-app risks (LLM01 prompt injection &hellip; "
+            "LLM10 unbounded consumption). Used as the OWASP class on "
+            "every Semgrep and Copilot control.",
+            "https://genai.owasp.org/llm-top-10/",
+            "genai.owasp.org/llm-top-10",
+        ),
+        (
+            "OWASP Agentic AI Top 10",
+            "Agent-orchestration risks &mdash; tool abuse, planner "
+            "injection, autonomy escalation. Drives cross-cutting "
+            "controls that span multiple call sites.",
+            "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+            "OWASP Agentic AI Top 10 (2026)",
+        ),
+        (
+            "OWASP Agentic Skills Top 10 (AST10)",
+            "Manifest- and skill-level risks (SKILL.md, AGENT.md, "
+            "CLAUDE.md). Used as the OWASP class on every manifest "
+            "scanner control.",
+            "https://github.com/OWASP/www-project-agentic-skills-top-10",
+            "OWASP/www-project-agentic-skills-top-10",
+        ),
+        (
+            "MITRE ATLAS",
+            "Adversarial ML tactics and techniques. Referenced where "
+            "an AgentShield finding maps to a published attack pattern.",
+            "https://atlas.mitre.org/",
+            "atlas.mitre.org",
+        ),
+        (
+            "CWE",
+            "Software weakness taxonomy. Used to anchor controls to a "
+            "generic weakness class where one exists, so traditional "
+            "AppSec tools can ingest the finding.",
+            "https://cwe.mitre.org/",
+            "cwe.mitre.org",
+        ),
+    ]
+
+    pillars = [
+        (
+            "Detect / Defend / Respond role split",
+            "Every control is classified by what it tells you: <strong>Detect</strong> "
+            "surfaces an exploitable surface, <strong>Defend</strong> flags a "
+            "missing or weak control, <strong>Respond</strong> covers "
+            "observability and recovery. Gives the report a NIST-style "
+            "shape rather than a flat list of bugs.",
+        ),
+        (
+            "Multi-engine architecture",
+            "Three engines run in parallel &mdash; Semgrep static rules, "
+            "Copilot LLM-as-a-judge, and the Manifest scanner &mdash; "
+            "each tuned to what it does best. Findings normalize into "
+            "one schema so the reviewer sees a single ranked report.",
+        ),
+        (
+            "Two-phase pipeline (static + runtime probe)",
+            "Phase 1 catalogues every risk the ruleset knows about. "
+            "Phase 2, when a target is configured, fires each attack at "
+            "the running agent and adds explore-mode discoveries. "
+            "Designed to run together on every agent.",
+        ),
+    ]
+
+    parts.append('<div class="design-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">▶</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">What AgentShield is designed on</span>'
+        '<span class="ref-section-teaser">The industry frameworks every '
+        'control checks adherence to, and the internal design pillars '
+        'that shape the report.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append(
+        '<p class="panel-subtitle">Industry-recognized security '
+        'frameworks drive every AgentShield control &mdash; each one is '
+        'built to enforce specific guidance from a published standard, '
+        'so the check tells you exactly where your agent diverges. '
+        'Explore-mode discoveries (the red-tinted simulated probes) '
+        'cover behavioural attacks the static rule pack can&rsquo;t '
+        'catch on its own &mdash; authority escalation, memory '
+        'poisoning, tool chaining, and similar agent-class issues. The '
+        'default run uses a curated catalogue applicable to any '
+        'tool-using agent; with a real LLM adversarial backend '
+        'configured, the same slot generates payloads tuned to your '
+        'specific target. A small set of internal design pillars then '
+        'keeps the report consistent across engines.</p>'
+    )
+
+    parts.append('<h4 class="design-subhead">Security frameworks</h4>')
+    parts.append('<div class="design-grid">')
+    for name, role, url, link_label in frameworks:
+        parts.append('<div class="design-tile">')
+        parts.append(f'<div class="design-tile-name">{name}</div>')
+        parts.append(f'<div class="design-tile-role">{role}</div>')
+        parts.append(
+            f'<a class="design-tile-link" href="{_html_escape(url)}" '
+            f'target="_blank" rel="noopener">{_html_escape(link_label)} ↗</a>'
+        )
+        parts.append('</div>')
+    parts.append('</div>')  # /design-grid
+
+    parts.append('<h4 class="design-subhead">Internal design pillars</h4>')
+    parts.append('<ul class="design-pillars">')
+    for pillar_name, pillar_body in pillars:
+        parts.append(
+            f'<li><strong>{pillar_name}.</strong> {pillar_body}</li>'
+        )
+    parts.append('</ul>')
+
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
+    parts.append('</div>')  # /design-card
+
+
+def _render_solution_diagram(parts: list[str]) -> None:
+    """Render the "AgentShield solution blueprint" section.
+
+    Framework-driven view: the five industry security frameworks sit at
+    the top as the drivers; AgentShield's controls sit below, grouped
+    by the engine that enforces them, with example IDs and the
+    framework codes each engine maps to. Inline SVG so the report
+    stays self-contained — no external assets, prints cleanly.
+    """
+    parts.append('<div class="solution-diagram">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9654;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">'
+        'AgentShield solution blueprint</span>'
+        '<span class="ref-section-teaser">AgentShield at a glance '
+        '&mdash; the industry frameworks it&rsquo;s built on, and the '
+        'four-part pipeline that turns code into a unified report.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append(
+        '<p class="panel-subtitle">The design basis sits on top &mdash; '
+        'five industry security frameworks driving every AgentShield '
+        'control. Below them, AgentShield in four parts: the target '
+        'you&rsquo;re shipping &rarr; the static scan &rarr; the '
+        'simulated probe &rarr; the unified report.</p>'
+    )
+    parts.append(
+        '<div class="solution-diagram-wrap">'
+        '<svg viewBox="0 0 1200 670" xmlns="http://www.w3.org/2000/svg" '
+        'role="img" aria-labelledby="sd-title" '
+        'class="solution-diagram-svg">'
+        '<title id="sd-title">AgentShield end-to-end: frameworks '
+        'drive controls, controls produce a unified report</title>'
+        '<defs>'
+        # Soft chevron between story cards.
+        '<marker id="sd-chev" viewBox="0 0 10 10" refX="6" refY="5" '
+        'markerWidth="9" markerHeight="9" orient="auto">'
+        '<path d="M 0 0 L 8 5 L 0 10" fill="none" stroke="#cbd5e1" '
+        'stroke-width="1.8" stroke-linecap="round" '
+        'stroke-linejoin="round"/>'
+        '</marker>'
+        # Drop-shadow filter — gives cards a subtle elevation cue
+        # without a heavy fill, matching modern SaaS card aesthetics.
+        '<filter id="sd-shadow" x="-10%" y="-10%" '
+        'width="120%" height="120%">'
+        '<feDropShadow dx="0" dy="2" stdDeviation="3" '
+        'flood-color="#0f172a" flood-opacity="0.08"/>'
+        '</filter>'
+        # Foundation banner background — very light slate wash so the
+        # frameworks read as the calm, neutral foundation underneath
+        # the colorful story.
+        '<linearGradient id="sd-grad-foundation" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#f8fafc"/>'
+        '<stop offset="100%" stop-color="#eef2f7"/>'
+        '</linearGradient>'
+        # Framework chip — clean white with a soft top highlight.
+        '<linearGradient id="sd-grad-chip" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#ffffff"/>'
+        '<stop offset="100%" stop-color="#f8fafc"/>'
+        '</linearGradient>'
+        '</defs>'
+
+        # =========================================================
+        # FOUNDATION BANNER — frameworks on top, calm & restrained
+        # =========================================================
+        '<g filter="url(#sd-shadow)">'
+        '<rect x="15" y="15" width="1170" height="150" rx="14" '
+        'fill="url(#sd-grad-foundation)" stroke="#e2e8f0" '
+        'stroke-width="1"/>'
+        # Slim amber accent stripe on the left edge — single-accent
+        # rule keeps the palette restrained but signals "foundation".
+        '<rect x="15" y="15" width="4" height="150" '
+        'fill="#f59e0b"/>'
+        '</g>'
+
+        # Hero pillar icon — anchors the foundation visually. Slightly
+        # warm amber to tie into the accent stripe; positioned at the
+        # left, vertically aligned with the eyebrow + title block.
+        '<text x="70" y="92" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="44" '
+        'fill="#d97706">\U0001F3DB</text>'
+
+        # Eyebrow label
+        '<text x="120" y="45" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'FOUNDATION</text>'
+
+        # Big hero title — slate, heavyweight, sets the editorial tone
+        '<text x="120" y="80" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="26" '
+        'font-weight="700" fill="#0f172a">'
+        'Five industry security frameworks</text>'
+
+        # Short tagline
+        '<text x="120" y="103" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="13" '
+        'font-style="italic" fill="#64748b">'
+        'AgentShield is built on these.</text>'
+
+        # Five framework chips — flat white, slate border, amber dot.
+        '<g>'
+        '<rect x="50" y="120" width="218" height="34" rx="17" '
+        'fill="url(#sd-grad-chip)" stroke="#cbd5e1" '
+        'stroke-width="1.2"/>'
+        '<circle cx="68" cy="137" r="3.5" fill="#f59e0b"/>'
+        '<text x="159" y="142" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#1e293b">OWASP LLM Top 10 v2</text>'
+        '</g>'
+        '<g>'
+        '<rect x="278" y="120" width="218" height="34" rx="17" '
+        'fill="url(#sd-grad-chip)" stroke="#cbd5e1" '
+        'stroke-width="1.2"/>'
+        '<circle cx="296" cy="137" r="3.5" fill="#f59e0b"/>'
+        '<text x="387" y="142" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#1e293b">'
+        'OWASP Agentic AI Top 10</text>'
+        '</g>'
+        '<g>'
+        '<rect x="506" y="120" width="234" height="34" rx="17" '
+        'fill="url(#sd-grad-chip)" stroke="#cbd5e1" '
+        'stroke-width="1.2"/>'
+        '<circle cx="524" cy="137" r="3.5" fill="#f59e0b"/>'
+        '<text x="623" y="142" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#1e293b">'
+        'OWASP Agentic Skills (AST10)</text>'
+        '</g>'
+        '<g>'
+        '<rect x="750" y="120" width="170" height="34" rx="17" '
+        'fill="url(#sd-grad-chip)" stroke="#cbd5e1" '
+        'stroke-width="1.2"/>'
+        '<circle cx="768" cy="137" r="3.5" fill="#f59e0b"/>'
+        '<text x="839" y="142" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#1e293b">MITRE ATLAS</text>'
+        '</g>'
+        '<g>'
+        '<rect x="930" y="120" width="120" height="34" rx="17" '
+        'fill="url(#sd-grad-chip)" stroke="#cbd5e1" '
+        'stroke-width="1.2"/>'
+        '<circle cx="948" cy="137" r="3.5" fill="#f59e0b"/>'
+        '<text x="993" y="142" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#1e293b">CWE</text>'
+        '</g>'
+
+        # "drives every control" connector — thin & quiet, not a pill
+        '<line x1="600" y1="175" x2="600" y2="208" '
+        'stroke="#cbd5e1" stroke-width="1.5"/>'
+        '<text x="600" y="192" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'fill="#64748b" letter-spacing="0.08em">'
+        '&mdash;&nbsp; DRIVES EVERY CONTROL &nbsp;&mdash;</text>'
+
+        # Workflow strip eyebrow label
+        '<text x="50" y="232" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'THE AGENTSHIELD PIPELINE &nbsp;&mdash;&nbsp; FOUR PARTS</text>'
+        # Thin underline that runs the width of the strip
+        '<line x1="50" y1="240" x2="1150" y2="240" '
+        'stroke="#e2e8f0" stroke-width="1"/>'
+
+        # Wrap the chapter strip in a translate so it clears the foundation.
+        '<g transform="translate(0,30)">'
+
+        # =========================================================
+        # CHAPTER 01 — THE TARGET (blue accent)
+        # =========================================================
+        '<g filter="url(#sd-shadow)">'
+        '<rect x="15" y="220" width="280" height="410" rx="14" '
+        'fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>'
+        '</g>'
+        # Top accent stripe (carries the chapter color)
+        '<rect x="15" y="220" width="280" height="6" '
+        'fill="#2563eb"/>'
+
+        # Eyebrow chapter label
+        '<text x="35" y="258" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#2563eb" letter-spacing="0.18em">'
+        'PART 01</text>'
+        # Small icon top-right — quiet accent, not hero
+        '<text x="270" y="263" text-anchor="end" '
+        'font-family="system-ui, sans-serif" font-size="20" '
+        'fill="#94a3b8">\U0001F4C2</text>'
+
+        # BIG hero numeral — slate, editorial weight
+        '<text x="155" y="358" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="76" '
+        'font-weight="800" fill="#0f172a" letter-spacing="-0.03em">'
+        '01</text>'
+
+        # Title
+        '<text x="155" y="402" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="18" '
+        'font-weight="700" fill="#0f172a">Your AI agent</text>'
+        # Narrative
+        '<text x="155" y="425" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'code, manifests, tools &mdash;</text>'
+        '<text x="155" y="442" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'built to do real work.</text>'
+
+        # Divider
+        '<line x1="40" y1="470" x2="270" y2="470" '
+        'stroke="#e2e8f0" stroke-width="1"/>'
+
+        # Details list
+        '<text x="155" y="495" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'WHAT IT CARRIES</text>'
+        '<text x="155" y="520" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="11" '
+        'fill="#334155">Source code</text>'
+        '<text x="155" y="542" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="11" '
+        'fill="#334155">Skill manifests</text>'
+        '<text x="155" y="564" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="11" '
+        'fill="#334155">Bundled configs</text>'
+        '<text x="155" y="595" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'fill="#94a3b8" font-style="italic">'
+        '(optionally a live endpoint</text>'
+        '<text x="155" y="611" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'fill="#94a3b8" font-style="italic">'
+        'for the probe to reach)</text>'
+
+        # chevron 01 → 02
+        '<path d="M 300 420 L 313 420" stroke="#cbd5e1" '
+        'stroke-width="2" fill="none" marker-end="url(#sd-chev)"/>'
+
+        # =========================================================
+        # CHAPTER 02 — THE SCAN (emerald accent)
+        # =========================================================
+        '<g filter="url(#sd-shadow)">'
+        '<rect x="316" y="220" width="280" height="410" rx="14" '
+        'fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>'
+        '</g>'
+        '<rect x="316" y="220" width="280" height="6" '
+        'fill="#10b981"/>'
+
+        '<text x="336" y="258" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#10b981" letter-spacing="0.18em">'
+        'PART 02</text>'
+        '<text x="571" y="263" text-anchor="end" '
+        'font-family="system-ui, sans-serif" font-size="20" '
+        'fill="#94a3b8">\U0001F50D</text>'
+
+        '<text x="456" y="358" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="76" '
+        'font-weight="800" fill="#0f172a" letter-spacing="-0.03em">'
+        '02</text>'
+
+        '<text x="456" y="402" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="18" '
+        'font-weight="700" fill="#0f172a">Static scan</text>'
+        '<text x="456" y="425" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'reads your code &amp; manifests &mdash;</text>'
+        '<text x="456" y="442" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'spots known issues, always.</text>'
+
+        '<line x1="341" y1="470" x2="571" y2="470" '
+        'stroke="#e2e8f0" stroke-width="1"/>'
+
+        '<text x="456" y="495" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'THREE LAYERS</text>'
+        '<text x="456" y="521" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">'
+        'Semgrep static rules engine</text>'
+        '<text x="456" y="537" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">Python &amp; Java pattern scan</text>'
+        '<text x="456" y="562" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">'
+        'Manifest scanner</text>'
+        '<text x="456" y="578" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">SKILL.md / AGENT.md / configs</text>'
+        '<text x="456" y="603" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">'
+        'Copilot LLM-as-judge</text>'
+        '<text x="456" y="619" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">interpretive review in your IDE</text>'
+
+        # chevron 02 → 03
+        '<path d="M 601 420 L 614 420" stroke="#cbd5e1" '
+        'stroke-width="2" fill="none" marker-end="url(#sd-chev)"/>'
+
+        # =========================================================
+        # CHAPTER 03 — THE PROBE (orange accent, "OPTIONAL" tag)
+        # =========================================================
+        '<g filter="url(#sd-shadow)">'
+        '<rect x="617" y="220" width="280" height="410" rx="14" '
+        'fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>'
+        '</g>'
+        # Dashed top stripe signals "optional" — same color
+        # vocabulary as the rest, the dash carries the meaning.
+        '<rect x="617" y="220" width="280" height="6" '
+        'fill="#f97316"/>'
+
+        '<text x="637" y="258" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#f97316" letter-spacing="0.18em">'
+        'PART 03</text>'
+        '<text x="872" y="263" text-anchor="end" '
+        'font-family="system-ui, sans-serif" font-size="20" '
+        'fill="#94a3b8">⚡</text>'
+
+        '<text x="757" y="358" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="76" '
+        'font-weight="800" fill="#0f172a" letter-spacing="-0.03em">'
+        '03</text>'
+
+        '<text x="757" y="402" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="18" '
+        'font-weight="700" fill="#0f172a">Simulated probe</text>'
+        '<text x="757" y="425" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'fires attacks at the live</text>'
+        '<text x="757" y="442" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'agent &mdash; catches what static can&rsquo;t.</text>'
+
+        '<line x1="642" y1="470" x2="872" y2="470" '
+        'stroke="#e2e8f0" stroke-width="1"/>'
+
+        '<text x="757" y="495" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'TWO MODES</text>'
+        '<text x="757" y="521" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">Verify mode</text>'
+        '<text x="757" y="537" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">canned payloads vs static findings</text>'
+        '<text x="757" y="568" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">Explore mode</text>'
+        '<text x="757" y="584" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">LLM brainstorms target-specific attacks</text>'
+
+        # chevron 03 → 04
+        '<path d="M 902 420 L 915 420" stroke="#cbd5e1" '
+        'stroke-width="2" fill="none" marker-end="url(#sd-chev)"/>'
+
+        # =========================================================
+        # CHAPTER 04 — THE REPORT (violet accent)
+        # =========================================================
+        '<g filter="url(#sd-shadow)">'
+        '<rect x="918" y="220" width="270" height="410" rx="14" '
+        'fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>'
+        '</g>'
+        '<rect x="918" y="220" width="270" height="6" '
+        'fill="#7c3aed"/>'
+
+        '<text x="938" y="258" text-anchor="start" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'font-weight="700" fill="#7c3aed" letter-spacing="0.18em">'
+        'PART 04</text>'
+        '<text x="1163" y="263" text-anchor="end" '
+        'font-family="system-ui, sans-serif" font-size="20" '
+        'fill="#94a3b8">\U0001F4CA</text>'
+
+        '<text x="1053" y="358" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="76" '
+        'font-weight="800" fill="#0f172a" letter-spacing="-0.03em">'
+        '04</text>'
+
+        '<text x="1053" y="402" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="18" '
+        'font-weight="700" fill="#0f172a">One report</text>'
+        '<text x="1053" y="425" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'every finding ranked,</text>'
+        '<text x="1053" y="442" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'fill="#64748b" font-style="italic">'
+        'framework-tagged, deduped.</text>'
+
+        '<line x1="943" y1="470" x2="1163" y2="470" '
+        'stroke="#e2e8f0" stroke-width="1"/>'
+
+        '<text x="1053" y="495" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        'FOUR FORMATS</text>'
+        '<text x="1053" y="520" text-anchor="middle" '
+        'font-family="ui-monospace, monospace" font-size="11" '
+        'fill="#334155">HTML &nbsp; Markdown</text>'
+        '<text x="1053" y="538" text-anchor="middle" '
+        'font-family="ui-monospace, monospace" font-size="11" '
+        'fill="#334155">JSON &nbsp; SARIF</text>'
+        '<text x="1053" y="563" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
+        '+ FIX.MD SKILLS</text>'
+        # Short description of what the fix files actually do — they
+        # are remediation playbooks the developer drops into Claude /
+        # Copilot Chat to get step-by-step guidance per finding.
+        '<text x="1053" y="582" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'fill="#334155" font-style="italic">'
+        'paste into Claude / Copilot Chat</text>'
+        '<text x="1053" y="598" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="10" '
+        'fill="#334155" font-style="italic">'
+        'for step-by-step fixes per finding.</text>'
+
+        '</g>'  # close translate(0,20) wrapper for the chapter strip
+
+        '</svg>'
+        '</div>'  # /solution-diagram-wrap
+    )
+
+
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
+    parts.append('</div>')  # /solution-diagram
 
 
 def _render_how_it_works(parts: list[str]) -> None:
@@ -5368,17 +6208,35 @@ def _render_how_it_works(parts: list[str]) -> None:
     same place. Pure HTML/CSS — no SVG dependency, prints cleanly.
     """
     parts.append('<div class="how-it-works">')
-    parts.append('<h3 class="how-title">How AgentShield works</h3>')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">▶</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">How AgentShield works</span>'
+        '<span class="ref-section-teaser">End-to-end pipeline &mdash; '
+        'static analysis plus runtime probe, walked stage by stage.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
     parts.append(
         '<p class="how-subtitle">'
-        'End-to-end pipeline. <strong>Phase 1</strong> (static analysis) '
-        'always runs &mdash; AgentShield reads your code and manifests '
-        'and flags problems. <strong>Phase 2</strong> (runtime probe) '
-        'is optional &mdash; AgentShield actually tries each attack '
-        'against your running agent and reports what really happens. '
-        'Both phases use the same bundled library of rules and attack '
-        'scripts; the same item knows how to be found <em>and</em> how '
-        'to be tested.</p>'
+        'Two phases, designed to run together on every agent. '
+        '<strong>Phase 1 &mdash; static analysis</strong> runs every '
+        'time: AgentShield reads your code and manifests and surfaces '
+        'every risk the catalogue knows about. '
+        '<strong>Phase 2 &mdash; runtime probe</strong> activates '
+        'whenever a target is configured: it fires each catalogued '
+        'attack at the running agent <em>and</em>, in explore mode, has '
+        'Copilot brainstorm new attacks tuned to that target &mdash; '
+        'surfacing live exploits no static rule covers (rendered as '
+        'red-tinted simulated probes alongside the amber static ones). '
+        'Skip Phase 2 and you still see the full '
+        'static risk list, but you lose both runtime confirmation of '
+        'which catalogued risks actually fire <em>and</em> the '
+        'explore-mode discoveries.</p>'
     )
     parts.append('<div class="how-stages">')
 
@@ -5847,6 +6705,8 @@ def _render_how_it_works(parts: list[str]) -> None:
     )
 
     parts.append('</div>')  # /how-stages
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
     parts.append('</div>')  # /how-it-works
 
 

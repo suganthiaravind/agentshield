@@ -136,6 +136,7 @@ def run_explore(
     """
     from agentshield.probe.explore import (
         DiscoveredFinding,
+        category_role_letter,
         generate_attacks,
     )
 
@@ -194,7 +195,7 @@ def run_explore(
         ]
         discovered.append(DiscoveredFinding(
             rule_id=f"probe-discovered-{attack.name}",
-            agentshield_id=f"AS-X-{i:03d}",
+            agentshield_id=f"AS-X-{category_role_letter(attack.category)}-{i:03d}",
             category=attack.category,
             severity=attack.severity,
             title=attack.name.replace("-", " ").title(),
@@ -207,6 +208,7 @@ def run_explore(
             llm_reasoning=llm_reasoning,
             target=config.target,
             discovered_at=discovered_at,
+            frameworks=attack.frameworks,
         ))
 
     return discovered
