@@ -269,16 +269,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prb.add_argument(
         "--mode",
-        choices=("verify", "explore", "both"),
+        choices=("verify", "explore", "campaign", "both", "all"),
         default="verify",
         help=(
             "Probe mode. 'verify' (default) tests vulnerabilities the "
             "static scan already found. 'explore' asks an LLM to "
-            "brainstorm attacks tuned to this target and fires them "
-            "against the agent — any that land become NEW findings the "
-            "static scan missed. 'both' runs verify then explore in "
-            "one invocation. Discovered findings get written to "
-            ".agentshield/probe-discovered.json."
+            "brainstorm single-shot attacks tuned to this target and "
+            "fires them against the agent. 'campaign' runs multi-turn "
+            "goal-directed red-team campaigns (memory poisoning across "
+            "sessions, authority escalation → destructive action, "
+            "recon → tool-chain exfil) — the real test of whether the "
+            "agent holds up against an attacker that probes, learns, "
+            "and adapts. 'both' runs verify then explore. 'all' runs "
+            "verify + explore + campaign in one invocation. Discovered "
+            "findings get written to .agentshield/probe-discovered.json; "
+            "campaign findings to .agentshield/probe-campaigns.json."
         ),
     )
 
@@ -831,8 +836,9 @@ def cmd_probe(args: argparse.Namespace) -> int:
         print(f"[probe] headers:   {names}")
     print()
 
-    run_verify = config.mode in ("verify", "both")
-    run_explore_mode = config.mode in ("explore", "both")
+    run_verify = config.mode in ("verify", "both", "all")
+    run_explore_mode = config.mode in ("explore", "both", "all")
+    run_campaign_mode = config.mode in ("campaign", "all")
 
     if run_verify:
         report = run_probes(target_root, config)
@@ -868,6 +874,41 @@ def cmd_probe(args: argparse.Namespace) -> int:
         for f in discovered:
             print(f"[probe/explore]   - [{f.severity}] {f.title} ({f.rule_id})")
         print(f"[probe/explore] written:         {disc_path}")
+
+    if run_campaign_mode:
+        from agentshield.probe.campaign import (
+            run_campaigns,
+            write_campaign_findings,
+        )
+
+        if run_verify or run_explore_mode:
+            print()
+        print(
+            "[probe/campaign] Multi-turn red-team campaigns — "
+            "goal-directed attacks that probe, learn, adapt..."
+        )
+        target_url = config.target.rstrip("/") + config.endpoint_path
+        campaigns = run_campaigns(
+            target_url=target_url,
+            timeout_seconds=config.timeout_seconds,
+            auth_header=config.auth_header,
+            extra_headers=config.extra_headers,
+        )
+        camp_path = write_campaign_findings(campaigns, target_root)
+        succeeded = sum(1 for c in campaigns if c.status == "succeeded")
+        blocked = sum(1 for c in campaigns if c.status == "blocked")
+        exhausted = sum(1 for c in campaigns if c.status == "exhausted")
+        print(f"[probe/campaign] campaigns run:    {len(campaigns)}")
+        print(f"[probe/campaign]   succeeded:      {succeeded}")
+        print(f"[probe/campaign]   blocked:        {blocked}")
+        print(f"[probe/campaign]   exhausted:      {exhausted}")
+        for c in campaigns:
+            print(
+                f"[probe/campaign]   - [{c.severity}/{c.status}] "
+                f"{c.title} ({c.turn_count} turn(s), "
+                f"{c.agentshield_id})"
+            )
+        print(f"[probe/campaign] written:          {camp_path}")
 
     return 0
 

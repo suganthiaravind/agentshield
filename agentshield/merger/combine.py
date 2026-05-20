@@ -104,6 +104,12 @@ class CombinedReport:
     # these findings were neither detected statically nor cross-checked by
     # Copilot — they came back from live attacks the probe brainstormed.
     probe_discovered: list[dict] = field(default_factory=list)
+    # Multi-turn red-team campaigns — populated when
+    # `.agentshield/probe-campaigns.json` exists (emitted by
+    # `agentshield probe --mode campaign`). Each entry carries the
+    # full kill-chain (turn-by-turn evidence) so the report can render
+    # them as attack narratives rather than flat findings.
+    probe_campaigns: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -124,14 +130,19 @@ class MergeResult:
     @property
     def actionable_finding_count(self) -> int:
         """Findings the user should act on: Tier 1 (excluding FP-marked) +
-        Tier 2 + probe-discovered (LLM-driven explore mode landed attacks)."""
+        Tier 2 + probe-discovered + landed red-team campaigns."""
         tier1_actionable = sum(
             1 for f in self.report.tier1_findings if f.tier2_verdict != "FP"
+        )
+        landed_campaigns = sum(
+            1 for c in self.report.probe_campaigns
+            if c.get("status") == "succeeded"
         )
         return (
             tier1_actionable
             + len(self.report.tier2_findings)
             + len(self.report.probe_discovered)
+            + landed_campaigns
         )
 
 
@@ -205,6 +216,10 @@ def merge(target_root: Path) -> MergeResult:
     # Probe-discovered findings load up front so the coverage matrix can
     # include their framework tags alongside tier1+tier2.
     probe_discovered = _load_probe_discovered_findings(out)
+    # Multi-turn red-team campaigns — loaded as raw dicts (kept under
+    # their own key on the report so renderers can show the kill-chain
+    # narrative rather than treating each campaign as a flat finding).
+    probe_campaigns = _load_probe_campaigns(out)
     coverage = _build_coverage(
         tier1_findings_raw,
         tier2.get("findings", []) if tier2_present else [],
@@ -239,6 +254,7 @@ def merge(target_root: Path) -> MergeResult:
         saige_tier=saige_tier,
         saige_tier_reasoning=saige_tier_reasoning,
         probe_discovered=probe_discovered,
+        probe_campaigns=probe_campaigns,
     )
 
     return MergeResult(
@@ -419,6 +435,103 @@ def _ddr_counts(report: CombinedReport) -> dict[str, dict[str, int]]:
         cat = f.get("category")
         if cat in out["tier2"]:
             out["tier2"][cat] += 1
+    return out
+
+
+def _load_probe_campaigns(agentshield_dir: Path) -> list[dict]:
+    """Load `.agentshield/probe-campaigns.json` if present.
+
+    Returns each campaign as a raw dict (turn-by-turn kill-chain). The
+    renderer treats each campaign as a multi-turn narrative — distinct
+    from single-shot probe-discovered findings — so we keep the dicts
+    in their native shape rather than flattening to the finding schema.
+    """
+    path = agentshield_dir / "probe-campaigns.json"
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    campaigns = raw.get("campaigns") or []
+    return [c for c in campaigns if isinstance(c, dict)]
+
+
+def _campaigns_to_findings(campaigns: list[dict]) -> list[dict]:
+    """Convert each landed/blocked campaign into a finding-dict so it
+    surfaces in the Detect / Defend / Respond tabs alongside other
+    findings.
+
+    The finding-dict carries everything the existing renderer needs
+    (rule_id / agentshield_id / category / severity / framework
+    mappings) plus `_campaign=True` and `_campaign_data` holding the
+    full turn-by-turn kill-chain. The scene renderer then emits one
+    pair of `.attack-sim-scene` elements per turn (instead of the
+    default 3-scene single-shot view), so Play simulation animates the
+    entire kill-chain end-to-end.
+    """
+    out: list[dict] = []
+    for c in campaigns:
+        if not isinstance(c, dict):
+            continue
+        # Skip exhausted campaigns where nothing landed and nothing was
+        # decisively blocked — they'd just be noise in the report.
+        # `succeeded` and `blocked` are both informative outcomes.
+        status = c.get("status") or "exhausted"
+        if status == "exhausted" and not c.get("turns"):
+            continue
+        fw = c.get("frameworks") or {}
+        turns = c.get("turns") or []
+        # Synthesise discovered-style fields so the existing finding
+        # card shell (header / meta / tags) renders identically.
+        first_attacker = turns[0].get("attacker_message", "") if turns else ""
+        last_response = turns[-1].get("target_response", "") if turns else ""
+        # Concatenate all indicators across turns for the discovered
+        # impact card — gives the reader a single answer to "what
+        # landed?".
+        all_indicators: list[str] = []
+        for t in turns:
+            for ind in t.get("indicators_matched", []) or []:
+                if ind not in all_indicators:
+                    all_indicators.append(ind)
+        out.append({
+            "rule_id": c.get("rule_id") or "",
+            "rule_id_short": c.get("rule_id") or "",
+            "agentshield_id": c.get("agentshield_id") or "",
+            "category": c.get("category") or "detect",
+            "severity": c.get("severity") or "high",
+            "file": c.get("target") or "(live target)",
+            "line": 0,
+            "message": c.get("objective") or c.get("title") or "",
+            "language": "n/a",
+            "framework_mappings": {
+                "owasp_llm": list(fw.get("owasp_llm") or []),
+                "owasp_agentic": list(fw.get("owasp_agentic") or []),
+                "mitre_atlas": list(fw.get("mitre_atlas") or []),
+                "cwe": list(fw.get("cwe") or []),
+                "nist_ai_rmf": [],
+                "ast": list(fw.get("ast") or []),
+            },
+            # Flags that drive the renderer:
+            "_campaign": True,
+            "_campaign_data": c,
+            # `_discovered=True` reuses the discovered-finding shell
+            # (Probe pill, expanded panel) but the scene-rendering
+            # block checks `_campaign` and emits multi-turn scenes
+            # instead of the default 3.
+            "_discovered": True,
+            "_discovered_title": c.get("title") or "",
+            "_discovered_payload": first_attacker,
+            "_discovered_response": last_response,
+            "_discovered_indicators": all_indicators,
+            "_discovered_llm_reasoning": (
+                f"Multi-turn campaign — {c.get('turn_count', 0)} "
+                f"fire(s) across {len(c.get('session_ids') or [])} "
+                f"session(s); status: {status}."
+            ),
+            "_discovered_confidence": c.get("confidence"),
+            "_discovered_at": c.get("discovered_at") or "",
+        })
     return out
 
 
@@ -636,6 +749,15 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
         ff = dict(f)
         ff["_origin"] = "tier2"
         ff["_discovered"] = True
+        cat = ff.get("category")
+        if cat in grouped:
+            grouped[cat].append(ff)
+    # Multi-turn red-team campaigns — converted to finding-dicts so
+    # they surface in the Detect / Defend / Respond tabs alongside
+    # everything else. The scene renderer detects `_campaign` and
+    # emits a turn-by-turn kill-chain Play simulation.
+    for ff in _campaigns_to_findings(report.probe_campaigns):
+        ff["_origin"] = "tier2"
         cat = ff.get("category")
         if cat in grouped:
             grouped[cat].append(ff)
@@ -2724,7 +2846,8 @@ footer {
    for the rules / LLM and orchestrator / classifier pairs. */
 .how-it-works,
 .design-card,
-.solution-diagram {
+.solution-diagram,
+.redteam-campaigns {
   margin-top: 20px;
   background: var(--panel);
   border: 1.5px solid var(--border);
@@ -2743,6 +2866,155 @@ footer {
   height: auto;
   display: block;
 }
+
+/* ----- Automated red-team campaigns (kill-chain section) ----- */
+.rt-campaign {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 18px 20px;
+  margin: 14px 0;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+}
+.rt-campaign.rt-status-succeeded { border-left: 4px solid #dc2626; }
+.rt-campaign.rt-status-blocked   { border-left: 4px solid #10b981; }
+.rt-campaign.rt-status-exhausted { border-left: 4px solid #94a3b8; }
+.rt-campaign-head { margin-bottom: 10px; }
+.rt-campaign-title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.rt-campaign-title {
+  font-size: 16px; font-weight: 700; color: #0f172a;
+}
+.rt-campaign-status {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  padding: 3px 10px; border-radius: 12px; text-transform: uppercase;
+}
+.rt-campaign-status.rt-status-succeeded { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+.rt-campaign-status.rt-status-blocked   { background: #ecfdf5; color: #10b981; border: 1px solid #6ee7b7; }
+.rt-campaign-status.rt-status-exhausted { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+.rt-campaign-meta {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-top: 6px; font-size: 11px; color: #64748b;
+}
+.rt-campaign-id {
+  font-family: ui-monospace, monospace; font-size: 11px;
+  color: #1e293b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+}
+.rt-campaign-sev {
+  font-weight: 600; text-transform: capitalize;
+}
+.rt-campaign-sev.sev-critical { color: #b91c1c; }
+.rt-campaign-sev.sev-high     { color: #dc2626; }
+.rt-campaign-sev.sev-medium   { color: #f59e0b; }
+.rt-campaign-body { font-size: 12px; line-height: 1.55; color: #334155; }
+.rt-label {
+  display: inline-block; min-width: 110px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.16em;
+  color: #94a3b8; text-transform: uppercase; margin-right: 8px;
+  vertical-align: top;
+}
+.rt-label-inline {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+  color: #94a3b8; text-transform: uppercase;
+}
+.rt-campaign-objective,
+.rt-campaign-rationale,
+.rt-campaign-frameworks {
+  margin: 6px 0;
+  display: flex; gap: 4px; align-items: baseline;
+}
+.rt-campaign-objective > span:last-child,
+.rt-campaign-rationale > span:last-child {
+  flex: 1;
+}
+.rt-fw-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rt-fw-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 10px; padding: 2px 7px; border-radius: 10px;
+  background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1;
+}
+.rt-fw-chip.rt-fw-owasp_llm    { background: #fef3c7; border-color: #fbbf24; color: #92400e; }
+.rt-fw-chip.rt-fw-owasp_agentic{ background: #ede9fe; border-color: #a78bfa; color: #5b21b6; }
+.rt-fw-chip.rt-fw-mitre_atlas  { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+.rt-fw-chip.rt-fw-cwe          { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+.rt-killchain {
+  margin-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 12px;
+}
+.rt-killchain-label { margin-bottom: 8px; display: block; min-width: 0; }
+.rt-killchain-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.rt-turn {
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 10px 12px; background: #fafbfc;
+}
+.rt-turn.rt-verdict-succeeded { border-color: #fca5a5; background: #fef2f2; }
+.rt-turn.rt-verdict-advanced  { border-color: #fed7aa; background: #fff7ed; }
+.rt-turn.rt-verdict-blocked   { border-color: #6ee7b7; background: #ecfdf5; }
+.rt-turn.rt-verdict-inconclusive { border-color: #cbd5e1; background: #f8fafc; }
+.rt-turn-head {
+  display: flex; gap: 12px; align-items: center;
+  font-size: 11px; margin-bottom: 6px;
+}
+.rt-turn-idx { font-weight: 700; color: #0f172a; }
+.rt-turn-verdict {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+  padding: 2px 8px; border-radius: 10px; text-transform: uppercase;
+}
+.rt-turn-verdict.rt-verdict-succeeded { background: #fee2e2; color: #b91c1c; }
+.rt-turn-verdict.rt-verdict-advanced  { background: #ffedd5; color: #c2410c; }
+.rt-turn-verdict.rt-verdict-blocked   { background: #d1fae5; color: #065f46; }
+.rt-turn-verdict.rt-verdict-inconclusive { background: #f1f5f9; color: #64748b; }
+.rt-turn-elapsed { color: #94a3b8; font-family: ui-monospace, monospace; font-size: 10px; }
+.rt-turn-attempt {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px; border-radius: 10px;
+  background: #fef3c7; color: #92400e; border: 1px solid #fbbf24;
+}
+.rt-turn-arrow {
+  font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #94a3b8;
+  margin: 8px 0 4px;
+}
+.rt-turn-msg {
+  font-size: 11px; line-height: 1.5;
+  padding: 8px 10px; border-radius: 6px;
+}
+.rt-msg-attacker {
+  background: #fef2f2; color: #7f1d1d;
+  border-left: 3px solid #dc2626;
+  font-style: italic;
+}
+.rt-msg-target {
+  background: #1f2933; color: #d4d2c8;
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 200px; overflow-y: auto;
+}
+.rt-msg-target code { background: none; color: inherit; padding: 0; }
+.rt-turn-indicators {
+  margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.rt-indicator-chip {
+  font-family: ui-monospace, monospace; font-size: 9px;
+  padding: 2px 6px; border-radius: 8px;
+  background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7;
+}
+.rt-campaign-target {
+  margin-top: 10px; font-size: 10px; color: #94a3b8;
+}
+.rt-campaign-target code {
+  font-size: 10px; background: none; color: #64748b;
+}
+.rt-status-succeeded { color: #dc2626; }
+.rt-status-blocked   { color: #10b981; }
+.rt-status-exhausted { color: #94a3b8; }
 .design-subhead {
   font-size: 12px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
@@ -4180,74 +4452,87 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         '</div>'
                         '<div class="attack-sim-list">'
                     )
-                    # Scene 1 — attacker payload toward the agent.
-                    parts.append(
-                        '<div class="attack-sim-scene" data-step="0">'
-                        '<div class="attack-sim-step-num">Step 1</div>'
-                        '<div class="attack-sim-row">'
-                        '<div class="attack-sim-actor">'
-                        '<span class="actor-icon">&#129302;</span>'
-                        '<span class="actor-label">LLM adversary</span>'
-                        '</div>'
-                        '<div class="attack-sim-arrow">'
-                        '<span class="attack-sim-arrow-label">crafted payload</span>'
-                        '<div class="attack-sim-arrow-line"></div>'
-                        '<span class="attack-sim-packet" aria-hidden="true"></span>'
-                        '</div>'
-                        '<div class="attack-sim-actor">'
-                        '<span class="actor-icon">&#129351;</span>'
-                        f'<span class="actor-label">{_html_escape(target_url)}</span>'
-                        '</div>'
-                        '</div>'
-                        f'<div class="attack-sim-payload">{_html_escape(payload_sent)}</div>'
-                        '<div class="attack-sim-note">'
-                        'The adversary generates an attack tuned to this '
-                        'specific agent\'s tools and role, then sends it as '
-                        'a normal user message.'
-                        '</div>'
-                        '</div>'
-                    )
-                    # Scene 2 — agent responds, compromised.
-                    short_resp = resp_excerpt[:220] + ("…" if len(resp_excerpt) > 220 else "")
-                    parts.append(
-                        '<div class="attack-sim-scene" data-step="1">'
-                        '<div class="attack-sim-step-num">Step 2</div>'
-                        '<div class="attack-sim-row">'
-                        '<div class="attack-sim-actor">'
-                        '<span class="actor-icon">&#129351;</span>'
-                        f'<span class="actor-label">{_html_escape(target_url)}</span>'
-                        '</div>'
-                        '<div class="attack-sim-arrow">'
-                        '<span class="attack-sim-arrow-label">compromised response</span>'
-                        '<div class="attack-sim-arrow-line"></div>'
-                        '<span class="attack-sim-packet" aria-hidden="true"></span>'
-                        '</div>'
-                        '<div class="attack-sim-actor">'
-                        '<span class="actor-icon">&#129302;</span>'
-                        '<span class="actor-label">LLM adversary</span>'
-                        '</div>'
-                        '</div>'
-                        f'<div class="attack-sim-payload">{_html_escape(short_resp)}</div>'
-                        '<div class="attack-sim-note">'
-                        'The agent executes the adversarial instruction '
-                        'instead of refusing — emitting tool calls or text '
-                        'that confirm the attack landed.'
-                        '</div>'
-                        '</div>'
-                    )
-                    # Scene 3 — impact card (no target, painted critical).
-                    parts.append(
-                        '<div class="attack-sim-scene attack-sim-impact" data-step="2">'
-                        '<div class="attack-sim-step-num">Impact</div>'
-                        '<div class="attack-sim-row">'
-                        '<div class="attack-sim-actor">'
-                        '<span class="actor-icon">&#128165;</span>'
-                        '<span class="actor-label">Attack landed</span>'
-                        '</div>'
-                        '</div>'
-                        f'<div class="attack-sim-note">{_html_escape(indicators_note)}</div>'
-                        '</div>'
-                    )
+                    campaign_data = f.get("_campaign_data")
+                    if campaign_data:
+                        # Multi-turn red-team campaign: one pair of
+                        # scenes per turn (attacker → agent, agent →
+                        # attacker) so Play simulation animates the
+                        # full kill-chain, plus an impact card at the
+                        # end with the final status + matched indicators.
+                        _render_campaign_scenes(
+                            parts, campaign_data, target_url, indicators_note,
+                        )
+                    else:
+                        # Single-shot probe (explore mode): 3 scenes —
+                        # payload, compromised response, impact.
+                        # Scene 1 — attacker payload toward the agent.
+                        parts.append(
+                            '<div class="attack-sim-scene" data-step="0">'
+                            '<div class="attack-sim-step-num">Step 1</div>'
+                            '<div class="attack-sim-row">'
+                            '<div class="attack-sim-actor">'
+                            '<span class="actor-icon">&#129302;</span>'
+                            '<span class="actor-label">LLM adversary</span>'
+                            '</div>'
+                            '<div class="attack-sim-arrow">'
+                            '<span class="attack-sim-arrow-label">crafted payload</span>'
+                            '<div class="attack-sim-arrow-line"></div>'
+                            '<span class="attack-sim-packet" aria-hidden="true"></span>'
+                            '</div>'
+                            '<div class="attack-sim-actor">'
+                            '<span class="actor-icon">&#129351;</span>'
+                            f'<span class="actor-label">{_html_escape(target_url)}</span>'
+                            '</div>'
+                            '</div>'
+                            f'<div class="attack-sim-payload">{_html_escape(payload_sent)}</div>'
+                            '<div class="attack-sim-note">'
+                            'The adversary generates an attack tuned to this '
+                            'specific agent\'s tools and role, then sends it as '
+                            'a normal user message.'
+                            '</div>'
+                            '</div>'
+                        )
+                        # Scene 2 — agent responds, compromised.
+                        short_resp = resp_excerpt[:220] + ("…" if len(resp_excerpt) > 220 else "")
+                        parts.append(
+                            '<div class="attack-sim-scene" data-step="1">'
+                            '<div class="attack-sim-step-num">Step 2</div>'
+                            '<div class="attack-sim-row">'
+                            '<div class="attack-sim-actor">'
+                            '<span class="actor-icon">&#129351;</span>'
+                            f'<span class="actor-label">{_html_escape(target_url)}</span>'
+                            '</div>'
+                            '<div class="attack-sim-arrow">'
+                            '<span class="attack-sim-arrow-label">compromised response</span>'
+                            '<div class="attack-sim-arrow-line"></div>'
+                            '<span class="attack-sim-packet" aria-hidden="true"></span>'
+                            '</div>'
+                            '<div class="attack-sim-actor">'
+                            '<span class="actor-icon">&#129302;</span>'
+                            '<span class="actor-label">LLM adversary</span>'
+                            '</div>'
+                            '</div>'
+                            f'<div class="attack-sim-payload">{_html_escape(short_resp)}</div>'
+                            '<div class="attack-sim-note">'
+                            'The agent executes the adversarial instruction '
+                            'instead of refusing — emitting tool calls or text '
+                            'that confirm the attack landed.'
+                            '</div>'
+                            '</div>'
+                        )
+                        # Scene 3 — impact card (no target, painted critical).
+                        parts.append(
+                            '<div class="attack-sim-scene attack-sim-impact" data-step="2">'
+                            '<div class="attack-sim-step-num">Impact</div>'
+                            '<div class="attack-sim-row">'
+                            '<div class="attack-sim-actor">'
+                            '<span class="actor-icon">&#128165;</span>'
+                            '<span class="actor-label">Attack landed</span>'
+                            '</div>'
+                            '</div>'
+                            f'<div class="attack-sim-note">{_html_escape(indicators_note)}</div>'
+                            '</div>'
+                        )
                     parts.append('</div>')  # /.attack-sim-list
 
                     # Run-probe terminal panel — streams a synthesised
@@ -4940,7 +5225,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<section class="static-section" data-panel="reference">')
     else:
         parts.append('<div class="tab-panel" role="tabpanel" data-panel="reference">')
-    _render_reference_panel(parts)
+    _render_reference_panel(parts, report=r)
     parts.append("</section>" if static else "</div>")  # /tab-panel
 
     parts.append("</div>")  # /tab-panels (or /static-report)
@@ -5431,8 +5716,18 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     parts.append('</div>')  # /coverage-card
 
 
-def _render_reference_panel(parts: list[str]) -> None:
-    """Emit the inner HTML of the Reference tab panel into `parts`."""
+def _render_reference_panel(
+    parts: list[str],
+    *,
+    report: "CombinedReport | None" = None,
+) -> None:
+    """Emit the inner HTML of the Reference tab panel into `parts`.
+
+    `report` is optional so existing call sites (tests, alternate
+    paths) keep working; when provided, multi-turn red-team campaigns
+    from `report.probe_campaigns` get rendered as a kill-chain section
+    after the solution blueprint.
+    """
     from agentshield.merger.reference import build_all_references
 
     refs = build_all_references(
@@ -5614,6 +5909,8 @@ def _render_reference_panel(parts: list[str]) -> None:
     _render_design_basis(parts)
     _render_how_it_works(parts)
     _render_solution_diagram(parts)
+    if report is not None and report.probe_campaigns:
+        _render_redteam_campaigns(parts, report.probe_campaigns)
 
 
 def _render_design_basis(parts: list[str]) -> None:
@@ -6198,6 +6495,314 @@ def _render_solution_diagram(parts: list[str]) -> None:
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append('</div>')  # /solution-diagram
+
+
+def _render_campaign_scenes(
+    parts: list[str],
+    campaign: dict,
+    target_url: str,
+    indicators_note: str,
+) -> None:
+    """Emit the `.attack-sim-scene` list for a multi-turn campaign.
+
+    One scene per direction per turn (attacker→agent, agent→attacker)
+    + one impact card at the end. The Play simulation handler iterates
+    `.attack-sim-scene` elements in DOM order, so N turns yield 2N+1
+    animated scenes automatically — no JS changes needed.
+
+    Mutation attempts (attempt > 1 within the same logical turn) get a
+    visible "mutation #K" badge on the attacker scene so reviewers see
+    the kill-chain's adaptive moves.
+    """
+    turns = campaign.get("turns") or []
+    status = campaign.get("status") or "exhausted"
+    step_idx = 0
+    for turn in turns:
+        logical = turn.get("logical_turn") or turn.get("index") or 1
+        attempt = turn.get("attempt") or 1
+        verdict = turn.get("verdict") or "inconclusive"
+        attacker_msg = turn.get("attacker_message") or ""
+        target_resp = turn.get("target_response") or ""
+        short_resp = target_resp[:260] + ("…" if len(target_resp) > 260 else "")
+        attempt_label = (
+            f"Turn {logical} · attempt {attempt}"
+            + (f" (mutation #{attempt - 1})" if attempt > 1 else "")
+        )
+
+        # Attacker → agent scene.
+        parts.append(
+            f'<div class="attack-sim-scene" data-step="{step_idx}">'
+            f'<div class="attack-sim-step-num">{_html_escape(attempt_label)}</div>'
+            '<div class="attack-sim-row">'
+            '<div class="attack-sim-actor">'
+            '<span class="actor-icon">&#129302;</span>'
+            '<span class="actor-label">LLM adversary</span>'
+            '</div>'
+            '<div class="attack-sim-arrow">'
+            '<span class="attack-sim-arrow-label">crafted payload</span>'
+            '<div class="attack-sim-arrow-line"></div>'
+            '<span class="attack-sim-packet" aria-hidden="true"></span>'
+            '</div>'
+            '<div class="attack-sim-actor">'
+            '<span class="actor-icon">&#129351;</span>'
+            f'<span class="actor-label">{_html_escape(target_url)}</span>'
+            '</div>'
+            '</div>'
+            f'<div class="attack-sim-payload">{_html_escape(attacker_msg)}</div>'
+            '</div>'
+        )
+        step_idx += 1
+
+        # Agent → attacker scene (color hinted by verdict).
+        verdict_note = {
+            "blocked": "The agent refused — guardrail fired.",
+            "succeeded": "The agent executed the adversarial instruction.",
+            "advanced": "The agent took the bait — campaign advances.",
+            "inconclusive": "Response neither lands nor blocks decisively.",
+        }.get(verdict, "")
+        parts.append(
+            f'<div class="attack-sim-scene rt-verdict-{_html_escape(verdict)}" '
+            f'data-step="{step_idx}">'
+            f'<div class="attack-sim-step-num">'
+            f'agent response &middot; '
+            f'<span class="rt-turn-verdict rt-verdict-{_html_escape(verdict)}">'
+            f'{_html_escape(verdict)}</span></div>'
+            '<div class="attack-sim-row">'
+            '<div class="attack-sim-actor">'
+            '<span class="actor-icon">&#129351;</span>'
+            f'<span class="actor-label">{_html_escape(target_url)}</span>'
+            '</div>'
+            '<div class="attack-sim-arrow">'
+            '<span class="attack-sim-arrow-label">response</span>'
+            '<div class="attack-sim-arrow-line"></div>'
+            '<span class="attack-sim-packet" aria-hidden="true"></span>'
+            '</div>'
+            '<div class="attack-sim-actor">'
+            '<span class="actor-icon">&#129302;</span>'
+            '<span class="actor-label">LLM adversary</span>'
+            '</div>'
+            '</div>'
+            f'<div class="attack-sim-payload">{_html_escape(short_resp)}</div>'
+            f'<div class="attack-sim-note">{_html_escape(verdict_note)}</div>'
+            '</div>'
+        )
+        step_idx += 1
+
+    # Final impact card — status + indicators across the whole kill-chain.
+    status_icon = {
+        "succeeded": "&#128165;",   # 💥
+        "blocked":   "&#128737;",   # 🛡
+        "exhausted": "&#9203;",    # ⏳
+    }.get(status, "&#128165;")
+    status_label = {
+        "succeeded": "Campaign succeeded — objective met",
+        "blocked":   "Campaign blocked — agent defended successfully",
+        "exhausted": "Campaign exhausted — no decisive outcome",
+    }.get(status, status.title())
+    parts.append(
+        f'<div class="attack-sim-scene attack-sim-impact rt-status-{_html_escape(status)}" '
+        f'data-step="{step_idx}">'
+        '<div class="attack-sim-step-num">Impact</div>'
+        '<div class="attack-sim-row">'
+        '<div class="attack-sim-actor">'
+        f'<span class="actor-icon">{status_icon}</span>'
+        f'<span class="actor-label">{_html_escape(status_label)}</span>'
+        '</div>'
+        '</div>'
+        f'<div class="attack-sim-note">{_html_escape(indicators_note)}</div>'
+        '</div>'
+    )
+
+
+def _render_redteam_campaigns(
+    parts: list[str], campaigns: list[dict]
+) -> None:
+    """Render multi-turn red-team campaigns as a kill-chain section.
+
+    Each campaign gets its own card with: a status badge (succeeded /
+    blocked / exhausted), the objective, the why-it-matters rationale,
+    framework tags, and a turn-by-turn timeline showing the attacker's
+    message and the target's response per turn — the kill-chain narrative
+    real red-team reports tell, not a flat row-per-finding view.
+    """
+    if not campaigns:
+        return
+
+    succeeded = sum(1 for c in campaigns if c.get("status") == "succeeded")
+    blocked = sum(1 for c in campaigns if c.get("status") == "blocked")
+    exhausted = sum(1 for c in campaigns if c.get("status") == "exhausted")
+
+    parts.append('<div class="redteam-campaigns">')
+    parts.append('<details class="ref-section" open>')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9654;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">'
+        'Automated red-team campaigns</span>'
+        '<span class="ref-section-teaser">Multi-turn, goal-directed '
+        'attacks &mdash; the real test of whether the agent holds up '
+        'against an adversary that probes, learns, and adapts.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append(
+        f'<p class="panel-subtitle">{len(campaigns)} campaign'
+        f'{"s" if len(campaigns) != 1 else ""} run &mdash; '
+        f'<strong class="rt-status-succeeded">{succeeded} succeeded</strong>, '
+        f'<strong class="rt-status-blocked">{blocked} blocked</strong>, '
+        f'<strong class="rt-status-exhausted">{exhausted} exhausted</strong>. '
+        f'Each campaign drove a multi-turn attack toward an objective; '
+        f'the timeline below shows turn-by-turn what the attacker sent '
+        f'and how the agent responded.</p>'
+    )
+
+    for c in campaigns:
+        _render_one_campaign(parts, c)
+
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
+    parts.append('</div>')  # /redteam-campaigns
+
+
+def _render_one_campaign(parts: list[str], c: dict) -> None:
+    """Render a single campaign card with its kill-chain timeline."""
+    status = c.get("status") or "exhausted"
+    severity = c.get("severity") or "high"
+    title = c.get("title") or c.get("name") or "Untitled campaign"
+    asid = c.get("agentshield_id") or ""
+    objective = c.get("objective") or ""
+    rationale = c.get("rationale") or ""
+    turn_count = c.get("turn_count", 0)
+    session_ids = c.get("session_ids") or []
+    target = c.get("target") or ""
+    turns = c.get("turns") or []
+    frameworks = c.get("frameworks") or {}
+
+    parts.append(f'<div class="rt-campaign rt-status-{_html_escape(status)}">')
+    # Card header — title + status badge + ID + severity
+    parts.append('<div class="rt-campaign-head">')
+    parts.append(
+        '<div class="rt-campaign-title-row">'
+        f'<span class="rt-campaign-title">{_html_escape(title)}</span>'
+        f'<span class="rt-campaign-status rt-status-{_html_escape(status)}">'
+        f'{_html_escape(status.upper())}</span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="rt-campaign-meta">'
+        f'<code class="rt-campaign-id">{_html_escape(asid)}</code>'
+        f'<span class="rt-campaign-sev sev-{_html_escape(severity)}">'
+        f'{_html_escape(severity)}</span>'
+        f'<span class="rt-campaign-turncount">'
+        f'{turn_count} turn{"s" if turn_count != 1 else ""}</span>'
+        f'<span class="rt-campaign-sessions">'
+        f'{len(session_ids)} session{"s" if len(session_ids) != 1 else ""}'
+        f'</span>'
+        '</div>'
+    )
+    parts.append('</div>')  # /rt-campaign-head
+
+    # Objective + rationale
+    parts.append('<div class="rt-campaign-body">')
+    parts.append(
+        '<div class="rt-campaign-objective">'
+        '<span class="rt-label">OBJECTIVE</span>'
+        f'<span>{_html_escape(objective)}</span>'
+        '</div>'
+    )
+    if rationale:
+        parts.append(
+            '<div class="rt-campaign-rationale">'
+            '<span class="rt-label">WHY IT MATTERS</span>'
+            f'<span>{_html_escape(rationale)}</span>'
+            '</div>'
+        )
+
+    # Framework tags (compact chips)
+    fw_chips: list[str] = []
+    for key, tags in frameworks.items():
+        if not tags:
+            continue
+        for tag in tags:
+            fw_chips.append(
+                f'<span class="rt-fw-chip rt-fw-{_html_escape(key)}">'
+                f'{_html_escape(str(tag))}</span>'
+            )
+    if fw_chips:
+        parts.append(
+            '<div class="rt-campaign-frameworks">'
+            '<span class="rt-label">FRAMEWORKS</span>'
+            f'<span class="rt-fw-chips">{"".join(fw_chips)}</span>'
+            '</div>'
+        )
+
+    # Kill-chain timeline
+    parts.append('<div class="rt-killchain">')
+    parts.append(
+        '<div class="rt-label rt-killchain-label">KILL-CHAIN TIMELINE</div>'
+    )
+    parts.append('<ol class="rt-killchain-list">')
+    for turn in turns:
+        idx = turn.get("index", "?")
+        logical = turn.get("logical_turn") or idx
+        attempt = turn.get("attempt") or 1
+        attacker = turn.get("attacker_message") or ""
+        response = turn.get("target_response") or ""
+        verdict = turn.get("verdict") or "inconclusive"
+        indicators = turn.get("indicators_matched") or []
+        elapsed_ms = turn.get("elapsed_ms", 0)
+        # Truncate response for the timeline view
+        response_short = response if len(response) <= 320 else response[:320] + "…"
+        # Attempt badge only when > 1 — keeps the common case clean and
+        # makes mutation attempts visually distinct.
+        attempt_html = ""
+        if attempt and attempt > 1:
+            attempt_html = (
+                f'<span class="rt-turn-attempt">'
+                f'mutation #{_html_escape(str(attempt - 1))}'
+                f'</span>'
+            )
+        parts.append(
+            f'<li class="rt-turn rt-verdict-{_html_escape(verdict)}">'
+            f'<div class="rt-turn-head">'
+            f'<span class="rt-turn-idx">Turn {_html_escape(str(logical))}'
+            f' &middot; attempt {_html_escape(str(attempt))}</span>'
+            f'{attempt_html}'
+            f'<span class="rt-turn-verdict rt-verdict-{_html_escape(verdict)}">'
+            f'{_html_escape(verdict)}</span>'
+            f'<span class="rt-turn-elapsed">{elapsed_ms} ms</span>'
+            f'</div>'
+            f'<div class="rt-turn-arrow">attacker &rarr; agent</div>'
+            f'<div class="rt-turn-msg rt-msg-attacker">'
+            f'{_html_escape(attacker)}</div>'
+            f'<div class="rt-turn-arrow">agent &rarr; attacker</div>'
+            f'<div class="rt-turn-msg rt-msg-target">'
+            f'<code>{_html_escape(response_short)}</code></div>'
+        )
+        if indicators:
+            chips = "".join(
+                f'<span class="rt-indicator-chip">{_html_escape(str(i))}</span>'
+                for i in indicators
+            )
+            parts.append(
+                f'<div class="rt-turn-indicators">'
+                f'<span class="rt-label-inline">indicators matched:</span> '
+                f'{chips}</div>'
+            )
+        parts.append('</li>')
+    parts.append('</ol>')
+    parts.append('</div>')  # /rt-killchain
+
+    if target:
+        parts.append(
+            f'<div class="rt-campaign-target">target: '
+            f'<code>{_html_escape(target)}</code></div>'
+        )
+    parts.append('</div>')  # /rt-campaign-body
+    parts.append('</div>')  # /rt-campaign
 
 
 def _render_how_it_works(parts: list[str]) -> None:
