@@ -3860,7 +3860,7 @@ footer {
   background: var(--panel);
   border: 1.5px solid var(--border);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 8px 18px 4px;
   margin-bottom: 20px;
   display: flex;
   flex-wrap: wrap;
@@ -3871,7 +3871,7 @@ footer {
 .filter-bar .filter-group {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
 }
-.filter-bar .filter-search-group { flex: 1; min-width: 240px; gap: 8px; }
+.filter-bar .filter-search-group { flex: 1; min-width: 240px; max-width: 360px; gap: 8px; }
 .filter-bar .filter-label {
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-muted); font-weight: 600; margin-right: 4px;
