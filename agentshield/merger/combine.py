@@ -2027,7 +2027,7 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines: list[str] = []
 
     # 1. Title
-    lines.append("# AgentShield Pre-Production Review")
+    lines.append("# AgentShield Pre-Production Review Report")
     lines.append("")
     lines.append(f"_Rules-engine Static Scan + Copilot LLM-as-a-Judge Scan · scanned {r.tier2_scanned_at or '(Semgrep only — Copilot LLM-as-a-Judge Scan not run)'}_")
     lines.append("")
@@ -7168,7 +7168,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts: list[str] = []
     parts.append("<!doctype html>")
     parts.append('<html lang="en"><head><meta charset="utf-8">')
-    parts.append("<title>AgentShield Pre-Production Review</title>")
+    parts.append("<title>AgentShield Pre-Production Review Report</title>")
     parts.append(f"<style>{_HTML_CSS}</style>")
     parts.append("</head><body>")
 
@@ -7190,7 +7190,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     scan_duration = "42s"
     total_findings = sum(sev_total.values())
     parts.append('<div class="report-header">')
-    parts.append("<h1>AgentShield Pre-Production Review</h1>")
+    parts.append("<h1>AgentShield Pre-Production Review Report</h1>")
     if r.tier2_scanned_at:
         subtitle = (
             f"Scanned: {_html_escape(repo_target)} "
@@ -8587,7 +8587,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     # structured `simulation` (actor → target scenes), we
                     # render the visual flow and animate scene-by-scene.
                     # Otherwise we fall back to the prose `steps` list.
-                    if scenario.simulation:
+                    if scenario.simulation and is_live_probe:
                         parts.append(
                             '<div class="attack-section attack-steps-section">'
                         )
@@ -8782,7 +8782,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             parts.append('</div>')  # /probe-panel
 
                         parts.append('</div>')  # /attack-section
-                    elif scenario.steps:
+                    elif scenario.steps and is_live_probe:
                         parts.append(
                             '<div class="attack-section attack-steps-section">'
                         )
@@ -8801,15 +8801,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             )
                         parts.append('</ol>')
                         parts.append('</div>')
-                    # Disclaimer has three states, matching the actual
-                    # provenance of the block:
-                    #   (a) live probe ran          → payloads WERE sent
-                    #   (b) canned probe attached   → simulated walkthrough
-                    #   (c) no probe at all         → static-only finding
-                    # The (c) case applies to at-rest disclosure rules
-                    # (hardcoded credentials), manifest-config rules, and
-                    # observability gaps — anything without a runtime
-                    # attack vector the HTTP-probe model can exercise.
+                    # Disclaimer has two states:
+                    #   (a) live probe ran  → payloads WERE sent
+                    #   (b) static scan     → no probe; finding from static analysis
                     if is_live_probe and effective_probe is not None:
                         parts.append(
                             f'<div class="attack-disclaimer attack-disclaimer-live">'
@@ -8820,22 +8814,10 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'captured.'
                             f'</div>'
                         )
-                    elif effective_probe is not None:
-                        parts.append(
-                            '<div class="attack-disclaimer">'
-                            'Simulated walkthrough &mdash; no payloads were '
-                            'sent to your system.'
-                            '</div>'
-                        )
                     else:
                         parts.append(
                             '<div class="attack-disclaimer attack-disclaimer-static">'
-                            '&#8505; Static-only finding &mdash; no runtime '
-                            'probe attached for this rule. The finding above '
-                            'comes from static analysis; this attack class '
-                            '(at-rest disclosure, manifest config, or '
-                            'observability gap) doesn\'t have a runtime '
-                            'vector AgentShield\'s HTTP probe can exercise.'
+                            '&#8505; Static-only finding'
                             '</div>'
                         )
                     parts.append('</div>')  # /attack-body
