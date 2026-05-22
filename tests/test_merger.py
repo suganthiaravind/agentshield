@@ -555,7 +555,7 @@ def test_html_is_well_formed_document(repo: Path) -> None:
     _write_tier2(repo, _tier2_payload())
     html = render_combined_html(merge(repo))
     assert html.startswith("<!doctype html>")
-    assert "<title>AgentShield Pre-Production Review</title>" in html
+    assert "<title>AgentShield Pre-Production Review Report</title>" in html
     assert html.rstrip().endswith("</html>")
 
 

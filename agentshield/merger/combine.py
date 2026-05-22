@@ -4020,11 +4020,10 @@ footer {
   flex-shrink: 0;
 }
 
-/* Reference tab pushes to the far right via auto margin — it's
-   tool-level reference material, conceptually distinct from anything
-   tied to this scan. Coverage sits flush with the D/D/R cluster on
-   the left. */
-.tab-btn[data-tab="reference"] {
+/* Coverage pushes itself (and everything after it) to the right via
+   auto margin, separating the D/D/R findings cluster on the left from
+   the Coverage / Input & Output / Reference utility tabs on the right. */
+.tab-btn[data-tab="coverage"] {
   margin-left: auto;
 }
 .tab-btn .tab-count {
@@ -4751,6 +4750,18 @@ footer {
 }
 .fw-map-table tbody tr:last-child td { border-bottom: none; }
 .fw-map-table tbody tr:hover { background: #fafafa; }
+.fw-map-col-id   { width: 160px; min-width: 160px; }
+.fw-map-col-rule { width: auto;  min-width: 180px; }
+.fw-map-col-cat  { width: 72px;  min-width: 72px; }
+.fw-map-col-fw   { width: 110px; min-width: 110px; }
+.fw-map-totals {
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+}
+.fw-map-totals-live    { color: #166534; font-weight: 500; }
+.fw-map-totals-pending { color: #92400e; font-weight: 500; }
+.fw-map-totals-sep     { color: #94a3b8; }
 .fw-map-id code {
   font-size: 10.5px;
   background: #f1f5f9;
@@ -9949,13 +9960,12 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-naming-body
     parts.append('</details>')  # /ref-naming
 
+    _render_framework_mapping_table(parts, refs)
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
-    _render_framework_mapping_table(parts, refs)
     _render_design_basis(parts)
     _render_how_it_works(parts)
-    _render_solution_diagram(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -10011,27 +10021,14 @@ def _render_framework_mapping_table(
     for bucket in groups.values():
         bucket.sort(key=lambda r: r.agentshield_id or r.rule_id or "")
 
-    parts.append('<div class="reference-card">')
-    parts.append('<details class="ref-section">')
+    parts.append('<details class="ref-naming">')
     parts.append(
-        '<summary class="ref-section-summary">'
-        '<span class="ref-section-chevron">▶</span>'
-        '<span class="ref-section-heading">'
-        '<span class="ref-section-title">'
+        '<summary class="ref-naming-summary">'
         'AgentShield &harr; Security Framework Mapping'
-        '</span>'
-        '<span class="ref-section-teaser">'
-        'Each AgentShield control mapped to the OWASP LLM / OWASP '
-        'Agentic / OWASP AST / MITRE ATLAS / CWE item it covers. '
-        'Tags shown here are curated to &ge;75% coverage of the '
-        'framework item &mdash; weak / borderline claims were pruned '
-        'in the mapping audit.'
-        '</span>'
-        '</span>'
-        '<span class="ref-section-hint"></span>'
+        '<span class="ref-naming-hint">click to expand</span>'
         '</summary>'
     )
-    parts.append('<div class="ref-section-body">')
+    parts.append('<div class="ref-naming-body">')
     parts.append(
         '<p class="panel-subtitle">'
         'Hover any framework chip for a brief definition. Empty '
@@ -10039,6 +10036,15 @@ def _render_framework_mapping_table(
         "coverage bar for this control &mdash; the control is "
         "still scanned, it just isn't claimed under that axis."
         '</p>'
+    )
+    live_count = sum(len(groups[k]) for k in ("Semgrep", "Copilot", "BehaviourEmulator", "Markdown"))
+    not_live_count = len(groups.get("Probe") or [])
+    parts.append(
+        '<div class="fw-map-totals">'
+        f'<span class="fw-map-totals-live">&#10003; Controls Live: <strong>{live_count}</strong></span>'
+        f'<span class="fw-map-totals-sep">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>'
+        f'<span class="fw-map-totals-pending">&#9675; Controls Not Yet Live: <strong>{not_live_count}</strong></span>'
+        '</div>'
     )
 
     def _chip_cell(field_key: str, items: list) -> str:
@@ -10182,9 +10188,8 @@ def _render_framework_mapping_table(
         parts.append('</tbody></table>')
         parts.append('</div>')  # /fw-map-table-wrap
         parts.append('</details>')  # /fw-map-group
-    parts.append('</div>')  # /ref-section-body
-    parts.append('</details>')
-    parts.append('</div>')  # /reference-card
+    parts.append('</div>')  # /ref-naming-body
+    parts.append('</details>')  # /ref-naming
 
 
 def _render_design_basis(parts: list[str]) -> None:

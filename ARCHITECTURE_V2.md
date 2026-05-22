@@ -1,6 +1,6 @@
 # AgentShield Architecture
 
-Status: 2026-05-07 — current.
+Status: 2026-05-22 — current.
 Companion to: [README.md](./README.md) (install + quickstart), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) (install + run guide), [GLOSSARY.md](./GLOSSARY.md) (security-term definitions).
 
 This document describes how AgentShield is built today. For the live, always-current rule list, open the **Reference tab** of any HTML report (`agentshield merge --output-html report.html`) — it's auto-generated from the rule pack, so it can never drift.
@@ -11,7 +11,7 @@ This document describes how AgentShield is built today. For the live, always-cur
 
 A **pre-production security evaluator for AI agents**. Static analysis + LLM-as-scanner + manifest scanner. Runs on a developer's machine or in a CI / VDI; never makes outbound network calls of its own.
 
-Three scanning surfaces feed a single unified report:
+Three scanning surfaces feed a unified report. An optional fourth step — the `probe` command — runs live adversarial tests and feeds its results back into the same merge pipeline:
 
 ```
                    ┌──────────────────────────────────────────────┐
@@ -58,7 +58,7 @@ Three scanning surfaces feed a single unified report:
                    └──────────────────────────────────────────────┘
 ```
 
-The two CLI commands are `agentshield scan <target>` and `agentshield merge <target>`. Everything else is library code.
+The three CLI commands are `agentshield scan <target>`, `agentshield merge <target>`, and `agentshield probe <target>`. Everything else is library code.
 
 ---
 
@@ -106,7 +106,7 @@ Each rule's YAML carries `metadata.framework_mappings` with multi-axis tags (OWA
 7. Tier 1 cross-check — Copilot reviews each Tier 1 finding and emits a TP/CD/FP verdict with reasoning
 8. JPMC SAIGE Agent Tier classification (Non-Agent / Agentic Tier 0–3) — informational only
 
-**Why Copilot specifically?** Tier 2 needs cross-function reasoning, absence-of-control detection, and intent comprehension — strengths the LLM has and Semgrep doesn't. The IDE handoff means AgentShield itself has no LLM dependency, no API key, no AWS / Bedrock surface, no token cost. Copilot runs against the user's existing IDE license.
+**Why Copilot specifically?** Tier 2 needs cross-function reasoning, absence-of-control detection, and intent comprehension — strengths the LLM has and Semgrep doesn't. The IDE handoff means AgentShield itself has no LLM dependency, no API key, no AWS / Bedrock surface, no token cost. Copilot runs against the user's existing IDE license. In the HTML report the Copilot source is labelled **"Copilot LLM-as-a-Judge (Static & Behaviour Emulator) Scan"** — the "Behaviour Emulator" suffix reflects that the same Copilot backend also drives the agent-emulator step when no live target is configured for probe mode.
 
 #### What Tier 2 catches that Tier 1 can't
 
@@ -204,16 +204,57 @@ This is the developer-tooling supply chain layer: skill packages distributed via
 | **AST05** Unsafe Deserialization | `yaml.load` (without SafeLoader), `pickle.loads`, `eval`, `exec` inside fenced code blocks |
 | **AST07** Update Drift | Missing signature, missing content_hash |
 
+### 2.4 Probe — live adversarial testing
+
+**Lives in** `agentshield/probe/`. An optional fourth path that runs live attacks against a deployed agent endpoint. Output written to `.agentshield/` is picked up automatically by `agentshield merge`.
+
+Three modes:
+
+| Mode | What it does | Output file |
+|---|---|---|
+| `verify` | Looks up a canned payload for each static finding's `rule_id` and sends it to the target. Confirms whether the vulnerability is exploitable at runtime. | `probe-results.json` |
+| `explore` | The adversarial backend (mock or real LLM) brainstorms attacks tuned to the agent's manifest + tool catalogue, fires each one, and classifies responses. Any that land are persisted as new findings. | `probe-discovered.json` |
+| `campaign` | Multi-turn goal-directed attacks. When a turn is blocked, a mutate step rewrites the payload and retries. An LLM judge classifies each response (landed / blocked / inconclusive). When no live target is configured, the agent behaviour emulator stands in so campaigns still run offline. | `probe-campaigns.json` |
+
+**Explore-mode attack catalogue (13 bundled classes):**
+
+| Attack name | Category | Severity | Primary frameworks |
+|---|---|---|---|
+| authority-escalation-via-roleplay | detect | high | LLM01, T6/T9, AML.T0051, CWE-269/287 |
+| memory-poisoning-persistent-directive | detect | high | T1, AML.T0018/T0019, CWE-94 |
+| tool-chaining-unauthorized-exfil | defend | high | LLM02/LLM06, T2/T5, AML.T0024/T0053, CWE-200/918 |
+| tool-description-injection | detect | medium | LLM01, T2, AML.T0051, CWE-94 |
+| path-traversal-via-file-tool | detect | high | LLM06, T2, AML.T0024, CWE-22 |
+| cross-tenant-data-fishing | detect | high | LLM02/LLM08, T5, AML.T0024, CWE-200/285 |
+| runaway-tool-loop | defend | medium | LLM10, T4, AML.T0029/T0034, CWE-400/770 |
+| goal-misalignment-redirect | detect | high | LLM01, T6/T7, AML.T0051 |
+| repudiation-deny-prior-action | respond | medium | LLM07, T8, AML.T0056, CWE-778 |
+| open-redirect-via-url-fetch | detect | medium | LLM06, T2, AML.T0010, CWE-601/918 |
+| overreliance-confident-hallucination | detect | medium | LLM09, T7 |
+| dynamic-plugin-installation | defend | high | LLM03, T2, AML.T0010, CWE-494/829 |
+| insecure-output-handling | detect | high | LLM02, T5, AML.T0048, CWE-79/116 |
+
+The mock backend returns all 13 attacks regardless of prompt; a real LLM backend would generate per-target payloads. The `_CATEGORY_ROLE_LETTER` mapping (`detect→D`, `defend→DF`, `respond→R`) is the canonical source used by both the probe orchestrator and the Reference-tab renderer.
+
+**Agent behaviour emulator:** when no live target URL is provided, the agent-emulator skill (emitted by `agentshield scan` into `.agentshield/agent_emulator_bootstrap.md`) lets Copilot simulate the kill-chain step-by-step against the source code. Emulation output is written to `agent-emulation.json` and surfaces in the report alongside real probe captures.
+
 ---
 
 ## 3. The merger
 
-**Lives in** `agentshield/merger/`. After both scan surfaces have run, `agentshield merge <target>` reads `tier1-results.json` + `tier2-findings.json` and produces a unified report.
+**Lives in** `agentshield/merger/`. After scanning surfaces have run, `agentshield merge <target>` reads all available inputs under `<target>/.agentshield/` and produces a unified report.
+
+**Inputs read:**
+- `tier1-results.json` — always required
+- `tier2-findings.json` — optional; soft-fail with banner if missing
+- `probe-discovered.json` — optional; explore-mode findings
+- `probe-campaigns.json` — optional; multi-turn campaign kill-chains
+- `agent-emulation.json` — optional; behaviour-emulator pipeline traces
 
 Responsibilities:
 - **Stale detection** — the emitter writes a SHA-256 fingerprint over Tier 1's `(file, line, rule_id)` tuples; Copilot is told to copy it verbatim into `tier2-findings.json`. Mismatch on merge surfaces a STALE banner (the user re-ran Tier 1 after Tier 2; results are inconsistent).
 - **Tier 2 cross-check overlay** — for each Tier 1 finding, if Copilot has emitted a TP/CD/FP verdict, the merger annotates that Tier 1 finding inline. FP-marked Tier 1 findings are excluded from the Net Actionable count and the SARIF Tier 1 run (they don't gate CI).
-- **Coverage matrix** — aggregates which framework items (OWASP LLM / OWASP Agentic / MITRE ATLAS / CWE / OWASP AST10) the combined scan touched.
+- **Coverage matrix** — aggregates which framework items (OWASP LLM / OWASP Agentic / MITRE ATLAS / CWE / OWASP AST10) the combined scan touched, including probe-discovered findings.
 - **Schema validation** — Tier 2 output validated against the schema in `agentshield/merger/schema.py`. Soft failures (missing Tier 2, schema-invalid Tier 2, stale fingerprint) surface as banners, never raise.
 
 ---
@@ -300,7 +341,9 @@ Other formats from the same merge:
 - `--output-json report.json` — machine-readable, mirrors the markdown structure
 - `--output-sarif report.sarif` — SARIF v2.1.0, two `runs` (Tier 1 / Tier 2 toolComponents), excludes FP-marked Tier 1 findings from the Tier 1 run
 
-The HTML **Reference tab** lists every check the scanner can fire (Semgrep + Copilot + Manifest), grouped by source + D/D/R category, generated live at render time from the YAML rule pack + checklist template + AST10 registry. It replaces the previous standalone rule-coverage doc — there's no second source of truth to keep in sync.
+The HTML **Reference tab** lists every **control** the scanner can fire (Semgrep + Copilot + Manifest), grouped by source + Detect/Defend/Respond category, generated live at render time from the YAML rule pack + checklist template + AST10 registry. It replaces the previous standalone rule-coverage doc — there's no second source of truth to keep in sync.
+
+The Reference tab's "What AgentShield checks" section shows a total control count in the heading. The **AgentShield ↔ Security Framework Mapping** table is nested inside the same collapsible section and shows "Controls Live" vs "Controls Not Yet Live" counters. The solution-diagram panel was removed in this release; the design basis and how-it-works sections replace it.
 
 ---
 
@@ -336,7 +379,21 @@ agentshield/
 ├── merger/
 │   ├── combine.py                # main merge logic + all 4 report renderers
 │   ├── schema.py                 # tier2-findings.json validator
-│   └── reference.py              # rule-data loader (powers Reference tab + fix-skill generator)
+│   ├── reference.py              # rule-data loader (powers Reference tab + fix-skill generator)
+│   └── attack_narratives.py      # multi-turn campaign narrative renderer
+├── probe/                        # live adversarial testing (verify / explore / campaign)
+│   ├── orchestrator.py           # probe runner — dispatches to verify / explore / campaign
+│   ├── explore.py                # exploratory mode: LLM brainstorms + fires 13 attack classes
+│   ├── campaign.py               # multi-turn goal-directed attacks with mutation-on-block
+│   ├── runner.py                 # HTTP request dispatcher to target endpoint
+│   ├── classifier.py             # heuristic verdict (substring + JSON-path)
+│   ├── llm_classifier.py         # LLM-driven verdict (Copilot / Bedrock)
+│   ├── synthesis.py              # LLM-driven payload contextualiser
+│   ├── target_adapter.py         # pluggable adapter (agent discovery, auth, mutation)
+│   ├── payloads.py               # canned payload catalogue + parametrization
+│   ├── harness.py                # safe-mode interception (mock responses)
+│   ├── profiles.py               # profile enum + validators
+│   └── schema.py                 # ProbeConfig / ProbeResult schema
 ├── report/                       # legacy single-tier writers (SARIF / JSON / Markdown for `scan`)
 └── frameworks/                   # external taxonomy lookup tables (OWASP LLM, AgentShield v1)
 
@@ -386,7 +443,7 @@ AgentShield runs unchanged on CI, locked-down VDIs, air-gapped boxes — provide
 
 ## 10. Non-goals
 
-- **No runtime probing of live agents.** AgentShield is a static / IDE-time tool. Dynamic red-teaming (Garak, AgentDojo, PyRIT, Promptfoo) is complementary, not in scope.
+- **No fully autonomous red-team platform.** `agentshield probe` fires targeted, structured attacks at a developer-supplied endpoint; it is not a continuous automated red-team service. Sustained autonomous fuzzing (Garak, AgentDojo, PyRIT, Promptfoo) is complementary for depth.
 - **No managed service.** AgentShield is a CLI you run locally. There is no hosted endpoint, no agentshield.com, no telemetry.
 - **No new languages.** Tier 1 stays Python + Java. Tier 2 (Copilot) reads anything in the workspace incidentally, but parity with Py/Java is not claimed.
 - **No Copilot plugin / VS Code extension.** The handoff is via skill files + Copilot Chat slash-prompt, not a custom extension.

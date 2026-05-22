@@ -1,6 +1,6 @@
 # Executing AgentShield — install + run guide (VDI-friendly)
 
-Status: 2026-05-07 — current.
+Status: 2026-05-22 — current.
 Companion to: [README.md](./README.md) (product overview), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) (how the pieces fit; Tier 2 / Copilot LLM Scan detail in §2.2).
 
 This is the only file you need to install and run AgentShield in a JPMC VDI (or any locked-down environment). Top-to-bottom; copy-paste-able.
@@ -16,6 +16,7 @@ This is the only file you need to install and run AgentShield in a JPMC VDI (or 
 | §5 | Install AgentShield (clone, venv, `pip install -e .`) | 3 min |
 | §6 | Verify install (`agentshield --version`, optional unit tests) | 1 min |
 | §7 | Run a scan: Tier 1 + AST10 → Copilot LLM Scan → merge → report | 5–15 min |
+| §7.4 | *(Optional)* Probe: live adversarial test against a running agent | varies |
 | §8 | Open the report in a browser (localhost or `file://`) | 30 s |
 | §9 | Privacy review before sharing | 2 min |
 
@@ -25,7 +26,7 @@ Subsequent runs skip §3–§6. The scan-and-merge loop is just §7 + §8.
 
 ## 2. The architecture in one sentence
 
-AgentShield runs three scanners — **Semgrep** (Python/Java static rules), **AST10 manifest scanner** (`SKILL.md` package checks), and **Copilot LLM Scan** (semantic file-by-file walk via Copilot Chat in your IDE) — and a **merger** that combines all three into a single HTML / Markdown / JSON / SARIF report. The first two run automatically; the third is an IDE step that takes a developer pasting one prompt.
+AgentShield runs three scanners — **Semgrep** (Python/Java static rules), **AST10 manifest scanner** (`SKILL.md` package checks), and **Copilot LLM Scan** (semantic file-by-file walk via Copilot Chat in your IDE) — and a **merger** that combines all three into a single HTML / Markdown / JSON / SARIF report. The first two run automatically; the third is an IDE step that takes a developer pasting one prompt. An optional **probe** command runs live adversarial tests: verify mode (replays payloads for static findings), explore mode (LLM brainstorms 13 attack classes and fires them at the agent), and campaign mode (multi-turn attacks with mutation-on-block).
 
 ---
 
@@ -246,7 +247,38 @@ CLI banners you might see:
 | `❌ Copilot LLM Scan output failed schema validation.` | Copilot's JSON is malformed | The merger prints the field paths; paste them into Copilot Chat to fix |
 | `⚠ STALE Copilot LLM Scan.` | Tier 1 fingerprint changed since Copilot ran | Re-run §7.2 |
 
-### 7.4 View the report
+### 7.4 *(Optional)* Probe — live adversarial tests
+
+`agentshield probe` fires attacks at a running agent endpoint. Skip this section if you only need the static + Copilot report.
+
+**Three modes:**
+
+| Mode | What it does |
+|---|---|
+| `verify` | Replays canned payloads for every static finding — confirms whether the vulnerability is exploitable at runtime. |
+| `explore` | Asks the adversarial backend to brainstorm attacks against this specific agent (tool catalogue, role, data), fires each one, classifies responses. Produces `probe-discovered.json` with any findings that landed. 13 attack classes are bundled: authority escalation, memory poisoning, tool chaining, tool-description injection, path traversal, cross-tenant data fishing, runaway tool loop, goal misalignment, repudiation, open redirect, overreliance / confident hallucination, dynamic plugin installation, and insecure output handling. |
+| `campaign` | Multi-turn goal-directed attacks. When a turn is blocked, a mutate step rewrites the payload and retries. An LLM judge classifies each response (landed / blocked / inconclusive). When no live target is configured, the agent behaviour emulator stands in so campaigns still run. Produces `probe-campaigns.json`. |
+
+```bash
+# Verify mode (requires a running agent endpoint)
+agentshield probe /path/to/your-agent-repo \
+  --mode verify \
+  --target http://localhost:8080/api/agent
+
+# Explore mode — brainstorm + fire (mock backend if no LLM configured)
+agentshield probe /path/to/your-agent-repo \
+  --mode explore \
+  --target http://localhost:8080/api/agent
+
+# Campaign mode — multi-turn with mutation-on-block
+agentshield probe /path/to/your-agent-repo \
+  --mode campaign \
+  --target http://localhost:8080/api/agent
+```
+
+Probe results are written to `.agentshield/` and picked up automatically by `agentshield merge` — probe-discovered findings appear in the merged report with a "Discovered at probe time" badge; campaign findings show a full turn-by-turn kill-chain.
+
+### 7.5 View the report
 
 #### Option A — open the file directly
 
@@ -273,7 +305,7 @@ The HTML files are fully self-contained (CSS + JS inlined, no external assets) �
 
 Every finding in the report has a canonical ID like `AS-S-D-LLM01-001` (Semgrep) / `AS-C-DF-LLM06-004` (Copilot) / `AS-M-D-AST03-001` (Manifest). Three places to look up the fix:
 
-1. **Reference tab** in `report.html` — every check the scanner can fire, with what-it-flags + remediation guidance + framework chips. Always in sync with the rule pack.
+1. **Reference tab** in `report.html` — every control the scanner can fire, with what-it-flags + remediation guidance + framework chips. Always in sync with the rule pack.
 2. **Fix-skill files** in `<your-agent-repo>/.agentshield/agentshield-{semgrep,copilot,manifest}-fixes.md` — drop the matching one into Claude Code or Copilot Chat, then paste a finding ID and ask "how do I fix this?". The skill auto-triggers on the ID prefix.
 3. **The "Fix:" line** below each finding card in the report.
 
@@ -335,7 +367,7 @@ Run Tier 1 (Semgrep) + AST10 (manifest scanner). Optionally emit Tier 2 skill fi
 
 ### `agentshield merge <path>`
 
-Combine `tier1-results.json` + `tier2-findings.json` into a unified report.
+Combine `tier1-results.json` + `tier2-findings.json` (and any probe results) into a unified report.
 
 | Flag | Purpose |
 |---|---|
@@ -345,6 +377,16 @@ Combine `tier1-results.json` + `tier2-findings.json` into a unified report.
 | `--output-sarif PATH` | Write SARIF v2.1.0 (two `runs`: Tier 1 + Tier 2). |
 | `--print` | Echo the Markdown report to stdout. |
 | `--open` | After writing the HTML, launch it in the default browser. |
+
+### `agentshield probe <path>`
+
+Run live adversarial tests against a running agent endpoint. Results are written to `.agentshield/` and consumed automatically by `agentshield merge`.
+
+| Flag | Purpose |
+|---|---|
+| `--mode {verify,explore,campaign}` | Select probe mode. Default: `verify`. |
+| `--target URL` | Agent endpoint to attack. Required for `verify` and `explore`. |
+| `--debug` | Verbose probe output (payloads sent, responses received, verdict). |
 
 ### Exit codes
 
