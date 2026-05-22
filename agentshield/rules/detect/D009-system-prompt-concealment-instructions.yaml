@@ -28,11 +28,17 @@ rules:
       legacy_ids: ["AS-D-009"]
       severity_normalized: high
       framework_mappings:
-        owasp_llm: ["LLM01", "LLM07"]
-        owasp_agentic: ["T6", "T8"]
+        # Curated to >=75% coverage. Dropped LLM01, LLM07, AML.T0051
+        # (rule catches developer-written deception language in the
+        # system prompt — neither user-input PI nor system-prompt
+        # leakage), T6 (intent-breaking is broader than concealment),
+        # CWE-489 (rule isn't about debug endpoints). T8 stays —
+        # hiding actions from logs/users is the textbook T8 surface.
+        owasp_llm: []
+        owasp_agentic: ["T8"]
         nist_ai_rmf: ["GOVERN-1.2", "MAP-2.3"]
-        mitre_atlas: ["AML.T0051"]
-        cwe: ["CWE-489"]
+        mitre_atlas: []
+        cwe: []
         agentshield_v1: []
       languages: [python]
       remediation: >-

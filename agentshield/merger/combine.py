@@ -110,6 +110,13 @@ class CombinedReport:
     # full kill-chain (turn-by-turn evidence) so the report can render
     # them as attack narratives rather than flat findings.
     probe_campaigns: list[dict] = field(default_factory=list)
+    # Agent behaviour-emulator output — populated when
+    # `.agentshield/agent-emulation.json` exists (emitted by the
+    # scan-time Copilot skill that walks the agent's pipeline from
+    # source). Distinct from probe_campaigns because the granularity
+    # is per-pipeline-step, not per-turn. Empty dict with
+    # `present: False` when no emulation has been run.
+    agent_emulation: dict = field(default_factory=lambda: {"present": False})
 
 
 @dataclass
@@ -128,9 +135,40 @@ class MergeResult:
         return self.tier2_present and not self.fingerprint_match
 
     @property
+    def tier2_classified_count(self) -> int:
+        """How many Tier 1 findings Copilot's Tier 2 pass actually
+        classified (TP / FP / CD). Doesn't count unclassified findings
+        — the absence is the load-bearing signal."""
+        return sum(
+            1 for f in self.report.tier1_findings
+            if f.tier2_verdict is not None
+        )
+
+    @property
+    def tier2_partial(self) -> bool:
+        """True when Tier 2 ran but classified fewer than every
+        Tier 1 finding. The right interpretation is *"Copilot's
+        context budget ran out mid-pass"* — NOT *"Copilot has no
+        opinion"*. Silently treating it as the latter would be the
+        kind of fake we explicitly agreed to avoid; the renderer
+        surfaces a PARTIAL Tier 2 banner so the reviewer knows
+        to re-run."""
+        if not self.tier2_present or self.stale:
+            return False  # other banners cover those cases
+        return (
+            len(self.report.tier1_findings) > 0
+            and self.tier2_classified_count < len(self.report.tier1_findings)
+        )
+
+    @property
     def actionable_finding_count(self) -> int:
         """Findings the user should act on: Tier 1 (excluding FP-marked) +
-        Tier 2 + probe-discovered + landed red-team campaigns."""
+        Tier 2 + probe-discovered + landed red-team campaigns +
+        behaviour-emulator findings with `lands` or `partial`
+        verdicts. Inconclusive emulator entries are NOT findings
+        (filtered upstream in `_emulation_to_findings`); blocked
+        emulator entries are positive evidence (rendered but not
+        counted as actionable)."""
         tier1_actionable = sum(
             1 for f in self.report.tier1_findings if f.tier2_verdict != "FP"
         )
@@ -138,11 +176,19 @@ class MergeResult:
             1 for c in self.report.probe_campaigns
             if c.get("status") == "succeeded"
         )
+        emu_actionable = sum(
+            1 for t in (
+                getattr(self.report, "agent_emulation", {})
+                .get("attack_class_traces") or []
+            )
+            if t.get("verdict") in ("lands", "partial")
+        )
         return (
             tier1_actionable
             + len(self.report.tier2_findings)
             + len(self.report.probe_discovered)
             + landed_campaigns
+            + emu_actionable
         )
 
 
@@ -220,6 +266,25 @@ def merge(target_root: Path) -> MergeResult:
     # their own key on the report so renderers can show the kill-chain
     # narrative rather than treating each campaign as a flat finding).
     probe_campaigns = _load_probe_campaigns(out)
+    # Simulated kill-chains from `agentshield/skills/redteam_simulate_*`
+    # — Copilot's predictions about how each campaign would play
+    # out against this specific repo, with file:line citations.
+    # Merged into the same list as real probe captures so the
+    # rendering pipeline handles both; the `_sim_simulated` flag
+    # drives the SIMULATED badge + provenance text. Real captures
+    # win when both exist (same campaign keyed by name).
+    # NOTE: probe-campaigns-simulated.json reader was removed in
+    # this release. The simulator skill was deprecated in favour of
+    # the agent-behaviour-emulator (which walks the pipeline step
+    # by step rather than predicting turn-by-turn against pre-baked
+    # source-code knowledge). See agent_emulator_bootstrap.md.tmpl
+    # for the rationale.
+
+    # Agent behaviour-emulator — loaded as a single structured dict
+    # (pipeline_map + per-attack-class traces). Distinct from
+    # probe_campaigns because the granularity is per-pipeline-step,
+    # not per-turn. Absent file → {"present": False}.
+    agent_emulation = _load_agent_emulation(out)
     coverage = _build_coverage(
         tier1_findings_raw,
         tier2.get("findings", []) if tier2_present else [],
@@ -255,6 +320,7 @@ def merge(target_root: Path) -> MergeResult:
         saige_tier_reasoning=saige_tier_reasoning,
         probe_discovered=probe_discovered,
         probe_campaigns=probe_campaigns,
+        agent_emulation=agent_emulation,
     )
 
     return MergeResult(
@@ -438,13 +504,588 @@ def _ddr_counts(report: CombinedReport) -> dict[str, dict[str, int]]:
     return out
 
 
-def _load_probe_campaigns(agentshield_dir: Path) -> list[dict]:
-    """Load `.agentshield/probe-campaigns.json` if present.
+_VALID_TURN_VERDICTS = {"landed", "refused", "inconclusive"}
+_VALID_CAMPAIGN_VERDICTS = {"landed", "refused", "partial", "inconclusive"}
 
-    Returns each campaign as a raw dict (turn-by-turn kill-chain). The
-    renderer treats each campaign as a multi-turn narrative — distinct
-    from single-shot probe-discovered findings — so we keep the dicts
-    in their native shape rather than flattening to the finding schema.
+
+def _load_redteam_judge(agentshield_dir: Path) -> dict[str, dict]:
+    """Load `.agentshield/probe-campaigns-judged.json` if present.
+
+    Returns a dict keyed by `agentshield_id` so the caller can join
+    against campaign rows in O(1). Missing file is fine — returns an
+    empty dict and the merger falls back to heuristic verdicts.
+
+    Defensive: unrecognised enum values are silently dropped (per the
+    schema doc's "Failure modes the merger handles gracefully"
+    section); confidences outside [0,1] are clamped.
+    """
+    path = agentshield_dir / "probe-campaigns-judged.json"
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    out: dict[str, dict] = {}
+    for entry in raw.get("judged_campaigns") or []:
+        if not isinstance(entry, dict):
+            continue
+        aid = entry.get("agentshield_id")
+        if not aid:
+            continue
+        verdict = entry.get("campaign_verdict")
+        if verdict not in _VALID_CAMPAIGN_VERDICTS:
+            verdict = None
+        # Clamp confidence to [0,1].
+        conf = entry.get("campaign_confidence")
+        try:
+            conf = max(0.0, min(1.0, float(conf))) if conf is not None else None
+        except (TypeError, ValueError):
+            conf = None
+        # Build per-turn map for fast lookup during render.
+        turn_map: dict[int, dict] = {}
+        for tv in entry.get("turn_verdicts") or []:
+            if not isinstance(tv, dict):
+                continue
+            try:
+                idx = int(tv.get("turn_index"))
+            except (TypeError, ValueError):
+                continue
+            tv_verdict = tv.get("verdict")
+            if tv_verdict not in _VALID_TURN_VERDICTS:
+                continue
+            tv_conf = tv.get("confidence")
+            try:
+                tv_conf = (
+                    max(0.0, min(1.0, float(tv_conf)))
+                    if tv_conf is not None else None
+                )
+            except (TypeError, ValueError):
+                tv_conf = None
+            turn_map[idx] = {
+                "verdict": tv_verdict,
+                "reasoning": str(tv.get("reasoning") or ""),
+                "confidence": tv_conf,
+            }
+        out[aid] = {
+            "campaign_verdict": verdict,
+            "campaign_reasoning": str(entry.get("campaign_reasoning") or ""),
+            "campaign_confidence": conf,
+            "turn_verdicts": turn_map,
+        }
+    return out
+
+
+_VALID_EMULATOR_VERDICTS = {"lands", "partial", "blocked", "inconclusive"}
+_VALID_EMULATOR_OUTCOMES = {"advances", "blocked", "modified", "absent_step"}
+_PIPELINE_STEP_KEYS = (
+    "user_prompt", "rag_context", "system_prompt", "planner",
+    "tool_choice", "tool_output", "re_planning", "final_answer",
+)
+
+# Per-pipeline-step actor mapping for the role-play walkthrough.
+# Each entry: (source_label, source_icon, target_label, target_icon,
+# arrow_label). The icons are unicode glyphs so the report stays
+# dependency-free (no SVG assets, no font ship). Source/target match
+# how each step actually flows in a typical agent runtime — the
+# attacker is the User actor only at step 1 + step 8 (output back
+# to caller); internal steps are agent ↔ planner ↔ tool exchanges.
+_EMU_STEP_ACTORS: dict[str, tuple[str, str, str, str, str]] = {
+    "user_prompt": (
+        "Threat actor", "\U0001F464",        # 👤
+        "Agent input handler", "\U0001F916",  # 🤖
+        "user message",
+    ),
+    "rag_context": (
+        "Agent", "\U0001F916",
+        "RAG / knowledge base", "\U0001F4DA",  # 📚
+        "retrieval query",
+    ),
+    "system_prompt": (
+        "System prompt store", "\U0001F4DC",   # 📜
+        "Agent context", "\U0001F916",
+        "load instructions",
+    ),
+    "planner": (
+        "Agent context", "\U0001F916",
+        "Planner LLM", "\U0001F9E0",            # 🧠
+        "plan request",
+    ),
+    "tool_choice": (
+        "Planner LLM", "\U0001F9E0",
+        "Tool dispatcher", "\U0001F527",        # 🔧
+        "tool_call",
+    ),
+    "tool_output": (
+        "Tool", "\U0001F527",
+        "Agent context", "\U0001F916",
+        "tool result",
+    ),
+    "re_planning": (
+        "Agent context", "\U0001F916",
+        "Planner LLM (re-plan)", "\U0001F9E0",
+        "re-plan with tool output",
+    ),
+    "final_answer": (
+        "Agent", "\U0001F916",
+        "User / caller", "\U0001F464",
+        "response",
+    ),
+}
+
+
+def _emu_actors_for_step(step_key: str) -> tuple[str, str, str, str, str]:
+    """Return (src_label, src_icon, dst_label, dst_icon, arrow_label)
+    for the named pipeline step. Falls back to a neutral generic
+    pair for unknown step keys so the renderer doesn't crash."""
+    return _EMU_STEP_ACTORS.get(step_key, (
+        "Source", "●", "Target", "●", "data",
+    ))
+
+
+# Per-actor hover tooltips — surfaced via title= on the actor card
+# so reviewers can hover any role to learn what it represents.
+# Critical for "Threat actor" specifically: the canonical positioning
+# says we test pattern classes not specific threat actors, but the
+# UI label still says "Threat actor" (the archetype role). The
+# tooltip resolves any ambiguity — yes, generic archetype, no, not
+# APT29-or-anyone-specific.
+_ACTOR_TOOLTIPS: dict[str, str] = {
+    "Threat actor": (
+        "Generic adversary archetype — the role playing the "
+        "attacker in this scene. Not a specific named threat "
+        "actor (APT29, FIN7, etc.). We test pattern classes, "
+        "not threat-actor-specific playbooks."
+    ),
+    "Agent input handler": (
+        "The route / function that receives user input and "
+        "passes it into the LLM call."
+    ),
+    "Agent context": (
+        "The agent's working state — system prompt + memory + "
+        "tool catalogue + current conversation."
+    ),
+    "Agent": (
+        "The agent's runtime — receives requests, consults the "
+        "planner, dispatches tools, returns responses."
+    ),
+    "RAG / knowledge base": (
+        "Document-retrieval surface — vector search, document "
+        "loaders, memory recall. Untrusted by default."
+    ),
+    "System prompt store": (
+        "Where the developer-supplied system instructions live "
+        "(hardcoded constant, config file, agent.yaml)."
+    ),
+    "Planner LLM": (
+        "The LLM call that decides which tool to invoke or how "
+        "to respond. Often chain.invoke / agent.run / "
+        "llm.predict."
+    ),
+    "Planner LLM (re-plan)": (
+        "Second LLM call consuming tool output — the re-planning "
+        "step. Absent in single-shot agents."
+    ),
+    "Tool dispatcher": (
+        "The code that resolves a tool_call to an actual "
+        "function and executes it."
+    ),
+    "Tool": (
+        "A registered agent tool — @tool, Tool(name=...), action "
+        "group, etc. Returns content back to the agent context."
+    ),
+    "User / caller": (
+        "The user or upstream service that receives the agent's "
+        "final response."
+    ),
+}
+
+
+def _actor_tooltip(label: str) -> str:
+    """Return the hover-tooltip text for an actor by its display
+    label. Empty string for unknown actors (renderer falls through
+    to no title= attribute)."""
+    return _ACTOR_TOOLTIPS.get(label, "")
+
+
+def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
+    """Emit the <div class="emu-trace">...</div> markup — the role-play
+    scenes (actors + arrow + packet + payload + behaviour line), the
+    streaming terminal log, and the final-outcome banner.
+
+    Used by both the Detect-tab Attack-scenario card and the
+    Coverage-tab per-row drilldown so the role-play markup stays
+    identical and a single .emu-play-btn handler animates both."""
+    import re as _re
+    emu_trace = emu_data.get("pipeline_trace") or []
+    if not emu_trace:
+        return
+    emu_verdict = (emu_data.get("verdict") or "inconclusive").strip()
+    emu_conf = emu_data.get("verdict_confidence")
+    emu_attack_class = emu_data.get("attack_class") or "unknown"
+
+    def _strip_prefix(lbl: str) -> str:
+        return _re.sub(r"^\d+\s*[—\-–]\s*", "", lbl).strip()
+
+    # Pipeline-coverage caption — the attack only touches N of 8
+    # standard steps; spelling that out removes the "why does
+    # numbering jump from 1 to 4" confusion. Strip leading "N — "
+    # from each step_label since the role-play uses Scene 1, 2, 3
+    # numbering instead.
+    touched = [
+        _strip_prefix(s.get("step_label") or s.get("step", "?"))
+        for s in emu_trace
+    ]
+    coverage_caption = (
+        f"Touches <strong>{len(touched)}</strong> "
+        f"of 8 pipeline steps: "
+        + " → ".join(
+            f"<em>{_html_escape(t)}</em>" for t in touched
+        )
+    )
+    parts.append(
+        '<div class="emu-trace">'
+        '<div class="emu-trace-header">'
+        '<button type="button" '
+        'class="emu-play-btn" '
+        'data-action="emu-play">'
+        '&#9654; Play behaviour emulation</button>'
+        '</div>'
+        f'<div class="emu-trace-coverage">{coverage_caption}</div>'
+        '<div class="emu-trace-steps">'
+    )
+    for scene_idx, step in enumerate(emu_trace):
+        outcome = step.get("outcome") or "advances"
+        step_key = step.get("step") or ""
+        step_cls = "emu-scene " f"emu-scene-{_html_escape(outcome)}"
+        step_label_clean = _strip_prefix(
+            step.get("step_label") or step_key or "?"
+        )
+        code_basis = step.get("code_basis") or []
+        citations = "".join(
+            f'<span class="emu-code-basis-chip">'
+            f'{_html_escape(str(c))}</span>'
+            for c in code_basis if isinstance(c, str)
+        )
+        defence_present = step.get("defensive_control_present", False)
+        defence_chip = (
+            '<span class="emu-defence-flag '
+            'emu-defence-flag-yes">defence present</span>'
+            if defence_present else
+            '<span class="emu-defence-flag '
+            'emu-defence-flag-no">no defence here</span>'
+        )
+        src_lbl, src_icon, dst_lbl, dst_icon, arrow_lbl = (
+            _emu_actors_for_step(step_key)
+        )
+        step_input = step.get("input") or ""
+        step_behavior = step.get("predicted_behavior") or ""
+        step_reasoning = step.get("outcome_reasoning") or ""
+        src_tip = _actor_tooltip(src_lbl)
+        dst_tip = _actor_tooltip(dst_lbl)
+        src_title_attr = (
+            f' data-tip="{_html_escape(src_tip)}"'
+            f' aria-label="{_html_escape(src_tip)}"'
+            if src_tip else ""
+        )
+        dst_title_attr = (
+            f' data-tip="{_html_escape(dst_tip)}"'
+            f' aria-label="{_html_escape(dst_tip)}"'
+            if dst_tip else ""
+        )
+        parts.append(
+            f'<div class="{step_cls}" data-step="{scene_idx}">'
+            f'<div class="emu-scene-header">'
+            f'<span class="emu-scene-step-num">{scene_idx + 1}</span>'
+            f'<span class="emu-scene-step-label">'
+            f'{_html_escape(step_label_clean)}</span>'
+            f'<span class="emu-scene-outcome '
+            f'emu-scene-outcome-{_html_escape(outcome)}">'
+            f'{_html_escape(outcome)}</span>'
+            f'{defence_chip}'
+            f'</div>'
+            f'<div class="emu-scene-actors">'
+            f'<div class="emu-actor emu-actor-src"{src_title_attr}>'
+            f'<span class="emu-actor-icon">{src_icon}</span>'
+            f'<span class="emu-actor-label">{_html_escape(src_lbl)}</span>'
+            f'</div>'
+            f'<div class="emu-arrow">'
+            f'<span class="emu-arrow-label">'
+            f'{_html_escape(arrow_lbl)}</span>'
+            f'<div class="emu-arrow-line"></div>'
+            f'<span class="emu-packet" aria-hidden="true"></span>'
+            f'</div>'
+            f'<div class="emu-actor emu-actor-dst"{dst_title_attr}>'
+            f'<span class="emu-actor-icon">{dst_icon}</span>'
+            f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
+            f'</div>'
+            f'</div>'
+        )
+        if step_input:
+            preview = step_input[:60]
+            if len(step_input) > 60:
+                preview += "…"
+            parts.append(
+                f'<details class="emu-scene-payload-details">'
+                f'<summary>'
+                f'<span class="emu-scene-payload-label">payload</span>'
+                f'<code class="emu-scene-payload-preview">'
+                f'{_html_escape(preview)}</code>'
+                f'</summary>'
+                f'<div class="emu-scene-payload">'
+                f'{_html_escape(step_input)}'
+                f'</div>'
+                f'</details>'
+            )
+        if step_behavior or step_reasoning:
+            combined = step_behavior
+            if step_reasoning and step_reasoning != step_behavior:
+                combined = (
+                    (combined + " ") if combined else ""
+                ) + step_reasoning
+            parts.append(
+                f'<div class="emu-scene-behavior">'
+                f'<span class="emu-scene-behavior-arrow">&rsaquo;</span> '
+                f'{_html_escape(combined)} {citations}'
+                f'</div>'
+            )
+        elif citations:
+            parts.append(
+                f'<div class="emu-scene-behavior">{citations}</div>'
+            )
+        parts.append('</div>')  # /emu-scene
+    parts.append('</div>')  # /emu-trace-steps
+
+    # Streaming terminal log.
+    terminal_lines: list[tuple[int, str, str, str]] = []
+    terminal_lines.append((
+        -1, "info", "INFO",
+        f"role-play start · {emu_attack_class} · "
+        f"{len(emu_trace)} of 8 pipeline steps",
+    ))
+    for si, step in enumerate(emu_trace):
+        outcome_l = step.get("outcome") or "advances"
+        step_label_clean = _re.sub(
+            r"^\d+\s*[—\-–]\s*", "",
+            step.get("step_label") or step.get("step", "?"),
+        ).strip()
+        terminal_lines.append((
+            si, "scene", "SCENE",
+            f"{si + 1}/{len(emu_trace)} · {step_label_clean}",
+        ))
+        code_b = step.get("code_basis") or []
+        if code_b:
+            terminal_lines.append((
+                si, "read", "READ",
+                ", ".join(
+                    str(c) for c in code_b if isinstance(c, str)
+                ),
+            ))
+        pb = (step.get("predicted_behavior") or "").strip()
+        if pb:
+            terminal_lines.append((
+                si, "predict", "PREDICT",
+                pb[:160] + ("…" if len(pb) > 160 else ""),
+            ))
+        or_ = (step.get("outcome_reasoning") or "").strip()
+        defence_word = (
+            "defence present"
+            if step.get("defensive_control_present")
+            else "no defence here"
+        )
+        terminal_lines.append((
+            si, f"outcome-{outcome_l}", "OUTCOME",
+            f"{outcome_l} · {defence_word}"
+            + (f" · {or_}" if or_ else ""),
+        ))
+    verdict_label = {
+        "lands": "ATTACK LANDS — predicted",
+        "partial": "PARTIAL — defence missing at some step",
+        "blocked": "ATTACK BLOCKED — defence working",
+        "inconclusive": "INCONCLUSIVE — see reasoning",
+    }.get(emu_verdict, "(unknown)")
+    conf_pct = (
+        f" · confidence {int(round(emu_conf * 100))}%"
+        if isinstance(emu_conf, (int, float)) else ""
+    )
+    terminal_lines.append((
+        len(emu_trace), f"verdict-{emu_verdict}", "VERDICT",
+        f"{verdict_label}{conf_pct}",
+    ))
+    parts.append(
+        '<div class="emu-terminal">'
+        '<div class="emu-terminal-header">'
+        '<span class="emu-terminal-light emu-terminal-light-r"></span>'
+        '<span class="emu-terminal-light emu-terminal-light-y"></span>'
+        '<span class="emu-terminal-light emu-terminal-light-g"></span>'
+        '<span class="emu-terminal-title">'
+        'agentshield-emulator — role-play log'
+        '</span>'
+        '</div>'
+        '<div class="emu-terminal-body">'
+    )
+    for li, (scene_i, lvl_cls, prefix, msg) in enumerate(terminal_lines):
+        t_sec = max(0, scene_i) * 2 + (
+            0 if prefix in ("INFO", "SCENE") else 1
+        )
+        ts = f"00:00:{t_sec:02d}"
+        parts.append(
+            f'<div class="emu-term-line '
+            f'emu-term-line-{_html_escape(lvl_cls)}" '
+            f'data-scene="{scene_i}">'
+            f'<span class="emu-term-ts">[{ts}]</span> '
+            f'<span class="emu-term-prefix">{prefix}</span> '
+            f'<span class="emu-term-msg">{_html_escape(msg)}</span>'
+            f'</div>'
+        )
+    parts.append('</div></div>')  # /emu-terminal-body /emu-terminal
+
+    banner_label = {
+        "lands": "ATTACK LANDS — predicted",
+        "partial": "PARTIAL — defence missing at some step",
+        "blocked": "ATTACK BLOCKED — defence working",
+        "inconclusive": "INCONCLUSIVE — see reasoning",
+    }.get(emu_verdict, "(unknown verdict)")
+    parts.append(
+        f'<div class="emu-trace-final '
+        f'emu-trace-final-{_html_escape(emu_verdict)}">'
+        f'{_html_escape(banner_label)}'
+        f'</div>'
+    )
+    parts.append('</div>')  # /emu-trace
+
+
+def _load_agent_emulation(agentshield_dir: Path) -> dict:
+    """Load `.agentshield/agent-emulation.json` if present.
+
+    The behaviour-emulator output is structurally different from
+    the older probe-campaigns-simulated.json shape: pipeline_map +
+    per-attack-class traces with per-step entries. We keep it as a
+    single top-level dict (not a list of campaigns) so the renderer
+    can pull both the pipeline map (shared across attack classes)
+    and individual traces cleanly.
+
+    Returns `{"present": False}` when the file is missing or
+    malformed so callers can branch on a single key. Defensive:
+    unrecognised verdict / outcome enums are silently dropped to
+    `None` so a typo can't poison the merge.
+    """
+    path = agentshield_dir / "agent-emulation.json"
+    if not path.exists():
+        return {"present": False}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"present": False}
+    if not isinstance(raw, dict):
+        return {"present": False}
+
+    # Pipeline map — normalise: every standard step key present,
+    # default to "absent" code_location.
+    pmap_in = raw.get("pipeline_map") or {}
+    pipeline_map: dict[str, dict] = {}
+    for key in _PIPELINE_STEP_KEYS:
+        entry = pmap_in.get(key) if isinstance(pmap_in, dict) else None
+        if isinstance(entry, dict):
+            pipeline_map[key] = {
+                "code_location": str(entry.get("code_location") or "absent"),
+                "description": str(entry.get("description") or ""),
+                "defensive_controls": [
+                    c for c in (entry.get("defensive_controls") or [])
+                    if isinstance(c, dict)
+                ],
+            }
+        else:
+            pipeline_map[key] = {
+                "code_location": "absent",
+                "description": "",
+                "defensive_controls": [],
+            }
+
+    # Attack-class traces — clamp confidence, drop unknown enums.
+    traces_out: list[dict] = []
+    for entry in raw.get("attack_class_traces") or []:
+        if not isinstance(entry, dict):
+            continue
+        verdict = entry.get("verdict")
+        if verdict not in _VALID_EMULATOR_VERDICTS:
+            verdict = None
+        conf = entry.get("verdict_confidence")
+        try:
+            conf = max(0.0, min(1.0, float(conf))) if conf is not None else None
+        except (TypeError, ValueError):
+            conf = None
+        # Per-step pipeline_trace: validate outcomes + carry through.
+        trace_out: list[dict] = []
+        for tstep in entry.get("pipeline_trace") or []:
+            if not isinstance(tstep, dict):
+                continue
+            outcome = tstep.get("outcome")
+            if outcome not in _VALID_EMULATOR_OUTCOMES:
+                outcome = None
+            trace_out.append({
+                "step": str(tstep.get("step") or ""),
+                "step_label": str(tstep.get("step_label") or ""),
+                "input": str(tstep.get("input") or ""),
+                "predicted_behavior": str(tstep.get("predicted_behavior") or ""),
+                "code_basis": [
+                    str(c) for c in (tstep.get("code_basis") or [])
+                ],
+                "defensive_control_present": bool(
+                    tstep.get("defensive_control_present", False)
+                ),
+                "outcome": outcome,
+                "outcome_reasoning": str(tstep.get("outcome_reasoning") or ""),
+            })
+        traces_out.append({
+            "attack_class": str(entry.get("attack_class") or ""),
+            "attack_class_label": str(entry.get("attack_class_label") or ""),
+            "targets_steps": [
+                str(s) for s in (entry.get("targets_steps") or [])
+            ],
+            "catalogue_payload": str(entry.get("catalogue_payload") or ""),
+            "verdict": verdict,
+            "verdict_confidence": conf,
+            "verdict_reasoning": str(entry.get("verdict_reasoning") or ""),
+            "frameworks": entry.get("frameworks") or {},
+            "pipeline_trace": trace_out,
+        })
+
+    return {
+        "present": True,
+        "honesty_label": str(raw.get("honesty_label") or "Behaviour emulator"),
+        "scanned_at": str(raw.get("scanned_at") or ""),
+        "pipeline_map": pipeline_map,
+        "attack_class_traces": traces_out,
+    }
+
+
+# NOTE: `_load_simulated_campaigns` was removed in this release —
+# the `probe-campaigns-simulated.json` shape it parsed has been
+# superseded by `agent-emulation.json` (per-pipeline-step traces
+# emitted by the agent-behaviour-emulator skill). See
+# `_load_agent_emulation` above.
+
+
+def _load_probe_campaigns(agentshield_dir: Path) -> list[dict]:
+    """Load `.agentshield/probe-campaigns.json` if present, with LLM
+    judge verdicts from `.agentshield/probe-campaigns-judged.json`
+    overlaid as extra fields on each campaign and turn.
+
+    Provenance: heuristic verdicts come from the campaign loop and
+    live in `status` / `turns[].verdict` (unchanged). LLM-judge
+    verdicts get attached as `llm_campaign_verdict` /
+    `turns[].llm_verdict` etc., plus a `_judge_present` boolean per
+    campaign. The renderer prefers LLM verdicts where present and
+    falls back to heuristic otherwise — campaigns the LLM didn't
+    judge keep their original substring-matched verdicts and render
+    identically to before.
+
+    Returns each campaign as a raw dict (turn-by-turn kill-chain).
+    The renderer treats each campaign as a multi-turn narrative —
+    distinct from single-shot probe-discovered findings — so we keep
+    the dicts in their native shape rather than flattening to the
+    finding schema.
     """
     path = agentshield_dir / "probe-campaigns.json"
     if not path.exists():
@@ -453,8 +1094,485 @@ def _load_probe_campaigns(agentshield_dir: Path) -> list[dict]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
-    campaigns = raw.get("campaigns") or []
-    return [c for c in campaigns if isinstance(c, dict)]
+    campaigns = [c for c in (raw.get("campaigns") or []) if isinstance(c, dict)]
+    judge = _load_redteam_judge(agentshield_dir)
+    for c in campaigns:
+        aid = c.get("agentshield_id")
+        verdicts = judge.get(aid) if aid else None
+        c["_judge_present"] = verdicts is not None
+        if verdicts is None:
+            continue
+        c["llm_campaign_verdict"] = verdicts["campaign_verdict"]
+        c["llm_campaign_reasoning"] = verdicts["campaign_reasoning"]
+        c["llm_campaign_confidence"] = verdicts["campaign_confidence"]
+        turn_map = verdicts["turn_verdicts"]
+        for t in c.get("turns") or []:
+            idx = t.get("index")
+            if not isinstance(idx, int):
+                continue
+            tv = turn_map.get(idx)
+            if tv is None:
+                continue
+            t["llm_verdict"] = tv["verdict"]
+            t["llm_reasoning"] = tv["reasoning"]
+            t["llm_confidence"] = tv["confidence"]
+    return campaigns
+
+
+# One-line descriptions for each framework item that appears as a
+# finding-tag chip. Used as the hover tooltip so a reviewer can
+# learn what e.g. "LLM06" or "T3" means without leaving the report.
+# Keep each entry short — these render in a floating tooltip
+# capped at ~320px wide; full definitions live in the framework's
+# own docs (linked via the Coverage tab's "reference →" links).
+_FRAMEWORK_ITEM_DESCRIPTIONS: dict[str, dict[str, str]] = {
+    "owasp_llm": {
+        "LLM01": "Prompt Injection — adversary instructions injected via user input (direct) or retrieved content (indirect) override the model's intended behaviour.",
+        "LLM02": "Sensitive Information Disclosure — the model emits secrets, PII, or internal context that should have been redacted before reaching the user.",
+        "LLM03": "Supply Chain — compromised models, datasets, plugins, or training pipelines introduce vulnerabilities upstream of the agent's call site.",
+        "LLM04": "Data and Model Poisoning — training data or fine-tuning corpus tampered with to bias outputs or insert backdoors.",
+        "LLM05": "Improper Output Handling — LLM output piped into eval/exec/subprocess/HTML/SQL without sanitisation, treating untrusted output as trusted code.",
+        "LLM06": "Excessive Agency — the agent has more tool surface, permissions, or autonomy than the task requires; one prompt-injected instruction can fire destructive actions.",
+        "LLM07": "System Prompt Leakage — the system prompt (often containing keys, business rules, or escalation instructions) reaches the user via error paths, debug endpoints, or the model echoing it back.",
+        "LLM08": "Vector and Embedding Weaknesses — RAG/embedding stores leak across tenants or accept adversarial inputs that game similarity scoring.",
+        "LLM09": "Misinformation — confident-but-wrong outputs that downstream consumers trust without verification.",
+        "LLM10": "Unbounded Consumption — no caps on tokens, tool calls, recursion depth, or wall-clock budget; attacker drives cost or denial-of-service.",
+    },
+    "owasp_agentic": {
+        "T1": "Memory Poisoning — adversary inputs are persisted into the agent's memory store and later recalled as authoritative context for future LLM calls.",
+        "T2": "Tool Misuse — agent calls tools with attacker-shaped arguments (shell/SQL/HTTP/path-traversal) because tool args derive from chat content without validation.",
+        "T3": "Privilege Compromise — agent operates with more permissions than the task needs; missing HITL gates on destructive tools.",
+        "T4": "Resource Overload — no max-iteration cap, timeout, or circuit breaker; planning loops run away on attacker-shaped inputs.",
+        "T5": "Cascading Hallucination — one false output feeds the next planner call, compounding errors across the agent's chain.",
+        "T6": "Intent Breaking and Goal Manipulation — user content overrides the developer's intended objective via prompt-injection or social-engineering of the planner.",
+        "T7": "Misaligned and Deceptive Behaviors — agent takes plausible-looking actions that don't match the user's actual goal.",
+        "T8": "Repudiation and Untraceability — no immutable audit log at the tool layer; the agent's self-report is the only evidence an action happened.",
+        "T9": "Identity Spoofing and Impersonation — chat-asserted role (\"I'm admin\") accepted as authority because no signed-identity check exists.",
+        "T10": "Overwhelmed Human-in-the-Loop — too many approval prompts cause reviewers to rubber-stamp or disable HITL altogether.",
+        "T11": "Unexpected RCE and Code Attacks — agent emits or interprets code that executes in a context the developer didn't anticipate.",
+        "T12": "Agent Communication Poisoning — upstream agent forwards user input verbatim to a downstream agent; trust boundary missing between agents.",
+        "T13": "Rogue Agents in Multi-Agent Systems — peer agents accepted as trusted on unauthenticated signals (e.g., header), no cryptographic peer auth.",
+        "T14": "Human Attacks on Multi-Agent Systems — operators socially engineered to approve actions across agents.",
+        "T15": "Human Manipulation — agent outputs designed to manipulate operators into harmful decisions.",
+    },
+    "ast": {
+        "AST01": "Untrusted Skill Loading — agent loads skills from an unvetted source (marketplace, user upload, remote URL).",
+        "AST02": "Skill Hijacking — a registered skill is replaced or shadowed by an attacker-controlled variant.",
+        "AST03": "Insecure Skill Manifest — manifest grants overly broad permissions (network: any, shell: true, no allow-list).",
+        "AST04": "Excessive Permissions — skill requests more capabilities than its documented action needs.",
+        "AST05": "Skill Supply Chain — skill bundle includes compromised dependencies or unpinned versions.",
+        "AST06": "Secrets in Skill Bundle — API keys, tokens, or credentials hardcoded into the skill's source files.",
+        "AST07": "Skill Output Injection — skill emits content that the host agent re-interprets as instructions.",
+        "AST08": "Cross-Skill Privilege Escalation — combining permissions from two skills grants an attack surface neither holds alone.",
+        "AST09": "Inadequate Skill Logging — skill calls aren't logged with sufficient detail to reconstruct what happened.",
+        "AST10": "Skill Behavior Drift — skill's behaviour changes version-to-version without baselines or detection.",
+    },
+    "mitre_atlas": {
+        "AML.T0010": "ML Supply Chain Compromise — adversary tampers with model files, training corpora, or ML dependencies upstream of deployment.",
+        "AML.T0011": "User Execution: Unsafe ML Artifacts — application loads pickled models or other unsafe formats from untrusted sources.",
+        "AML.T0012": "Valid Accounts — adversary obtains legitimate credentials and uses them to interact with the ML system.",
+        "AML.T0018": "Backdoor ML Model — adversary inserts a trigger into the model that activates malicious behaviour on specific inputs.",
+        "AML.T0019": "Publish Poisoned Datasets — adversary releases datasets crafted to corrupt models that train on them.",
+        "AML.T0024": "Exfiltration via ML Inference API — adversary queries the model to extract training data, prompts, or proprietary parameters.",
+        "AML.T0029": "Denial of ML Service — adversary drives the model into expensive or infinite computation paths.",
+        "AML.T0049": "Exploit Public-Facing Application — abuse of a public ML/agent interface to reach internal resources.",
+        "AML.T0050": "Command and Scripting Interpreter — LLM-derived content executed via shell, eval, or interpreter.",
+        "AML.T0051": "LLM Prompt Injection — direct or indirect injection that overrides the model's intended behaviour.",
+        "AML.T0053": "LLM Plugin Compromise — a plugin or tool integrated with the LLM is compromised and abused as a foothold.",
+        "AML.T0054": "LLM Jailbreak — adversary bypasses content / safety guardrails via crafted prompts.",
+        "AML.T0055": "Unsecured Credentials — credentials accessible from the agent's runtime context are stolen or leaked.",
+        "AML.T0056": "LLM Meta Prompt Extraction — adversary extracts the system prompt or hidden instructions.",
+        "AML.T0057": "LLM Data Leakage — model emits training data, prompts, or other sensitive context to the user.",
+    },
+    "cwe": {
+        "CWE-22":  "Path Traversal — attacker-controlled path component reaches the filesystem without normalisation, allowing access outside the intended directory.",
+        "CWE-78":  "OS Command Injection — attacker-controlled string interpolated into a shell command without sanitisation.",
+        "CWE-79":  "Cross-site Scripting — attacker-controlled content rendered into a web page without escaping.",
+        "CWE-89":  "SQL Injection — attacker-controlled string concatenated into a SQL query without parameterisation.",
+        "CWE-94":  "Code Injection — attacker-controlled input passed to eval / exec / dynamic-import without validation.",
+        "CWE-95":  "Eval Injection — direct eval() of user-influenced or LLM-emitted strings.",
+        "CWE-200": "Information Exposure — sensitive content (secrets, system prompt, PII) emitted to a user who shouldn't see it.",
+        "CWE-269": "Improper Privilege Management — agent or tool acts with more privilege than the task requires.",
+        "CWE-285": "Improper Authorization — action proceeds without verifying the caller has the required permission.",
+        "CWE-287": "Improper Authentication — caller's identity isn't verified before sensitive operations.",
+        "CWE-319": "Cleartext Transmission — sensitive data sent over a channel without encryption.",
+        "CWE-322": "Key Exchange Without Entity Authentication — keys established without verifying the counterparty's identity.",
+        "CWE-345": "Insufficient Verification of Authenticity — input accepted as trusted without signature / origin checks.",
+        "CWE-400": "Uncontrolled Resource Consumption — no caps on iterations, tokens, or compute time enable denial-of-service.",
+        "CWE-489": "Active Debug Code — debug endpoints or paths left enabled in production.",
+        "CWE-494": "Download of Code Without Integrity Check — code or models fetched and executed without signature verification.",
+        "CWE-502": "Deserialization of Untrusted Data — pickle / yaml.load / similar called on attacker-controlled bytes.",
+        "CWE-532": "Insertion of Sensitive Information into Log File — secrets, PII, or prompts written to logs and later exposed.",
+        "CWE-639": "Authorization Bypass Through User-Controlled Key — IDOR / tenant-scoping enforced at the prompt layer instead of the data-access layer.",
+        "CWE-732": "Incorrect Permission Assignment for Critical Resource — file/manifest/IAM grants are broader than necessary (often the AST03 manifest pattern).",
+        "CWE-778": "Insufficient Logging — actions taken by the agent aren't recorded with enough detail to reconstruct what happened.",
+        "CWE-798": "Use of Hard-coded Credentials — API keys, tokens, or passwords baked into source code.",
+        "CWE-829": "Inclusion of Functionality from Untrusted Control Sphere — code or skills loaded from untrusted sources.",
+        "CWE-835": "Loop with Unreachable Exit Condition — re-planning loop with no max-iteration or timeout safeguard.",
+        "CWE-918": "Server-Side Request Forgery — LLM-derived URL or destination reaches an unrestricted egress channel.",
+    },
+}
+
+
+def _framework_item_tooltip(field: str, item: str) -> str:
+    """Return the hover-tooltip text for a framework chip (e.g.
+    `field='owasp_llm', item='LLM06'`). Falls back to an empty
+    string when no description is curated for that item."""
+    return _FRAMEWORK_ITEM_DESCRIPTIONS.get(field, {}).get(item, "")
+
+
+# Human-readable labels per attack-class slug. Used by the Emulator
+# coverage block on the Input & Output tab when an attack class
+# wasn't evaluated (no trace in the file) — we still want to list
+# it so the reviewer sees "13 of 13 classes evaluated" or "4 of 13".
+_EMULATOR_CLASS_LABELS: dict[str, str] = {
+    "direct-prompt-injection": "Direct prompt injection (T6 / LLM01)",
+    "indirect-prompt-injection": "Indirect prompt injection via retrieved doc (LLM01 indirect)",
+    "system-prompt-extraction": "System prompt extraction (LLM07 / AML.T0056)",
+    "memory-poisoning": "Memory poisoning (T1)",
+    "tool-description-injection": "Tool-description injection (T2 / T6)",
+    "authority-spoofing": "Authority spoofing (T9)",
+    "tool-output-poisoning": "Tool-output poisoning",
+    "recursive-injection": "Recursive injection / runaway loops (T4)",
+    "cross-tenant-fishing": "Cross-tenant data fishing (T9 + LLM06)",
+    "repudiation": "Repudiation (T8)",
+    "excessive-agency": "Excessive agency / over-broad tool surface (LLM06 / Agentic T3)",
+    "tool-argument-injection": "Tool argument injection (Agentic T2 / CWE-78 / CWE-89)",
+    "insecure-output-handling": "Insecure output handling (LLM05)",
+}
+
+# Per-attack-class framework mappings curated to >=75% coverage.
+# Surfaced on the Reference tab's mapping table so the
+# behaviour-emulator catalogue shows exactly which framework
+# items each class corresponds to. Same audit bar as the YAML
+# rules above.
+_EMULATOR_CLASS_FRAMEWORKS: dict[str, dict[str, list[str]]] = {
+    "direct-prompt-injection": {
+        "owasp_llm": ["LLM01"],
+        "owasp_agentic": ["T6"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": [],
+        "ast": [],
+    },
+    "indirect-prompt-injection": {
+        "owasp_llm": ["LLM01"],
+        "owasp_agentic": ["T6"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": [],
+        "ast": [],
+    },
+    "system-prompt-extraction": {
+        "owasp_llm": ["LLM07"],
+        "owasp_agentic": [],
+        "mitre_atlas": ["AML.T0056"],
+        "cwe": ["CWE-200"],
+        "ast": [],
+    },
+    "memory-poisoning": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T1"],
+        "mitre_atlas": [],
+        "cwe": [],
+        "ast": [],
+    },
+    "tool-description-injection": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T6"],
+        "mitre_atlas": [],
+        "cwe": [],
+        "ast": [],
+    },
+    "authority-spoofing": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T9"],
+        "mitre_atlas": [],
+        "cwe": ["CWE-285"],
+        "ast": [],
+    },
+    "tool-output-poisoning": {
+        "owasp_llm": ["LLM05"],
+        "owasp_agentic": [],
+        "mitre_atlas": [],
+        "cwe": [],
+        "ast": [],
+    },
+    "recursive-injection": {
+        "owasp_llm": ["LLM10"],
+        "owasp_agentic": ["T4"],
+        "mitre_atlas": [],
+        "cwe": ["CWE-835"],
+        "ast": [],
+    },
+    "cross-tenant-fishing": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T9"],
+        "mitre_atlas": [],
+        "cwe": ["CWE-639"],
+        "ast": [],
+    },
+    "repudiation": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T8"],
+        "mitre_atlas": [],
+        "cwe": ["CWE-778"],
+        "ast": [],
+    },
+    "excessive-agency": {
+        "owasp_llm": ["LLM06"],
+        "owasp_agentic": ["T3"],
+        "mitre_atlas": [],
+        "cwe": [],
+        "ast": [],
+    },
+    "tool-argument-injection": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T2"],
+        "mitre_atlas": [],
+        "cwe": ["CWE-78", "CWE-89"],
+        "ast": [],
+    },
+    "insecure-output-handling": {
+        "owasp_llm": ["LLM05"],
+        "owasp_agentic": [],
+        "mitre_atlas": ["AML.T0050"],
+        "cwe": ["CWE-94"],
+        "ast": [],
+    },
+}
+
+_EMULATOR_CATEGORY_BY_CLASS: dict[str, str] = {
+    "direct-prompt-injection": "detect",
+    "indirect-prompt-injection": "detect",
+    "system-prompt-extraction": "detect",
+    "memory-poisoning": "detect",
+    "tool-description-injection": "detect",
+    "authority-spoofing": "defend",
+    "tool-output-poisoning": "detect",
+    "recursive-injection": "defend",
+    "cross-tenant-fishing": "detect",
+    "repudiation": "respond",
+    "excessive-agency": "defend",
+    "tool-argument-injection": "detect",
+    "insecure-output-handling": "detect",
+}
+
+_EMULATOR_SEVERITY_BY_VERDICT: dict[str, str] = {
+    "lands": "critical",
+    "partial": "high",
+    "blocked": "info",
+    "inconclusive": "info",
+}
+
+# Per-attack-class remediation, keyed by the attack_class slug.
+# Lives here (not in the catalogue) because behaviour-emulator
+# findings are class-based (one per attack pattern), not campaign-
+# instance based — the remediation is general defensive guidance
+# for that attack class. The text mirrors the equivalent §5.5
+# Tier-2 check's remediation where one exists, so the static
+# finding and emulator finding give consistent fix advice.
+_EMULATOR_REMEDIATION: dict[str, str] = {
+    "direct-prompt-injection": (
+        "Layer three controls: (1) input sanitiser at the user-"
+        "prompt step that strips or flags instruction-override "
+        "patterns; (2) anti-injection language in the system "
+        "prompt instructing the planner to refuse meta-"
+        "instructions from user content; (3) output filter at the "
+        "final-answer step that scrubs system-prompt content and "
+        "embedded secrets before emission."
+    ),
+    "indirect-prompt-injection": (
+        "Treat retrieved content (RAG, document loaders, vector "
+        "search hits, memory recall) as untrusted input. Sanitise "
+        "or content-classify before it reaches the planner; mark "
+        "retrieved text as data-not-instruction in the prompt "
+        "envelope; reject documents that fail a provenance check."
+    ),
+    "system-prompt-extraction": (
+        "Never place the system prompt verbatim in any response "
+        "payload — including error paths, debug endpoints, or "
+        "audit messages. Filter system-prompt content out of "
+        "the final-answer step with an explicit regex / "
+        "classifier. Test the error path specifically; it's the "
+        "most common leak channel."
+    ),
+    "memory-poisoning": (
+        "Scope memory writes to the current session — never share "
+        "memory across session_id values. Treat any user-supplied "
+        "\"remember this forever\" directive as data, not policy. "
+        "Strip system-prompt and config content from any model "
+        "output before it can be persisted into a memory store."
+    ),
+    "tool-description-injection": (
+        "Tool descriptions must be hardcoded constants, not "
+        "user-supplied or attacker-influenced strings. Reject any "
+        "tool registration whose description originates from an "
+        "untrusted source. Treat the tool catalogue as compiled "
+        "code, not data."
+    ),
+    "authority-spoofing": (
+        "Bind tool-call authority to the request's signed "
+        "identity (JWT / IAM principal) — never to a role the "
+        "model claims in chat. Destructive tools (drop_table, "
+        "delete_*, purge_*) must require a separate human-in-the-"
+        "loop confirmation step regardless of any declared "
+        "\"admin mode\". Reject every tool call whose required "
+        "scope is not present in the authenticated principal's "
+        "actual permissions."
+    ),
+    "tool-output-poisoning": (
+        "Treat tool output as untrusted input. Validate or "
+        "classify tool returns before feeding them into the re-"
+        "planning step. Schema-check structured outputs. Strip "
+        "instruction-shaped content from free-form tool replies. "
+        "Plugins / third-party tools must be sandboxed; their "
+        "returns must not be trusted as authoritative context."
+    ),
+    "recursive-injection": (
+        "Cap the planner loop at a hard max-iterations (typically "
+        "5-15). Add a per-tool-call timeout and a per-request "
+        "wall-clock budget. Detect repeated failure-then-retry "
+        "patterns and short-circuit them. Surface a circuit-"
+        "breaker metric to ops so runaway loops trigger an alert."
+    ),
+    "cross-tenant-fishing": (
+        "Enforce the tenant boundary at the data-access layer — "
+        "every read query must include the authenticated "
+        "principal's tenant ID as a non-overridable filter, not a "
+        "hint the model can choose to ignore. Reject any tool "
+        "call whose resulting query would cross tenants "
+        "regardless of declared role in chat. Log cross-tenant "
+        "lookups separately and require explicit out-of-band "
+        "approval for legitimate audit reads."
+    ),
+    "repudiation": (
+        "Tie the audit trail to the tool layer, not to the model's "
+        "self-report. Every tool call must write an immutable log "
+        "entry (timestamp, authenticated principal, tool, args) "
+        "before the call returns, and the agent must never be "
+        "asked to attest to whether an action happened — only the "
+        "audit log answers that question."
+    ),
+    "excessive-agency": (
+        "Minimise the tool surface — register only the tools the "
+        "agent needs for the current workflow, not every tool the "
+        "team has ever built. Mark destructive tools (cancel_, "
+        "delete_, drop_, purge_, transfer_) as HITL-gated: they "
+        "must require a separate confirmation step (out-of-band "
+        "approval, signed-scope claim, or explicit user click) "
+        "before the dispatcher executes. Never let a single LLM "
+        "decision fire a destructive action without a second gate."
+    ),
+    "tool-argument-injection": (
+        "Validate every tool argument against an allow-list / "
+        "regex / schema before it reaches a shell, SQL query, "
+        "HTTP URL, or filesystem path. Use parameterised queries "
+        "for SQL, list-form subprocess invocation (never "
+        "shell=True with interpolated strings), and structured "
+        "URL builders that reject path traversal. Treat the LLM "
+        "as an untrusted source for tool-argument content."
+    ),
+    "insecure-output-handling": (
+        "Never feed LLM output (or tool output derived from LLM "
+        "output) into eval(), exec(), subprocess with shell=True, "
+        "or an unescaped template render. Sanitise / validate at "
+        "the consumer boundary: parse with ast.literal_eval for "
+        "expressions, escape for HTML/SQL contexts, and require "
+        "a strict schema for any downstream call. LLM output is "
+        "untrusted user content, not code."
+    ),
+}
+
+
+def _classify_emulator_finding(
+    attack_class: str, verdict: str | None,
+) -> tuple[str, str]:
+    """Map an attack-class slug + verdict to (category, severity)
+    for the D/D/R rendering pipeline. Inconclusive findings get
+    info severity regardless of class so they degrade quietly.
+    Blocked findings also get info — they're positive evidence,
+    not actionable. Lands / partial inherit the class's normal
+    severity."""
+    category = _EMULATOR_CATEGORY_BY_CLASS.get(attack_class, "detect")
+    severity = _EMULATOR_SEVERITY_BY_VERDICT.get(verdict or "", "info")
+    return category, severity
+
+
+def _emulation_to_findings(emulation: dict) -> list[dict]:
+    """Convert the agent-emulator output into D/D/R finding dicts
+    so each attack-class trace appears alongside other findings.
+    Each entry carries `_emulator_trace: True` plus the full per-
+    step trace under `_emulator_data` so the renderer can emit the
+    pipeline visualisation inside the finding card."""
+    if not emulation.get("present"):
+        return []
+    pipeline_map = emulation.get("pipeline_map") or {}
+    out: list[dict] = []
+    for entry_idx, entry in enumerate(
+        emulation.get("attack_class_traces") or [], start=1
+    ):
+        if not isinstance(entry, dict):
+            continue
+        attack_class = entry.get("attack_class") or "unknown"
+        verdict = entry.get("verdict")
+        category, severity = _classify_emulator_finding(attack_class, verdict)
+        category_letter = {"detect": "D", "defend": "DF", "respond": "R"}.get(
+            category, "D"
+        )
+        out.append({
+            "rule_id": f"agent-emulator-{attack_class}",
+            "rule_id_short": f"emulator-{attack_class}",
+            "agentshield_id": f"AS-E-{category_letter}-{entry_idx:03d}",
+            "category": category,
+            "severity": severity,
+            "file": "(behaviour emulator — pipeline trace)",
+            "line": 0,
+            "message": entry.get("attack_class_label") or attack_class,
+            "language": "n/a",
+            "remediation": _EMULATOR_REMEDIATION.get(attack_class, ""),
+            "framework_mappings": {
+                "owasp_llm": list((entry.get("frameworks") or {}).get("owasp_llm", [])),
+                "owasp_agentic": list((entry.get("frameworks") or {}).get("owasp_agentic", [])),
+                "mitre_atlas": list((entry.get("frameworks") or {}).get("mitre_atlas", [])),
+                "cwe": list((entry.get("frameworks") or {}).get("cwe", [])),
+                "nist_ai_rmf": [],
+                "ast": [],
+            },
+            # Provenance flags the renderer keys off.
+            "_emulator_trace": True,
+            "_emulator_data": entry,
+            "_emulator_pipeline_map": pipeline_map,
+            # Reuse the discovered shell for layout but switch the
+            # body content to the pipeline-trace visualisation.
+            "_discovered": True,
+            "_discovered_title": entry.get("attack_class_label") or attack_class,
+            "_discovered_payload": entry.get("catalogue_payload") or "",
+            "_discovered_response": "",
+            "_discovered_indicators": [],
+            "_discovered_llm_reasoning": entry.get("verdict_reasoning") or "",
+            "_discovered_confidence": entry.get("verdict_confidence"),
+            "_discovered_at": emulation.get("scanned_at") or "",
+        })
+    return out
+
+
+def _catalogue_remediation_for(campaign_name: str) -> str:
+    """Look up a campaign's defensive guidance from
+    MOCK_CAMPAIGN_CATALOGUE by name. Used as a fallback when a
+    campaign dict (typically simulator-origin) doesn't carry a
+    `remediation` field of its own — the catalogue is the
+    authoritative source for defensive guidance, the simulator
+    skill should not be re-authoring it. Returns empty string for
+    unknown names so callers can fall through cleanly."""
+    if not campaign_name:
+        return ""
+    try:
+        from agentshield.probe.campaign import MOCK_CAMPAIGN_CATALOGUE
+    except ImportError:
+        return ""
+    for obj in MOCK_CAMPAIGN_CATALOGUE:
+        if obj.name == campaign_name:
+            return obj.remediation or ""
+    return ""
 
 
 def _campaigns_to_findings(campaigns: list[dict]) -> list[dict]:
@@ -504,6 +1622,21 @@ def _campaigns_to_findings(campaigns: list[dict]) -> list[dict]:
             "line": 0,
             "message": c.get("objective") or c.get("title") or "",
             "language": "n/a",
+            # Defensive guidance authored on the campaign objective —
+            # renders in the standard finding-card Fix block.
+            # Fallback: simulator-origin campaigns may not carry a
+            # remediation field (the simulator skill predicts agent
+            # behaviour but defensive guidance is authoritatively
+            # the campaign template's job — Copilot shouldn't be
+            # re-authoring it). Look it up by name from the
+            # MOCK_CAMPAIGN_CATALOGUE so every campaign card carries
+            # the matching Fix block regardless of whether the
+            # entry came from a real probe run or a simulator pass.
+            "remediation": (
+                c.get("remediation")
+                or _catalogue_remediation_for(c.get("name") or "")
+                or ""
+            ),
             "framework_mappings": {
                 "owasp_llm": list(fw.get("owasp_llm") or []),
                 "owasp_agentic": list(fw.get("owasp_agentic") or []),
@@ -525,7 +1658,7 @@ def _campaigns_to_findings(campaigns: list[dict]) -> list[dict]:
             "_discovered_response": last_response,
             "_discovered_indicators": all_indicators,
             "_discovered_llm_reasoning": (
-                f"Multi-turn campaign — {c.get('turn_count', 0)} "
+                f"Multi-turn probe — {c.get('turn_count', 0)} "
                 f"fire(s) across {len(c.get('session_ids') or [])} "
                 f"session(s); status: {status}."
             ),
@@ -725,9 +1858,16 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
     can show a tier badge per finding without losing the D/D/R-led grouping.
     Tier 1 findings additionally carry `_tier2_verdict` + `_tier2_reasoning`
     when Tier 2 cross-checked them.
+
+    FP-marked Tier 1 findings are NOT included in the D/D/R buckets —
+    they're net-of-FP, matching the Net Actionable headline. Use
+    `_findings_excluded_as_fp` to get the FP list for a separate
+    "Ruled out by Copilot" panel.
     """
     grouped: dict[str, list[dict]] = {"detect": [], "defend": [], "respond": []}
     for ann in report.tier1_findings:
+        if ann.tier2_verdict == "FP":
+            continue
         f = dict(ann.finding)
         f["_origin"] = "tier1"
         f["_tier2_verdict"] = ann.tier2_verdict
@@ -761,6 +1901,22 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
         cat = ff.get("category")
         if cat in grouped:
             grouped[cat].append(ff)
+    # Agent behaviour-emulator traces — one finding per attack class
+    # the emulator evaluated. The pipeline_map is carried on each
+    # finding so the renderer can show the step the attack targets
+    # without needing to re-fetch the map. Filtered: inconclusive
+    # AND blocked traces are NOT findings (no actionable signal) —
+    # blocked is positive evidence (defence works), inconclusive
+    # is a pipeline gap. Both live in the Emulator coverage block
+    # of the Input & Output tab, not in D/D/R.
+    for ff in _emulation_to_findings(getattr(report, "agent_emulation", {})):
+        verdict = ff.get("_emulator_data", {}).get("verdict")
+        if verdict in ("inconclusive", "blocked"):
+            continue
+        ff["_origin"] = "tier2"
+        cat = ff.get("category")
+        if cat in grouped:
+            grouped[cat].append(ff)
     # Sort each bucket by severity (critical → info), then by file path
     sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     for bucket in grouped.values():
@@ -770,6 +1926,84 @@ def _findings_grouped_by_ddr(report: CombinedReport) -> dict[str, list[dict]]:
             f.get("line", 0),
         ))
     return grouped
+
+
+def _render_ruled_out_block(
+    r: Any, parts: list[str], *, static: bool = False,
+) -> None:
+    """Render the 'Ruled out by Copilot' collapsible panel — Tier 1
+    findings Copilot judged FP. Lives on the Input & Output tab so
+    the D/D/R columns stay focused on actionable findings while the
+    audit trail (what was excluded and why) is still one click
+    away. Renders nothing when there are no FPs."""
+    fp_excluded = _findings_excluded_as_fp(r)
+    if not fp_excluded:
+        return
+    parts.append('<div class="ruled-out-section">')
+    open_attr = " open" if static else ""
+    parts.append(
+        f'<details class="ruled-out-card"{open_attr}>'
+        f'<summary class="ruled-out-summary">'
+        f'<span class="ruled-out-chevron">&#9656;</span>'
+        f'<span class="ruled-out-title">Ruled out by Copilot</span>'
+        f'<span class="ruled-out-meta">'
+        f'<strong>{len(fp_excluded)}</strong> '
+        f'Tier 1 finding{"s" if len(fp_excluded) != 1 else ""} marked '
+        f'False Positive &middot; excluded from Detect / Defend / '
+        f'Respond and from Net Actionable, kept here for audit'
+        f'</span>'
+        f'</summary>'
+        f'<ul class="ruled-out-list">'
+    )
+    for f in fp_excluded:
+        file_ = f.get("file") or "?"
+        line_ = f.get("line") or "?"
+        rule = f.get("rule_id") or f.get("agentshield_id") or "?"
+        msg = f.get("message") or ""
+        reason = f.get("_tier2_reasoning") or ""
+        parts.append(
+            f'<li class="ruled-out-item">'
+            f'<div class="ruled-out-head">'
+            f'<code class="ruled-out-loc">'
+            f'{_html_escape(file_)}:{_html_escape(str(line_))}'
+            f'</code>'
+            f'<span class="ruled-out-rule">{_html_escape(rule)}</span>'
+            f'<span class="ruled-out-verdict">FP</span>'
+            f'</div>'
+        )
+        if msg:
+            parts.append(
+                f'<div class="ruled-out-msg">{_html_escape(msg)}</div>'
+            )
+        if reason:
+            parts.append(
+                f'<div class="ruled-out-reason">'
+                f'<strong>Copilot reasoning:</strong> '
+                f'{_html_escape(reason)}'
+                f'</div>'
+            )
+        parts.append('</li>')
+    parts.append('</ul></details>')
+    parts.append('</div>')  # /ruled-out-section
+
+
+def _findings_excluded_as_fp(report: CombinedReport) -> list[dict]:
+    """Return the Tier 1 findings Copilot judged FP (false positive),
+    in the same dict shape as the D/D/R buckets. Used to render the
+    "Ruled out by Copilot" panel — these findings are excluded from
+    the headline Net Actionable count and from D/D/R, but stay
+    auditable so a reviewer can second-guess any FP call."""
+    out: list[dict] = []
+    for ann in report.tier1_findings:
+        if ann.tier2_verdict != "FP":
+            continue
+        f = dict(ann.finding)
+        f["_origin"] = "tier1"
+        f["_tier2_verdict"] = "FP"
+        f["_tier2_reasoning"] = ann.tier2_reasoning
+        out.append(f)
+    out.sort(key=lambda f: (f.get("file", ""), f.get("line", 0)))
+    return out
 
 
 def render_combined_markdown(result: MergeResult) -> str:
@@ -1118,6 +2352,12 @@ h3 { font-size: 15px; }
 .banner.warn  { background: #fbf3dc; border-color: var(--defend); color: #5a3f00; }
 .banner.error { background: var(--critical-bg); border-color: var(--critical); color: #5e1a16; }
 .banner.stale { background: var(--info-bg); border-color: var(--info); color: #2c4250; }
+/* Partial Tier 2 coverage — Copilot classified some but not all
+   Tier 1 findings. Distinct from STALE (which is "ran against
+   different code") and from missing (which is "didn't run at
+   all"). Amber, in between "all good" and "alarm". */
+.banner.partial-tier2 { background: #fff7ed; border-color: #fb923c; color: #7c2d12; }
+.banner.partial-tier2 code { background: rgba(124, 45, 18, 0.08); padding: 1px 5px; border-radius: 3px; }
 
 .ddr-row {
   display: grid;
@@ -1207,30 +2447,60 @@ h3 { font-size: 15px; }
 .pill.pill-zero { opacity: 0.45; }
 
 .metrics-row {
-  /* F.33: 3 input cards (1fr each) + a thin separator + 1 hero card
-     (1.4fr) so the headline number visually outweighs its inputs.
-     The CSS-only divider is a 1px column the user reads as
-     "everything left = inputs; everything right = result". */
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 8px 1.4fr;
-  gap: 12px;
-  margin-bottom: 24px;
+  /* Flex row so the column count adapts to whichever input cards
+     are present (Probe Runtime is hidden when probe data is empty).
+     Each .metric grows equally (flex: 1 1 0); the .metrics-divider
+     is a fixed-width dashed line; the hero .metric.metric-hero
+     grows 1.4× so the headline number visually outweighs its
+     inputs. Pre-grid the layout used `grid-template-columns:
+     1fr 1fr 1fr 1fr 1fr 8px 1.4fr` — hardcoded for 5 input cards.
+     When a card was hidden, the hero slid into the 8px divider
+     slot and got squashed. Flex avoids that entirely. */
+  display: flex;
   align-items: stretch;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: nowrap;
 }
 .metrics-row .metrics-divider {
   align-self: stretch;
   border-left: 1px dashed var(--border);
   margin: 4px 0;
+  flex: 0 0 1px;
+}
+/* Formula operators between metric cards. The "+" lives between
+   adjacent input cards; the "=" sits before the hero. Both are
+   decorative (aria-hidden) — the actual numbers are in the card
+   values. Renders as a visible equation: 25 + 6 + 8 = 39. */
+.metrics-row .metric-op {
+  align-self: center;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.metrics-row .metric-op-plus {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+.metrics-row .metric-op-eq {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 0 4px;
 }
 .metric {
   background: var(--panel);
   border: 1.5px solid var(--border);
   border-radius: 10px;
-  padding: 14px 18px;
+  padding: 12px 14px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
   display: flex; flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;  /* allow card to shrink below content's preferred width */
 }
-.metric .metric-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+.metric .metric-label { font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
                         color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
 .metric .metric-value { font-size: 28px; font-weight: 700; line-height: 1; }
 .metric .metric-value.actionable { color: var(--accent); }
@@ -1261,9 +2531,146 @@ h3 { font-size: 15px; }
   border-color: var(--accent);
   border-left-width: 4px;
   background: linear-gradient(180deg, #f4f8fb 0%, #ffffff 100%);
+  flex: 1.4 1 0;
 }
 .metric.metric-hero .metric-label { color: var(--accent); }
 .metric.metric-hero .metric-value { font-size: 40px; }
+
+/* Severity-group collapsible — wraps the per-finding cards inside
+   each D/D/R tab so a reviewer can fold away low-priority noise.
+   Critical / high are open by default; medium / low / info start
+   collapsed. The summary mirrors the existing severity pill style
+   so the visual hierarchy stays consistent. */
+.sev-group {
+  margin-bottom: 10px;
+}
+.sev-group > .sev-group-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  transition: background 140ms ease;
+  margin-bottom: 6px;
+}
+.sev-group > .sev-group-summary::-webkit-details-marker { display: none; }
+.sev-group > .sev-group-summary:hover { background: #f1f5f9; }
+.sev-group-chevron {
+  display: inline-block;
+  font-size: 11px;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+.sev-group[open] > .sev-group-summary .sev-group-chevron {
+  transform: rotate(90deg);
+}
+.sev-group-count {
+  font-size: 12px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* When every finding in a severity group is filtered out (e.g. the
+   user unchecks HIGH in the filter bar), dim the whole group so the
+   reviewer can see at a glance that the count they're reading is
+   suppressed, not stale. The chevron stays clickable so the group
+   can still be expanded if needed. */
+.sev-group.sev-group-filtered {
+  opacity: 0.5;
+}
+.sev-group.sev-group-filtered > .sev-group-summary {
+  background: #fafafa;
+  border-color: #e5e7eb;
+}
+.sev-group.sev-group-filtered > .sev-group-summary .pill {
+  filter: saturate(0.4);
+}
+
+/* Ruled out by Copilot — lives outside the D/D/R tab panels so a
+   reviewer can audit what was excluded from Net Actionable. Quiet
+   styling (collapsed by default, muted colours) because these are
+   non-findings; the block should not visually compete with the
+   actionable buckets above it. */
+.ruled-out-section {
+  margin: 18px 0;
+}
+.ruled-out-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid #94a3b8;
+  border-radius: 6px;
+  padding: 0;
+}
+.ruled-out-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  border-radius: 6px;
+  transition: background 160ms ease;
+}
+.ruled-out-summary::-webkit-details-marker { display: none; }
+.ruled-out-summary:hover { background: #f1f5f9; }
+.ruled-out-chevron {
+  display: inline-block;
+  font-size: 11px;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+.ruled-out-card[open] .ruled-out-chevron { transform: rotate(90deg); }
+.ruled-out-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.ruled-out-meta {
+  font-size: 11.5px; color: var(--text-muted);
+}
+.ruled-out-meta strong { color: var(--text); font-weight: 700; }
+.ruled-out-list {
+  list-style: none; margin: 0; padding: 0 14px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ruled-out-item {
+  padding: 8px 10px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.ruled-out-head {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.ruled-out-loc {
+  font-family: ui-monospace, monospace; font-size: 11px;
+  color: #1e293b;
+  background: #f1f5f9;
+  padding: 1px 6px; border-radius: 3px;
+  border: 1px solid #cbd5e1;
+}
+.ruled-out-rule {
+  font-family: ui-monospace, monospace; font-size: 11px;
+  color: #475569;
+}
+.ruled-out-verdict {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px; border-radius: 10px;
+  background: #f1f5f9; color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+.ruled-out-msg {
+  color: #334155;
+  margin-bottom: 4px;
+}
+.ruled-out-reason {
+  color: #64748b; font-size: 11.5px; line-height: 1.5;
+}
+.ruled-out-reason strong {
+  color: #475569; font-weight: 600;
+}
 
 .severity-bar {
   display: flex;
@@ -1319,6 +2726,37 @@ h3 { font-size: 15px; }
 .findings-section .section-title { font-size: 16px; font-weight: 600; }
 .findings-section .section-subtitle { font-size: 12px; color: var(--text-muted); flex: 1; }
 .findings-section .section-count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+/* Bulk expand/collapse — single text-link toggle. Sits on its
+   own row below the section header so it doesn't fight the count
+   pills for attention. Subtle by default, accent on hover. */
+.section-bulk-row {
+  display: flex; justify-content: flex-end;
+  padding: 6px 14px 0;
+  margin-bottom: 4px;
+}
+.section-bulk-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 140ms ease, background 140ms ease;
+}
+.section-bulk-toggle:hover {
+  color: var(--accent);
+  background: rgba(15, 23, 42, 0.04);
+}
+.section-bulk-icon {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 160ms ease;
+}
+.section-bulk-toggle.is-expanded .section-bulk-icon {
+  transform: rotate(180deg);
+}
 .findings-section .section-severity {
   display: inline-flex; flex-wrap: wrap; gap: 4px;
   margin-left: 10px;
@@ -1338,11 +2776,50 @@ h3 { font-size: 15px; }
 .sev-mini.low      { background: var(--low-bg);      color: var(--low); }
 .sev-mini.info     { background: var(--info-bg);     color: var(--info); }
 
+/* Each findings-section (one per D/D/R tab) resets its own
+   finding counter so the numbering reads 1..N within Detect,
+   1..N within Defend, etc. The counter increments per .finding
+   in document order — filtered-out findings still consume a
+   number, so a reviewer can spot that #5 and #8 are hidden by
+   the active filter. */
+.findings-section { counter-reset: finding-counter; }
+/* Each finding is its own card — distinct panel with a subtle
+   border + shadow so consecutive findings read as separate blocks
+   instead of one continuous wall of text. */
 .finding {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+  counter-increment: finding-counter;
 }
-.finding:last-child { border-bottom: none; }
+/* Sequential number tag in the top-left of each card — small,
+   muted, tabular-nums so the digits line up vertically as the
+   reviewer scrolls. */
+.finding > .finding-header::before {
+  content: "#" counter(finding-counter);
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  margin-right: 2px;
+}
+.finding:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+.finding:last-child { margin-bottom: 0; }
+/* Inside a severity-group <details>, indent the cards slightly so
+   they read as children of the group header. */
+.sev-group .finding { margin-left: 4px; margin-right: 4px; }
 .finding-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .finding-rule { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-size: 12px; color: var(--text); font-weight: 600; }
@@ -1400,19 +2877,29 @@ h3 { font-size: 15px; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: #b84444; color: white;
 }
-.finding-discovered .discovered-body { padding: 10px 14px 12px; }
+/* Simulator variant of the discovered badge — blue palette matching
+   the outer Simulated XX% campaign badge, so a reviewer reading the
+   inner attack-scenario panel can tell at a glance this is a Copilot
+   forecast (not a captured probe). */
+.finding-discovered .discovered-badge-sim {
+  background: #1e40af; color: #dbeafe;
+}
+.finding-discovered .discovered-body { padding: 14px 16px 14px; }
 .finding-discovered .discovered-row {
   display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 10px;
-  margin-bottom: 8px;
+  grid-template-columns: 100px 1fr;
+  gap: 14px;
+  margin-bottom: 12px;
   align-items: start;
+  line-height: 1.55;
+  color: #1e293b;
+  font-size: 12.5px;
 }
 .finding-discovered .discovered-row:last-of-type { margin-bottom: 0; }
 .finding-discovered .discovered-label {
-  font-size: 10.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: #6b1818; padding-top: 3px;
+  font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: #64748b; padding-top: 2px;
 }
 .finding-discovered .discovered-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1608,84 +3095,222 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
   transform: translateY(0);
 }
 
-/* v4: visual attack-flow simulation — actor → target scenes per step. */
+/* v4: visual attack-flow simulation — actor → target scenes per step.
+   Animation upgrade: glowing packet with motion trail, gradient
+   sweep along the arrow line as the packet traverses, lifted/glowing
+   source actor on emit, ripple-on-receipt at the destination, a
+   subtle sheen sweep across the active scene card, and a richer
+   impact-step finale. Transitions use cubic-bezier curves for a
+   more polished feel than plain ease. */
 .attack-sim-list {
   display: flex; flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   margin-top: 10px;
 }
 .attack-sim-scene {
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   position: relative;
+  overflow: hidden;  /* contain the sheen sweep + trail */
+  transition: border-color 360ms cubic-bezier(.4,0,.2,1),
+              box-shadow   360ms cubic-bezier(.4,0,.2,1),
+              transform    360ms cubic-bezier(.4,0,.2,1);
+}
+/* Decorative sheen — a soft accent-tinted gradient that sweeps
+   left-to-right across the active scene, like a spotlight passing
+   over a stage. Pure CSS, no JS triggering. */
+.attack-sim-scene::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(44, 95, 126, 0.07) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-current::before {
+  opacity: 1;
+  animation: agentshield-scene-sheen 2400ms cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes agentshield-scene-sheen {
+  0%   { background-position: -100% 0; }
+  100% { background-position:  100% 0; }
 }
 .attack-sim-scene .attack-sim-step-num {
-  position: absolute; top: -7px; left: 12px;
-  background: var(--bg);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
-  text-transform: uppercase; color: var(--text-muted);
-  padding: 0 6px;
+  position: absolute; top: 10px; left: 14px;
+  background: #f1f5f9;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #475569;
+  padding: 2px 9px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  z-index: 3;
+  line-height: 1.4;
+}
+/* Right-side scene tag (no-defence / impact). Mirrors the
+   emulator's per-step "no defence here" + outcome chips so the
+   attack-sim card carries the same visual cue language. The
+   default tag reads "no defence" since these scenes are
+   pre-curated attack narratives that succeed (the attack
+   *lands*); impact scenes override the label to "IMPACT". */
+.attack-sim-scene::after {
+  content: "no defence";
+  position: absolute; top: 10px; right: 14px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: #fee2e2; color: #991b1b;
+  border: 1px solid #fca5a5;
+  z-index: 3;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.attack-sim-scene.attack-sim-impact::after {
+  content: "impact";
+  background: #fef2f2; color: #7f1d1d;
+  border-color: #fca5a5;
+}
+/* Push the row down so the absolute-positioned step-num + tag
+   sit cleanly above it instead of overlapping. */
+.attack-sim-scene .attack-sim-row {
+  margin-top: 28px;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-current
+  .attack-sim-step-num {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--panel);
 }
 .attack-sim-row {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 4px;
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 6px;
+  position: relative;
+  z-index: 2;
 }
+/* Inline pill style — same shape as the emulator's .emu-actor so
+   the attack-sim and behaviour-emulator visualisations read with
+   consistent visual language. Icon + label sit horizontally
+   inside a single pill instead of stacking inside a heavy box. */
 .attack-sim-actor {
-  display: flex; flex-direction: column; align-items: center;
-  min-width: 90px;
-  padding: 8px 10px;
-  border: 1.5px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  text-align: center;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 280ms cubic-bezier(.4,0,.2,1),
+              background   280ms cubic-bezier(.4,0,.2,1),
+              transform    280ms cubic-bezier(.34,1.56,.64,1),
+              box-shadow   280ms cubic-bezier(.4,0,.2,1);
 }
-.attack-sim-actor .actor-icon { font-size: 22px; line-height: 1; margin-bottom: 4px; }
+.attack-sim-actor .actor-icon {
+  font-size: 14px; line-height: 1;
+  transition: transform 280ms cubic-bezier(.34,1.56,.64,1);
+}
 .attack-sim-actor .actor-label {
-  font-size: 11px; font-weight: 600; color: var(--text);
+  font-size: 10.5px; font-weight: 600; color: #334155;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1.2;
-  word-break: break-word;
+  line-height: 1;
 }
 .attack-sim-arrow {
-  flex: 1; position: relative; height: 28px;
+  flex: 1; position: relative; height: 32px;
   display: flex; align-items: center; min-width: 80px;
 }
 .attack-sim-arrow-label {
-  position: absolute; top: 0; left: 50%;
+  position: absolute; top: -3px; left: 50%;
   transform: translateX(-50%);
   font-size: 10px; font-weight: 700;
-  letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--accent);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted);
   background: var(--panel);
-  padding: 0 8px; white-space: nowrap;
+  padding: 0 10px; white-space: nowrap;
+  transition: color 280ms ease, transform 280ms cubic-bezier(.34,1.56,.64,1);
+  z-index: 2;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
+  .attack-sim-arrow-label,
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-arrow-label {
+  color: var(--accent);
+  transform: translateX(-50%) scale(1.06);
 }
 .attack-sim-arrow-line {
   flex: 1; height: 2px;
-  background: var(--text-muted);
+  background: linear-gradient(90deg,
+    var(--accent) 0%, var(--accent) 0%,
+    var(--text-muted) 0%, var(--text-muted) 100%);
+  background-size: 100% 100%;
   position: relative;
+  border-radius: 1px;
+  transition: background 600ms cubic-bezier(.4,0,.2,1);
 }
 .attack-sim-arrow-line::after {
   content: ''; position: absolute; right: -1px; top: -4px;
   width: 0; height: 0;
   border: 5px solid transparent;
   border-left-color: var(--text-muted);
+  transition: border-left-color 280ms ease;
+}
+/* Arrow line "fills" with accent as the packet traverses. CSS-only
+   gradient sweep, synced with the packet flight via the same total
+   duration. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
+  .attack-sim-arrow-line {
+  background: linear-gradient(90deg,
+    var(--accent) 0%, var(--accent) 0%,
+    var(--text-muted) 0%, var(--text-muted) 100%);
+  animation: agentshield-line-fill 1500ms cubic-bezier(.4,0,.2,1) forwards;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-arrow-line {
+  background: linear-gradient(90deg,
+    var(--accent) 0%, var(--accent) 100%,
+    var(--text-muted) 100%, var(--text-muted) 100%);
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-arrow-line::after {
+  border-left-color: var(--accent);
+}
+@keyframes agentshield-line-fill {
+  0% {
+    background: linear-gradient(90deg,
+      var(--accent) 0%, var(--accent) 0%,
+      var(--text-muted) 0%, var(--text-muted) 100%);
+  }
+  100% {
+    background: linear-gradient(90deg,
+      var(--accent) 0%, var(--accent) 100%,
+      var(--text-muted) 100%, var(--text-muted) 100%);
+  }
 }
 .attack-sim-payload {
-  margin-top: 10px;
+  margin-top: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px; color: var(--text);
   background: #f4f1e8;
   border-left: 3px solid var(--accent);
-  padding: 6px 10px;
-  border-radius: 0 4px 4px 0;
+  padding: 7px 11px;
+  border-radius: 0 6px 6px 0;
   word-break: break-word;
+  position: relative;
+  z-index: 2;
 }
 .attack-sim-note {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11.5px; color: var(--text-muted);
-  font-style: italic; line-height: 1.5;
+  font-style: italic; line-height: 1.55;
+  position: relative;
+  z-index: 2;
 }
 /* Impact scene — terminal beat, no target, painted critical. */
 .attack-sim-scene.attack-sim-impact {
@@ -1697,90 +3322,305 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
 }
 .attack-sim-scene.attack-sim-impact .attack-sim-actor {
   border-color: var(--critical);
-  background: var(--panel);
-  min-width: 120px;
+  background: #fef2f2;
+  padding: 6px 14px;
+  font-weight: 700;
+}
+.attack-sim-scene.attack-sim-impact .attack-sim-actor .actor-label {
+  color: #7f1d1d;
+}
+.attack-sim-scene.attack-sim-impact .attack-sim-actor .actor-icon {
+  font-size: 16px;
 }
 .attack-sim-scene.attack-sim-impact .attack-sim-note {
   text-align: center; color: var(--text); font-style: normal; font-weight: 500;
 }
-/* Playing mode — scenes start hidden, fade in sequentially, the
-   currently-active scene gets an accent ring + lift. */
+/* Playing mode — scenes start hidden, slide-up into view, the
+   currently-active scene gets an accent ring + a subtle lift +
+   the sheen sweep defined above. */
 .attack-sim-list.attack-sim-playing .attack-sim-scene {
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.3s ease;
+  transform: translateY(12px);
+  transition: opacity 520ms cubic-bezier(.4,0,.2,1),
+              transform 520ms cubic-bezier(.4,0,.2,1),
+              box-shadow 360ms cubic-bezier(.4,0,.2,1),
+              border-color 280ms cubic-bezier(.4,0,.2,1);
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-visible {
   opacity: 1;
   transform: translateY(0);
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-current {
-  box-shadow: 0 0 0 2px rgba(44, 95, 126, 0.25);
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px rgba(44, 95, 126, 0.28),
+    0 8px 24px -8px rgba(44, 95, 126, 0.22);
+  transform: translateY(-2px);
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.attack-sim-current {
-  box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.35);
+  border-color: var(--critical);
+  box-shadow:
+    0 0 0 2px rgba(179, 38, 30, 0.42),
+    0 8px 28px -8px rgba(179, 38, 30, 0.36);
 }
-/* v4: per-scene choreography — source pulse, packet travels along arrow,
-   target pulse on arrival, payload+note reveal on receipt. Only runs
-   while the parent list is in playing mode; static view shows
-   everything at once. */
+/* Source actor — emit state. Lifts up, accent border, glow ring
+   expands outward, icon does a subtle bob. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.source-pulsing
+  .attack-sim-row > .attack-sim-actor:first-child {
+  border-color: var(--accent);
+  background: var(--panel);
+  transform: translateY(-3px);
+  box-shadow:
+    0 0 0 4px rgba(44, 95, 126, 0.12),
+    0 6px 16px -6px rgba(44, 95, 126, 0.32);
+  animation: agentshield-actor-emit 700ms cubic-bezier(.34,1.56,.64,1);
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.source-pulsing
+  .attack-sim-row > .attack-sim-actor:first-child .actor-icon {
+  animation: agentshield-icon-bob 700ms cubic-bezier(.34,1.56,.64,1);
+}
+/* Destination actor — receipt state. Ripple ring expands outward
+   from the actor, border flashes accent, icon punches in. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-row > .attack-sim-actor:last-child {
+  border-color: var(--accent);
+  background: var(--panel);
+  transform: translateY(-2px);
+  animation: agentshield-actor-receive 720ms cubic-bezier(.34,1.56,.64,1);
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-row > .attack-sim-actor:last-child .actor-icon {
+  animation: agentshield-icon-punch 600ms cubic-bezier(.34,1.56,.64,1);
+}
+/* Packet — glowing dot with a radial-gradient halo and a soft
+   motion trail rendered via the ::after pseudo-element. */
 .attack-sim-packet {
   position: absolute; top: 50%; left: 0;
-  width: 12px; height: 12px;
+  width: 14px; height: 14px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(44, 95, 126, 0.55);
+  background: radial-gradient(circle,
+    #ffffff 0%,
+    var(--accent) 35%,
+    rgba(44,95,126,0.6) 70%,
+    rgba(44,95,126,0) 100%);
+  box-shadow:
+    0 0 12px 2px rgba(44, 95, 126, 0.55),
+    0 0 24px 6px rgba(44, 95, 126, 0.18);
   transform: translate(-50%, -50%);
   opacity: 0; pointer-events: none;
-  z-index: 2;
+  z-index: 3;
+}
+.attack-sim-packet::after {
+  content: "";
+  position: absolute;
+  top: 50%; right: 100%;
+  width: 36px; height: 3px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg,
+    rgba(44,95,126,0) 0%,
+    rgba(44,95,126,0.55) 75%,
+    rgba(44,95,126,0.85) 100%);
+  border-radius: 999px;
+  filter: blur(1px);
+  opacity: 0.85;
+  pointer-events: none;
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene .attack-sim-payload,
 .attack-sim-list.attack-sim-playing .attack-sim-scene .attack-sim-note {
   opacity: 0;
-  transition: opacity 0.45s ease;
+  transform: translateY(4px);
+  transition: opacity 480ms cubic-bezier(.4,0,.2,1),
+              transform 480ms cubic-bezier(.4,0,.2,1);
 }
-.attack-sim-list.attack-sim-playing .attack-sim-scene.received .attack-sim-payload,
-.attack-sim-list.attack-sim-playing .attack-sim-scene.received .attack-sim-note {
+/* Reveal payload when the packet starts flying — the viewer
+   reads it DURING the 1.5s flight, not after. Stays visible
+   through `received`. The note text is moved up into the arrow
+   label slot by JS during play (see the `.attack-sim-note-on-
+   arrow` rules below), so the bottom note row is hidden while
+   playing to avoid duplication. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying .attack-sim-payload,
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received .attack-sim-payload {
   opacity: 1;
+  transform: translateY(0);
 }
-.attack-sim-list.attack-sim-playing .attack-sim-scene.source-pulsing
-  .attack-sim-row > .attack-sim-actor:first-child {
-  animation: agentshield-actor-pulse 0.55s ease;
+.attack-sim-list.attack-sim-playing .attack-sim-scene .attack-sim-note {
+  /* Bottom note row is suppressed while the simulation is
+     playing — the note text appears in the arrow label slot
+     instead, where the viewer's eye already is. */
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  overflow: hidden;
+  transition: opacity 320ms ease, max-height 320ms ease,
+              margin 320ms ease;
 }
+/* Steady amber highlight on the payload while the packet is
+   in flight (no blink — just a calm "look here" tint that holds
+   until the packet arrives). Settles into a softer state on
+   received. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
+  .attack-sim-payload,
 .attack-sim-list.attack-sim-playing .attack-sim-scene.received
-  .attack-sim-row > .attack-sim-actor:last-child {
-  animation: agentshield-actor-pulse 0.55s ease;
+  .attack-sim-payload {
+  background: #fef3c7;
+  border-left-color: #d97706;
+  border-left-width: 4px;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.30);
+  transition: background 480ms ease, border-color 480ms ease,
+              border-width 480ms ease, box-shadow 480ms ease,
+              opacity 480ms cubic-bezier(.4,0,.2,1),
+              transform 480ms cubic-bezier(.4,0,.2,1);
+}
+/* Arrow label takes over the note text during play — bigger
+   font, amber background, sits in the same "above the arrow"
+   slot the static `HOST` / `PROMPT` / `DECLARES` label used. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
+  .attack-sim-arrow-label,
+.attack-sim-list.attack-sim-playing .attack-sim-scene.received
+  .attack-sim-arrow-label {
+  background: #fef3c7;
+  color: #78350f;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.20);
+  white-space: normal;
+  max-width: 70%;
+  line-height: 1.35;
+  text-align: center;
+  top: -10px;
+}
+/* Impact scene — the descriptive note inside the impact card
+   gets a brighter red-tinted highlight so the final beat hits
+   hard. Bottom note row remains the visible slot for impact
+   scenes since impact cards have no arrow / no arrow-label to
+   borrow. */
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact
+  .attack-sim-note {
+  opacity: 1;
+  max-height: 200px;
+  margin: 8px 0 0;
+  overflow: visible;
+}
+.attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.received
+  .attack-sim-note {
+  background: #fee2e2;
+  color: #7f1d1d;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-style: normal;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35),
+              0 4px 12px -4px rgba(220, 38, 38, 0.30);
+  transition: background 480ms ease, color 480ms ease,
+              padding 480ms ease, box-shadow 480ms ease;
+}
+@keyframes agentshield-payload-blink {
+  0%, 100% { background: #f4f1e8; }
+  50% {
+    background: #fef3c7;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+  }
+}
+@keyframes agentshield-payload-border-pulse {
+  0%   { border-left-color: var(--accent); border-left-width: 3px; }
+  25%  { border-left-color: #f59e0b;       border-left-width: 5px; }
+  60%  { border-left-color: #d97706;       border-left-width: 5px; }
+  100% { border-left-color: var(--accent); border-left-width: 3px; }
+}
+@keyframes agentshield-note-blink {
+  0%, 100% {
+    background: transparent;
+    color: var(--text-muted);
+    padding-left: 0;
+  }
+  50% {
+    background: #fef3c7;
+    color: #78350f;
+    padding-left: 6px;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35);
+    border-radius: 4px;
+  }
+}
+/* Stronger impact-step note blink — three brighter flashes with
+   a red-orange tint to give the final beat real weight. Larger
+   ring, bolder colour, slight scale-up so it visibly punches
+   above the regular two-blink. */
+@keyframes agentshield-impact-note-blink {
+  0%, 100% {
+    background: transparent;
+    color: var(--text);
+    transform: scale(1);
+    padding-left: 0;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    border-radius: 0;
+  }
+  50% {
+    background: #fee2e2;
+    color: #7f1d1d;
+    transform: scale(1.025);
+    padding-left: 10px;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.45),
+                0 4px 14px -4px rgba(220, 38, 38, 0.40);
+    border-radius: 6px;
+    font-weight: 600;
+  }
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene.packet-flying
   .attack-sim-packet {
-  animation: agentshield-packet-fly 0.75s ease-out forwards;
+  animation: agentshield-packet-fly 1500ms cubic-bezier(.4,0,.2,1) forwards;
 }
+/* Impact-step finale — full-card flash + icon punch-in + accent
+   ring that lingers. */
 .attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.impact-active {
-  animation: agentshield-impact-flash 0.9s ease;
+  animation: agentshield-impact-flash 1100ms cubic-bezier(.4,0,.2,1);
 }
 .attack-sim-list.attack-sim-playing .attack-sim-scene.attack-sim-impact.impact-active
   .attack-sim-actor .actor-icon {
-  animation: agentshield-impact-icon 0.8s ease;
+  animation: agentshield-impact-icon 900ms cubic-bezier(.34,1.56,.64,1);
 }
-@keyframes agentshield-actor-pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(44,95,126,0); }
-  50% { transform: scale(1.07); box-shadow: 0 0 0 5px rgba(44,95,126,0.2); }
+@keyframes agentshield-actor-emit {
+  0%   { transform: translateY(0)   scale(1);    box-shadow: 0 0 0 0 rgba(44,95,126,0); }
+  35%  { transform: translateY(-5px) scale(1.06); box-shadow: 0 0 0 8px rgba(44,95,126,0.18); }
+  100% { transform: translateY(-3px) scale(1);    box-shadow: 0 0 0 4px rgba(44,95,126,0.12), 0 6px 16px -6px rgba(44,95,126,0.32); }
+}
+@keyframes agentshield-actor-receive {
+  0%   { transform: translateY(0)   scale(1);    box-shadow: 0 0 0 0 rgba(44,95,126,0); }
+  40%  { transform: translateY(-4px) scale(1.08); box-shadow: 0 0 0 10px rgba(44,95,126,0.20); }
+  100% { transform: translateY(-2px) scale(1);    box-shadow: 0 0 0 0 rgba(44,95,126,0); }
+}
+@keyframes agentshield-icon-bob {
+  0%   { transform: translateY(0)   scale(1); }
+  45%  { transform: translateY(-3px) scale(1.10); }
+  100% { transform: translateY(0)   scale(1); }
+}
+@keyframes agentshield-icon-punch {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.25) rotate(-4deg); }
+  70%  { transform: scale(0.96) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); }
 }
 @keyframes agentshield-packet-fly {
-  0% { left: 0%; opacity: 0; }
-  10% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { left: 100%; opacity: 0.5; }
+  0%   { left: 0%;   opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  10%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  50%  { transform: translate(-50%, -50%) scale(1.05); }
+  85%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { left: 100%; opacity: 0;  transform: translate(-50%, -50%) scale(0.7); }
 }
 @keyframes agentshield-impact-flash {
-  0% { box-shadow: 0 0 0 0 rgba(179,38,30,0); }
-  40% { box-shadow: 0 0 0 10px rgba(179,38,30,0.45); }
-  100% { box-shadow: 0 0 0 2px rgba(179,38,30,0.35); }
+  0%   { box-shadow: 0 0 0 0 rgba(179,38,30,0),    0 8px 28px -8px rgba(179,38,30,0); }
+  35%  { box-shadow: 0 0 0 14px rgba(179,38,30,0.50), 0 12px 36px -8px rgba(179,38,30,0.55); }
+  100% { box-shadow: 0 0 0 2px  rgba(179,38,30,0.42), 0 8px 28px -8px rgba(179,38,30,0.36); }
 }
 @keyframes agentshield-impact-icon {
-  0% { transform: scale(0.6); opacity: 0.3; }
-  60% { transform: scale(1.3); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(0.5) rotate(-12deg); opacity: 0.2; }
+  55%  { transform: scale(1.45) rotate(8deg);   opacity: 1;   }
+  78%  { transform: scale(0.92) rotate(-3deg);  opacity: 1;   }
+  100% { transform: scale(1)    rotate(0);      opacity: 1;   }
 }
 /* v4: mocked red-team probe — looks like watching a live attack run. */
 .attack-probe-btn {
@@ -1863,7 +3703,54 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
 .probe-level-warn { color: #e8b04b; }
 .probe-level-error { color: #e88475; }
 .probe-level-verdict { color: #ffffff; }
+/* `blocked` lines: bright green with a brief blink so the eye
+   catches the defender's win as the trace streams past. */
+.probe-level-blocked {
+  color: #4ade80;
+  font-weight: 700;
+  animation: agentshield-probe-blink 0.55s ease-in-out 0s 3 alternate;
+}
+/* Whole-line tinting for the lines where the outcome lands —
+   `blocked` rows get a faint green halo, `success` / `verdict`
+   rows that announce ATTACK LANDED get a faint red halo. Uses
+   data-level= for max browser support (no :has()). */
+.probe-line[data-level="blocked"] {
+  background: rgba(74, 222, 128, 0.08);
+  border-left: 3px solid #22c55e;
+  padding-left: 6px;
+}
+.probe-line[data-level="success"],
+.probe-line[data-level="verdict"] {
+  background: rgba(248, 113, 113, 0.10);
+  border-left: 3px solid #ef4444;
+  padding-left: 6px;
+}
+.probe-line[data-level="success"] .probe-msg,
+.probe-line[data-level="verdict"] .probe-msg {
+  color: #fca5a5;
+  font-weight: 600;
+  animation: agentshield-probe-blink 0.55s ease-in-out 0s 3 alternate;
+}
+/* Three-flash blink: fade between full opacity and ~55% so the
+   reader's eye registers the verdict line as the trace streams
+   past. Settles to full opacity afterwards. */
+@keyframes agentshield-probe-blink {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.55; }
+  100% { opacity: 1; }
+}
 .probe-msg { color: #d4d2c8; word-break: break-word; }
+/* Fallback-mutation note in the Play-simulation strip — muted,
+   italic, and visually quiet so the primary planned move stays
+   the hero of each scene. */
+.rt-fallback-note {
+  font-style: italic;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px dashed #fbbf24;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
 .probe-level-verdict + .probe-msg { font-weight: 700; }
 
 .probe-verdict {
@@ -2162,8 +4049,12 @@ footer {
    in favour of this — `aria-label` carries the same text for screen
    readers, so accessibility is preserved. */
 [data-tip] { position: relative; }
-[data-tip]:hover::after,
-[data-tip]:focus-visible::after {
+/* .emu-actor pills opt OUT of this CSS-only tooltip — they use the
+   JS-driven floating tooltip (#emu-floating-tooltip) so the bubble
+   can escape parent overflow and viewport edges. Without the
+   :not() guard both tooltips fire at once. */
+[data-tip]:not(.emu-actor):hover::after,
+[data-tip]:not(.emu-actor):focus-visible::after {
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + 8px);
@@ -2182,8 +4073,8 @@ footer {
   pointer-events: none;
 }
 /* Small downward arrow under the tooltip pointing at the target. */
-[data-tip]:hover::before,
-[data-tip]:focus-visible::before {
+[data-tip]:not(.emu-actor):hover::before,
+[data-tip]:not(.emu-actor):focus-visible::before {
   content: "";
   position: absolute;
   bottom: calc(100% + 2px);
@@ -2425,6 +4316,177 @@ footer {
   width: 6px; height: 6px;
 }
 
+/* Emulator coverage block — bottom of the Input & Output tab.
+   Lists every catalogued attack class with its verdict so a
+   reviewer can answer "what was tested?" without opening any
+   finding card. Blocked + inconclusive entries live ONLY here
+   (filtered out of D/D/R); lands + partial are duplicated here
+   as a coverage summary. */
+.emu-coverage-card { margin-top: 18px; }
+/* Collapsed-by-default <details> wrapper. The summary shows the
+   headline counts so reviewers see scope without expanding. */
+.emu-coverage-card.emu-coverage-collapse > .emu-coverage-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 14px;
+  flex-wrap: wrap;
+  border-radius: 6px;
+  transition: background 160ms ease;
+}
+.emu-coverage-card.emu-coverage-collapse > .emu-coverage-summary::-webkit-details-marker {
+  display: none;
+}
+.emu-coverage-card.emu-coverage-collapse > .emu-coverage-summary:hover {
+  background: #f1f5f9;
+}
+.emu-coverage-card.emu-coverage-collapse > .emu-coverage-summary::before {
+  content: "▸";
+  display: inline-block;
+  color: #64748b;
+  font-size: 12px;
+  margin-right: 4px;
+  transition: transform 160ms ease;
+}
+.emu-coverage-card.emu-coverage-collapse[open] > .emu-coverage-summary::before {
+  transform: rotate(90deg);
+}
+.emu-coverage-summary-title {
+  font-size: 15px; font-weight: 600; color: var(--text);
+}
+.emu-coverage-summary-meta {
+  font-size: 11.5px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.emu-coverage-summary-meta strong { color: var(--text); font-weight: 700; }
+.emu-coverage-intro {
+  font-size: 12px; color: var(--text-muted);
+  line-height: 1.5; margin: 0 0 12px;
+  padding: 0 14px;
+}
+.emu-coverage-intro em { font-style: normal; font-weight: 600; }
+.emu-coverage-totals {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 14px;
+  margin-bottom: 12px;
+}
+.emu-coverage-total {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 4px 10px;
+  border-radius: 12px; border: 1px solid #e2e8f0;
+  background: #f8fafc; color: #475569;
+}
+.emu-coverage-total strong {
+  font-variant-numeric: tabular-nums; font-weight: 700; color: #0f172a;
+}
+.emu-coverage-total-lands { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+.emu-coverage-total-lands strong { color: #991b1b; }
+.emu-coverage-total-partial { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
+.emu-coverage-total-partial strong { color: #9a3412; }
+.emu-coverage-total-blocked { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+.emu-coverage-total-blocked strong { color: #065f46; }
+.emu-coverage-total-inconclusive { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.emu-coverage-total-not_evaluated { background: #fafafa; border-color: #e5e7eb; color: #6b7280; }
+.emu-coverage-list {
+  list-style: none; padding: 0 14px 14px; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+/* Per-row drilldown — collapsed <details> wrapper around the
+   full role-play (scenes + terminal + final banner). When open,
+   the Detect-tab .emu-play-btn / emu-trace styling kicks in. */
+.emu-coverage-rowtrace {
+  margin-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 8px;
+}
+.emu-coverage-rowtrace > .emu-coverage-rowtrace-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  color: #1e40af;
+  font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 140ms ease;
+}
+.emu-coverage-rowtrace > .emu-coverage-rowtrace-summary::-webkit-details-marker {
+  display: none;
+}
+.emu-coverage-rowtrace > .emu-coverage-rowtrace-summary:hover {
+  background: #eff6ff;
+}
+.emu-coverage-rowtrace-chevron {
+  display: inline-block;
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+.emu-coverage-rowtrace[open] > .emu-coverage-rowtrace-summary .emu-coverage-rowtrace-chevron {
+  transform: rotate(90deg);
+}
+.emu-coverage-rowtrace[open] > .emu-coverage-rowtrace-summary {
+  margin-bottom: 8px;
+}
+.emu-coverage-row {
+  border: 1px solid var(--border);
+  border-left: 3px solid #94a3b8;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  background: var(--panel);
+  font-size: 12px; line-height: 1.5;
+}
+.emu-coverage-row-lands       { border-left-color: #ef4444; background: #fef2f2; }
+.emu-coverage-row-partial     { border-left-color: #f97316; background: #fff7ed; }
+.emu-coverage-row-blocked     { border-left-color: #10b981; background: #f0fdf4; }
+.emu-coverage-row-inconclusive { border-left-color: #94a3b8; background: #f8fafc; }
+.emu-coverage-row-not_evaluated { border-left-color: #d1d5db; background: #fafafa; }
+.emu-coverage-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.emu-coverage-label {
+  font-weight: 600; color: #0f172a; font-size: 12.5px;
+}
+.emu-coverage-verdict {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px; border-radius: 10px;
+  white-space: nowrap;
+}
+.emu-coverage-verdict-lands       { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.emu-coverage-verdict-partial     { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+.emu-coverage-verdict-blocked     { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.emu-coverage-verdict-inconclusive { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+.emu-coverage-verdict-not_evaluated { background: #fafafa; color: #6b7280; border: 1px solid #e5e7eb; }
+.emu-coverage-reason {
+  margin-top: 5px;
+  color: #334155; font-size: 11.5px; line-height: 1.5;
+}
+.emu-coverage-meta {
+  margin-top: 5px;
+  font-size: 10.5px; color: #64748b;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+}
+.emu-coverage-meta-label {
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #475569; font-size: 9.5px;
+}
+.emu-coverage-step {
+  display: inline-block;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  padding: 1px 6px; margin: 1px 2px;
+  background: #eef2ff; color: #3730a3;
+  border-radius: 4px; border: 1px solid #c7d2fe;
+}
+.emu-coverage-cite {
+  display: inline-block;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  padding: 1px 6px; margin: 1px 2px;
+  background: #f1f5f9; color: #1e293b;
+  border-radius: 4px; border: 1px solid #cbd5e1;
+}
+
 /* v4: pipeline view — 3 columns (Input → Engines → Output) with arrows. */
 .io-pipeline {
   display: grid;
@@ -2566,6 +4628,172 @@ footer {
   .io-pipeline { grid-template-columns: 1fr; gap: 10px; }
   .io-pipeline-arrow { transform: rotate(90deg); padding: 4px 0; }
 }
+
+/* AgentShield ↔ Security Framework mapping table on the Reference
+   tab. Compact data table with chip cells for each framework
+   axis. Source / category pills mirror the colour palette used
+   elsewhere so the row reads consistently with the rest of the
+   report. */
+.fw-map-group {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.fw-map-group:last-child { margin-bottom: 0; }
+.fw-map-group > .fw-map-group-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+  border-radius: 8px;
+  transition: background 140ms ease;
+}
+.fw-map-group > .fw-map-group-summary::-webkit-details-marker { display: none; }
+.fw-map-group > .fw-map-group-summary:hover { background: #f8fafc; }
+.fw-map-group-chevron {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 11px;
+  transition: transform 160ms ease;
+}
+.fw-map-group[open] > .fw-map-group-summary .fw-map-group-chevron {
+  transform: rotate(90deg);
+}
+.fw-map-group-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.fw-map-group-count {
+  font-size: 11.5px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fw-map-group-count strong { color: var(--text); font-weight: 700; }
+/* "runs via" pill on group headers — surfaces the CLI command
+   that actually exercises each group of controls so a reviewer
+   can see at a glance which tier is part of `agentshield scan`
+   vs the separate `agentshield probe` step. */
+.fw-map-group-cmd {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: help;
+}
+.fw-map-group-cmd-label {
+  font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.fw-map-group-cmd code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: #1e293b;
+  background: transparent;
+  padding: 0;
+}
+/* "Not yet live" status pill on group headers that document a
+   capability AgentShield can run but hasn't exercised on this
+   scan (e.g. runtime probe with no live target configured). */
+.fw-map-group-status {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 8px;
+  cursor: help;
+}
+.fw-map-group-status-pending {
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fde68a;
+}
+.fw-map-group-note {
+  font-size: 11.5px; line-height: 1.55;
+  color: #475569;
+  padding: 8px 14px 0;
+  background: #fffbeb;
+  border-top: 1px solid #fde68a;
+}
+.fw-map-group-note strong { color: #78350f; font-weight: 700; }
+.fw-map-group-note code {
+  font-size: 11px;
+  background: #fef3c7;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #78350f;
+}
+.fw-map-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+}
+.fw-map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.fw-map-table thead th {
+  text-align: left;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.fw-map-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+.fw-map-table tbody tr:last-child td { border-bottom: none; }
+.fw-map-table tbody tr:hover { background: #fafafa; }
+.fw-map-id code {
+  font-size: 10.5px;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #1e293b;
+  white-space: nowrap;
+}
+.fw-map-title {
+  color: var(--text);
+  max-width: 280px;
+}
+.fw-map-empty { color: #cbd5e1; }
+.fw-map-src-pill, .fw-map-cat-pill {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 6px;
+  border: 1px solid transparent;
+}
+.fw-map-src-semgrep   { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
+.fw-map-src-copilot   { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.fw-map-src-probe     { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.fw-map-src-markdown  { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.fw-map-cat-detect    { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+.fw-map-cat-defend    { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
+.fw-map-cat-respond   { background: #eff6ff; color: #1e3a8a; border-color: #bfdbfe; }
+.fw-map-chip {
+  display: inline-block;
+  font-family: ui-monospace, monospace;
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px;
+  margin: 1px 3px 1px 0;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: help;
+}
+.fw-map-chip-owasp_llm     { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.fw-map-chip-owasp_agentic { background: #f3e8ff; color: #6b21a8; border-color: #ddd6fe; }
+.fw-map-chip-mitre_atlas   { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+.fw-map-chip-cwe           { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+.fw-map-chip-ast           { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
@@ -2867,7 +5095,7 @@ footer {
   display: block;
 }
 
-/* ----- Automated red-team campaigns (kill-chain section) ----- */
+/* ----- Multi-turn red-team probes (kill-chain section) ----- */
 .rt-campaign {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2977,6 +5205,808 @@ footer {
   padding: 2px 8px; border-radius: 10px;
   background: #fef3c7; color: #92400e; border: 1px solid #fbbf24;
 }
+/* ATT&CK / ATLAS kill-chain tactic chips */
+.rt-campaign-flow {
+  margin: 10px 0; display: flex; gap: 8px; align-items: center;
+  flex-wrap: wrap;
+}
+.rt-flow-chips {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  align-items: center;
+}
+.rt-flow-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600;
+  padding: 4px 9px; border-radius: 12px;
+  border: 1px solid;
+}
+.rt-flow-icon { font-size: 11px; }
+.rt-flow-label { letter-spacing: 0.02em; }
+.rt-flow-count {
+  font-family: ui-monospace, monospace; font-size: 9px;
+  opacity: 0.75; font-weight: 700;
+}
+.rt-flow-arrow {
+  color: #94a3b8; font-size: 11px; padding: 0 2px;
+}
+.rt-turn-tactic {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: 10px;
+  border: 1px solid;
+}
+/* Help cursor signals that hovering the chip reveals the MITRE
+   ATLAS technique's full name via the `title=` tooltip. */
+.rt-turn-tactic[title] { cursor: help; }
+
+/* ---- Behaviour-emulator pipeline trace ---- */
+/* Renders inside an emulator finding card. Shows the agent's
+   8-step runtime pipeline as a vertical flow; each step that the
+   active attack class traverses gets a per-step card with the
+   predicted behaviour + code citations + outcome chip. */
+/* Honesty banner — methodology disclaimer at the top of the
+   panel. Blue palette keeps it visually distinct from the
+   neutral findings body. */
+.emu-honesty-banner {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  font-size: 11.5px; line-height: 1.55;
+  color: #1e3a8a;
+}
+.emu-honesty-banner strong { color: #1d4ed8; font-weight: 700; }
+
+/* Verdict row — pill + confidence on same line, sits above a
+   subtle divider that separates the headline from the reasoning
+   block below. */
+.emu-verdict-row {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+.emu-verdict {
+  display: inline-flex; align-items: center;
+  font-size: 10.5px; font-weight: 700;
+  padding: 4px 11px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.emu-verdict-lands       { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.emu-verdict-partial     { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+.emu-verdict-blocked     { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.emu-verdict-inconclusive { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
+.emu-confidence {
+  font-size: 11.5px; color: #64748b; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Generic catalogue payload — softer dark code block with a clear
+   sans-serif label and monospace content. */
+.emu-payload {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+}
+.emu-payload-label {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, sans-serif;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #94a3b8;
+  margin-bottom: 6px;
+}
+/* Pipeline trace — vertical flow of per-step cards */
+.emu-trace {
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.emu-trace-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #475569;
+  margin-bottom: 4px;
+}
+.emu-step {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid #94a3b8;
+  border-radius: 0 6px 6px 0;
+  padding: 10px 12px;
+  font-size: 12px; line-height: 1.55;
+}
+.emu-step-advances  { border-left-color: #f87171; background: #fef2f2; }
+.emu-step-blocked   { border-left-color: #22c55e; background: #f0fdf4; }
+.emu-step-modified  { border-left-color: #fb923c; background: #fff7ed; }
+.emu-step-absent    { border-left-color: #cbd5e1; background: #f8fafc; opacity: 0.85; }
+.emu-step-head {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; margin-bottom: 6px;
+}
+.emu-step-label {
+  font-weight: 700; color: #0f172a; font-size: 12px;
+}
+.emu-step-outcome {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px; border-radius: 8px;
+}
+.emu-step-outcome-advances  { background: #fee2e2; color: #b91c1c; }
+.emu-step-outcome-blocked   { background: #d1fae5; color: #065f46; }
+.emu-step-outcome-modified  { background: #fed7aa; color: #9a3412; }
+.emu-step-outcome-absent_step { background: #e2e8f0; color: #475569; }
+.emu-step-section {
+  margin: 6px 0;
+}
+.emu-step-section-label {
+  display: block;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #64748b;
+  margin-bottom: 2px;
+}
+.emu-step-text { color: #334155; }
+.emu-code-basis-chip {
+  display: inline-block;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  padding: 1px 6px; margin: 1px 3px 1px 0;
+  background: #f1f5f9; color: #1e293b;
+  border-radius: 4px; border: 1px solid #cbd5e1;
+}
+.emu-defence-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+  margin-left: 4px;
+}
+.emu-defence-flag-yes { background: #d1fae5; color: #065f46; }
+.emu-defence-flag-no  { background: #fee2e2; color: #991b1b; }
+
+/* Behaviour-emulator header — Play button on the left, sits above
+   the scene strip with breathing room. */
+.emu-trace-header {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: 12px;
+  margin: 4px 0 10px;
+}
+.emu-trace-header .emu-trace-label { margin-bottom: 0; }
+.emu-play-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #1e40af; color: #ffffff;
+  border: 1px solid #1e40af;
+  padding: 6px 14px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.01em;
+  font-family: inherit; cursor: pointer;
+  box-shadow: 0 1px 2px rgba(30, 64, 175, 0.15);
+  transition: background 140ms ease, box-shadow 140ms ease,
+              transform 80ms ease;
+}
+.emu-play-btn:hover {
+  background: #1e3a8a; border-color: #1e3a8a;
+  box-shadow: 0 2px 6px rgba(30, 58, 138, 0.25);
+}
+.emu-play-btn:active { transform: translateY(1px); }
+.emu-play-btn:disabled {
+  background: #e2e8f0; color: #64748b; border-color: #cbd5e1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Play-state choreography. When .emu-trace.emu-trace-playing is
+   active: all emu-step children start hidden, then each one fades
+   in as the JS adds `.emu-step-visible` to it. The current step
+   gets a brief pulse via `.emu-step-current`. The final banner
+   appears at the very end via `.emu-trace-final-visible`. */
+.emu-trace-steps { display: flex; flex-direction: column; gap: 8px; }
+.emu-trace-final {
+  margin-top: 10px; padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  display: none;     /* shown only when revealed */
+}
+.emu-trace-final-lands       { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.emu-trace-final-partial     { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+.emu-trace-final-blocked     { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.emu-trace-final-inconclusive { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+.emu-trace-final.emu-trace-final-visible {
+  display: block;
+  animation: emu-final-pop 350ms ease-out;
+}
+@keyframes emu-final-pop {
+  0%   { opacity: 0; transform: scale(0.95); }
+  60%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1.00); }
+}
+
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-step {
+  opacity: 0.12;
+  filter: grayscale(60%);
+  transition: opacity 250ms ease-out, filter 250ms ease-out;
+}
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-step.emu-step-visible {
+  opacity: 1;
+  filter: none;
+}
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-step.emu-step-current {
+  animation: emu-step-pulse 600ms ease-in-out;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+@keyframes emu-step-pulse {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+/* ===== Compact role-play scene — single-row actors + arrow ===== */
+.emu-trace-coverage {
+  font-size: 11px; color: #475569;
+  margin: 0 0 6px;
+  padding: 5px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.emu-trace-coverage strong { color: #1e293b; font-weight: 700; }
+.emu-trace-coverage em {
+  font-style: normal; font-weight: 600;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  color: #1e40af;
+}
+
+.emu-scene {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 10px;
+  font-size: 11.5px; line-height: 1.5;
+  margin-bottom: 0;
+}
+.emu-scene-advances  { border-left-color: #ef4444; }
+.emu-scene-blocked   { border-left-color: #22c55e; }
+.emu-scene-modified  { border-left-color: #fb923c; }
+.emu-scene-absent_step { border-left-color: #cbd5e1; opacity: 0.85; }
+
+.emu-scene-header {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.emu-scene-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  font-size: 10px; font-weight: 700; color: #ffffff;
+  background: #475569; border-radius: 50%;
+  flex-shrink: 0;
+}
+.emu-scene-step-label {
+  font-weight: 700; color: #0f172a; font-size: 12px;
+  flex: 1 1 auto;
+}
+.emu-scene-outcome {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px; border-radius: 8px;
+}
+.emu-scene-outcome-advances  { background: #fee2e2; color: #b91c1c; }
+.emu-scene-outcome-blocked   { background: #d1fae5; color: #065f46; }
+.emu-scene-outcome-modified  { background: #fed7aa; color: #9a3412; }
+.emu-scene-outcome-absent_step { background: #e2e8f0; color: #475569; }
+
+/* Compact horizontal actor row — icon+label inline, arrow flexes */
+.emu-scene-actors {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 0;
+}
+.emu-actor {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  transition: box-shadow 240ms cubic-bezier(.4,0,.2,1),
+              background 240ms cubic-bezier(.4,0,.2,1);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Shared floating tooltip — single fixed-position bubble in the
+   <body>, repositioned by JS on each hover. position: fixed lets
+   us ignore parent overflow + clipping; JS clamps the X/Y so the
+   bubble never leaves the viewport. Far more robust than CSS-only
+   anchoring. */
+.emu-actor[data-tip] { cursor: help; }
+#emu-floating-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 8px 10px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 11px; font-weight: 400; line-height: 1.5;
+  border-radius: 6px;
+  max-width: 280px;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.30);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
+}
+#emu-floating-tooltip.emu-tip-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.emu-actor-icon {
+  font-size: 14px; line-height: 1;
+}
+.emu-actor-label {
+  font-size: 10.5px; font-weight: 600;
+  color: #334155; line-height: 1;
+}
+/* Flexible arrow + flying packet */
+.emu-arrow {
+  position: relative; flex: 1 1 auto;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 2px; min-width: 80px;
+}
+.emu-arrow-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.04em;
+  color: #64748b;
+  font-family: ui-monospace, monospace;
+}
+.emu-arrow-line {
+  position: relative;
+  width: 100%; height: 1.5px;
+  background: #cbd5e1; border-radius: 1px;
+}
+.emu-arrow-line::after {
+  content: ""; position: absolute; right: -1px; top: -3px;
+  border-left: 6px solid #cbd5e1;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+.emu-packet {
+  position: absolute;
+  left: 4px; top: 50%; margin-top: -4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.55);
+  opacity: 0;
+  /* cubic-bezier for a smoother accelerate-decelerate */
+  transition: left 850ms cubic-bezier(.45,.05,.3,1),
+              opacity 220ms ease-out;
+}
+.emu-scene-blocked  .emu-packet { background: #16a34a; box-shadow: 0 0 6px rgba(22,163,74,0.55); }
+.emu-scene-modified .emu-packet { background: #f97316; box-shadow: 0 0 6px rgba(249,115,22,0.55); }
+
+/* Collapsible payload — closed by default, single-line preview */
+.emu-scene-payload-details {
+  margin: 4px 0;
+  font-size: 11px;
+}
+.emu-scene-payload-details > summary {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none;
+  list-style: none;
+}
+.emu-scene-payload-details > summary::-webkit-details-marker { display: none; }
+.emu-scene-payload-details > summary::before {
+  content: "▸"; color: #94a3b8; font-size: 9px;
+  transition: transform 160ms;
+}
+.emu-scene-payload-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.emu-scene-payload-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #64748b;
+}
+.emu-scene-payload-preview {
+  font-family: ui-monospace, monospace; font-size: 10.5px;
+  color: #475569; background: #f1f5f9;
+  padding: 1px 6px; border-radius: 3px;
+  flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis;
+}
+.emu-scene-payload {
+  margin: 4px 0 0 16px;
+  padding: 8px 10px;
+  background: #1e293b; color: #e2e8f0;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace; font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* Single combined behaviour + outcome reasoning line */
+.emu-scene-behavior {
+  margin: 4px 0 0;
+  font-size: 11px; color: #475569;
+  line-height: 1.5;
+}
+.emu-scene-behavior-arrow {
+  color: #94a3b8; font-weight: 700; margin-right: 2px;
+}
+
+/* Role-play animation — softer glow instead of harsh pulse,
+   cubic-bezier easing on the packet. */
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene {
+  opacity: 0.16;
+  filter: grayscale(60%);
+  transition: opacity 320ms ease-out, filter 320ms ease-out;
+}
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-visible {
+  opacity: 1;
+  filter: none;
+}
+.emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
+.emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
+  opacity: 0;
+  transition: opacity 280ms ease-out;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-payload-details,
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-behavior {
+  opacity: 1;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-source-pulsing
+  .emu-actor-src {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.20),
+              0 0 12px rgba(220, 38, 38, 0.35);
+  background: #fef2f2;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received
+  .emu-actor-dst {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.20),
+              0 0 12px rgba(220, 38, 38, 0.35);
+  background: #fef2f2;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-received
+  .emu-actor-dst {
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.20),
+              0 0 12px rgba(22, 163, 74, 0.35);
+  background: #f0fdf4;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-packet {
+  left: calc(100% - 14px);
+  opacity: 1;
+}
+
+/* ===== Wow polish ===== */
+
+/* Glow trail behind the flying packet — a thin streak that fades
+   out, anchored to the packet via pseudo-element. The trail is
+   drawn on the .emu-arrow-line by switching its background to a
+   gradient that animates from left edge to right edge when the
+   packet is in flight. */
+.emu-trace.emu-trace-playing .emu-scene .emu-arrow-line {
+  background: linear-gradient(to right,
+    #cbd5e1 0%, #cbd5e1 100%);
+  transition: background 850ms cubic-bezier(.45,.05,.3,1);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line {
+  background: linear-gradient(to right,
+    rgba(220, 38, 38, 0.40) 0%,
+    rgba(220, 38, 38, 0.85) 60%,
+    #dc2626 100%);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line {
+  background: linear-gradient(to right,
+    rgba(22, 163, 74, 0.40) 0%,
+    rgba(22, 163, 74, 0.85) 60%,
+    #16a34a 100%);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line {
+  background: linear-gradient(to right,
+    rgba(249, 115, 22, 0.40) 0%,
+    rgba(249, 115, 22, 0.85) 60%,
+    #f97316 100%);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-arrow-line {
+  /* Lit line stays lit after arrival, fading slowly */
+  transition: background 600ms ease-out;
+}
+
+/* Outcome chip stamp-in — when a scene becomes received, the
+   outcome chip and defence flag pop in with an elastic-ish
+   bounce so the eye catches them. */
+.emu-trace.emu-trace-playing .emu-scene .emu-scene-outcome,
+.emu-trace.emu-trace-playing .emu-scene .emu-defence-flag {
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 200ms ease-out, transform 320ms cubic-bezier(.34,1.56,.64,1);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-outcome,
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-defence-flag {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ===== Terminal panel ===== */
+/* Hidden by default — no point staring at an empty black box.
+   Appears the moment the user clicks Play behaviour emulation (which adds
+   .emu-trace-playing) and stays visible afterwards so the
+   reader can scroll the log. Reset to hidden on Replay (JS
+   removes + re-adds the playing class). */
+.emu-terminal {
+  display: none;
+  margin-top: 12px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.55;
+}
+.emu-trace.emu-trace-playing .emu-terminal {
+  display: block;
+  animation: emu-terminal-fade-in 280ms ease-out;
+}
+@keyframes emu-terminal-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.emu-terminal-header {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 10px;
+  background: #1e293b;
+  border-bottom: 1px solid #0f172a;
+}
+.emu-terminal-light {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; flex-shrink: 0;
+}
+.emu-terminal-light-r { background: #ef4444; }
+.emu-terminal-light-y { background: #f59e0b; }
+.emu-terminal-light-g { background: #10b981; }
+.emu-terminal-title {
+  margin-left: 8px;
+  font-size: 10.5px; color: #94a3b8; font-weight: 600;
+}
+.emu-terminal-body {
+  padding: 8px 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.emu-term-line {
+  display: block;
+  white-space: pre-wrap; word-break: break-word;
+  color: #cbd5e1;
+}
+.emu-term-line + .emu-term-line { margin-top: 1px; }
+.emu-term-ts { color: #64748b; }
+.emu-term-prefix {
+  display: inline-block;
+  font-weight: 700;
+  min-width: 60px;
+  margin-right: 2px;
+}
+.emu-term-line-info    .emu-term-prefix { color: #60a5fa; }   /* blue */
+.emu-term-line-scene   .emu-term-prefix { color: #c4b5fd; }   /* lilac */
+.emu-term-line-read    .emu-term-prefix { color: #5eead4; }   /* teal */
+/* PREDICT + OUTCOME lines: whole line in amber (prefix + message)
+   to flag the load-bearing prediction/verdict beats. The outcome
+   variants keep their semantic accent (red for advances, green for
+   blocked, etc.) but use the amber-friendly tone. */
+.emu-term-line-predict .emu-term-prefix,
+.emu-term-line-predict .emu-term-msg { color: #fde68a; }       /* amber */
+.emu-term-line-outcome-advances     .emu-term-prefix,
+.emu-term-line-outcome-advances     .emu-term-msg { color: #fca5a5; }
+.emu-term-line-outcome-blocked      .emu-term-prefix,
+.emu-term-line-outcome-blocked      .emu-term-msg { color: #86efac; }
+.emu-term-line-outcome-modified     .emu-term-prefix,
+.emu-term-line-outcome-modified     .emu-term-msg { color: #fdba74; }
+.emu-term-line-outcome-absent_step  .emu-term-prefix,
+.emu-term-line-outcome-absent_step  .emu-term-msg { color: #cbd5e1; }
+.emu-term-line-verdict-lands        .emu-term-prefix,
+.emu-term-line-verdict-lands        .emu-term-msg {
+  color: #f87171; font-weight: 700;
+}
+.emu-term-line-verdict-blocked      .emu-term-prefix,
+.emu-term-line-verdict-blocked      .emu-term-msg {
+  color: #4ade80; font-weight: 700;
+}
+.emu-term-line-verdict-partial      .emu-term-prefix,
+.emu-term-line-verdict-partial      .emu-term-msg {
+  color: #fb923c; font-weight: 700;
+}
+.emu-term-line-verdict-inconclusive .emu-term-prefix {
+  color: #cbd5e1; font-weight: 700;
+}
+
+/* Streaming-state: during playback, hide all lines, reveal as
+   the matching scene's animation reaches the OUTCOME beat. The
+   terminal is nested inside .emu-trace so a descendant selector
+   is the right scope (not a sibling selector). The reveal rule
+   MUST share the playing-state scope or specificity gives the
+   hide rule the win — that's the bug that left the terminal
+   blank even after lines were class-flagged as revealed. */
+.emu-trace.emu-trace-playing .emu-terminal .emu-term-line {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.emu-trace.emu-trace-playing .emu-terminal .emu-term-line.emu-term-revealed {
+  opacity: 1;
+}
+/* Blink emphasis on PREDICT / OUTCOME / VERDICT lines when they
+   reveal — flashes the line to draw the reviewer's eye to the
+   load-bearing beats. PREDICT + OUTCOME do a double blink;
+   VERDICT does a triple blink so the final beat feels weightier
+   than the intermediate ones. The opacity reveal transition runs
+   first; the blink layers on top of the revealed state. */
+.emu-trace.emu-trace-playing .emu-terminal
+  .emu-term-line-predict.emu-term-revealed,
+.emu-trace.emu-trace-playing .emu-terminal
+  [class*="emu-term-line-outcome-"].emu-term-revealed {
+  animation: emu-term-line-blink 380ms ease-out 2;
+}
+.emu-trace.emu-trace-playing .emu-terminal
+  [class*="emu-term-line-verdict-"].emu-term-revealed {
+  animation: emu-term-line-blink 380ms ease-out 3;
+}
+@keyframes emu-term-line-blink {
+  0%   { background: transparent; }
+  50%  { background: rgba(253, 230, 138, 0.38); }
+  100% { background: transparent; }
+}
+/* Subtle blinking cursor on the most recently revealed line */
+.emu-term-line.emu-term-current::after {
+  content: "▌";
+  color: #94a3b8;
+  margin-left: 4px;
+  animation: emu-cursor-blink 900ms steps(2) infinite;
+}
+@keyframes emu-cursor-blink {
+  to { opacity: 0; }
+}
+
+/* Simulated kill-chain badges. Surfaced when Copilot generated a
+   *prediction* from reading the agent's code instead of capturing
+   a real probe — clearly distinguished from exploit proof. The
+   blue-grey palette keeps simulated cards visually distinct from
+   the red/orange of real captured campaigns. */
+.rt-simulated-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px; border-radius: 8px;
+  background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;
+}
+.rt-simulated-banner {
+  margin: 8px 0; padding: 10px 12px;
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+  border-radius: 0 6px 6px 0;
+  font-size: 12px; line-height: 1.5;
+  color: #1e3a8a;
+}
+.rt-simulated-banner-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #1d4ed8;
+  margin-right: 6px;
+}
+.rt-simulated-files {
+  margin-top: 6px;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  color: #475569;
+}
+.rt-simulated-files-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #64748b; margin-right: 6px;
+}
+.rt-sim-cite {
+  display: inline-block;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  padding: 1px 6px; margin: 1px 2px;
+  background: #f1f5f9; color: #1e293b;
+  border-radius: 4px; border: 1px solid #cbd5e1;
+}
+/* On a simulated campaign card the whole rt-campaign block gets a
+   subtle blue tint instead of the captured-run red. */
+.rt-campaign[data-sim="true"] {
+  border-color: #93c5fd;
+  background: #f8fafc;
+}
+
+/* Tool-call evidence — surfaced under each turn when the adapter
+   extracted structured tool invocations from the response (inline
+   tool_calls in the body, or trace-stream events for Bedrock-style
+   adapters). One chip per tool name; the count badge fires when the
+   same tool was invoked more than once on the turn. Destructive
+   verbs (drop_table / delete_* / purge_* / send_message) get red-
+   tinted chips so the eye catches them in the timeline. */
+.rt-turn-tools {
+  margin-top: 6px; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 4px;
+  font-size: 11px;
+}
+.rt-turn-tools-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #475569; margin-right: 4px;
+}
+.rt-tool-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px;
+  font-family: ui-monospace, monospace; font-size: 10px;
+  background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1;
+}
+.rt-tool-chip-destructive {
+  background: #fef2f2; color: #b91c1c; border-color: #fca5a5;
+}
+.rt-tool-chip-count {
+  font-size: 9px; opacity: 0.7; font-weight: 400;
+}
+
+/* Copilot LLM-judge badges + per-turn reasoning. Surfaced only when
+   `.agentshield/probe-campaigns-judged.json` is present and covers
+   the campaign/turn — un-judged rows render exactly as they did
+   before, so this is purely additive. */
+.rt-verdict-source {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 2px 6px; border-radius: 8px;
+  text-transform: uppercase;
+}
+.rt-verdict-source-copilot {
+  background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd;
+}
+.rt-verdict-source-heuristic {
+  background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;
+}
+.rt-llm-verdict {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+  text-transform: lowercase;
+}
+.rt-llm-verdict-landed       { background: #fee2e2; color: #b91c1c; }
+.rt-llm-verdict-refused      { background: #d1fae5; color: #065f46; }
+.rt-llm-verdict-partial      { background: #ffedd5; color: #c2410c; }
+.rt-llm-verdict-inconclusive { background: #f1f5f9; color: #64748b; }
+.rt-llm-confidence {
+  font-family: ui-monospace, monospace;
+  font-size: 9px; font-weight: 400;
+  color: inherit; opacity: 0.7;
+}
+/* Per-turn reasoning callout — Copilot's one-sentence explanation
+   of why the turn landed/refused, surfaced under the response so
+   reviewers see the rationale next to the evidence it cites. */
+.rt-llm-reasoning {
+  margin-top: 6px;
+  font-size: 12px; line-height: 1.5;
+  padding: 8px 10px;
+  border-left: 3px solid #c4b5fd;
+  background: #faf5ff;
+  color: #4c1d95;
+  border-radius: 0 6px 6px 0;
+}
+.rt-llm-reasoning-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #6d28d9;
+  margin-right: 6px;
+}
+/* Tactic colour tokens — calm pastels keyed to MITRE's intuition:
+   recon = blue, initial-access = yellow, persistence = purple,
+   privilege-escalation = red, defense-evasion = pink, discovery =
+   cyan, collection = indigo, exfiltration = orange-red, impact =
+   slate-black, execution = orange, credential-access = green. */
+.rt-tactic-reconnaissance       { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
+.rt-tactic-initial-access       { background: #fef9c3; color: #854d0e; border-color: #facc15; }
+.rt-tactic-execution            { background: #ffedd5; color: #9a3412; border-color: #fb923c; }
+.rt-tactic-persistence          { background: #ede9fe; color: #5b21b6; border-color: #a78bfa; }
+.rt-tactic-privilege-escalation { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.rt-tactic-defense-evasion      { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
+.rt-tactic-credential-access    { background: #dcfce7; color: #166534; border-color: #86efac; }
+.rt-tactic-discovery            { background: #cffafe; color: #155e75; border-color: #67e8f9; }
+.rt-tactic-collection           { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+.rt-tactic-exfiltration         { background: #fed7aa; color: #7c2d12; border-color: #fb923c; }
+.rt-tactic-impact               { background: #1f2937; color: #fef2f2; border-color: #111827; }
 .rt-turn-arrow {
   font-size: 9px; letter-spacing: 0.14em;
   text-transform: uppercase; color: #94a3b8;
@@ -3437,6 +6467,29 @@ _HTML_JS = """
         });
         sevSpan.innerHTML = sevHtml;
       }
+      // Severity-group collapsible blocks inside this section: update
+      // their count labels live and dim the whole group when its
+      // severity is filtered out (visible === 0). Reviewer sees
+      // "16 findings" become "0 of 16 findings" + a dim grey card
+      // when HIGH is unchecked, instead of a stale "16" claim.
+      var sevGroups = s.querySelectorAll('.sev-group[data-sev-group]');
+      sevGroups.forEach(function (g) {
+        var gSev = g.getAttribute('data-sev-group');
+        var gTotal = parseInt(g.getAttribute('data-sev-total'), 10) || 0;
+        var gVisible = (visiblePerCatSev[cat] || {})[gSev] || 0;
+        var gCountEl = g.querySelector('[data-sev-group-count]');
+        if (gCountEl) {
+          if (gVisible === gTotal) {
+            gCountEl.textContent =
+              gTotal + ' finding' + (gTotal === 1 ? '' : 's');
+          } else {
+            gCountEl.textContent =
+              gVisible + ' of ' + gTotal +
+              ' finding' + (gTotal === 1 ? '' : 's');
+          }
+        }
+        g.classList.toggle('sev-group-filtered', gVisible === 0);
+      });
     });
 
     // Update D/D/R hero cards.
@@ -3619,6 +6672,227 @@ _HTML_JS = """
     });
   });
 
+  // Bulk expand / collapse all severity-group <details> in a
+  // findings-section. Smart-state single toggle — label flips
+  // between "Expand all" / "Collapse all" based on whether every
+  // group is currently open. Also re-syncs after the user opens or
+  // closes any individual group so the label stays accurate.
+  document.querySelectorAll('[data-bulk-toggle]').forEach(function (btn) {
+    var section = btn.closest('.findings-section');
+    if (!section) return;
+    var labelEl = btn.querySelector('[data-bulk-label]');
+    function syncLabel() {
+      var groups = section.querySelectorAll('.sev-group');
+      if (!groups.length) return;
+      var allOpen = true;
+      groups.forEach(function (g) {
+        if (!g.hasAttribute('open')) allOpen = false;
+      });
+      if (allOpen) {
+        btn.classList.add('is-expanded');
+        if (labelEl) labelEl.textContent = 'Collapse all';
+      } else {
+        btn.classList.remove('is-expanded');
+        if (labelEl) labelEl.textContent = 'Expand all';
+      }
+    }
+    btn.addEventListener('click', function () {
+      var groups = section.querySelectorAll('.sev-group');
+      var open = !btn.classList.contains('is-expanded');
+      groups.forEach(function (g) {
+        if (open) g.setAttribute('open', '');
+        else g.removeAttribute('open');
+      });
+      syncLabel();
+    });
+    // Re-sync if the reviewer opens/closes a group manually.
+    section.querySelectorAll('.sev-group').forEach(function (g) {
+      g.addEventListener('toggle', syncLabel);
+    });
+    syncLabel();
+  });
+
+  // Behaviour-emulator role-play walkthrough Play button.
+  // Animates each scene as: scene fades in -> source actor
+  // pulses -> packet flies along the arrow -> destination actor
+  // pulses -> payload + outcome reveal. Mirrors the campaign
+  // Play-simulation choreography but driven from emu-scene
+  // classes so the two animations don't interfere.
+  document.querySelectorAll('.emu-play-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var trace = btn.closest('.emu-trace');
+      if (!trace) return;
+      var scenes = trace.querySelectorAll('.emu-trace-steps .emu-scene');
+      var finalBanner = trace.querySelector('.emu-trace-final');
+      // Terminal panel is nested inside .emu-trace (sits after
+      // the trace-steps block).
+      var terminal = trace.querySelector('.emu-terminal');
+      var termLines = terminal
+        ? terminal.querySelectorAll('.emu-term-line')
+        : [];
+      if (!scenes.length) return;
+      // Slowed from 1800ms → 2600ms so the gap between scene 1
+      // finishing and scene 2 starting reads as a deliberate beat,
+      // not a rush. Each scene's internal choreography still fits
+      // comfortably under this cadence (packet arrives at 1150ms,
+      // terminal stream completes around 1300ms).
+      var SCENE_CADENCE = 2600;  // ms per scene
+      trace.classList.add('emu-trace-playing');
+      btn.disabled = true;
+      btn.innerHTML = '⏵ Playing…';
+      // Scroll the role-play into view at the top of the viewport
+      // so the scenes (above) AND the terminal (below) are both
+      // visible while the lines stream. Without this, the
+      // terminal can be below the fold and the user just sees the
+      // visual scenes without realising the terminal is filling
+      // in beneath. block:'start' anchors the role-play header
+      // and lets the scenes + terminal flow downward.
+      trace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scenes.forEach(function (s) {
+        s.classList.remove('emu-scene-visible');
+        s.classList.remove('emu-scene-source-pulsing');
+        s.classList.remove('emu-scene-packet-flying');
+        s.classList.remove('emu-scene-received');
+      });
+      if (finalBanner) {
+        finalBanner.classList.remove('emu-trace-final-visible');
+      }
+      // Hide all terminal lines + position the cursor on the
+      // INFO header so the first reveal is the role-play start.
+      termLines.forEach(function (ln) {
+        ln.classList.remove('emu-term-revealed');
+        ln.classList.remove('emu-term-current');
+      });
+      // Helper — reveal terminal lines tied to a scene index,
+      // staggered one-by-one within the scene so the lines
+      // appear in sequence (typewriter feel) instead of all at
+      // once. Each line ~150ms after the previous; the cursor
+      // (▌) walks down with the active line.
+      var LINE_STAGGER = 150;
+      function revealTermLines(forScene, atTime) {
+        var matching = [];
+        termLines.forEach(function (ln) {
+          var s = parseInt(ln.getAttribute('data-scene') || '-1', 10);
+          if (s === forScene) matching.push(ln);
+        });
+        matching.forEach(function (ln, idx) {
+          setTimeout(function () {
+            termLines.forEach(function (l) {
+              l.classList.remove('emu-term-current');
+            });
+            ln.classList.add('emu-term-revealed');
+            ln.classList.add('emu-term-current');
+            if (terminal) {
+              var body = terminal.querySelector('.emu-terminal-body');
+              if (body) body.scrollTop = body.scrollHeight;
+            }
+          }, atTime + idx * LINE_STAGGER);
+        });
+      }
+      // INFO header line — fire first, before any scene.
+      revealTermLines(-1, 0);
+      scenes.forEach(function (scene, i) {
+        setTimeout(function () {
+          scene.classList.add('emu-scene-visible');
+          scene.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          // Scene choreography:
+          //   100ms — source actor glows
+          //   350ms — packet leaves source, arrow lights up
+          //  1150ms — packet arrives → dst glows, payload + outcome
+          //           stamp in, outcome chip animates
+          setTimeout(function () {
+            scene.classList.add('emu-scene-source-pulsing');
+          }, 100);
+          setTimeout(function () {
+            scene.classList.add('emu-scene-packet-flying');
+          }, 350);
+          setTimeout(function () {
+            scene.classList.add('emu-scene-received');
+          }, 1150);
+          // Terminal: stream this scene's lines staggered through
+          // the visual choreography. With ~4 lines per scene at
+          // 150ms each, starting at 700ms means the final OUTCOME
+          // line arrives at 1150ms — exactly when the packet hits
+          // the destination actor. Perfect lockstep.
+          revealTermLines(i, 700);
+          if (i === scenes.length - 1) {
+            setTimeout(function () {
+              if (finalBanner) {
+                finalBanner.classList.add('emu-trace-final-visible');
+                finalBanner.scrollIntoView({
+                  behavior: 'smooth', block: 'nearest',
+                });
+              }
+              // Reveal the VERDICT line in the terminal —
+              // data-scene equals scenes.length for the verdict.
+              revealTermLines(scenes.length, 0);
+              btn.disabled = false;
+              btn.innerHTML = '↻ Replay behaviour emulation';
+            }, 1400);
+          }
+        }, i * SCENE_CADENCE);
+      });
+    });
+  });
+
+  // Floating tooltip for behaviour-emulator actor pills. A single
+  // #emu-floating-tooltip element is appended to <body> and
+  // repositioned per-hover. position: fixed + JS clamping lets the
+  // bubble escape any clipped/scrolling parent and stay inside the
+  // viewport — the CSS-only ::after approach was getting cut off on
+  // edge-positioned actors (left edge of the report).
+  (function () {
+    var tip = document.createElement('div');
+    tip.id = 'emu-floating-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tip);
+    var current = null;
+    function position(actor) {
+      var text = actor.getAttribute('data-tip') || '';
+      if (!text) return;
+      tip.textContent = text;
+      // Make visible (off-screen) so we can measure before clamping.
+      tip.style.left = '-9999px';
+      tip.style.top = '-9999px';
+      tip.classList.add('emu-tip-visible');
+      var rect = actor.getBoundingClientRect();
+      var tipRect = tip.getBoundingClientRect();
+      var margin = 8;
+      // Center over actor, then clamp X into [margin, vw-tipW-margin].
+      var x = rect.left + (rect.width - tipRect.width) / 2;
+      x = Math.max(margin, Math.min(window.innerWidth - tipRect.width - margin, x));
+      // Default: above the actor. Flip below if there isn't room.
+      var y = rect.top - tipRect.height - margin;
+      if (y < margin) {
+        y = rect.bottom + margin;
+      }
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    }
+    function show(actor) {
+      current = actor;
+      position(actor);
+    }
+    function hide(actor) {
+      if (current === actor) current = null;
+      tip.classList.remove('emu-tip-visible');
+    }
+    document.querySelectorAll('.emu-actor[data-tip]').forEach(function (actor) {
+      actor.addEventListener('mouseenter', function () { show(actor); });
+      actor.addEventListener('mouseleave', function () { hide(actor); });
+      actor.addEventListener('focus', function () { show(actor); });
+      actor.addEventListener('blur', function () { hide(actor); });
+    });
+    // Re-clamp on scroll/resize while a tooltip is open so it
+    // doesn't drift off the actor.
+    window.addEventListener('scroll', function () {
+      if (current) position(current);
+    }, true);
+    window.addEventListener('resize', function () {
+      if (current) position(current);
+    });
+  })();
+
   document.querySelectorAll('.attack-play-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var section = btn.closest('.attack-steps-section');
@@ -3630,11 +6904,18 @@ _HTML_JS = """
 
       if (simList) {
         var scenes = simList.querySelectorAll('.attack-sim-scene');
-        var SCENE_CADENCE = 1900;  // ms per scene — long enough to let
-                                   // the choreography finish before the
-                                   // next scene begins.
+        // Slowed from 1900ms → 3000ms per scene so the viewer has
+        // time to read the payload + note while the packet is
+        // mid-flight. The internal beats below are scaled to
+        // match: packet now takes ~1500ms to cross the arrow
+        // (vs the previous 750ms) so the highlight animation has
+        // time to land before the next scene starts.
+        var SCENE_CADENCE = 3000;  // ms per scene
         simList.classList.add('attack-sim-playing');
-        // Reset every scene to its pre-play state.
+        // Reset every scene to its pre-play state. Also stash
+        // the original arrow-label text (e.g. "HOST" / "PROMPT")
+        // on first play so we can restore it; on subsequent
+        // plays we just re-read the stashed value.
         scenes.forEach(function (s) {
           s.classList.remove('attack-sim-visible');
           s.classList.remove('attack-sim-current');
@@ -3642,6 +6923,17 @@ _HTML_JS = """
           s.classList.remove('packet-flying');
           s.classList.remove('received');
           s.classList.remove('impact-active');
+          var lbl = s.querySelector('.attack-sim-arrow-label');
+          if (lbl && !lbl.hasAttribute('data-orig-label')) {
+            lbl.setAttribute('data-orig-label', lbl.textContent || '');
+          }
+          if (lbl) {
+            // Restore the original short label before the
+            // animation kicks in; the swap to the note text
+            // happens when packet-flying fires (see below).
+            var orig = lbl.getAttribute('data-orig-label') || '';
+            lbl.textContent = orig;
+          }
         });
         scenes.forEach(function (scene, i) {
           setTimeout(function () {
@@ -3653,23 +6945,40 @@ _HTML_JS = """
             scene.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             var isImpact = scene.classList.contains('attack-sim-impact');
             if (isImpact) {
-              // Impact: full-card flash + icon punch-in + note reveal.
-              setTimeout(function () { scene.classList.add('impact-active'); }, 50);
-              setTimeout(function () { scene.classList.add('received'); }, 250);
+              // Impact: full-card flash + icon punch-in + note
+              // reveal. Slightly delayed so the prior scene's
+              // received-state has time to settle.
+              setTimeout(function () { scene.classList.add('impact-active'); }, 100);
+              setTimeout(function () { scene.classList.add('received'); }, 400);
             } else {
-              // Normal scene choreography:
-              //   100ms — source actor pulses
-              //   350ms — packet leaves source
-              //  1100ms — packet has arrived → target pulses, payload reveals
-              setTimeout(function () { scene.classList.add('source-pulsing'); }, 100);
-              setTimeout(function () { scene.classList.add('packet-flying'); }, 350);
-              setTimeout(function () { scene.classList.add('received'); }, 1100);
+              // Normal scene choreography (slowed for readability):
+              //   200ms — source actor pulses
+              //   650ms — packet leaves source; swap arrow label
+              //           text with the descriptive note so the
+              //           viewer reads it AT the packet's path
+              //           while the packet is mid-air (~1.5s
+              //           window). The bottom note row hides via
+              //           CSS so the same text doesn't appear
+              //           twice.
+              //  2200ms — packet has arrived → target pulses,
+              //           highlight settles
+              setTimeout(function () { scene.classList.add('source-pulsing'); }, 200);
+              setTimeout(function () {
+                var lbl = scene.querySelector('.attack-sim-arrow-label');
+                var noteEl = scene.querySelector('.attack-sim-note');
+                if (lbl && noteEl) {
+                  var noteText = (noteEl.textContent || '').trim();
+                  if (noteText) lbl.textContent = noteText;
+                }
+                scene.classList.add('packet-flying');
+              }, 650);
+              setTimeout(function () { scene.classList.add('received'); }, 2200);
             }
             if (i === scenes.length - 1) {
               setTimeout(function () {
                 btn.disabled = false;
                 btn.textContent = '↻ Replay simulation';
-              }, 1400);
+              }, 2400);
             }
           }, i * SCENE_CADENCE);
         });
@@ -3924,6 +7233,22 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             "The Semgrep fingerprint changed since the Copilot LLM-as-a-Judge Scan was run; results may be inconsistent. "
             "Re-run the Copilot LLM-as-a-Judge Scan for fresh results.</div>"
         )
+    elif result.tier2_partial:
+        classified = result.tier2_classified_count
+        total = len(result.report.tier1_findings)
+        parts.append(
+            f'<div class="banner partial-tier2">'
+            f'<strong>PARTIAL Copilot LLM-as-a-Judge Scan.</strong> '
+            f'Copilot classified only <code>{classified} of {total}</code> '
+            f"Tier 1 findings (TP / FP / CD). The remaining "
+            f"<code>{total - classified}</code> have no Tier 2 verdict "
+            f"— most likely Copilot's context budget was exhausted "
+            f"before the pass completed. The honest read is "
+            f"<em>incomplete classification</em>, not <em>no strong "
+            f"opinion</em>. Re-run the Copilot LLM-as-a-Judge Scan in "
+            f"your IDE for full coverage."
+            f'</div>'
+        )
 
     # Exec-summary header: SAIGE classification card + severity-distribution
     # bar above D/D/R so the agent's autonomy tier + at-a-glance "how bad
@@ -4000,36 +7325,52 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     tier1_code = tier1_total - tier1_markdown
     tier2_markdown = _markdown_count(r.tier2_findings, lambda f: f.get("file"))
     tier2_code = tier2_total - tier2_markdown
-    # Same code/markdown split for the FP card so all three input metrics
-    # carry the same breakdown shape — keeps the row scannable.
+    # FP code/markdown split — used to net-out the Rules-engine
+    # card so the headline number already excludes Copilot-judged
+    # false positives. (The standalone FP card was removed; the
+    # subtitle on the Static card surfaces the FP count for
+    # transparency without giving it its own headline.)
     fp_findings_iter = [f for f in r.tier1_findings if f.tier2_verdict == "FP"]
     fp_markdown = _markdown_count(fp_findings_iter, lambda f: f.finding.get("file"))
     fp_code = fp_marked - fp_markdown
+    tier1_net = tier1_total - fp_marked
+    tier1_code_net = tier1_code - fp_code
+    tier1_markdown_net = tier1_markdown - fp_markdown
     # F.33: redesigned metrics row.
-    # 3 input cards (left of divider) -> 1 hero "Net Actionable" card
-    # (right). Each card carries a one-line subtitle so the number is
-    # legible without external context. FP card stays neutral — a zero
-    # there is ambiguous (could mean "nothing to exclude" or "Copilot
-    # didn't run thoroughly"), so a green/positive tint would mislead.
-    parts.append('<div class="metrics-row">')
-    parts.append(
+    # Input cards left of divider, hero "Net Actionable" right. The
+    # Rules-engine card shows the NET tier-1 count (gross minus
+    # Copilot-judged FPs), so the row reads cleanly as
+    # Static + LLM-Judge + Behaviour-Emulator = Net Actionable
+    # without a subtraction step. FP details are surfaced inline as
+    # a subtitle hint so the deduction is still auditable.
+    # Build input cards into a list so we can interleave "+"
+    # operator separators between them and end with an "="
+    # before the hero card. Reads as a visible formula:
+    # Static + LLM-Judge + Behaviour-Emulator = Net Actionable.
+    fp_subtitle = (
+        f"what static rules caught · {fp_marked} FP excluded"
+        if fp_marked > 0
+        else "what static rules caught"
+    )
+    input_cards: list[str] = []
+    input_cards.append(
         f'<div class="metric">'
         f'<div class="metric-label">Rules-engine Static Scan</div>'
-        f'<div class="metric-value">{tier1_total}</div>'
+        f'<div class="metric-value">{tier1_net}</div>'
         f'<div class="metric-breakdown" '
-        f'title="Findings on .py / .java source (Semgrep) vs findings '
-        f'on agent-loaded markdown (manifest scanner) — both are Tier '
-        f'1 static rule engines">'
-        f'<span class="metric-bd-item">{tier1_code} code</span>'
+        f'title="Net findings (Copilot-judged FPs already excluded). '
+        f'Split: code = .py / .java source (Semgrep); markdown = '
+        f'agent-loaded markdown (manifest scanner).">'
+        f'<span class="metric-bd-item">{tier1_code_net} code</span>'
         f'<span class="metric-bd-sep">·</span>'
-        f'<span class="metric-bd-item">{tier1_markdown} markdown</span>'
+        f'<span class="metric-bd-item">{tier1_markdown_net} markdown</span>'
         f'</div>'
-        f'<div class="metric-subtitle">what static rules caught</div>'
+        f'<div class="metric-subtitle">{_html_escape(fp_subtitle)}</div>'
         f'</div>'
     )
-    parts.append(
+    input_cards.append(
         f'<div class="metric">'
-        f'<div class="metric-label">Copilot LLM-as-a-Judge Scan</div>'
+        f'<div class="metric-label">Copilot LLM-as-a-Judge Static Scan</div>'
         f'<div class="metric-value">{tier2_total}</div>'
         f'<div class="metric-breakdown" '
         f'title="Findings on .py / .java source vs findings on agent-'
@@ -4042,28 +7383,82 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<div class="metric-subtitle">what LLM found</div>'
         f'</div>'
     )
-    parts.append(
+    # Probe runtime scan — only emitted when there's actual probe
+    # data so the formula doesn't carry a zeroed-out term.
+    probe_discovered_n = len(r.probe_discovered)
+    landed_campaigns_n = sum(
+        1 for c in r.probe_campaigns if c.get("status") == "succeeded"
+    )
+    probe_total = probe_discovered_n + landed_campaigns_n
+    if probe_total > 0:
+        input_cards.append(
+            f'<div class="metric">'
+            f'<div class="metric-label">Probe Runtime Scan</div>'
+            f'<div class="metric-value">{probe_total}</div>'
+            f'<div class="metric-breakdown" '
+            f'title="Single-shot explore-mode probes (LLM brainstorms an '
+            f'attack and fires it) plus landed multi-turn red-team '
+            f'campaigns (goal-directed attacks that probe, learn, and '
+            f'adapt across turns)">'
+            f'<span class="metric-bd-item">{probe_discovered_n} single-shot</span>'
+            f'<span class="metric-bd-sep">·</span>'
+            f'<span class="metric-bd-item">{landed_campaigns_n} multi-turn</span>'
+            f'</div>'
+            f'<div class="metric-subtitle">what runtime probes confirmed</div>'
+            f'</div>'
+        )
+    # Behaviour Emulator: lands + partial = actionable. Blocked
+    # and inconclusive are shown in the breakdown but excluded
+    # from the headline value.
+    emu_traces = (
+        (r.agent_emulation or {}).get("attack_class_traces") or []
+    )
+    emu_landed = sum(1 for t in emu_traces if t.get("verdict") == "lands")
+    emu_partial = sum(1 for t in emu_traces if t.get("verdict") == "partial")
+    emu_blocked = sum(1 for t in emu_traces if t.get("verdict") == "blocked")
+    emu_inconclusive = sum(1 for t in emu_traces if t.get("verdict") == "inconclusive")
+    emu_actionable_n = emu_landed + emu_partial
+    input_cards.append(
         f'<div class="metric">'
-        f'<div class="metric-label">False Positives</div>'
-        f'<div class="metric-value">{fp_marked}</div>'
+        f'<div class="metric-label">Copilot Behaviour Emulator</div>'
+        f'<div class="metric-value">{emu_actionable_n}</div>'
         f'<div class="metric-breakdown" '
-        f'title="FP-marked Tier 1 findings on .py / .java source vs '
-        f'findings on agent-loaded markdown (SKILL.md, AGENT.md, AGENTS.md, '
-        f'INSTRUCTION(S).md, PROMPT(S).md, CLAUDE.md)">'
-        f'<span class="metric-bd-item">{fp_code} code</span>'
+        f'title="Copilot walked the agent\'s pipeline from source '
+        f'and verdicted each attack class. Actionable = lands + '
+        f'partial. Blocked = working defence. Inconclusive = the '
+        f'targeted pipeline step is not present in this agent.">'
+        f'<span class="metric-bd-item">{emu_landed} lands</span>'
         f'<span class="metric-bd-sep">·</span>'
-        f'<span class="metric-bd-item">{fp_markdown} markdown</span>'
+        f'<span class="metric-bd-item">{emu_blocked} blocked</span>'
+        f'<span class="metric-bd-sep">·</span>'
+        f'<span class="metric-bd-item">{emu_inconclusive} inconcl.</span>'
         f'</div>'
-        f'<div class="metric-subtitle">what was ruled out</div>'
+        f'<div class="metric-subtitle">pipeline-walked predictions</div>'
         f'</div>'
     )
-    parts.append('<div class="metrics-divider" aria-hidden="true"></div>')
+    parts.append('<div class="metrics-row">')
+    # Emit input cards with "+" between them, then "=" before the
+    # hero card. aria-hidden on the operators because the actual
+    # math is in the card values and the operators are decorative.
+    for idx, card_html in enumerate(input_cards):
+        if idx > 0:
+            parts.append(
+                '<span class="metric-op metric-op-plus" '
+                'aria-hidden="true">+</span>'
+            )
+        parts.append(card_html)
+    parts.append(
+        '<span class="metric-op metric-op-eq" '
+        'aria-hidden="true">=</span>'
+    )
     # Net Actionable's tooltip carries the formula; the subtitle stays
-    # in the "what …" parallel structure of the three input cards.
+    # in the "what …" parallel structure of the four input cards.
     parts.append(
         f'<div class="metric metric-hero" '
-        f'title="Net Actionable = Semgrep + Copilot − False Positives '
-        f'(= {tier1_total} + {tier2_total} − {fp_marked})">'
+        f'title="Net Actionable = Rules-engine (net of FP) + Copilot '
+        f'+ Probe + Behaviour-Emulator '
+        f'(= {tier1_net} + {tier2_total} + {probe_total} + '
+        f'{emu_actionable_n})">'
         f'<div class="metric-label">Net Actionable</div>'
         f'<div class="metric-value actionable">{result.actionable_finding_count}</div>'
         f'<div class="metric-subtitle">what\'s left to address</div>'
@@ -4243,15 +7638,86 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 )
         parts.append("</span>")
         parts.append("</div>")
+        # Bulk expand/collapse toggle — single subtle text link
+        # below the section header. Smart label: reads "Expand all"
+        # while any severity group is collapsed, flips to "Collapse
+        # all" once everything is open. Less visual noise than two
+        # competing buttons.
+        if bucket:
+            parts.append(
+                '<div class="section-bulk-row">'
+                '<button type="button" class="section-bulk-toggle" '
+                'data-bulk-toggle '
+                'aria-label="Expand or collapse all severity groups">'
+                '<span class="section-bulk-icon" '
+                'data-bulk-icon>&#9662;</span>'
+                '<span class="section-bulk-label" '
+                'data-bulk-label>Expand all</span>'
+                '</button>'
+                '</div>'
+            )
         if not bucket:
             parts.append(
                 f'<div class="finding finding-empty"><span style="color:var(--text-muted);'
                 f'font-style:italic;">No {cat} findings.</span></div>'
             )
         else:
+            # Severity grouping: wrap findings of each severity in a
+            # collapsible <details> so reviewers can fold away the
+            # noise-prone lower buckets. Critical / high open by
+            # default; medium / low / info collapsed. Bucket is
+            # already severity-sorted upstream, so we just watch for
+            # severity transitions and emit open/close tags inline.
+            _sev_counts_for_group: dict[str, int] = {}
+            for _bf in bucket:
+                _sk = _bf.get("severity", "info")
+                _sev_counts_for_group[_sk] = _sev_counts_for_group.get(_sk, 0) + 1
+            # Collapsed by default for every severity so a reviewer
+            # can scan the group headers first, then expand only the
+            # buckets they want to drill into. Static / print variant
+            # forces them open below so the hardcopy is complete.
+            _DEFAULT_OPEN_SEV: tuple[str, ...] = ()
+            _SEV_GROUP_LABELS = {
+                "critical": "Critical",
+                "high": "High",
+                "medium": "Medium",
+                "low": "Low",
+                "info": "Info",
+            }
+            _prev_group_sev = None
             for f in bucket:
                 origin = f["_origin"]
                 sev = f.get("severity", "info")
+                if sev != _prev_group_sev:
+                    if _prev_group_sev is not None:
+                        parts.append('</details>')
+                    _group_count = _sev_counts_for_group.get(sev, 0)
+                    # Static / print variant: force every group open
+                    # so the hardcopy carries every finding without
+                    # relying on interactive expansion.
+                    _group_open = (
+                        " open" if (static or sev in _DEFAULT_OPEN_SEV) else ""
+                    )
+                    _group_label = _SEV_GROUP_LABELS.get(sev, sev.title())
+                    parts.append(
+                        f'<details class="sev-group sev-group-{_html_escape(sev)}" '
+                        f'data-sev-group="{_html_escape(sev)}" '
+                        f'data-sev-total="{_group_count}"'
+                        f'{_group_open}>'
+                    )
+                    parts.append(
+                        f'<summary class="sev-group-summary">'
+                        f'<span class="sev-group-chevron">&#9656;</span>'
+                        f'<span class="pill {_html_escape(sev)}">'
+                        f'{_html_escape(_group_label)}</span>'
+                        f'<span class="sev-group-count" '
+                        f'data-sev-group-count>'
+                        f'{_group_count} finding'
+                        f'{"s" if _group_count != 1 else ""}'
+                        f'</span>'
+                        f'</summary>'
+                    )
+                    _prev_group_sev = sev
                 # F.31: prefer the human-readable slug. Semgrep findings
                 # already carry `rule_id_short` (e.g. `unsanitized-user-
                 # input-to-llm`); Copilot findings only have `rule_id`
@@ -4278,8 +7744,16 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         tags.append(f"{k_label} {v}")
                         fw_keys.append(f"{k_field}:{v}")
                 # F.21 search index: lowercase concat of searchable fields.
+                # Include the canonical agentshield_id (AS-S-…, AS-M-…,
+                # AS-C-…, AS-X-…, AS-RT-…) so a user can paste any of
+                # those into the search bar and the finding surfaces.
                 search_blob = " ".join(
-                    str(x).lower() for x in [rule, file_, f.get("message", "")]
+                    str(x).lower() for x in [
+                        rule,
+                        f.get("agentshield_id", ""),
+                        file_,
+                        f.get("message", ""),
+                    ]
                 )
                 # Data attributes drive the JS filter — keep them on the
                 # outer .finding so the show/hide logic is one query selector.
@@ -4292,12 +7766,26 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 )
                 parts.append('<div class="finding-header">')
                 is_discovered = bool(f.get("_discovered"))
+                is_emu_pill = bool(f.get("_emulator_trace"))
                 origin_label = "Semgrep" if origin == "tier1" else "Copilot"
                 parts.append(f'<span class="pill {origin}">{origin_label}</span>')
-                # Probe sub-badge: surfaces that this Copilot finding came
-                # from the LLM-adversary explore mode rather than the
-                # static-checklist LLM-as-a-Judge pass.
-                if is_discovered:
+                # Sub-badge: distinguishes WHICH Copilot path produced
+                # this finding. Emulator findings come from a static
+                # pipeline walk (no payloads fired); other discovered
+                # findings come from explore-mode probing (payloads
+                # actually fired at the agent). Different methodology,
+                # different badge.
+                if is_emu_pill:
+                    parts.append(
+                        '<span class="pill probe-sub" '
+                        'data-tip="Behaviour emulator: Copilot walked '
+                        'the agent\'s runtime pipeline from source and '
+                        'predicted the outcome for this catalogued '
+                        'attack class. No payloads were fired." '
+                        'aria-label="Behaviour Emulator">'
+                        'Behaviour Emulator</span>'
+                    )
+                elif is_discovered:
                     parts.append(
                         '<span class="pill probe-sub" '
                         'data-tip="LLM-adversary explore mode: this attack '
@@ -4344,11 +7832,23 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         for v in (fm.get(k_field) or []):
                             tag_text = f"{k_label} {v}"
                             tag_key = f"{k_field}:{v}"
+                            # Combine the framework-item description
+                            # with the filter hint into one tooltip
+                            # so a reviewer learns what the control
+                            # is AND that the chip is clickable. Uses
+                            # data-tip so the styled CSS tooltip
+                            # fires instead of the native title.
+                            desc = _framework_item_tooltip(k_field, v)
+                            if desc:
+                                tip = f"{tag_text} — {desc} Click to filter."
+                            else:
+                                tip = f"Click to filter by {tag_text}."
                             parts.append(
                                 f'<span class="finding-tag" '
                                 f'data-framework-key="{_html_escape(tag_key)}" '
                                 f'role="button" tabindex="0" '
-                                f'title="Click to filter by {_html_escape(tag_text)}">'
+                                f'data-tip="{_html_escape(tip)}" '
+                                f'aria-label="{_html_escape(tip)}">'
                                 f'{_html_escape(tag_text)}</span>'
                             )
                     parts.append("</div>")
@@ -4370,7 +7870,50 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     llm_reason = f.get("_discovered_llm_reasoning") or ""
                     conf = f.get("_discovered_confidence")
                     disc_title = f.get("_discovered_title") or "Simulated probe"
+                    # Attack-scenario panel stays collapsed by
+                    # default (including behaviour-emulator cards)
+                    # so the findings list is scannable; reviewer
+                    # opens the panel to see the pipeline trace.
                     open_attr = " open" if static else ""
+                    # Campaign findings that came from the
+                    # `redteam-simulate` skill carry _sim_simulated
+                    # via _campaign_data. Surface a distinct badge
+                    # so a reviewer doesn't mistake a Copilot
+                    # forecast for a real runtime probe capture —
+                    # consistent with the outer blue Simulated XX%
+                    # badge on the campaign card title.
+                    campaign_data = f.get("_campaign_data") or {}
+                    is_sim_card = bool(
+                        campaign_data.get("_sim_simulated")
+                    )
+                    is_emu_card = bool(f.get("_emulator_trace"))
+                    if is_emu_card:
+                        inner_badge_html = (
+                            '<span class="discovered-badge '
+                            'discovered-badge-sim" '
+                            'title="Adjacent to adversary emulation '
+                            'but methodology-distinct: we walk the '
+                            'pipeline statically from source, we '
+                            'don\'t fire payloads; we test pattern '
+                            'classes from OWASP LLM / Agentic and '
+                            'MITRE ATLAS, not specific threat '
+                            'actors.">'
+                            '[ Behaviour emulator ]</span>'
+                        )
+                    elif is_sim_card:
+                        inner_badge_html = (
+                            '<span class="discovered-badge '
+                            'discovered-badge-sim" '
+                            'title="Copilot read the agent\'s source '
+                            'code and predicted this kill-chain — not '
+                            'a captured exploit proof.">'
+                            '[ Simulated by Copilot ]</span>'
+                        )
+                    else:
+                        inner_badge_html = (
+                            '<span class="discovered-badge">'
+                            '[ Simulated Probe ]</span>'
+                        )
                     parts.append(
                         f'<details class="finding-discovered"{open_attr}>'
                     )
@@ -4378,12 +7921,127 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         '<summary>'
                         '<span class="discovered-icon" aria-hidden="true">&#9888;</span>'
                         'Attack scenario '
-                        '<span class="discovered-badge">'
-                        '[ Simulated Probe ]</span>'
+                        f'{inner_badge_html}'
                         f' &mdash; {_html_escape(disc_title)}'
                         '</summary>'
                     )
                     parts.append('<div class="discovered-body">')
+                    # Behaviour-emulator path — renders the pipeline
+                    # trace inside the discovered-body and SKIPS the
+                    # canned payload/response/indicators rows below.
+                    # The catalogue payload + verdict + per-step trace
+                    # carry all the relevant information.
+                    if is_emu_card:
+                        emu_data = f.get("_emulator_data") or {}
+                        emu_payload = emu_data.get("catalogue_payload") or ""
+                        emu_verdict = emu_data.get("verdict") or "inconclusive"
+                        emu_conf = emu_data.get("verdict_confidence")
+                        emu_reasoning = emu_data.get("verdict_reasoning") or ""
+                        emu_trace = emu_data.get("pipeline_trace") or []
+                        # Honesty banner — surfaces the canonical
+                        # positioning paragraph at the top of the
+                        # body so reviewers see methodology + scope
+                        # before reading any conclusion.
+                        parts.append(
+                            '<div class="emu-honesty-banner">'
+                            '<strong>Behaviour emulator:</strong> '
+                            'Runs catalogued adversary tactics '
+                            '(OWASP LLM / Agentic Top-10, MITRE '
+                            'ATLAS) against the agent\'s runtime '
+                            'pipeline, statically from source. '
+                            '<strong>Adjacent to adversary '
+                            'emulation but methodology-distinct:</strong> '
+                            'we walk the pipeline, we don\'t fire '
+                            'payloads; we test pattern classes, not '
+                            'specific threat actors.'
+                            '</div>'
+                        )
+                        # Verdict + confidence row.
+                        conf_html = ""
+                        if isinstance(emu_conf, (int, float)):
+                            conf_html = (
+                                f'<span class="emu-confidence">'
+                                f'predicted with confidence '
+                                f'{int(round(emu_conf * 100))}%</span>'
+                            )
+                        parts.append(
+                            f'<div class="emu-verdict-row">'
+                            f'<span class="emu-verdict '
+                            f'emu-verdict-{_html_escape(emu_verdict)}">'
+                            f'{_html_escape(emu_verdict)}</span>'
+                            f'{conf_html}'
+                            f'</div>'
+                        )
+                        # Verdict reasoning — the summary paragraph.
+                        if emu_reasoning:
+                            parts.append(
+                                f'<div class="discovered-row">'
+                                f'<span class="discovered-label">'
+                                f'Reasoning</span>'
+                                f'<span>{_html_escape(emu_reasoning)}'
+                                f'</span></div>'
+                            )
+                        # Generic catalogue payload (verbatim, no
+                        # source-code adaptation).
+                        if emu_payload:
+                            parts.append(
+                                f'<div class="emu-payload">'
+                                f'<span class="emu-payload-label">'
+                                f'Generic catalogue payload</span>'
+                                f'{_html_escape(emu_payload)}'
+                                f'</div>'
+                            )
+                        # Per-step pipeline trace — scenes + terminal + final
+                        # banner are rendered by a shared helper so the same
+                        # markup powers the Coverage-tab per-row drilldown.
+                        _render_emu_trace_block(parts, emu_data)
+
+                        # Close panel + finding — emulator path is
+                        # complete; skip the canned payload/response
+                        # and the simulation animation that follow
+                        # for other finding kinds.
+                        parts.append('</div>')  # /discovered-body
+                        parts.append('</details>')
+                        parts.append("</div>")  # /finding-body
+                        parts.append("</div>")  # /finding
+                        continue
+                    # Simulator-origin campaigns: surface the campaign-
+                    # level reasoning + the files Copilot consulted
+                    # at the top of the discovered-body, so the
+                    # provenance is visible the moment a reviewer
+                    # expands the card. The same data renders again
+                    # in the kill-chain section; here it's right
+                    # where the reviewer is reading the predicted
+                    # payload + response.
+                    if is_sim_card:
+                        sim_reasoning = (
+                            campaign_data.get("_sim_predicted_status_reasoning")
+                            or ""
+                        )
+                        sim_files = (
+                            campaign_data.get("_sim_files_read") or []
+                        )
+                        if sim_reasoning:
+                            parts.append(
+                                f'<div class="rt-simulated-banner">'
+                                f'<span class="rt-simulated-banner-label">'
+                                f'Simulated by Copilot:</span>'
+                                f'{_html_escape(sim_reasoning)}'
+                                f'</div>'
+                            )
+                        if sim_files:
+                            cites = "".join(
+                                f'<span class="rt-sim-cite">'
+                                f'{_html_escape(str(p))}</span>'
+                                for p in sim_files if isinstance(p, str)
+                            )
+                            if cites:
+                                parts.append(
+                                    f'<div class="rt-simulated-files">'
+                                    f'<span class="rt-simulated-files-label">'
+                                    f'Files read:</span>{cites}'
+                                    f'</div>'
+                                )
                     if payload_sent:
                         parts.append(
                             f'<div class="discovered-row">'
@@ -4439,8 +8097,55 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         if indicators else
                         "Attack landed — agent responded as the adversary intended."
                     )
+                    # Inconclusive simulator campaigns have nothing to
+                    # play — the threat model doesn't apply to this
+                    # codebase, so there are no turns to animate.
+                    # Render a brief explainer inside the Attack-
+                    # simulation panel instead of an empty list; the
+                    # per-campaign reasoning + Files read are already
+                    # visible above this in the discovered-body.
+                    sim_campaign_data = f.get("_campaign_data") or {}
+                    is_inconclusive_simulator = (
+                        is_sim_card
+                        and sim_campaign_data.get("status") == "inconclusive"
+                        and not (sim_campaign_data.get("turns") or [])
+                    )
                     parts.append(
                         '<div class="attack-section attack-steps-section">'
+                    )
+                    if is_inconclusive_simulator:
+                        parts.append(
+                            '<div class="attack-label">'
+                            'Attack simulation</div>'
+                            '<div class="rt-simulated-banner" '
+                            'style="margin-top:0">'
+                            '<span class="rt-simulated-banner-label">'
+                            'No simulation:</span>'
+                            "Copilot reached an "
+                            "<strong>inconclusive</strong> verdict for "
+                            "this campaign because the relevant code "
+                            "shape isn't present in this codebase "
+                            "(see <em>Simulated by Copilot</em> above "
+                            "for the specific evidence gap). No turns "
+                            "to play. Re-run the simulator if the "
+                            "relevant code is added later, or run the "
+                            "runtime probe against staging for a "
+                            "behavioural verdict."
+                            '</div>'
+                        )
+                        # Skip the scene rendering + terminal panel
+                        # below by closing the attack-section here.
+                        parts.append('</div>')  # /.attack-steps-section
+                        parts.append('</div>')  # /.discovered-body
+                        parts.append('</details>')
+                        # Continue to the next finding — there is no
+                        # static narrative or fallback panel to render
+                        # for a campaign-discovered finding; the
+                        # `discovered` body+details is the whole card.
+                        parts.append("</div>")  # /finding-body
+                        parts.append("</div>")  # /finding
+                        continue
+                    parts.append(
                         '<div class="attack-label">'
                         'Attack simulation'
                         '<button type="button" class="attack-play-btn" '
@@ -4573,25 +8278,141 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         payload_sent[:140]
                         + ("…" if len(payload_sent) > 140 else "")
                     )
-                    trace_lines = [
-                        ("info",    0,
-                         f"agentshield probe --mode explore --target {target_url}"),
-                        ("info",    1,
-                         "LLM adversary brainstorming attacks tuned to this agent…"),
-                        ("info",    2,
-                         f"Selected attack: {disc_title}"),
-                        ("request", 3,
-                         f'POST /api/agent {{ "message": "{short_payload_for_trace}" }}'),
-                        ("response", 4,
-                         f"200 OK  {short_resp_for_trace}"),
-                        ("success", 5,
-                         f"Indicators matched: {indicators_csv}"),
-                        ("verdict", 6,
-                         f"Verdict: LANDED  (confidence {conf_str})"),
-                    ]
+                    campaign_data = f.get("_campaign_data")
+                    if campaign_data:
+                        # Multi-turn campaign — build a per-turn trace
+                        # so Re-run probe streams every fire (not just
+                        # turn 1). Each turn contributes 4 lines:
+                        # header, request, response, per-turn verdict.
+                        # The campaign-level verdict closes the trace.
+                        camp_turns = campaign_data.get("turns") or []
+                        camp_status = campaign_data.get("status") or "exhausted"
+                        trace_lines = [
+                            ("info", 0,
+                             f"agentshield probe --mode campaign "
+                             f"--target {target_url}"),
+                            ("info", 1,
+                             "Multi-turn probe — LLM adversary "
+                             "planning goal-directed attack…"),
+                            ("info", 2,
+                             f"Objective: {disc_title}"),
+                        ]
+                        delta = 3
+                        for turn in camp_turns:
+                            logical = turn.get("logical_turn") or 1
+                            attempt = turn.get("attempt") or 1
+                            atk_full = turn.get("attacker_message") or ""
+                            atk = atk_full[:130] + (
+                                "…" if len(atk_full) > 130 else ""
+                            )
+                            resp_full = turn.get("target_response") or ""
+                            resp = resp_full[:160] + (
+                                "…" if len(resp_full) > 160 else ""
+                            )
+                            verdict_t = (
+                                turn.get("verdict") or "inconclusive"
+                            )
+                            ind_list = turn.get("indicators_matched") or []
+                            ind_csv = (
+                                ", ".join(ind_list) if ind_list else "(none)"
+                            )
+                            tactic_t = (turn.get("tactic") or "").upper()
+                            atlas_t = turn.get("atlas_technique") or ""
+                            attempt_label = f"attempt {attempt}"
+                            if attempt > 1:
+                                attempt_label += (
+                                    f" (mutation #{attempt - 1})"
+                                )
+                            tactic_str = (
+                                f" [{tactic_t} · {atlas_t}]"
+                                if tactic_t else ""
+                            )
+                            trace_lines.append((
+                                "info", delta,
+                                f"── Turn {logical} · {attempt_label}"
+                                f"{tactic_str} ──",
+                            ))
+                            delta += 1
+                            trace_lines.append((
+                                "request", delta,
+                                f'POST /api/agent {{ "message": "{atk}" }}',
+                            ))
+                            delta += 1
+                            trace_lines.append((
+                                "response", delta,
+                                f"200 OK  {resp}",
+                            ))
+                            delta += 1
+                            verdict_level = {
+                                "succeeded": "success",
+                                "advanced": "info",
+                                "blocked": "blocked",
+                                "inconclusive": "info",
+                            }.get(verdict_t, "info")
+                            trace_lines.append((
+                                verdict_level, delta,
+                                f"Turn verdict: {verdict_t.upper()}"
+                                f"  indicators: {ind_csv}",
+                            ))
+                            delta += 1
+                        # Final attack-level verdict line.
+                        final_msg = {
+                            "succeeded": (
+                                "verdict",
+                                "Verdict: ATTACK LANDED — objective met",
+                            ),
+                            "blocked": (
+                                "blocked",
+                                "Verdict: ATTACK BLOCKED — agent defended",
+                            ),
+                            "exhausted": (
+                                "info",
+                                "Verdict: ATTACK EXHAUSTED — no decisive outcome",
+                            ),
+                        }.get(
+                            camp_status,
+                            ("verdict", f"Verdict: {camp_status.upper()}"),
+                        )
+                        trace_lines.append((
+                            final_msg[0], delta,
+                            f"{final_msg[1]}  (confidence {conf_str})",
+                        ))
+                    else:
+                        # Single-shot explore-mode trace (7 lines).
+                        trace_lines = [
+                            ("info",    0,
+                             f"agentshield probe --mode explore --target {target_url}"),
+                            ("info",    1,
+                             "LLM adversary brainstorming attacks tuned to this agent…"),
+                            ("info",    2,
+                             f"Selected attack: {disc_title}"),
+                            ("request", 3,
+                             f'POST /api/agent {{ "message": "{short_payload_for_trace}" }}'),
+                            ("response", 4,
+                             f"200 OK  {short_resp_for_trace}"),
+                            ("success", 5,
+                             f"Indicators matched: {indicators_csv}"),
+                            ("verdict", 6,
+                             f"Verdict: LANDED  (confidence {conf_str})"),
+                        ]
+                    # The .probe-panel's data-verdict drives the
+                    # closing-banner styling. For campaigns, succeeded
+                    # → landed, blocked → blocked, exhausted →
+                    # inconclusive (so the existing CSS verdict
+                    # variants keep working).
+                    panel_verdict = "landed"
+                    if campaign_data:
+                        camp_status_for_panel = (
+                            campaign_data.get("status") or "exhausted"
+                        )
+                        panel_verdict = {
+                            "succeeded": "landed",
+                            "blocked": "blocked",
+                            "exhausted": "inconclusive",
+                        }.get(camp_status_for_panel, "landed")
                     parts.append(
-                        '<div class="probe-panel" hidden '
-                        'data-verdict="landed">'
+                        f'<div class="probe-panel" hidden '
+                        f'data-verdict="{panel_verdict}">'
                     )
                     parts.append('<div class="probe-meta">')
                     parts.append(
@@ -4599,10 +8420,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'<span class="probe-meta-label">target</span>'
                         f'<code>{_html_escape(target_url)}</code></span>'
                     )
+                    profile_label = "multi-turn" if campaign_data else "explore"
                     parts.append(
                         '<span class="probe-meta-row">'
                         '<span class="probe-meta-label">profile</span>'
-                        '<code>explore</code></span>'
+                        f'<code>{profile_label}</code></span>'
                     )
                     if discovered_at:
                         parts.append(
@@ -4625,9 +8447,19 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'</div>'
                         )
                     parts.append('</div>')  # /probe-terminal
+                    # Closing banner — single-shot and multi-turn probes
+                    # share the same "ATTACK" framing so the language
+                    # stays consistent. Verdict colour comes from
+                    # `panel_verdict` (landed / blocked / inconclusive).
+                    verdict_class = f"probe-verdict-{panel_verdict}"
+                    badge_text = {
+                        "landed":       "🔴 ATTACK LANDED",
+                        "blocked":      "🛡 ATTACK BLOCKED",
+                        "inconclusive": "⏳ ATTACK EXHAUSTED",
+                    }.get(panel_verdict, "🔴 ATTACK LANDED")
                     parts.append(
-                        '<div class="probe-verdict probe-verdict-landed" hidden>'
-                        '<div class="probe-verdict-badge">🔴 ATTACK LANDED</div>'
+                        f'<div class="probe-verdict {verdict_class}" hidden>'
+                        f'<div class="probe-verdict-badge">{badge_text}</div>'
                     )
                     if llm_reason:
                         conf_html = ""
@@ -4695,17 +8527,24 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     #                        the user sees. The live vs
                     #                        canned distinction stays
                     #                        inside the panel itself.
-                    if effective_probe is not None:
-                        badge_title = (
-                            "Click 🎯 Run probe to play back the captured "
-                            "trace. The data is "
-                            + ("from a real probe run."
-                               if is_live_probe else "canned narrative data.")
-                        )
+                    # Badge honestly reflects whether a probe ACTUALLY
+                    # ran against the target:
+                    #   - is_live_probe=True  → [ Simulated Probe ] (a
+                    #     real probe run captured this trace; "simulated"
+                    #     because the user clicks Play to replay it)
+                    #   - is_live_probe=False → [ Static scan ] (even if
+                    #     the narrative ships with canned replay data,
+                    #     no probe actually ran in this scan — the
+                    #     canned data is just visual aid for the Play
+                    #     button. Honesty rule: don't imply probe ran
+                    #     when it didn't, since this is the repo-scan-
+                    #     from-Copilot workflow's primary feature.)
+                    if is_live_probe:
                         badge_html = (
                             f'<span class="attack-probe-badge '
                             f'attack-probe-badge-probe" '
-                            f'title="{_html_escape(badge_title)}">'
+                            f'title="Click 🎯 Run probe to play back the '
+                            f'captured trace from a real probe run.">'
                             f'[ Simulated Probe ]</span>'
                         )
                     else:
@@ -4713,7 +8552,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             '<span class="attack-probe-badge '
                             'attack-probe-badge-static" '
                             'title="Static analysis only — no runtime probe '
-                            'attached for this rule">[ Static scan ]</span>'
+                            'ran against the target. The Play button '
+                            'animates a canned walkthrough for context.">'
+                            '[ Static scan ]</span>'
                         )
                     parts.append(
                         f'<summary><span class="attack-icon" aria-hidden="true">'
@@ -4756,19 +8597,20 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             '<button type="button" class="attack-play-btn" '
                             'data-action="play">▶ Play simulation</button>'
                         )
-                        if effective_probe is not None:
-                            mode_label = (
-                                'LIVE' if is_live_probe else '(simulated)'
-                            )
-                            mode_class = (
-                                'probe-mode probe-mode-live'
-                                if is_live_probe else 'probe-mode'
-                            )
+                        # Only surface the Run probe button when real
+                        # runtime probe data was captured. The
+                        # simulated variant added noise (it duplicated
+                        # the Play simulation animation and risked
+                        # being misread as a live test), and the
+                        # behaviour-emulator pattern already covers
+                        # "what would happen" without firing payloads.
+                        if effective_probe is not None and is_live_probe:
                             parts.append(
-                                f'<button type="button" class="attack-probe-btn" '
-                                f'data-action="probe">🎯 Run probe '
-                                f'<span class="{mode_class}">{mode_label}</span>'
-                                f'</button>'
+                                '<button type="button" class="attack-probe-btn" '
+                                'data-action="probe">🎯 Run probe '
+                                '<span class="probe-mode probe-mode-live">'
+                                'LIVE</span>'
+                                '</button>'
                             )
                         parts.append('</div>')
                         parts.append('<div class="attack-sim-list">')
@@ -4833,13 +8675,16 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             parts.append('</div>')  # /attack-sim-scene
                         parts.append('</div>')  # /attack-sim-list
 
-                        # v4: mocked red-team probe — terminal-style panel
-                        # that streams a canned trace and ends with a
-                        # verdict badge. Looks like watching a live
-                        # probe; client-side script-only.
-                        if effective_probe is not None:
+                        # Probe terminal panel — only emitted when
+                        # real probe data was captured. Without LIVE
+                        # probe data the Run probe button isn't
+                        # rendered above either, so the panel would
+                        # be orphaned. (Simulated-probe button was
+                        # removed; behaviour-emulator role-play is
+                        # the static-scan equivalent of this panel.)
+                        if effective_probe is not None and is_live_probe:
                             probe = effective_probe
-                            live_attr = ' data-live="true"' if is_live_probe else ''
+                            live_attr = ' data-live="true"'
                             parts.append(
                                 '<div class="probe-panel" hidden '
                                 f'data-verdict="{_html_escape(probe.verdict)}"'
@@ -4995,8 +8840,52 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         )
                     parts.append('</div>')  # /attack-body
                     parts.append('</details>')
+                elif not is_discovered:
+                    # Fallback: static finding whose rule_id has no
+                    # curated narrative in the library. We still emit
+                    # an Attack-scenario panel with the [Static scan]
+                    # badge so a reviewer can tell at a glance this
+                    # is a static-only finding (no runtime probe was
+                    # ever fired) — same shape as the curated case,
+                    # just with the bare minimum body. Authoring a
+                    # full narrative for the rule_id later upgrades
+                    # this panel automatically.
+                    rule_short = (
+                        f.get("agentshield_id")
+                        or f.get("rule_id_short")
+                        or f.get("rule_id")
+                        or "static rule"
+                    )
+                    open_attr = " open" if static else ""
+                    parts.append(
+                        f'<details class="finding-attack-scenario"{open_attr}>'
+                        f'<summary><span class="attack-icon" aria-hidden="true">'
+                        f'&#9888;</span> Attack scenario '
+                        f'<span class="attack-probe-badge '
+                        f'attack-probe-badge-static" '
+                        f'title="Static analysis only — no runtime probe '
+                        f'attached for this rule">[ Static scan ]</span> '
+                        f'&mdash; {_html_escape(str(rule_short))} '
+                        f'static pattern at '
+                        f'<code>{_html_escape(str(f.get("file") or ""))}'
+                        f':{_html_escape(str(f.get("line") or 0))}</code>'
+                        f'</summary>'
+                        f'<div class="attack-body">'
+                        f'<div class="attack-disclaimer '
+                        f'attack-disclaimer-static">'
+                        f'&#8505; Static-only finding &mdash; no runtime '
+                        f'probe attached for this rule. The finding above '
+                        f'comes from static analysis; no curated attack '
+                        f'walkthrough exists for this rule_id yet. The '
+                        f'framework chips on the card describe the threat '
+                        f'model this rule belongs to.'
+                        f'</div></div></details>'
+                    )
                 parts.append("</div>")  # /finding-body
                 parts.append("</div>")  # /finding
+            # Close the last severity group's <details>.
+            if _prev_group_sev is not None:
+                parts.append('</details>')
         parts.append("</div>")  # /findings-section
         parts.append("</section>" if static else "</div>")  # /tab-panel (D/D/R)
 
@@ -5195,6 +9084,15 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             parts.append('</details>')
         parts.append('</div>')  # /framework-group
     parts.append("</div>")  # /coverage-card
+
+    # ---- Emulator coverage block (bottom of Coverage tab) ----
+    # Lists every catalogued attack class the behaviour emulator
+    # considered with its verdict. Lands / partial duplicate-link
+    # the actionable cards in D/D/R; blocked + inconclusive live
+    # ONLY here. Collapsed by default — the Coverage tab is dense
+    # enough without an always-open 13-row table.
+    _render_emulator_coverage_block(r, parts, static=static)
+
     parts.append("</section>" if static else "</div>")  # /tab-panel
 
     # v4: Frameworks tab removed — its per-item click-to-filter
@@ -5715,6 +9613,172 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     parts.append('</div>')  # /io-pipeline
     parts.append('</div>')  # /coverage-card
 
+    # ---- Ruled out by Copilot ----
+    # FP audit trail belongs on this tab now (was a peer of the D/D/R
+    # panels). Keeps the actionable columns focused on what's left to
+    # fix while the "what was excluded and why" stays one tab away.
+    _render_ruled_out_block(r, parts)
+
+
+def _render_emulator_coverage_block(
+    r: Any, parts: list[str], *, static: bool = False,
+) -> None:
+    """Render the Behaviour emulator coverage block — all 13
+    catalogued attack classes with verdict chips, reasoning, and
+    code citations. Pulls trace data from r.agent_emulation.
+
+    Wrapped in a <details> so the block is collapsed by default
+    (open by default in the static / print variant so reviewers
+    see it without interaction). Inside: a Play button drives a
+    staggered row-reveal animation analogous to the Detect-tab
+    role-play (verdict chips pulse in one by one)."""
+    emu = (getattr(r, "agent_emulation", {}) or {})
+    if not emu.get("present"):
+        return
+    traces_by_slug: dict[str, dict] = {}
+    for entry in emu.get("attack_class_traces") or []:
+        slug = entry.get("attack_class") or ""
+        if slug:
+            traces_by_slug[slug] = entry
+    catalogue_order = list(_EMULATOR_CLASS_LABELS.keys())
+    counts: dict[str, int] = {
+        "lands": 0, "partial": 0, "blocked": 0,
+        "inconclusive": 0, "not_evaluated": 0,
+    }
+    for slug in catalogue_order:
+        entry = traces_by_slug.get(slug)
+        v = (entry.get("verdict") if entry else "not_evaluated") or "not_evaluated"
+        if v not in counts:
+            v = "not_evaluated"
+        counts[v] += 1
+    total = len(catalogue_order)
+    evaluated = total - counts["not_evaluated"]
+
+    open_attr = " open" if static else ""
+    parts.append(
+        f'<details class="coverage-card emu-coverage-card '
+        f'emu-coverage-collapse"{open_attr}>'
+    )
+    parts.append(
+        '<summary class="emu-coverage-summary">'
+        '<span class="emu-coverage-summary-title">'
+        'Behaviour emulator coverage'
+        '</span>'
+        f'<span class="emu-coverage-summary-meta">'
+        f'<strong>{evaluated}</strong> of {total} attack classes '
+        f'evaluated &middot; <strong>{counts["lands"]}</strong> lands &middot; '
+        f'<strong>{counts["partial"]}</strong> partial &middot; '
+        f'<strong>{counts["blocked"]}</strong> blocked &middot; '
+        f'<strong>{counts["inconclusive"]}</strong> inconclusive'
+        f'</span>'
+        '</summary>'
+    )
+    parts.append(
+        '<p class="emu-coverage-intro">'
+        '<em>Lands</em> / <em>partial</em> are actionable findings '
+        '(shown in Detect / Defend / Respond). <em>Blocked</em> '
+        '(defence works) and <em>inconclusive</em> (pipeline step '
+        'absent in this agent) live here only &mdash; they\'re '
+        'coverage notes, not findings.'
+        '</p>'
+    )
+    # Totals strip. Per-row Play behaviour emulation buttons live
+    # inside each row's nested emu-trace block (rendered by the
+    # shared helper), so the row gets a Play button only when a
+    # pipeline_trace is available.
+    parts.append('<div class="emu-coverage-totals">')
+    for vkey, vlabel in [
+        ("lands", "lands"),
+        ("partial", "partial"),
+        ("blocked", "blocked"),
+        ("inconclusive", "inconclusive"),
+        ("not_evaluated", "not evaluated"),
+    ]:
+        n = counts.get(vkey, 0)
+        parts.append(
+            f'<span class="emu-coverage-total emu-coverage-total-{vkey}">'
+            f'<strong>{n}</strong> {vlabel}</span>'
+        )
+    parts.append('</div>')
+    # Per-class table. data-row-idx drives the staggered reveal.
+    parts.append('<ul class="emu-coverage-list">')
+    for row_idx, slug in enumerate(catalogue_order):
+        label = _EMULATOR_CLASS_LABELS.get(slug, slug)
+        entry = traces_by_slug.get(slug)
+        if entry is None:
+            verdict = "not_evaluated"
+            verdict_lbl = "not evaluated"
+            reasoning = (
+                "No trace in agent-emulation.json. Re-run the "
+                "behaviour emulator to evaluate this class."
+            )
+            citations: list[str] = []
+            steps: list[str] = []
+        else:
+            verdict = (entry.get("verdict") or "inconclusive").strip()
+            verdict_lbl = verdict
+            reasoning = (entry.get("verdict_reasoning") or "").strip()
+            steps = list(entry.get("targets_steps") or [])
+            citations = []
+            for tstep in entry.get("pipeline_trace") or []:
+                for c in tstep.get("code_basis") or []:
+                    if isinstance(c, str) and c not in citations:
+                        citations.append(c)
+        step_chips = "".join(
+            f'<span class="emu-coverage-step">{_html_escape(s)}</span>'
+            for s in steps
+        )
+        citation_chips = "".join(
+            f'<span class="emu-coverage-cite">{_html_escape(c)}</span>'
+            for c in citations[:4]
+        )
+        parts.append(
+            f'<li class="emu-coverage-row '
+            f'emu-coverage-row-{_html_escape(verdict)}" '
+            f'data-row-idx="{row_idx}">'
+            f'<div class="emu-coverage-head">'
+            f'<span class="emu-coverage-label">{_html_escape(label)}</span>'
+            f'<span class="emu-coverage-verdict '
+            f'emu-coverage-verdict-{_html_escape(verdict)}">'
+            f'{_html_escape(verdict_lbl)}</span>'
+            f'</div>'
+        )
+        if reasoning:
+            parts.append(
+                f'<div class="emu-coverage-reason">'
+                f'{_html_escape(reasoning)}</div>'
+            )
+        if step_chips or citation_chips:
+            parts.append('<div class="emu-coverage-meta">')
+            if step_chips:
+                parts.append(
+                    '<span class="emu-coverage-meta-label">Targets:</span> '
+                    + step_chips
+                )
+            if citation_chips:
+                parts.append(
+                    ' <span class="emu-coverage-meta-label">Code:</span> '
+                    + citation_chips
+                )
+            parts.append('</div>')
+        # Per-row drilldown: full role-play (scenes + terminal +
+        # final banner) inside a collapsed <details>. The same
+        # markup as the Detect-tab Attack-scenario card so the
+        # Play button works identically.
+        if entry and entry.get("pipeline_trace"):
+            parts.append('<details class="emu-coverage-rowtrace">')
+            parts.append(
+                '<summary class="emu-coverage-rowtrace-summary">'
+                '<span class="emu-coverage-rowtrace-chevron">&#9656;</span>'
+                'Show behaviour emulation walkthrough'
+                '</summary>'
+            )
+            _render_emu_trace_block(parts, entry)
+            parts.append('</details>')
+        parts.append('</li>')
+    parts.append('</ul>')
+    parts.append('</details>')  # /coverage-card
+
 
 def _render_reference_panel(
     parts: list[str],
@@ -5751,7 +9815,7 @@ def _render_reference_panel(
     source_display = {
         "Semgrep": "Semgrep Rules-engine Static Scan",
         "Copilot": "Copilot LLM-as-a-Judge (Static & Probe) Scan",
-        "Markdown": "Manifest Static Scanner",
+        "Markdown": "Manifest Rules-Engine Static Scanner",
     }
 
     parts.append('<div class="reference-card">')
@@ -5906,11 +9970,239 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
+    _render_framework_mapping_table(parts, refs)
     _render_design_basis(parts)
     _render_how_it_works(parts)
     _render_solution_diagram(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
+
+
+def _render_framework_mapping_table(
+    parts: list[str], refs: list,
+) -> None:
+    """Render the AgentShield → security-framework mapping table.
+
+    One row per AgentShield control with the framework items it
+    maps to (after the >=75% coverage audit). Grouped by source
+    (Semgrep / Copilot / Markdown) so a reviewer can collapse the
+    sources they're not interested in. Sits between the rule
+    catalogue and the design-basis section."""
+    if not refs:
+        return
+    # Group by scan type. Inside the Copilot provenance there are
+    # three distinct scan kinds:
+    #   - static Tier 2 checklist (source = "Copilot")
+    #   - the 13 catalogued behaviour-emulator attack classes
+    #     (synthesised from _EMULATOR_CLASS_LABELS — they live in
+    #     the emulator skill, not the rule catalogue)
+    #   - the AS-X-* probe / explore-mode scenarios
+    #     (source = "Probe")
+    # Each gets its own group so the catalogue / probe split is
+    # honest and matches the metric-card naming.
+    groups: dict[str, list] = {
+        "Semgrep": [],
+        "Copilot": [],
+        "BehaviourEmulator": [],
+        "Probe": [],
+        "Markdown": [],
+    }
+    for r in refs:
+        bucket = r.source if r.source in groups else None
+        if bucket:
+            groups[bucket].append(r)
+    # Synthesise pseudo-RuleReference entries for the 13 catalogued
+    # behaviour-emulator attack classes. They aren't real rules in
+    # the YAML / checklist sense, but they ARE controls AgentShield
+    # claims coverage for — so they belong in this mapping table.
+    from types import SimpleNamespace
+    for slug, label in _EMULATOR_CLASS_LABELS.items():
+        fw = _EMULATOR_CLASS_FRAMEWORKS.get(slug, {})
+        groups["BehaviourEmulator"].append(SimpleNamespace(
+            agentshield_id=f"AS-E-D-{slug}",
+            rule_id=slug,
+            title=label,
+            category="detect",
+            source="BehaviourEmulator",
+            frameworks=fw,
+        ))
+    for bucket in groups.values():
+        bucket.sort(key=lambda r: r.agentshield_id or r.rule_id or "")
+
+    parts.append('<div class="reference-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">▶</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">'
+        'AgentShield &harr; Security Framework Mapping'
+        '</span>'
+        '<span class="ref-section-teaser">'
+        'Each AgentShield control mapped to the OWASP LLM / OWASP '
+        'Agentic / OWASP AST / MITRE ATLAS / CWE item it covers. '
+        'Tags shown here are curated to &ge;75% coverage of the '
+        'framework item &mdash; weak / borderline claims were pruned '
+        'in the mapping audit.'
+        '</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append(
+        '<p class="panel-subtitle">'
+        'Hover any framework chip for a brief definition. Empty '
+        "cells mean no item in that framework reaches the &ge;75% "
+        "coverage bar for this control &mdash; the control is "
+        "still scanned, it just isn't claimed under that axis."
+        '</p>'
+    )
+
+    def _chip_cell(field_key: str, items: list) -> str:
+        if not items:
+            return '<td class="fw-map-empty">&mdash;</td>'
+        chips = []
+        for it in items:
+            it_str = str(it)
+            desc = _framework_item_tooltip(field_key, it_str)
+            tip_attrs = ""
+            if desc:
+                tip_attrs = (
+                    f' data-tip="{_html_escape(desc)}"'
+                    f' aria-label="{_html_escape(desc)}"'
+                )
+            chips.append(
+                f'<span class="fw-map-chip fw-map-chip-{field_key}"'
+                f'{tip_attrs}>{_html_escape(it_str)}</span>'
+            )
+        return f'<td>{"".join(chips)}</td>'
+
+    # Display labels mirror the metric-card naming so a reviewer
+    # sees consistent provenance language across the report.
+    source_display = {
+        "Semgrep": "Semgrep Rules-engine Static Scan",
+        "Copilot": "Copilot LLM-as-a-Judge Static Scan",
+        "BehaviourEmulator": "Copilot Behaviour Emulator",
+        "Probe": "Copilot Probe / Explore-mode Scenarios",
+        "Markdown": "Manifest Rules-Engine Static Scanner",
+    }
+    # CLI command that actually exercises each group. Surfaced as
+    # a small pill on the group header so a reviewer can see at a
+    # glance which tier runs as part of `agentshield scan` vs the
+    # separate `agentshield probe` step. The Copilot tiers run
+    # under `scan` (which emits the prompt) but the actual LLM
+    # evaluation happens when the developer pastes the prompt
+    # into Copilot Chat — the pill says so explicitly.
+    source_command = {
+        "Semgrep": "agentshield scan",
+        "Copilot": "agentshield scan + Copilot Chat",
+        "BehaviourEmulator": "agentshield scan + Copilot Chat",
+        "Probe": "agentshield probe --target …",
+        "Markdown": "agentshield scan",
+    }
+
+    for src_key, src_refs in groups.items():
+        if not src_refs:
+            continue
+        # Each source group is its own collapsible <details>.
+        # Collapsed by default so the section reads as a scannable
+        # index; reviewer expands the group they care about.
+        open_attr = ""
+        display = source_display.get(src_key, src_key)
+        # Probe group is fully built but requires a live agent
+        # endpoint to exercise. Surface that honestly with a
+        # "Not yet live" pill on the group header until a target
+        # is configured + the probe step has been run.
+        status_pill = ""
+        status_note = ""
+        if src_key == "Probe":
+            status_pill = (
+                '<span class="fw-map-group-status '
+                'fw-map-group-status-pending" '
+                'data-tip="Runtime probe is built and runnable today '
+                'via `agentshield probe --target ...`, but not yet '
+                'exercised on this scan — requires a reachable agent '
+                'endpoint (staging deployment or mock harness).">'
+                'Not yet live'
+                '</span>'
+            )
+            status_note = (
+                '<div class="fw-map-group-note">'
+                '<strong>Status:</strong> capability built, not yet '
+                'live on this scan. These scenarios fire real HTTP '
+                'requests once <code>agentshield probe '
+                '--target &lt;url&gt;</code> is run against a '
+                'reachable agent. Until then they are documented as '
+                'planned runtime coverage, not as findings.'
+                '</div>'
+            )
+        cmd = source_command.get(src_key, "")
+        cmd_pill = (
+            f'<span class="fw-map-group-cmd" '
+            f'data-tip="CLI command that exercises this group of '
+            f'controls. Run from the target repo.">'
+            f'<span class="fw-map-group-cmd-label">runs via</span>'
+            f'<code>{_html_escape(cmd)}</code>'
+            f'</span>'
+        ) if cmd else ""
+        parts.append(
+            f'<details class="fw-map-group"{open_attr}>'
+            f'<summary class="fw-map-group-summary">'
+            f'<span class="fw-map-group-chevron">&#9656;</span>'
+            f'<span class="fw-map-group-title">'
+            f'{_html_escape(display)}</span>'
+            f'<span class="fw-map-group-count">'
+            f'<strong>{len(src_refs)}</strong> control'
+            f'{"s" if len(src_refs) != 1 else ""}</span>'
+            f'{cmd_pill}'
+            f'{status_pill}'
+            f'</summary>'
+        )
+        if status_note:
+            parts.append(status_note)
+        parts.append('<div class="fw-map-table-wrap">')
+        parts.append('<table class="fw-map-table">')
+        parts.append(
+            '<thead><tr>'
+            '<th class="fw-map-col-id">AgentShield ID</th>'
+            '<th class="fw-map-col-rule">Control</th>'
+            '<th class="fw-map-col-cat">D/D/R</th>'
+            '<th class="fw-map-col-fw">OWASP LLM</th>'
+            '<th class="fw-map-col-fw">OWASP Agentic</th>'
+            '<th class="fw-map-col-fw">OWASP AST</th>'
+            '<th class="fw-map-col-fw">MITRE ATLAS</th>'
+            '<th class="fw-map-col-fw">CWE</th>'
+            '</tr></thead>'
+        )
+        parts.append('<tbody>')
+        for r in src_refs:
+            fw = r.frameworks or {}
+            as_id = r.agentshield_id or r.rule_id or "?"
+            title = r.title or r.rule_id or as_id
+            if not as_id or as_id == "?":
+                continue
+            cat = (r.category or "").lower()
+            parts.append(
+                f'<tr>'
+                f'<td class="fw-map-id"><code>{_html_escape(as_id)}</code></td>'
+                f'<td class="fw-map-title">{_html_escape(title)}</td>'
+                f'<td class="fw-map-cat">'
+                f'<span class="fw-map-cat-pill fw-map-cat-{_html_escape(cat)}">'
+                f'{_html_escape(cat or "—")}</span></td>'
+                f'{_chip_cell("owasp_llm", fw.get("owasp_llm") or [])}'
+                f'{_chip_cell("owasp_agentic", fw.get("owasp_agentic") or [])}'
+                f'{_chip_cell("ast", fw.get("ast") or [])}'
+                f'{_chip_cell("mitre_atlas", fw.get("mitre_atlas") or [])}'
+                f'{_chip_cell("cwe", fw.get("cwe") or [])}'
+                f'</tr>'
+            )
+        parts.append('</tbody></table>')
+        parts.append('</div>')  # /fw-map-table-wrap
+        parts.append('</details>')  # /fw-map-group
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /reference-card
 
 
 def _render_design_basis(parts: list[str]) -> None:
@@ -6503,113 +10795,151 @@ def _render_campaign_scenes(
     target_url: str,
     indicators_note: str,
 ) -> None:
-    """Emit the `.attack-sim-scene` list for a multi-turn campaign.
+    """Emit the `.attack-sim-scene` list for a multi-turn campaign — as
+    the campaign's PLAN, not its captured outcome.
 
-    One scene per direction per turn (attacker→agent, agent→attacker)
-    + one impact card at the end. The Play simulation handler iterates
-    `.attack-sim-scene` elements in DOM order, so N turns yield 2N+1
-    animated scenes automatically — no JS changes needed.
+    Play simulation tells the strategy story: one scene per *logical*
+    turn (mutations collapse to a note on the primary scene), each
+    showing the attacker's intent, the tactic + ATLAS technique, the
+    payload they'd send, and — if applicable — that the attacker has
+    N mutations queued for this turn if the agent refuses.
 
-    Mutation attempts (attempt > 1 within the same logical turn) get a
-    visible "mutation #K" badge on the attacker scene so reviewers see
-    the kill-chain's adaptive moves.
+    The actual response, indicator matches, and per-turn verdicts live
+    in the Run probe terminal trace — see `_build_campaign_trace`
+    inline above where the probe-panel is built. Keeping the two views
+    distinct: Play simulation = intent / plan; Run probe = evidence.
     """
-    turns = campaign.get("turns") or []
-    status = campaign.get("status") or "exhausted"
-    step_idx = 0
-    for turn in turns:
-        logical = turn.get("logical_turn") or turn.get("index") or 1
-        attempt = turn.get("attempt") or 1
-        verdict = turn.get("verdict") or "inconclusive"
-        attacker_msg = turn.get("attacker_message") or ""
-        target_resp = turn.get("target_response") or ""
-        short_resp = target_resp[:260] + ("…" if len(target_resp) > 260 else "")
-        attempt_label = (
-            f"Turn {logical} · attempt {attempt}"
-            + (f" (mutation #{attempt - 1})" if attempt > 1 else "")
-        )
+    from agentshield.probe.campaign import tactic_meta
 
-        # Attacker → agent scene.
+    # Prefer the snapshot the runner persisted (planned_turns); fall
+    # back to deriving from `turns` when we're rendering a finding
+    # written before that field existed.
+    planned = campaign.get("planned_turns") or []
+    if not planned:
+        # Legacy fallback: one entry per actual fire, primary-only
+        # (mutations not preserved on old findings).
+        derived: list[dict] = []
+        seen: set[tuple[int, int]] = set()
+        for t in campaign.get("turns") or []:
+            lt = t.get("logical_turn") or t.get("index") or 1
+            at = t.get("attempt") or 1
+            if (lt, at) in seen:
+                continue
+            seen.add((lt, at))
+            derived.append({
+                "logical_turn": lt,
+                "attempt": at,
+                "is_mutation_fallback": at > 1,
+                "tactic": t.get("tactic") or "",
+                "atlas_technique": t.get("atlas_technique") or "",
+                "message": t.get("attacker_message") or "",
+            })
+        planned = derived
+
+    status = campaign.get("status") or "exhausted"
+    objective = campaign.get("objective") or ""
+    step_idx = 0
+
+    for entry in planned:
+        logical = entry.get("logical_turn") or step_idx + 1
+        attempt = entry.get("attempt") or 1
+        is_fallback = bool(entry.get("is_mutation_fallback"))
+        tactic_slug = (entry.get("tactic") or "").strip()
+        atlas_tech = (entry.get("atlas_technique") or "").strip()
+        msg = entry.get("message") or ""
+
+        # Tactic chip inline with the step label. When an ATLAS
+        # technique ID is present, expand it into a `title=` tooltip so
+        # reviewers can hover to see the technique's human-readable
+        # name without leaving the report.
+        tactic_chip = ""
+        if tactic_slug:
+            from agentshield.probe.campaign import technique_label
+            meta = tactic_meta(tactic_slug)
+            tech_suffix = (
+                f' &middot; {_html_escape(atlas_tech)}' if atlas_tech else ""
+            )
+            tech_name = technique_label(atlas_tech)
+            title_attr = (
+                f' title="{_html_escape(atlas_tech)} — '
+                f'{_html_escape(tech_name)}"'
+                if atlas_tech and tech_name else
+                (f' title="{_html_escape(atlas_tech)}"' if atlas_tech else "")
+            )
+            tactic_chip = (
+                f' <span class="rt-turn-tactic '
+                f'rt-tactic-{_html_escape(tactic_slug)}"{title_attr}>'
+                f'{meta["icon"]} {_html_escape(meta["label"])}'
+                f'{tech_suffix}</span>'
+            )
+
+        # Step label distinguishes primary attempt from fallback
+        # mutation, so the planned chain reads as a fallback strategy
+        # rather than four equivalent fires.
+        if is_fallback:
+            step_label = (
+                f"Turn {logical} &middot; fallback mutation #{attempt - 1}"
+            )
+            fallback_note = (
+                '<div class="attack-sim-note rt-fallback-note">'
+                'Fired only if the previous attempt is blocked or '
+                'inconclusive &mdash; the attacker re-phrases until '
+                'the guardrail misses.'
+                '</div>'
+            )
+        else:
+            step_label = f"Turn {logical} &middot; primary move"
+            fallback_note = ""
+
         parts.append(
             f'<div class="attack-sim-scene" data-step="{step_idx}">'
-            f'<div class="attack-sim-step-num">{_html_escape(attempt_label)}</div>'
-            '<div class="attack-sim-row">'
-            '<div class="attack-sim-actor">'
-            '<span class="actor-icon">&#129302;</span>'
-            '<span class="actor-label">LLM adversary</span>'
-            '</div>'
-            '<div class="attack-sim-arrow">'
-            '<span class="attack-sim-arrow-label">crafted payload</span>'
-            '<div class="attack-sim-arrow-line"></div>'
-            '<span class="attack-sim-packet" aria-hidden="true"></span>'
-            '</div>'
-            '<div class="attack-sim-actor">'
-            '<span class="actor-icon">&#129351;</span>'
-            f'<span class="actor-label">{_html_escape(target_url)}</span>'
-            '</div>'
-            '</div>'
-            f'<div class="attack-sim-payload">{_html_escape(attacker_msg)}</div>'
-            '</div>'
-        )
-        step_idx += 1
-
-        # Agent → attacker scene (color hinted by verdict).
-        verdict_note = {
-            "blocked": "The agent refused — guardrail fired.",
-            "succeeded": "The agent executed the adversarial instruction.",
-            "advanced": "The agent took the bait — campaign advances.",
-            "inconclusive": "Response neither lands nor blocks decisively.",
-        }.get(verdict, "")
-        parts.append(
-            f'<div class="attack-sim-scene rt-verdict-{_html_escape(verdict)}" '
-            f'data-step="{step_idx}">'
             f'<div class="attack-sim-step-num">'
-            f'agent response &middot; '
-            f'<span class="rt-turn-verdict rt-verdict-{_html_escape(verdict)}">'
-            f'{_html_escape(verdict)}</span></div>'
+            f'{step_label}{tactic_chip}</div>'
             '<div class="attack-sim-row">'
-            '<div class="attack-sim-actor">'
-            '<span class="actor-icon">&#129351;</span>'
-            f'<span class="actor-label">{_html_escape(target_url)}</span>'
-            '</div>'
-            '<div class="attack-sim-arrow">'
-            '<span class="attack-sim-arrow-label">response</span>'
-            '<div class="attack-sim-arrow-line"></div>'
-            '<span class="attack-sim-packet" aria-hidden="true"></span>'
-            '</div>'
             '<div class="attack-sim-actor">'
             '<span class="actor-icon">&#129302;</span>'
             '<span class="actor-label">LLM adversary</span>'
             '</div>'
+            '<div class="attack-sim-arrow">'
+            '<span class="attack-sim-arrow-label">planned payload</span>'
+            '<div class="attack-sim-arrow-line"></div>'
+            '<span class="attack-sim-packet" aria-hidden="true"></span>'
             '</div>'
-            f'<div class="attack-sim-payload">{_html_escape(short_resp)}</div>'
-            f'<div class="attack-sim-note">{_html_escape(verdict_note)}</div>'
+            '<div class="attack-sim-actor">'
+            '<span class="actor-icon">&#129351;</span>'
+            f'<span class="actor-label">{_html_escape(target_url)}</span>'
+            '</div>'
+            '</div>'
+            f'<div class="attack-sim-payload">{_html_escape(msg)}</div>'
+            f'{fallback_note}'
             '</div>'
         )
         step_idx += 1
 
-    # Final impact card — status + indicators across the whole kill-chain.
+    # Impact card — describes the OBJECTIVE the campaign is aiming for
+    # plus the actual run-time outcome status badge. This is the
+    # "expected outcome" closer for the planned walkthrough.
     status_icon = {
         "succeeded": "&#128165;",   # 💥
         "blocked":   "&#128737;",   # 🛡
         "exhausted": "&#9203;",    # ⏳
     }.get(status, "&#128165;")
     status_label = {
-        "succeeded": "Campaign succeeded — objective met",
-        "blocked":   "Campaign blocked — agent defended successfully",
-        "exhausted": "Campaign exhausted — no decisive outcome",
+        "succeeded": "Last run: ATTACK LANDED — objective met",
+        "blocked":   "Last run: ATTACK BLOCKED — agent defended",
+        "exhausted": "Last run: ATTACK EXHAUSTED — no decisive outcome",
     }.get(status, status.title())
     parts.append(
         f'<div class="attack-sim-scene attack-sim-impact rt-status-{_html_escape(status)}" '
         f'data-step="{step_idx}">'
-        '<div class="attack-sim-step-num">Impact</div>'
+        '<div class="attack-sim-step-num">Objective</div>'
         '<div class="attack-sim-row">'
         '<div class="attack-sim-actor">'
         f'<span class="actor-icon">{status_icon}</span>'
         f'<span class="actor-label">{_html_escape(status_label)}</span>'
         '</div>'
         '</div>'
-        f'<div class="attack-sim-note">{_html_escape(indicators_note)}</div>'
+        f'<div class="attack-sim-note">{_html_escape(objective)}</div>'
         '</div>'
     )
 
@@ -6639,22 +10969,23 @@ def _render_redteam_campaigns(
         '<span class="ref-section-chevron">&#9654;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">'
-        'Automated red-team campaigns</span>'
-        '<span class="ref-section-teaser">Multi-turn, goal-directed '
-        'attacks &mdash; the real test of whether the agent holds up '
-        'against an adversary that probes, learns, and adapts.</span>'
+        'Multi-turn red-team probes</span>'
+        '<span class="ref-section-teaser">Goal-directed attacks that '
+        'span multiple turns &mdash; the real test of whether the '
+        'agent holds up against an adversary that probes, learns, and '
+        'adapts.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
         '</summary>'
     )
     parts.append('<div class="ref-section-body">')
     parts.append(
-        f'<p class="panel-subtitle">{len(campaigns)} campaign'
+        f'<p class="panel-subtitle">{len(campaigns)} multi-turn probe'
         f'{"s" if len(campaigns) != 1 else ""} run &mdash; '
         f'<strong class="rt-status-succeeded">{succeeded} succeeded</strong>, '
         f'<strong class="rt-status-blocked">{blocked} blocked</strong>, '
         f'<strong class="rt-status-exhausted">{exhausted} exhausted</strong>. '
-        f'Each campaign drove a multi-turn attack toward an objective; '
+        f'Each probe drove a multi-turn attack toward an objective; '
         f'the timeline below shows turn-by-turn what the attacker sent '
         f'and how the agent responded.</p>'
     )
@@ -6665,6 +10996,34 @@ def _render_redteam_campaigns(
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append('</div>')  # /redteam-campaigns
+
+
+def _campaign_tactic_flow(turns: list[dict]) -> list[tuple[str, str, str, int]]:
+    """Compute the ordered tactic flow for a campaign's kill-chain.
+
+    Returns a list of `(tactic_slug, label, icon, fires_count)` in
+    first-appearance order, collapsing repeated tactics on consecutive
+    turns into one chip with a fire-count badge (e.g. three
+    `defense-evasion` mutations on the same logical turn collapse to
+    one `Defense Evasion × 3` chip in the strip).
+    """
+    from agentshield.probe.campaign import tactic_meta
+
+    flow: list[tuple[str, str, str, int]] = []
+    for t in turns:
+        tactic = (t.get("tactic") or "").strip()
+        if not tactic:
+            continue
+        meta = tactic_meta(tactic)
+        label = meta["label"]
+        icon = meta["icon"]
+        if flow and flow[-1][0] == tactic:
+            # Collapse consecutive same-tactic fires into one chip
+            slug, lbl, ic, n = flow[-1]
+            flow[-1] = (slug, lbl, ic, n + 1)
+        else:
+            flow.append((tactic, label, icon, 1))
+    return flow
 
 
 def _render_one_campaign(parts: list[str], c: dict) -> None:
@@ -6681,13 +11040,54 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
     turns = c.get("turns") or []
     frameworks = c.get("frameworks") or {}
 
-    parts.append(f'<div class="rt-campaign rt-status-{_html_escape(status)}">')
-    # Card header — title + status badge + ID + severity
+    is_simulated = bool(c.get("_sim_simulated"))
+    sim_attr = ' data-sim="true"' if is_simulated else ""
+    parts.append(
+        f'<div class="rt-campaign rt-status-{_html_escape(status)}"{sim_attr}>'
+    )
+    # Card header — title + status badge + ID + severity.
+    # When the Copilot judge has verdicted this campaign, surface the
+    # LLM verdict + confidence next to the heuristic status so the
+    # reviewer sees both. Heuristic stays for provenance; LLM gets
+    # the visual weight because it's the trustworthy one.
     parts.append('<div class="rt-campaign-head">')
+    simulated_pill = ""
+    if is_simulated:
+        sim_conf = c.get("_sim_confidence")
+        conf_html = (
+            f' <span class="rt-llm-confidence">'
+            f'{int(round(sim_conf * 100))}%</span>'
+            if isinstance(sim_conf, (int, float)) else ""
+        )
+        simulated_pill = (
+            f'<span class="rt-simulated-badge" '
+            f'title="Predicted by Copilot from reading the agent\'s '
+            f'source code — not a captured exploit proof">'
+            f'Simulated{conf_html}</span>'
+        )
+    llm_campaign_pill = ""
+    if c.get("_judge_present") and c.get("llm_campaign_verdict"):
+        llm_v = c["llm_campaign_verdict"]
+        llm_conf = c.get("llm_campaign_confidence")
+        conf_html = (
+            f' <span class="rt-llm-confidence">'
+            f'{int(round(llm_conf * 100))}%</span>'
+            if isinstance(llm_conf, (int, float)) else ""
+        )
+        llm_campaign_pill = (
+            f'<span class="rt-verdict-source rt-verdict-source-copilot" '
+            f'title="Copilot LLM judge — reasons about the response '
+            f'instead of substring matching">Copilot</span>'
+            f'<span class="rt-llm-verdict rt-llm-verdict-{_html_escape(llm_v)}">'
+            f'{_html_escape(llm_v)}{conf_html}</span>'
+        )
     parts.append(
         '<div class="rt-campaign-title-row">'
         f'<span class="rt-campaign-title">{_html_escape(title)}</span>'
-        f'<span class="rt-campaign-status rt-status-{_html_escape(status)}">'
+        f'{simulated_pill}'
+        f'{llm_campaign_pill}'
+        f'<span class="rt-campaign-status rt-status-{_html_escape(status)}" '
+        f'title="Heuristic verdict from the substring classifier">'
         f'{_html_escape(status.upper())}</span>'
         '</div>'
     )
@@ -6707,6 +11107,33 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
 
     # Objective + rationale
     parts.append('<div class="rt-campaign-body">')
+    # Simulated-run banner sits at the top of the body so the reader
+    # sees the provenance before reading any kill-chain content. The
+    # banner shows the campaign-level reasoning + the files Copilot
+    # cited — load-bearing for honesty about what this section is.
+    if is_simulated:
+        sim_reasoning = c.get("_sim_predicted_status_reasoning") or ""
+        sim_files = c.get("_sim_files_read") or []
+        if sim_reasoning:
+            parts.append(
+                f'<div class="rt-simulated-banner">'
+                f'<span class="rt-simulated-banner-label">'
+                f'Simulated by Copilot:</span>'
+                f'{_html_escape(sim_reasoning)}'
+                f'</div>'
+            )
+        if sim_files:
+            cites = "".join(
+                f'<span class="rt-sim-cite">{_html_escape(str(f))}</span>'
+                for f in sim_files if isinstance(f, str)
+            )
+            if cites:
+                parts.append(
+                    f'<div class="rt-simulated-files">'
+                    f'<span class="rt-simulated-files-label">'
+                    f'Files read:</span>{cites}'
+                    f'</div>'
+                )
     parts.append(
         '<div class="rt-campaign-objective">'
         '<span class="rt-label">OBJECTIVE</span>'
@@ -6739,6 +11166,31 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
             '</div>'
         )
 
+    # Tactic-flow strip — ATT&CK / ATLAS tactic per turn, in order.
+    # Tells reviewers the kill-chain at a glance (e.g.
+    # Persistence → Exfiltration) and matches the format real
+    # red-team reports follow.
+    flow = _campaign_tactic_flow(turns)
+    if flow:
+        parts.append('<div class="rt-campaign-flow">')
+        parts.append('<span class="rt-label">KILL-CHAIN FLOW</span>')
+        parts.append('<span class="rt-flow-chips">')
+        for i, (slug, label, icon, n) in enumerate(flow):
+            count_html = (
+                f' <span class="rt-flow-count">&times;{n}</span>'
+                if n > 1 else ""
+            )
+            parts.append(
+                f'<span class="rt-flow-chip rt-tactic-{_html_escape(slug)}">'
+                f'<span class="rt-flow-icon">{icon}</span>'
+                f'<span class="rt-flow-label">{_html_escape(label)}'
+                f'{count_html}</span></span>'
+            )
+            if i < len(flow) - 1:
+                parts.append('<span class="rt-flow-arrow">&rarr;</span>')
+        parts.append('</span>')
+        parts.append('</div>')
+
     # Kill-chain timeline
     parts.append('<div class="rt-killchain">')
     parts.append(
@@ -6765,13 +11217,63 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
                 f'mutation #{_html_escape(str(attempt - 1))}'
                 f'</span>'
             )
+        # Per-turn ATT&CK tactic chip — what kill-chain step this turn
+        # executed (Persistence, Defense Evasion, Exfiltration, …)
+        # plus the matching ATLAS technique ID where one applies.
+        tactic_html = ""
+        tactic_slug = (turn.get("tactic") or "").strip()
+        atlas_tech = (turn.get("atlas_technique") or "").strip()
+        if tactic_slug:
+            from agentshield.probe.campaign import (
+                tactic_meta,
+                technique_label,
+            )
+            meta = tactic_meta(tactic_slug)
+            tech_suffix = (
+                f' &middot; {_html_escape(atlas_tech)}' if atlas_tech else ""
+            )
+            tech_name = technique_label(atlas_tech)
+            title_attr = (
+                f' title="{_html_escape(atlas_tech)} — '
+                f'{_html_escape(tech_name)}"'
+                if atlas_tech and tech_name else
+                (f' title="{_html_escape(atlas_tech)}"' if atlas_tech else "")
+            )
+            tactic_html = (
+                f'<span class="rt-turn-tactic rt-tactic-{_html_escape(tactic_slug)}"{title_attr}>'
+                f'<span class="rt-flow-icon">{meta["icon"]}</span>'
+                f' {_html_escape(meta["label"])}{tech_suffix}'
+                f'</span>'
+            )
+        # Per-turn Copilot verdict pill: surfaced when the judge run
+        # covered this turn. Heuristic verdict stays alongside so a
+        # reviewer can see both classifications.
+        llm_turn_pill = ""
+        llm_turn_verdict = turn.get("llm_verdict") or ""
+        if llm_turn_verdict:
+            llm_turn_conf = turn.get("llm_confidence")
+            conf_html = (
+                f' <span class="rt-llm-confidence">'
+                f'{int(round(llm_turn_conf * 100))}%</span>'
+                if isinstance(llm_turn_conf, (int, float)) else ""
+            )
+            llm_turn_pill = (
+                f'<span class="rt-verdict-source rt-verdict-source-copilot" '
+                f'title="Copilot LLM judge">Copilot</span>'
+                f'<span class="rt-llm-verdict '
+                f'rt-llm-verdict-{_html_escape(llm_turn_verdict)}">'
+                f'{_html_escape(llm_turn_verdict)}{conf_html}</span>'
+            )
         parts.append(
             f'<li class="rt-turn rt-verdict-{_html_escape(verdict)}">'
             f'<div class="rt-turn-head">'
             f'<span class="rt-turn-idx">Turn {_html_escape(str(logical))}'
             f' &middot; attempt {_html_escape(str(attempt))}</span>'
             f'{attempt_html}'
-            f'<span class="rt-turn-verdict rt-verdict-{_html_escape(verdict)}">'
+            f'{tactic_html}'
+            f'{llm_turn_pill}'
+            f'<span class="rt-turn-verdict rt-verdict-{_html_escape(verdict)}" '
+            f'title="Heuristic verdict from the substring classifier">'
             f'{_html_escape(verdict)}</span>'
             f'<span class="rt-turn-elapsed">{elapsed_ms} ms</span>'
             f'</div>'
@@ -6782,6 +11284,18 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
             f'<div class="rt-turn-msg rt-msg-target">'
             f'<code>{_html_escape(response_short)}</code></div>'
         )
+        # Copilot reasoning callout — the load-bearing artifact of the
+        # judge pass. One sentence, evidence-anchored, surfaced right
+        # under the response so reviewers see the rationale next to
+        # the text it cites.
+        llm_reasoning = turn.get("llm_reasoning") or ""
+        if llm_reasoning:
+            parts.append(
+                f'<div class="rt-llm-reasoning">'
+                f'<span class="rt-llm-reasoning-label">Copilot judge:</span>'
+                f'{_html_escape(llm_reasoning)}'
+                f'</div>'
+            )
         if indicators:
             chips = "".join(
                 f'<span class="rt-indicator-chip">{_html_escape(str(i))}</span>'
@@ -6792,6 +11306,46 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
                 f'<span class="rt-label-inline">indicators matched:</span> '
                 f'{chips}</div>'
             )
+        # Tool-call evidence: structured tools the adapter saw the
+        # target invoke on this turn. Strongest possible signal for
+        # `landed` — especially for destructive verbs that we tint
+        # red so a reviewer's eye catches them in the timeline.
+        tool_calls = turn.get("tool_calls") or []
+        if tool_calls:
+            from collections import Counter
+            destructive_names = {
+                "drop_table", "delete_table", "purge_table",
+                "send_message", "send_email", "publish",
+                "elevate_session", "register_tool", "pip_install",
+                "memory_write",
+            }
+            tool_name_counts = Counter()
+            for call in tool_calls:
+                if isinstance(call, dict):
+                    name = str(call.get("name") or "").strip()
+                    if name:
+                        tool_name_counts[name] += 1
+            if tool_name_counts:
+                tool_chips = []
+                for name, count in tool_name_counts.items():
+                    chip_cls = "rt-tool-chip"
+                    if name in destructive_names:
+                        chip_cls += " rt-tool-chip-destructive"
+                    count_html = (
+                        f' <span class="rt-tool-chip-count">'
+                        f'&times;{count}</span>' if count > 1 else ""
+                    )
+                    tool_chips.append(
+                        f'<span class="{chip_cls}" '
+                        f'title="Tool invoked by the agent on this turn">'
+                        f'{_html_escape(name)}{count_html}</span>'
+                    )
+                parts.append(
+                    f'<div class="rt-turn-tools">'
+                    f'<span class="rt-turn-tools-label">tools invoked:</span>'
+                    f'{"".join(tool_chips)}'
+                    f'</div>'
+                )
         parts.append('</li>')
     parts.append('</ol>')
     parts.append('</div>')  # /rt-killchain

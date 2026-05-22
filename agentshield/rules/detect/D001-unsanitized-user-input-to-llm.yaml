@@ -93,13 +93,16 @@ rules:
       legacy_ids: ["AS-D-001"]
       severity_normalized: high
       framework_mappings:
+        # Mappings curated to >=75% coverage: a tag is kept only when
+        # the rule reliably catches the canonical instance of that
+        # framework item, not just an adjacent surface.
+        # Dropped: T6 (broader than direct PI), AML.T0054 (jailbreak
+        # is a specific subset of PI; rule catches all PI, not just
+        # jailbreaks).
         owasp_llm: ["LLM01"]
-        owasp_agentic: ["T6"]
+        owasp_agentic: []
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        # Path B: AML.T0054 (Jailbreak) added — runtime probe validates
-        # the injection actually lands at the LLM. The static surface
-        # finds the path; the probe confirms the model accepts it.
-        mitre_atlas: ["AML.T0051", "AML.T0054"]
+        mitre_atlas: ["AML.T0051"]
         agentshield_v1: []
       languages: [python]
       remediation: >-

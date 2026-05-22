@@ -965,7 +965,7 @@ def test_html_reference_tab_renders_cards_from_three_sources(repo: Path) -> None
     for source_phrase in (
         "Semgrep Rules-engine Static Scan",
         "Copilot LLM-as-a-Judge Scan",
-        "Manifest Static Scanner",
+        "Manifest Rules-Engine Static Scanner",
     ):
         assert source_phrase in html, f"missing source: {source_phrase}"
     # At least one card from each tier.
@@ -1113,3 +1113,310 @@ def test_framework_finding_counts_aggregates_both_tiers(repo: Path) -> None:
     assert counts.get("owasp_llm:LLM02") == 1
     assert counts.get("owasp_agentic:T8") == 1
     assert counts.get("cwe:CWE-200") == 1
+
+
+def _write_probe_discovered(repo: Path, n_findings: int) -> None:
+    """Write a probe-discovered.json with `n_findings` minimal entries."""
+    payload = {
+        "findings": [
+            {
+                "rule_id": f"redteam-explore-{i}",
+                "agentshield_id": f"AS-X-D-{i:03d}",
+                "category": "detect",
+                "severity": "high",
+                "target": "http://localhost:8765/api/agent",
+                "title": f"Explore probe #{i}",
+                "frameworks": {
+                    "owasp_llm": ["LLM01"],
+                    "owasp_agentic": ["T6"],
+                    "mitre_atlas": ["AML.T0051"],
+                    "cwe": ["CWE-200"],
+                    "ast": [],
+                },
+            }
+            for i in range(n_findings)
+        ],
+    }
+    (repo / ".agentshield" / "probe-discovered.json").write_text(
+        json.dumps(payload)
+    )
+
+
+def _write_probe_campaigns(
+    repo: Path,
+    *,
+    succeeded: int,
+    blocked: int,
+) -> None:
+    """Write a probe-campaigns.json with `succeeded`+`blocked` campaigns."""
+    campaigns = []
+    seq = 0
+    for status, count in (("succeeded", succeeded), ("blocked", blocked)):
+        for _ in range(count):
+            seq += 1
+            campaigns.append({
+                "rule_id": f"redteam-campaign-test-{seq}",
+                "agentshield_id": f"AS-RT-D-{seq:03d}",
+                "name": f"test-{seq}",
+                "title": f"Test campaign {seq}",
+                "category": "detect",
+                "severity": "high",
+                "objective": "test objective",
+                "rationale": "test rationale",
+                "status": status,
+                "confidence": 0.8,
+                "turn_count": 1,
+                "target": "http://localhost:8765/api/agent",
+                "session_ids": ["s1"],
+                "discovered_at": "2026-05-20T00:00:00Z",
+                "frameworks": {
+                    "owasp_llm": ["LLM01"],
+                    "owasp_agentic": [],
+                    "mitre_atlas": [],
+                    "cwe": [],
+                    "ast": [],
+                },
+                "turns": [{
+                    "index": 1, "logical_turn": 1, "attempt": 1,
+                    "attacker_message": "m", "target_response": "r",
+                    "indicators_matched": [],
+                    "verdict": "succeeded" if status == "succeeded" else "blocked",
+                    "reasoning": "test", "elapsed_ms": 1,
+                    "tactic": "", "atlas_technique": "",
+                }],
+            })
+    (repo / ".agentshield" / "probe-campaigns.json").write_text(
+        json.dumps({"campaigns": campaigns})
+    )
+
+
+def _parse_metric_cards(html: str) -> dict[str, int]:
+    """Extract every `(metric-label, metric-value)` pair from the
+    metrics row. Returns a dict keyed by label so the test can assert
+    on individual cards by name."""
+    import re
+    pattern = re.compile(
+        r'<div class="metric(?:\s+metric-hero)?"[^>]*>\s*'
+        r'<div class="metric-label">([^<]+)</div>\s*'
+        r'<div class="metric-value(?:\s+actionable)?">(\d+)</div>',
+        re.S,
+    )
+    return {label.strip(): int(v) for label, v in pattern.findall(html)}
+
+
+def test_html_metric_cards_sum_to_net_actionable(repo: Path) -> None:
+    """Invariant: the four input metric cards must sum (minus FP) to the
+    Net Actionable hero value. This catches regressions where a new
+    finding category gets added to `actionable_finding_count` but isn't
+    surfaced in the breakdown row — exactly the bug that hid the
+    probe-runtime subtotal pre-v4."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    _write_probe_discovered(repo, n_findings=11)
+    _write_probe_campaigns(repo, succeeded=4, blocked=2)
+
+    html = render_combined_html(merge(repo))
+    cards = _parse_metric_cards(html)
+
+    # Input cards present. False Positives is no longer a separate
+    # card — the Rules-engine card already shows the net-of-FP count.
+    assert "Rules-engine Static Scan" in cards
+    assert "Copilot LLM-as-a-Judge Static Scan" in cards
+    assert "Probe Runtime Scan" in cards
+    assert "Copilot Behaviour Emulator" in cards
+    assert "False Positives" not in cards
+    assert "Net Actionable" in cards
+
+    # Probe card aggregates discovered + landed (succeeded) campaigns,
+    # not blocked ones — blocked campaigns are defensive wins, not
+    # actionable findings.
+    assert cards["Probe Runtime Scan"] == 11 + 4  # discovered + landed
+    assert cards["Probe Runtime Scan"] != 11 + 4 + 2  # blocked excluded
+
+    # The invariant: input cards must equal Net Actionable. The
+    # Rules-engine card is already net of FP, so no subtraction
+    # step is needed in the formula.
+    expected = (
+        cards["Rules-engine Static Scan"]
+        + cards["Copilot LLM-as-a-Judge Static Scan"]
+        + cards["Probe Runtime Scan"]
+        + cards["Copilot Behaviour Emulator"]
+    )
+    assert cards["Net Actionable"] == expected, (
+        f"Breakdown row does not sum to Net Actionable: "
+        f"{cards['Rules-engine Static Scan']} + "
+        f"{cards['Copilot LLM-as-a-Judge Scan']} + "
+        f"{cards['Probe Runtime Scan']} + "
+        f"{cards['Copilot Behaviour Emulator']} = {expected}, "
+        f"but Net Actionable = {cards['Net Actionable']}"
+    )
+
+
+def test_html_campaign_finding_has_fix_block(repo: Path) -> None:
+    """Every campaign that carries a `remediation` field must render a
+    Fix block on its finding card. Pre-v4 the campaign→finding bridge
+    forgot to forward `remediation`, so cards showed objective + tags
+    + attack scenario but no defensive guidance."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload())
+    _write_probe_campaigns(repo, succeeded=1, blocked=0)
+    # Inject a remediation string into the lone campaign so the renderer
+    # has something to surface.
+    pc_path = repo / ".agentshield" / "probe-campaigns.json"
+    raw = json.loads(pc_path.read_text())
+    raw["campaigns"][0]["remediation"] = (
+        "Bind tool-call authority to the request's signed identity."
+    )
+    pc_path.write_text(json.dumps(raw))
+
+    html = render_combined_html(merge(repo))
+
+    assert "Bind tool-call authority to the request's signed identity." in html
+    # The Fix block uses the same .finding-remediation shell as static
+    # findings, so it inherits the report-wide Fix styling.
+    assert "<strong>Fix:</strong>" in html
+
+
+def test_campaign_catalogue_has_minimum_depth_and_breadth() -> None:
+    """Product floor for the multi-turn probe surface: at least 5
+    distinct campaigns, each with at least 5 planned attempts
+    (primary + mutations combined). Anything shallower stops being
+    a 'multi-turn' kill-chain and reads as a single-shot probe."""
+    from agentshield.probe.campaign import MOCK_CAMPAIGN_CATALOGUE
+
+    assert len(MOCK_CAMPAIGN_CATALOGUE) >= 5, (
+        f"Catalogue has {len(MOCK_CAMPAIGN_CATALOGUE)} campaigns; "
+        f"product floor is 5."
+    )
+    shallow: list[tuple[str, int]] = []
+    for obj in MOCK_CAMPAIGN_CATALOGUE:
+        attempts = 0
+        for entry in obj.turn_plan:
+            attempts += 1  # primary
+            attempts += len(entry.get("mutations") or ())
+        if attempts < 5:
+            shallow.append((obj.name, attempts))
+    assert not shallow, (
+        f"{len(shallow)} campaign(s) below the 5-attempt floor:\n  "
+        + "\n  ".join(f"{n}: {a} attempt(s)" for n, a in shallow)
+    )
+
+
+# ---------- Tier 2 partial-coverage detection ----------
+
+
+def _callout(
+    idx: int, verdict: str = "TP", *,
+    file_: str = "src/foo.py", line: int = 42,
+    rule: str = "agentshield.detect.unsanitized-user-input-to-llm",
+    reasoning: str = "verified by reading the cited file:line",
+) -> dict:
+    """Build a schema-valid Tier 2 callout for `tier1_finding_index=idx`."""
+    return {
+        "tier1_finding_index": idx,
+        "file": file_, "line": line,
+        "tier1_rule": rule,
+        "verdict": verdict,
+        "reasoning": reasoning,
+    }
+
+
+def _tier2_payload_with_callouts(callouts: list[dict]) -> dict:
+    """Build a tier2 payload with the supplied tier1_fp_callouts —
+    exercises the PARTIAL Tier 2 banner."""
+    payload = _tier2_payload()
+    payload["tier1_fp_callouts"] = callouts
+    return payload
+
+
+def test_tier2_partial_false_when_every_finding_classified(
+    repo: Path,
+) -> None:
+    """Full coverage → no PARTIAL banner."""
+    _write_tier1(repo, _tier1_payload())  # one tier 1 finding
+    _write_tier2(repo, _tier2_payload_with_callouts([_callout(0)]))
+    result = merge(repo)
+    assert result.tier2_classified_count == 1
+    assert result.tier2_partial is False
+
+
+def test_tier2_partial_true_when_some_findings_unclassified(
+    repo: Path,
+) -> None:
+    """Pre-v4 silent-skip behaviour (no callout for TPs) now flags
+    as partial — exactly the ambiguity we wanted to surface."""
+    # Two tier1 findings, only one classified.
+    findings = [
+        {**_tier1_payload()["findings"][0], "line": 1},
+        {**_tier1_payload()["findings"][0], "line": 2},
+    ]
+    _write_tier1(repo, _tier1_payload(findings))
+    _write_tier2(repo, _tier2_payload_with_callouts([_callout(0)]))
+    # index 1 deliberately uncommented — pre-v4 default for TPs
+    result = merge(repo)
+    assert result.tier2_classified_count == 1
+    assert result.tier2_partial is True
+
+
+def test_tier2_partial_false_when_tier2_missing(repo: Path) -> None:
+    """No Tier 2 at all → not partial (different signal)."""
+    _write_tier1(repo, _tier1_payload())
+    # tier2-findings.json deliberately not written
+    result = merge(repo)
+    assert result.tier2_partial is False
+
+
+def test_tier2_partial_false_when_tier2_stale(repo: Path) -> None:
+    """Stale Tier 2 → STALE banner wins; PARTIAL doesn't double up."""
+    _write_tier1(repo, _tier1_payload(fingerprint="abc"))
+    _write_tier2(repo, _tier2_payload_with_callouts([])  # empty callouts
+                 | {"agentshield_tier1_fingerprint": "different"})
+    # The fingerprint mismatch makes stale=True; the partial check
+    # should defer to stale.
+    result = merge(repo)
+    assert result.stale is True
+    assert result.tier2_partial is False
+
+
+def test_html_emits_partial_tier2_banner_when_classification_incomplete(
+    repo: Path,
+) -> None:
+    """End-to-end: the PARTIAL banner appears at the top of the
+    report with the X-of-Y count and a re-run prompt."""
+    findings = [
+        {**_tier1_payload()["findings"][0], "line": 1},
+        {**_tier1_payload()["findings"][0], "line": 2},
+        {**_tier1_payload()["findings"][0], "line": 3},
+    ]
+    _write_tier1(repo, _tier1_payload(findings))
+    _write_tier2(repo, _tier2_payload_with_callouts([_callout(0)]))
+    html = render_combined_html(merge(repo))
+    assert "PARTIAL Copilot LLM-as-a-Judge Scan" in html
+    assert "1 of 3" in html
+    assert "Re-run" in html
+    # Distinct from STALE — different banner class.
+    assert "partial-tier2" in html
+    # No STALE banner when fingerprints match.
+    assert "STALE Copilot" not in html
+
+
+def test_html_omits_partial_banner_on_full_coverage(repo: Path) -> None:
+    """Regression guard: full coverage → no PARTIAL banner."""
+    _write_tier1(repo, _tier1_payload())
+    _write_tier2(repo, _tier2_payload_with_callouts([_callout(0)]))
+    html = render_combined_html(merge(repo))
+    assert "PARTIAL Copilot" not in html
+
+
+def test_checklist_requires_callout_for_every_finding() -> None:
+    """The §7 instructions must make 100% coverage explicit so
+    Copilot doesn't silently skip TPs. Regression guard: if
+    someone reverts the language, this fails."""
+    body = Path("agentshield/skills/tier2_checklist.md.tmpl").read_text()
+    # The §7 section must state the hard rule.
+    assert "emit a callout for every Tier 1 finding" in body
+    # The TP branch must require a callout (not skip).
+    assert "verdict: \"TP\"" in body or "verdict: 'TP'" in body
+    # The PARTIAL banner reference must be present so Copilot
+    # knows the consequence of silent skips.
+    assert "PARTIAL Tier 2" in body

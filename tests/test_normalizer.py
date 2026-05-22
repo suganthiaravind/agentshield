@@ -58,7 +58,8 @@ def test_d001_preserves_framework_mappings(normalized_findings: list[Finding]) -
     assert d001.agentshield_id == "AS-S-D-LLM01-001"
     assert "AS-D-001" in d001.legacy_ids
     assert "LLM01" in d001.framework_mappings.owasp_llm
-    assert "T6" in d001.framework_mappings.owasp_agentic
+    # T6 dropped in the >=75% mapping audit (broader than direct PI).
+    assert d001.framework_mappings.owasp_agentic == []
     assert "AML.T0051" in d001.framework_mappings.mitre_atlas
 
 

@@ -35,12 +35,13 @@ rules:
       legacy_ids: []
       severity_normalized: high
       framework_mappings:
+        # Curated to >=75% coverage. Dropped T8 (rule catches data
+        # leakage via output, not lack of audit/traceability; ~45%).
+        # AML.T0056 stays — system-prompt-disclosure surface is a
+        # direct match. Runtime probe pair confirms behaviour.
         owasp_llm: ["LLM07"]
-        owasp_agentic: ["T8"]
+        owasp_agentic: []
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.10"]
-        # ATLAS AML.T0056 — System Prompt Disclosure. Static rule
-        # finds the leak surface; runtime probe (Path B) confirms the
-        # model returns the prompt under extraction pressure.
         mitre_atlas: ["AML.T0056"]
         cwe: ["CWE-200"]  # Information Exposure
         agentshield_v1: []

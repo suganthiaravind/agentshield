@@ -45,17 +45,16 @@ rules:
       legacy_ids: []
       severity_normalized: high
       framework_mappings:
+        # Curated to >=75% coverage. Dropped T6 (broader than inter-
+        # agent PI; rule is specifically agent-to-agent), AML.T0054
+        # (rule catches any inter-agent injection, not specifically
+        # jailbreak payloads), CWE-918 (target URL is fixed in this
+        # rule; SSRF needs attacker-controlled destination).
         owasp_llm: ["LLM01"]
-        # T12 (Agent Communication Poisoning) is the headline mapping.
-        # T6 stays in scope because this is still a prompt-injection
-        # vector — the injection just lands one hop downstream.
-        owasp_agentic: ["T12", "T6"]
+        owasp_agentic: ["T12"]
         nist_ai_rmf: ["MAP-2.3", "GOVERN-1.5"]
-        mitre_atlas: ["AML.T0051", "AML.T0054"]
-        cwe: ["CWE-918"]  # SSRF-adjacent — the agent fetches at the
-                          # request of an attacker, even though the
-                          # request target is fixed; the body is what's
-                          # attacker-controlled.
+        mitre_atlas: ["AML.T0051"]
+        cwe: []
         agentshield_v1: []
       languages: [python]
       remediation: >-

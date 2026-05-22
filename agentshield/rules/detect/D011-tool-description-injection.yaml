@@ -26,10 +26,17 @@ rules:
       legacy_ids: ["AS-D-011"]
       severity_normalized: medium
       framework_mappings:
-        owasp_llm: ["LLM05", "LLM01"]
-        owasp_agentic: ["T2", "T6"]
+        # Curated to >=75% coverage. Dropped LLM05 (tool-description
+        # bias ≠ output handling), LLM01 (metadata-side injection is
+        # a narrower surface than user-input PI; <60%), T2 (rule
+        # detects description content, not tool-call arguments;
+        # ~50%), AML.T0051 (same — partial PI subset). T6 stays —
+        # the rule directly catches developer/attacker intent
+        # override via tool metadata.
+        owasp_llm: []
+        owasp_agentic: ["T6"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        mitre_atlas: ["AML.T0051"]
+        mitre_atlas: []
         agentshield_v1: []
       languages: [python]
       remediation: >-

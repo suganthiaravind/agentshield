@@ -30,10 +30,16 @@ rules:
       legacy_ids: ["AS-D-010"]
       severity_normalized: high
       framework_mappings:
-        owasp_llm: ["LLM01"]
-        owasp_agentic: ["T6"]
+        # Curated to >=75% coverage. Dropped LLM01 and AML.T0051
+        # (developer-written jailbreak strings ≠ adversary-injected
+        # prompt injection — same lexical pattern, opposite threat
+        # actor), T6 (broader than embedded jailbreak markers).
+        # No framework currently mappable at >=75%; the rule remains
+        # a useful hygiene check but is reported as AgentShield-only.
+        owasp_llm: []
+        owasp_agentic: []
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        mitre_atlas: ["AML.T0051"]
+        mitre_atlas: []
         agentshield_v1: []
       languages: [python]
       remediation: >-

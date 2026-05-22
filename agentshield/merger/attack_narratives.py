@@ -2260,6 +2260,57 @@ NARRATIVES: dict[str, AttackScenario] = {
             "the real thing."
         ),
     ),
+    "D-AST06-001": AttackScenario(
+        title="Credential hard-coded in a skill bundle file",
+        attacker_input=(
+            "(No runtime payload — the credential leaks via the "
+            "bundle's distribution channels: git history, container "
+            "images, build artefacts, CI logs, registry mirrors.)"
+        ),
+        code_path=(
+            "A non-code file shipped inside the skill bundle "
+            "(YAML, JSON, .env, plain text) contains a literal "
+            "API key, OAuth token, password, or signing secret. "
+            "Semgrep's code-side scanner only inspects `.py` / "
+            "`.java` — the credential class that lives in config "
+            "files only surfaces from the manifest scanner."
+        ),
+        impact=(
+            "The credential ships to every consumer of the bundle "
+            "in the clear: git clones, image pulls, registry "
+            "mirrors, CI artefact stores. Rotation is forever — "
+            "git history exposes the secret even after deletion "
+            "from HEAD. A single leaked bundle compromises every "
+            "tenant that loaded the skill."
+        ),
+    ),
+    "D-AST08-001": AttackScenario(
+        title="Skills combine to grant a dangerous permission set",
+        attacker_input=(
+            "(No direct attacker payload — the risk is structural. "
+            "Two seemingly-benign skills loaded together hand the "
+            "agent a capability neither was meant to confer on its "
+            "own.)"
+        ),
+        code_path=(
+            "Two or more skills declared in the same manifest set "
+            "carry permissions that individually look fine but in "
+            "combination form a known-dangerous pair "
+            "(e.g. `read:filesystem` + `network:any` = exfil "
+            "primitive; `read:secrets` + `write:logs` = secret "
+            "leak via audit trail; `execute:shell` + "
+            "`read:user_inputs` = RCE-on-tap)."
+        ),
+        impact=(
+            "Permission bleed: a workflow that combines the two "
+            "skills hands the LLM-planner a capability the skill "
+            "reviewers never intended to expose. AST03 catches "
+            "the single-skill case; AST08 is the cross-skill blind "
+            "spot. Real attackers don't grant themselves the "
+            "compound capability in one step — they assemble it "
+            "from parts the reviewer waved through individually."
+        ),
+    ),
 }
 
 

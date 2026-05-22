@@ -56,11 +56,16 @@ rules:
       legacy_ids: ["AS-D-003"]
       severity_normalized: critical
       framework_mappings:
-        owasp_llm: ["LLM05", "LLM06"]
-        owasp_agentic: ["T2", "T11"]
+        # Curated to >=75% coverage. Dropped LLM05 (rule detects the
+        # capability, not output handling), T2 (tool dispatch is the
+        # T2 surface; this rule flags the availability), AML.T0011
+        # (model-loading surface, unrelated), CWE-78 (rule detects
+        # the tool exists, not OS-command injection paths).
+        owasp_llm: ["LLM06"]
+        owasp_agentic: ["T11"]
         nist_ai_rmf: ["MAP-2.3", "MANAGE-2.4"]
-        mitre_atlas: ["AML.T0011", "AML.T0050"]
-        cwe: ["CWE-78", "CWE-94"]
+        mitre_atlas: ["AML.T0050"]
+        cwe: ["CWE-94"]
         agentshield_v1: []
       languages: [python]
       remediation: >-

@@ -111,12 +111,12 @@ rules:
       legacy_ids: ["AS-D-001"]
       severity_normalized: high
       framework_mappings:
+        # Curated to >=75% coverage. Dropped T6 (broader than direct PI),
+        # AML.T0054 (rule catches all PI, not jailbreak specifically).
         owasp_llm: ["LLM01"]
-        owasp_agentic: ["T6"]
+        owasp_agentic: []
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7"]
-        # Path B: AML.T0054 (Jailbreak) added — runtime probe confirms
-        # the injection lands at the LLM.
-        mitre_atlas: ["AML.T0051", "AML.T0054"]
+        mitre_atlas: ["AML.T0051"]
         agentshield_v1: []
       languages: [java]
       remediation: >-

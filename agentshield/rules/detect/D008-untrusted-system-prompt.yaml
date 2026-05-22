@@ -69,10 +69,14 @@ rules:
       legacy_ids: ["AS-D-008"]
       severity_normalized: critical
       framework_mappings:
-        owasp_llm: ["LLM01", "LLM07"]
+        # Curated to >=75% coverage. Dropped LLM01 (rule catches the
+        # system-prompt source, not user-input PI), LLM07 (system-
+        # prompt source ≠ system-prompt leakage to user), AML.T0051
+        # (direct PI surface is user input, not prompt sourcing).
+        owasp_llm: []
         owasp_agentic: ["T6"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
-        mitre_atlas: ["AML.T0051"]
+        mitre_atlas: []
         cwe: ["CWE-829"]
         agentshield_v1: []
       languages: [python]

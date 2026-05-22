@@ -268,6 +268,46 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     prb.add_argument(
+        "--target-env",
+        choices=("staging", "production", "mock", "auto"),
+        default="auto",
+        help=(
+            "Deployment-stage declaration for safety gating. "
+            "'auto' (default) inherits from target.yaml's `env` "
+            "field, falling back to 'staging' if absent. Explicit "
+            "values override target.yaml. When the resolved env is "
+            "'production', destructive multi-turn campaigns "
+            "(`drop_table`, exfil, cross-tenant reads, real "
+            "cancellations) are blocked unless --confirm-destructive "
+            "is also passed."
+        ),
+    )
+    prb.add_argument(
+        "--confirm-destructive",
+        action="store_true",
+        help=(
+            "Required with --target-env=production AND "
+            "--profile destructive to actually fire destructive "
+            "multi-turn campaigns against a production agent. "
+            "Acknowledges that real account state may mutate."
+        ),
+    )
+    prb.add_argument(
+        "--target-config",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a target.yaml describing how to talk to the "
+            "agent — used by the pluggable TargetAdapter layer. When "
+            "provided, the adapter loaded from this file overrides "
+            "the legacy --target / --endpoint / --auth-env / --header "
+            "flags. Defaults to .agentshield/target.yaml in the "
+            "target repo if that file exists; otherwise the legacy "
+            "flags synthesise an http-generic adapter (mock-agent "
+            "shape) for one release cycle."
+        ),
+    )
+    prb.add_argument(
         "--mode",
         choices=("verify", "explore", "campaign", "both", "all"),
         default="verify",
@@ -276,14 +316,16 @@ def build_parser() -> argparse.ArgumentParser:
             "static scan already found. 'explore' asks an LLM to "
             "brainstorm single-shot attacks tuned to this target and "
             "fires them against the agent. 'campaign' runs multi-turn "
-            "goal-directed red-team campaigns (memory poisoning across "
-            "sessions, authority escalation → destructive action, "
-            "recon → tool-chain exfil) — the real test of whether the "
-            "agent holds up against an attacker that probes, learns, "
-            "and adapts. 'both' runs verify then explore. 'all' runs "
-            "verify + explore + campaign in one invocation. Discovered "
-            "findings get written to .agentshield/probe-discovered.json; "
-            "campaign findings to .agentshield/probe-campaigns.json."
+            "red-team probes — goal-directed attacks across multiple "
+            "turns (memory poisoning across sessions, authority "
+            "escalation → destructive action, recon → tool-chain "
+            "exfil) — the real test of whether the agent holds up "
+            "against an attacker that probes, learns, and adapts. "
+            "'both' runs verify then explore. 'all' runs verify + "
+            "explore + campaign in one invocation. Discovered findings "
+            "get written to .agentshield/probe-discovered.json; "
+            "multi-turn probe findings to "
+            ".agentshield/probe-campaigns.json."
         ),
     )
 
@@ -613,7 +655,44 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"[agentshield] ERROR emitting Tier 2 skill files: {exc}", file=sys.stderr)
         return 2
 
+    # Emit the agent behaviour-emulator skill alongside Tier 2.
+    # This is the scan-side answer to "what if there's no live
+    # agent to probe?" — Copilot walks the agent's runtime
+    # pipeline (user prompt → RAG → planner → tool choice → tool
+    # output → re-planning → final answer) from source code and
+    # predicts per-step behaviour under catalogued attack classes,
+    # citing file:line evidence. Honestly labelled in the report
+    # as a behaviour emulator, NOT as red-teaming.
+    from agentshield.emitter.skill_emitter import (
+        agent_emulator_prompt,
+        emit_agent_emulator_skill,
+    )
+    try:
+        emu_emitted = emit_agent_emulator_skill(target_root)
+    except FileNotFoundError as exc:
+        print(
+            f"[agentshield] ERROR emitting agent behaviour-emulator "
+            f"skill files: {exc}", file=sys.stderr,
+        )
+        return 2
+
     _print_tier2_banner(target_root, emit)
+    print()
+    print("[agentshield] Agent behaviour-emulator contract written:")
+    for p in emu_emitted:
+        print(f"[agentshield]   - {p}")
+    print()
+    print(
+        "[agentshield] Optional: emulate this agent's behaviour "
+        "against the catalogued attack classes (Copilot walks the "
+        "pipeline from your code, predicts per-step behaviour, "
+        "cites file:line). Paste this into Copilot Chat after "
+        "Tier 2:"
+    )
+    print()
+    for line in agent_emulator_prompt().splitlines():
+        print(f"    {line}")
+    print()
     return 0
 
 
@@ -880,35 +959,163 @@ def cmd_probe(args: argparse.Namespace) -> int:
             run_campaigns,
             write_campaign_findings,
         )
+        from agentshield.probe.target_adapter import (
+            AdapterConfigError,
+            load_adapter,
+        )
 
         if run_verify or run_explore_mode:
             print()
         print(
-            "[probe/campaign] Multi-turn red-team campaigns — "
+            "[probe/multi-turn] Multi-turn red-team probes — "
             "goal-directed attacks that probe, learn, adapt..."
         )
         target_url = config.target.rstrip("/") + config.endpoint_path
+
+        # Resolve the TargetAdapter for multi-turn campaigns. Precedence:
+        #   1. --target-config <path>                     (explicit)
+        #   2. <repo>/.agentshield/target.yaml            (auto-discover)
+        #   3. None -> run_campaigns synthesises an http-generic
+        #      adapter from --target / --endpoint / --auth-env /
+        #      --header (legacy path, one release of compat).
+        adapter = None
+        config_path = None
+        if args.target_config:
+            config_path = Path(args.target_config)
+        else:
+            auto = target_root / ".agentshield" / "target.yaml"
+            if auto.exists():
+                config_path = auto
+        if config_path is not None:
+            try:
+                adapter = load_adapter(config_path)
+            except AdapterConfigError as e:
+                print(
+                    f"error: failed to load {config_path}: {e}",
+                    file=sys.stderr,
+                )
+                return 2
+            print(f"[probe/multi-turn] target-config: {config_path}")
+            print(f"[probe/multi-turn] adapter:       {adapter.name}")
+
+        # Load the Copilot-authored mutations file if it exists.
+        # Mutations appends fresh attempts to blocked logical turns;
+        # no-op when absent. (The deprecated `load_redteam_plan`
+        # pre-baked source-code knowledge into payloads — wrong for
+        # honest red-team semantics — and was removed; see the
+        # agent-emulator bootstrap doc for the rationale.)
+        from agentshield.probe.campaign import load_redteam_mutations
+        mutations_file = load_redteam_mutations(
+            target_root / ".agentshield"
+        )
+        appended_count = sum(
+            len(c.get("new_mutations") or [])
+            for c in mutations_file.get("appended_mutations") or []
+            if isinstance(c, dict)
+        )
+        if appended_count:
+            print(
+                f"[probe/multi-turn] appending mutator output: "
+                f"{appended_count} new mutation(s) across "
+                f"{len(mutations_file['appended_mutations'])} turn(s)"
+            )
+
+        # Resolve the deployment-stage env: explicit --target-env
+        # wins; "auto" inherits from the adapter (which read
+        # target.yaml's `env` field at load time); falls back to
+        # "staging" when neither is set.
+        from agentshield.probe.campaign import SafetyPolicy
+        if args.target_env != "auto":
+            resolved_env = args.target_env
+        else:
+            resolved_env = getattr(adapter, "target_env", "staging") if adapter else "staging"
+        policy = SafetyPolicy(
+            profile=args.profile,
+            target_env=resolved_env,
+            confirm=bool(args.confirm),
+            confirm_destructive=bool(args.confirm_destructive),
+        )
+        print(
+            f"[probe/multi-turn] safety: profile={policy.profile} "
+            f"env={policy.target_env} "
+            f"confirm={policy.confirm} "
+            f"confirm_destructive={policy.confirm_destructive}"
+        )
+
         campaigns = run_campaigns(
             target_url=target_url,
             timeout_seconds=config.timeout_seconds,
             auth_header=config.auth_header,
             extra_headers=config.extra_headers,
+            adapter=adapter,
+            mutations_file=mutations_file,
+            safety=policy,
         )
+
+        # Emit the two remaining Copilot follow-up contracts —
+        # mutate (turn-by-turn mutation extension) and judge (LLM
+        # verdict per turn). The deprecated redteam-plan was
+        # removed: pre-baking source-code knowledge into payloads
+        # is dishonest for runtime red-team semantics. Per-target
+        # static analysis is the agent-behaviour-emulator's job
+        # (emitted by `scan`, not by `probe`).
+        from agentshield.emitter.skill_emitter import (
+            emit_redteam_judge_skill,
+            emit_redteam_mutate_skill,
+            redteam_judge_prompt,
+            redteam_mutate_prompt,
+        )
+        mutate_emitted = emit_redteam_mutate_skill(target_root)
+        judge_emitted = emit_redteam_judge_skill(target_root)
+        print()
+        print("[probe/multi-turn] Copilot contracts written:")
+        for p in mutate_emitted + judge_emitted:
+            print(f"[probe/multi-turn]   - {p}")
+        # Surface the mutator prompt only when there's something to
+        # mutate — at least one exhausted campaign or one blocked
+        # turn — so we don't suggest a no-op pass.
+        has_exhausted = any(
+            c.status == "exhausted" for c in campaigns
+        )
+        has_blocked_turn = any(
+            t.verdict == "blocked"
+            for c in campaigns for t in c.turns
+        )
+        if (has_exhausted or has_blocked_turn) and appended_count == 0:
+            print()
+            print(
+                "[probe/multi-turn] Some turns were blocked or "
+                "exhausted. To generate fresh mutation phrasings "
+                "from the actual refusal text, paste this into "
+                "Copilot Chat (then re-run probe):"
+            )
+            print()
+            for line in redteam_mutate_prompt().splitlines():
+                print(f"    {line}")
+        print()
+        print(
+            "[probe/multi-turn] To upgrade the substring-based verdicts "
+            "to reasoning-based ones, paste this into Copilot Chat:"
+        )
+        print()
+        for line in redteam_judge_prompt().splitlines():
+            print(f"    {line}")
+        print()
         camp_path = write_campaign_findings(campaigns, target_root)
         succeeded = sum(1 for c in campaigns if c.status == "succeeded")
         blocked = sum(1 for c in campaigns if c.status == "blocked")
         exhausted = sum(1 for c in campaigns if c.status == "exhausted")
-        print(f"[probe/campaign] campaigns run:    {len(campaigns)}")
-        print(f"[probe/campaign]   succeeded:      {succeeded}")
-        print(f"[probe/campaign]   blocked:        {blocked}")
-        print(f"[probe/campaign]   exhausted:      {exhausted}")
+        print(f"[probe/multi-turn] probes run:      {len(campaigns)}")
+        print(f"[probe/multi-turn]   succeeded:     {succeeded}")
+        print(f"[probe/multi-turn]   blocked:       {blocked}")
+        print(f"[probe/multi-turn]   exhausted:     {exhausted}")
         for c in campaigns:
             print(
-                f"[probe/campaign]   - [{c.severity}/{c.status}] "
+                f"[probe/multi-turn]   - [{c.severity}/{c.status}] "
                 f"{c.title} ({c.turn_count} turn(s), "
                 f"{c.agentshield_id})"
             )
-        print(f"[probe/campaign] written:          {camp_path}")
+        print(f"[probe/multi-turn] written:         {camp_path}")
 
     return 0
 

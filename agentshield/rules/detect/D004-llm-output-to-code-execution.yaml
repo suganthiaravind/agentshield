@@ -78,10 +78,14 @@ rules:
       legacy_ids: ["AS-D-004"]
       severity_normalized: critical
       framework_mappings:
-        owasp_llm: ["LLM05", "LLM06"]
-        owasp_agentic: ["T2", "T11"]
+        # Curated to >=75% coverage. Dropped LLM06 (output handling,
+        # not privilege/tool-surface), T2 (rule is about output flow
+        # to sinks, not tool dispatch), AML.T0011 (model-loading,
+        # unrelated).
+        owasp_llm: ["LLM05"]
+        owasp_agentic: ["T11"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
-        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        mitre_atlas: ["AML.T0050"]
         cwe: ["CWE-94"]
         agentshield_v1: []
       languages: [python]

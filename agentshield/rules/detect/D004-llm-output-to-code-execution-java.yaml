@@ -88,10 +88,14 @@ rules:
       legacy_ids: ["AS-D-004"]
       severity_normalized: critical
       framework_mappings:
-        owasp_llm: ["LLM05", "LLM06"]
-        owasp_agentic: ["T2", "T11"]
+        # Curated to >=75% coverage. Dropped LLM06, T2, AML.T0011
+        # (see Python variant for rationale). CWE-89 kept — Java
+        # variant explicitly catches LLM-output into unparameterized
+        # JDBC, so SQL Injection is a direct match.
+        owasp_llm: ["LLM05"]
+        owasp_agentic: ["T11"]
         nist_ai_rmf: ["MAP-2.3", "MEASURE-2.7", "MANAGE-2.4"]
-        mitre_atlas: ["AML.T0011", "AML.T0050"]
+        mitre_atlas: ["AML.T0050"]
         cwe: ["CWE-89", "CWE-94"]
         agentshield_v1: []
       languages: [java]

@@ -46,8 +46,10 @@ rules:
       legacy_ids: []
       severity_normalized: high
       framework_mappings:
+        # Curated to >=75% coverage. Dropped T6 (broader than rogue-
+        # peer input; ~50%).
         owasp_llm: ["LLM01"]
-        owasp_agentic: ["T13", "T6"]
+        owasp_agentic: ["T13"]
         nist_ai_rmf: ["GOVERN-1.5", "MAP-3.1"]
         mitre_atlas: ["AML.T0051"]
         cwe: ["CWE-345"]  # Insufficient verification of data authenticity
