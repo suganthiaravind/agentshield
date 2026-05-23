@@ -600,6 +600,60 @@ _PIPELINE_STEP_SHORT = {
     "final_answer":  "Response",
 }
 
+# One-sentence guiding question shown as a banner before the animation plays.
+# Gives every viewer a frame: "what is this animation trying to answer?"
+_ATTACK_QUESTION: dict[str, str] = {
+    "direct-prompt-injection": (
+        "Can an attacker overwrite the agent's instructions by embedding commands in the user message?"
+    ),
+    "indirect-prompt-injection": (
+        "Can an attacker plant hidden instructions in an external document the agent fetches — "
+        "without ever sending a message to the agent directly?"
+    ),
+    "system-prompt-extraction": (
+        "Can an attacker trick the agent into revealing the private developer instructions it was given?"
+    ),
+    "excessive-agency": (
+        "Can the agent take a consequential action — like cancelling a subscription — "
+        "without being explicitly asked to, and without any human approval?"
+    ),
+    "tool-argument-injection": (
+        "Can an attacker craft a message that causes the agent to call a tool "
+        "with arguments the attacker controls?"
+    ),
+    "tool-description-injection": (
+        "Can an attacker get their text into the tool description that the AI model reads "
+        "when deciding which tool to call?"
+    ),
+    "tool-output-poisoning": (
+        "Can a malicious tool return a response that hijacks the agent's next action?"
+    ),
+    "memory-poisoning": (
+        "Can an attacker corrupt what the agent remembers across sessions, "
+        "so that future users are affected by the tampered memory?"
+    ),
+    "recursive-injection": (
+        "Can an attacker trigger a chain of self-referencing calls that the agent "
+        "cannot break out of, consuming resources or producing unbounded output?"
+    ),
+    "authority-spoofing": (
+        "Can an attacker impersonate a privileged identity — an admin, the platform, "
+        "or another agent — to expand what the agent will do for them?"
+    ),
+    "cross-tenant-fishing": (
+        "Can one user's request cause the agent to read or expose data "
+        "that belongs to a completely different user?"
+    ),
+    "repudiation": (
+        "Can the agent take a consequential action — sending a message, making a payment — "
+        "with no audit record that proves exactly what happened and who authorised it?"
+    ),
+    "insecure-output-handling": (
+        "Can attacker-controlled text flow from the agent's response into a downstream system "
+        "— a shell, database, or external API — without being sanitised first?"
+    ),
+}
+
 # Plain-English narrative shown per step in the emulator modal,
 # keyed by (step_key, outcome). Tells the reviewer exactly what
 # is happening at each pipeline point in non-technical language.
@@ -1158,8 +1212,19 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             '</div>'
         )
 
+    attack_question = _ATTACK_QUESTION.get(emu_attack_class, "")
+    attack_question_html = ""
+    if attack_question:
+        attack_question_html = (
+            f'<div class="emu-attack-question" style="display:none">'
+            f'<span class="emu-aq-label">The question:</span> '
+            f'{_html_escape(attack_question)}'
+            f'</div>'
+        )
+
     parts.append(
         f'<div class="emu-trace"{catalog_attr}>'
+        f'{attack_question_html}'
         f'{layer_intro_html}'
         '<div class="emu-trace-header">'
         '<button type="button" class="emu-play-btn" data-action="emu-play">'
@@ -6166,6 +6231,28 @@ footer {
   border: 1px solid #334155;
   vertical-align: middle;
 }
+/* Attack-question banner — shown throughout the animation */
+.emu-attack-question {
+  margin-bottom: 10px;
+  padding: 9px 14px;
+  background: #0c1a2e;
+  border: 1px solid #1e40af;
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  font-size: 13px; line-height: 1.5;
+  color: #cbd5e1;
+  animation: emu-aq-fadein 0.4s ease forwards;
+}
+.emu-aq-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #60a5fa;
+  margin-right: 6px;
+}
+@keyframes emu-aq-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 /* Payload-firing catalogue intro — shown before pipeline scenes animate */
 .emu-layer-intro {
   margin-bottom: 10px;
@@ -7932,6 +8019,9 @@ _HTML_JS = """
                              'emu-lp-landed','emu-lp-blocked-all');
         });
       }
+      // Hide the attack-question banner on reset
+      var aq = trace.querySelector('.emu-attack-question');
+      if (aq) aq.style.display = 'none';
     }
 
     // Animate the payload-firing catalogue intro before the pipeline scenes.
@@ -8086,6 +8176,12 @@ _HTML_JS = """
             }, afterScene);
           }
         });
+      }
+
+      // Show the attack-question banner immediately when Play is pressed
+      if (startIdx === 0) {
+        var aq = trace.querySelector('.emu-attack-question');
+        if (aq) { aq.style.display = ''; }
       }
 
       // Play the layer-firing catalogue intro (seeds → mutations) first,
