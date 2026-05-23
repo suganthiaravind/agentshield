@@ -136,9 +136,12 @@ def run_explore(
     """
     from agentshield.probe.explore import (
         DiscoveredFinding,
+        MAX_MUTATIONS_PER_CLASS,
+        MAX_SEEDS_PER_CLASS,
         category_role_letter,
         generate_attacks,
     )
+    from agentshield.probe.schema import ProbePayload
 
     attacks = generate_attacks(target_root)
     discovered: list[DiscoveredFinding] = []
@@ -151,39 +154,75 @@ def run_explore(
     for i, attack in enumerate(attacks, start=1):
         endpoint = attack.endpoint_override or config.endpoint_path
         target_url = target_url_base + endpoint
-        response = send_payload(
-            target_url,
-            attack.payload,
-            timeout_seconds=config.timeout_seconds,
-            auth_header=config.auth_header,
-            extra_headers=config.extra_headers,
-            method="POST",
-        )
 
-        # Re-use the same classify() heuristic. Build a thin ProbePayload-
-        # shaped object so the classifier sees the same interface.
-        from agentshield.probe.schema import ProbePayload
-        shim_payload = ProbePayload(
+        shim = ProbePayload(
             rule_id=f"PROBE-DISCOVERED/{attack.name}",
             name=attack.name,
             template=attack.payload,
             indicators=attack.indicators,
             json_indicators=attack.json_indicators,
         )
-        heuristic_verdict = classify(response, shim_payload)
-        # Only landed attacks become discovered findings — the rest are
-        # noise the report shouldn't surface.
-        if heuristic_verdict != "landed":
+
+        # --- Two-layer firing: seeds first, then mutations ---
+        # Build the ordered sequence: seeds (agent-agnostic) then
+        # mutations (response-driven; pre-baked in mock mode).
+        # Stop the moment any attempt lands.
+        seed_texts = [s.text for s in attack.seed_payloads[:MAX_SEEDS_PER_CLASS]]
+        mut_texts = list(attack.mutation_payloads[:MAX_MUTATIONS_PER_CLASS])
+        # The catalogue's primary payload is the first LLM-generated
+        # variant — prepend it to the mutation sequence.
+        if attack.payload and attack.payload not in mut_texts:
+            mut_texts.insert(0, attack.payload)
+        # Enforce the mutation cap after the prepend.
+        mut_texts = mut_texts[:MAX_MUTATIONS_PER_CLASS]
+
+        fired_payload = attack.payload  # fallback for the finding record
+        landed_response = None
+        layer_label = "mutation"
+
+        for layer, texts in (("seed", seed_texts), ("mutation", mut_texts)):
+            if landed_response is not None:
+                break
+            for payload_text in texts:
+                response = send_payload(
+                    target_url,
+                    payload_text,
+                    timeout_seconds=config.timeout_seconds,
+                    auth_header=config.auth_header,
+                    extra_headers=config.extra_headers,
+                    method="POST",
+                )
+                shim_for_attempt = ProbePayload(
+                    rule_id=shim.rule_id,
+                    name=shim.name,
+                    template=payload_text,
+                    indicators=attack.indicators,
+                    json_indicators=attack.json_indicators,
+                )
+                verdict = classify(response, shim_for_attempt)
+                if verdict == "landed":
+                    fired_payload = payload_text
+                    landed_response = response
+                    layer_label = layer
+                    break
+
+        if landed_response is None:
+            # No payload landed for this attack class.
             continue
 
-        # When the LLM classifier is on, get its reasoning too — provides
-        # the audit trail for why this novel attack should be trusted.
         llm_reasoning = ""
-        llm_confidence: float = 0.7  # heuristic-only baseline
+        llm_confidence: float = 0.7
         if config.classifier == "llm":
             from agentshield.probe.llm_classifier import classify as llm_classify
+            shim_landed = ProbePayload(
+                rule_id=shim.rule_id,
+                name=shim.name,
+                template=fired_payload,
+                indicators=attack.indicators,
+                json_indicators=attack.json_indicators,
+            )
             llm_result = llm_classify(
-                response, shim_payload,
+                landed_response, shim_landed,
                 finding={"file": "(discovered)", "line": 0},
             )
             llm_reasoning = llm_result.reasoning
@@ -191,7 +230,7 @@ def run_explore(
 
         matched = [
             ind for ind in attack.indicators
-            if ind.lower() in (response.body or "").lower()
+            if ind.lower() in (landed_response.body or "").lower()
         ]
         discovered.append(DiscoveredFinding(
             rule_id=f"probe-discovered-{attack.name}",
@@ -199,9 +238,9 @@ def run_explore(
             category=attack.category,
             severity=attack.severity,
             title=attack.name.replace("-", " ").title(),
-            message=attack.rationale,
-            payload_sent=attack.payload,
-            response_excerpt=(response.body or "")[:400],
+            message=f"[{layer_label}] {attack.rationale}",
+            payload_sent=fired_payload,
+            response_excerpt=(landed_response.body or "")[:400],
             indicators_matched=matched,
             verdict="landed",
             confidence=llm_confidence,

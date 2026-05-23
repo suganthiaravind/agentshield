@@ -44,6 +44,11 @@ from agentshield.probe.target_adapter import (
 
 _FRAMEWORK_KEYS = ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast")
 
+# Hard cap on mutations per logical turn. Attempt 1 is the primary phrasing;
+# attempts 2 through MAX_MUTATIONS_PER_TURN+1 are mutations. Beyond this the
+# attacker backend returns None and the logical turn is declared blocked.
+MAX_MUTATIONS_PER_TURN = 5
+
 
 # Kill-chain tactic vocabulary — aligned with MITRE ATT&CK and MITRE
 # ATLAS so a security buyer can map each turn to the kill-chain step
@@ -368,11 +373,16 @@ class _MockAttackerBackend:
             return self._fire_logical_turn(
                 objective, logical_turn=last.logical_turn + 1, attempt=1
             )
-        # blocked / inconclusive → try mutation of the same logical turn
+        # blocked / inconclusive → try next mutation of the same logical turn,
+        # but stop after MAX_MUTATIONS_PER_TURN total mutations (attempt 1 is
+        # the primary; mutations are attempts 2..MAX_MUTATIONS_PER_TURN+1).
+        next_attempt = last.attempt + 1
+        if next_attempt > MAX_MUTATIONS_PER_TURN + 1:
+            return None  # mutation budget exhausted for this logical turn
         return self._fire_logical_turn(
             objective,
             logical_turn=last.logical_turn,
-            attempt=last.attempt + 1,
+            attempt=next_attempt,
         )
 
     @staticmethod
@@ -536,7 +546,7 @@ def run_campaign(
     history: list[Turn] = []
     sessions_used: list[str] = []
     status = "exhausted"
-    max_total_fires = objective.max_turns * 4 + 4
+    max_total_fires = objective.max_turns * (MAX_MUTATIONS_PER_TURN + 1) + 1
 
     while len(history) < max_total_fires:
         plan_request = backend.plan_next_turn(objective, tuple(history))
@@ -1668,6 +1678,9 @@ def apply_mutations_to_catalogue(
                 continue
             # Build full mutation dicts inheriting from the primary.
             existing = list(entry_copy.get("mutations") or ())
+            # Honour the per-turn mutation cap — drop mutations beyond
+            # MAX_MUTATIONS_PER_TURN even if the mutator file supplies more.
+            existing = existing[:MAX_MUTATIONS_PER_TURN]
             primary_session = str(entry_copy.get("session_id") or "default")
             inherited_indicators = {
                 k: entry_copy.get(k)
