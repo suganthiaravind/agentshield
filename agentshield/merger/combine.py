@@ -605,67 +605,331 @@ _PIPELINE_STEP_SHORT = {
 # is happening at each pipeline point in non-technical language.
 _STEP_NARRATIVE: dict[str, dict[str, str]] = {
     "user_prompt": {
-        "advances": "The attacker’s payload enters the agent as ordinary user input — no input filters in place; the agent cannot tell it apart from a legitimate request. The attack moves forward.",
-        "blocked":  "An input validation layer intercepts the message before it reaches the agent. The attack is stopped at the front door.",
-        "modified": "The input is partially sanitised but the core payload survives. The attack continues in a weakened form.",
-        "absent_step": "This agent has no direct user-input pathway at this step.",
+        "advances": (
+            "The user-prompt step is the front door of the agent — the point where a user’s message "
+            "is received and handed to the AI model. "
+            "Here, the attacker’s payload enters as an ordinary chat message. "
+            "There is no input filter, keyword check, or intent classifier at this boundary, "
+            "so the agent cannot tell the malicious instruction apart from a legitimate user request. "
+            "The attack passes through this step unchanged and continues into the pipeline."
+        ),
+        "blocked": (
+            "The user-prompt step is the front door of the agent — the point where a user’s message "
+            "is received before it reaches the AI model. "
+            "A defensive control at this boundary — such as an input sanitiser, keyword filter, "
+            "or intent classifier — has intercepted the attacker’s message. "
+            "The malicious payload is rejected here, before the LLM ever sees it. "
+            "Blocking at the input boundary is the earliest and most reliable defence against prompt injection."
+        ),
+        "modified": (
+            "The user-prompt step is the front door of the agent — the point where a user’s message "
+            "is received before it reaches the AI model. "
+            "A partial input filter is present and strips some of the payload, "
+            "but the core injected instruction survives in altered form. "
+            "The attack continues into the pipeline in a weakened state. "
+            "Partial sanitisation is a common failure mode: attackers probe what gets stripped "
+            "and rephrase the payload to bypass the filter."
+        ),
+        "absent_step": (
+            "This agent does not expose a direct user-input pathway — requests arrive through "
+            "a different mechanism such as an internal API, a queue, or a hardcoded trigger "
+            "rather than a live user typing a message. "
+            "Direct prompt injection through a chat interface does not apply here. "
+            "Other attack classes targeting internal data sources (indirect injection, "
+            "tool-output poisoning) may still be relevant."
+        ),
     },
     "rag_context": {
-        "advances": "The agent pulls documents from its knowledge base without checking their content first. A poisoned document injects attacker-controlled text directly into the agent's context window.",
-        "blocked":  "Retrieved content is checked before being added to context. The malicious document is caught here.",
-        "modified": "Some content is filtered, but enough of the payload survives to influence the agent's next action.",
-        "absent_step": "This agent does not use RAG retrieval at this step.",
+        "advances": (
+            "The RAG-context step is where the agent fetches external content — documents, "
+            "web pages, database rows, or memory entries — and adds that content to the AI model’s "
+            "context window before it reasons or responds. "
+            "Here, the agent retrieves content from an external source without any provenance check "
+            "or content-trust marker. "
+            "If an attacker has pre-poisoned that external source, their hidden instructions "
+            "now appear inside the agent’s context alongside legitimate content. "
+            "The AI model cannot distinguish the attacker’s injected text from genuine retrieved data, "
+            "so the attack moves forward."
+        ),
+        "blocked": (
+            "The RAG-context step is where the agent fetches external content and adds it to the "
+            "AI model’s context window. "
+            "A defensive control — such as a provenance check, content-trust marker, "
+            "injection-pattern filter, or sandboxed retrieval zone — has caught the malicious "
+            "content at this boundary. "
+            "The attacker’s text is stripped or rejected before entering the AI model’s context window."
+        ),
+        "modified": (
+            "The RAG-context step is where the agent fetches external content and adds it to the "
+            "AI model’s context window. "
+            "A partial content filter is present and removes some of the attacker’s injected text, "
+            "but enough of the payload survives to influence the AI model’s next action. "
+            "Partial content filtering commonly fails when the filter targets specific patterns "
+            "(e.g., HTML tags, known phrases) but misses rephrased or encoded variants."
+        ),
+        "absent_step": (
+            "This agent does not retrieve content from an external knowledge base, vector store, "
+            "URL loader, or memory store at this step — it works only from the information "
+            "already in the conversation and its system prompt. "
+            "Indirect prompt injection (embedding malicious instructions inside a document the "
+            "agent fetches) is not applicable here. "
+            "If document retrieval is added in future, this step must be re-evaluated."
+        ),
     },
     # Narrative override for indirect injection — the attacker/user split
     # must be made explicit here; the generic rag_context text obscures it.
     "rag_context_indirect": {
         "advances": (
-            "⚠ The attacker is NOT the person chatting with this agent. "
-            "They pre-poisoned an external document (web page, database entry, memory store) "
-            "before any user ever made a request. "
-            "A legitimate user then triggered the agent to fetch that source — "
-            "and the hidden instructions inside it entered the agent's context window alongside the real content. "
-            "The agent has no way to tell the attacker's text apart from the genuine document."
+            "⚠ Important: the attacker is NOT the person chatting with this agent. "
+            "The RAG-context step is where the agent fetches external content (a web page, "
+            "document, or database entry) and adds it to the AI model’s context window. "
+            "Before any user ever made a request, the attacker poisoned that external source — "
+            "planting hidden instructions inside it. "
+            "A legitimate user then triggered the agent to fetch that source by sending an "
+            "innocent request (e.g., ‘summarise this URL’). "
+            "The hidden instructions entered the agent’s context window alongside the real content. "
+            "The AI model has no way to tell the attacker’s injected text apart from the genuine document, "
+            "so it treats both as trustworthy input — and the attack moves forward."
         ),
-        "blocked": "Retrieved content is validated for provenance or stripped of instruction-like patterns before being added to context. The injected text is neutralised here.",
-        "modified": "Some injected content is filtered, but residual attacker text still enters the context.",
-        "absent_step": "This agent does not use RAG retrieval at this step.",
+        "blocked": (
+            "⚠ Important: the attacker is NOT the person chatting with this agent — they "
+            "pre-poisoned an external document before any user made a request. "
+            "A defensive control at the RAG-context step — such as a provenance signature, "
+            "content-trust marker, or injection-pattern filter — has caught the attacker’s "
+            "hidden instructions before they entered the AI model’s context window. "
+            "The poisoned content is neutralised here."
+        ),
+        "modified": (
+            "⚠ Important: the attacker is NOT the person chatting with this agent — they "
+            "pre-poisoned an external document before any user made a request. "
+            "A partial content filter is present at the RAG-context step and removes some of the "
+            "attacker’s injected instructions, but enough survives to influence the AI model’s "
+            "next action. The attack continues in a weakened form."
+        ),
+        "absent_step": (
+            "This agent does not retrieve content from an external source at this step. "
+            "The indirect injection attack class — where an attacker poisons a document the "
+            "agent fetches — is not applicable here."
+        ),
     },
     "system_prompt": {
-        "advances": "The system prompt source is not verified at runtime. An attacker who can influence the prompt store can rewrite the agent's core instructions.",
-        "blocked":  "The system prompt is integrity-checked or loaded from a locked, immutable source. Tampering is detected.",
-        "modified": "The system prompt is partially constrained, but gaps remain that the attacker can exploit.",
-        "absent_step": "No system prompt is loaded at this step.",
+        "advances": (
+            "The system-prompt step is where developer instructions are loaded into the AI model’s "
+            "context before any user interaction begins. "
+            "These instructions define the agent’s identity, available tools, safety rules, "
+            "and what it is and is not allowed to do — they are the agent’s rulebook. "
+            "Here, the system prompt source is not integrity-checked at runtime. "
+            "An attacker who can influence the prompt store (by modifying a config file, "
+            "database row, or prompt template that the agent loads) can rewrite the agent’s "
+            "core rulebook before any user request arrives. "
+            "This is a high-value target: compromising the system prompt compromises everything "
+            "the agent does."
+        ),
+        "blocked": (
+            "The system-prompt step is where developer instructions are loaded into the AI model’s "
+            "context — the agent’s rulebook for what it is and is not allowed to do. "
+            "The system prompt is loaded from an immutable, integrity-verified source "
+            "(such as a compiled code constant, a signed config, or a version-controlled template "
+            "that requires a full deployment to change). "
+            "An attacker cannot modify the system prompt at runtime without access to the "
+            "deployment pipeline itself."
+        ),
+        "modified": (
+            "The system-prompt step is where developer instructions are loaded into the AI model’s "
+            "context — the agent’s rulebook. "
+            "The prompt source has partial integrity protection, but gaps remain. "
+            "An attacker can modify some parts of the prompt while constrained sections hold firm, "
+            "resulting in a partially compromised rulebook."
+        ),
+        "absent_step": (
+            "This agent does not load a system prompt at runtime — either there are no developer "
+            "instructions, or they are baked directly into the model through fine-tuning rather "
+            "than loaded as a runtime message. "
+            "Without an explicit system prompt, attacks that target prompt disclosure or "
+            "runtime prompt manipulation have less to work with, though the agent may still "
+            "be influenced through user-turn instructions alone."
+        ),
     },
     "planner": {
-        "advances": "The planning LLM folds the attacker's instruction into its reasoning without detecting the manipulation. It now treats the injected goal as its primary objective.",
-        "blocked":  "A guardrail or output schema validation catches the anomalous plan. The agent refuses to act on the injected instruction.",
-        "modified": "The plan is partially influenced. The agent takes an unintended action, but the full attack objective is not achieved.",
-        "absent_step": "This agent has no dedicated planning step.",
+        "advances": (
+            "The planner step is where the AI model reasons about what to do next — "
+            "it reads the full context (system prompt + user message + any retrieved content) "
+            "and decides on a goal or the next action to take. "
+            "Here, the AI model folds the attacker’s injected instruction into its reasoning "
+            "without detecting the manipulation. "
+            "It now treats the injected goal as its primary objective, overriding or supplementing "
+            "what the legitimate user and developer intended. "
+            "At this point the agent believes it is doing the right thing — "
+            "the injection has succeeded at the cognitive level and the attack moves forward."
+        ),
+        "blocked": (
+            "The planner step is where the AI model reasons about what to do next. "
+            "A guardrail catches the anomalous plan before it is acted on — this may be an output "
+            "schema validator, a refusal classifier, a deny-list of forbidden intents, "
+            "or an explicit instruction in the system prompt that resists override attempts. "
+            "The agent recognises that the injected instruction conflicts with its permitted "
+            "behaviour and refuses to act on it."
+        ),
+        "modified": (
+            "The planner step is where the AI model reasons about what to do next. "
+            "The plan is partially influenced by the injection — the agent takes an action that "
+            "was not fully intended, but the attacker’s complete objective is not achieved. "
+            "This happens when a safety instruction partially constrains the planner but does "
+            "not fully prevent the injected goal from shaping the tool selection or response."
+        ),
+        "absent_step": (
+            "This agent does not have a dedicated planning step. "
+            "Instead of a separate reasoning phase that decides what to do, it uses a single "
+            "LLM call that simultaneously reasons and responds — this is called the "
+            "’single-shot’ pattern: one message in, one answer out. "
+            "There is no iterative goal-decomposition loop. "
+            "This means attacks that specifically target a planning cycle "
+            "(goal-redirection, runaway re-planning) are not applicable here. "
+            "However, the single LLM call still processes user input, so direct prompt injection "
+            "into that call remains fully relevant."
+        ),
     },
     "tool_choice": {
-        "advances": "The planner selects a tool based on the attacker-controlled plan. No allow-list prevents out-of-scope tool use — the wrong tool is about to be called.",
-        "blocked":  "Tool selection is constrained to an explicit allow-list. The attacker cannot reach the intended tool.",
-        "modified": "A different tool is selected than intended, but agent behaviour is still abnormal.",
-        "absent_step": "No tool selection occurs at this step.",
+        "advances": (
+            "The tool-choice step is where the agent selects and invokes an external capability — "
+            "an API call, database query, file operation, or any registered tool — based on the "
+            "planner’s decision. "
+            "Here, the planner’s decision has been shaped by the attacker’s injection, "
+            "and it now selects a tool (or constructs tool arguments) that serves the attacker’s goal. "
+            "There is no allow-list restricting which tools may be called, no authority check "
+            "verifying the caller’s identity, and no human-in-the-loop confirmation step. "
+            "The wrong tool fires with the wrong arguments."
+        ),
+        "blocked": (
+            "The tool-choice step is where the agent selects and invokes an external capability. "
+            "A defensive control prevents the attacker from reaching the intended tool — "
+            "this may be an explicit allow-list of permitted tools for this user, "
+            "an authority check that verifies the caller’s identity, "
+            "or a human-in-the-loop approval gate that requires confirmation before "
+            "the tool is dispatched."
+        ),
+        "modified": (
+            "The tool-choice step is where the agent selects and invokes an external capability. "
+            "A partial control is present — the agent cannot call the exact tool the attacker "
+            "intended, but its behaviour is still abnormal. "
+            "A different tool is selected, or the intended tool is called with altered arguments, "
+            "meaning the attack’s full objective is not achieved but some unintended action occurs."
+        ),
+        "absent_step": (
+            "This agent does not select or invoke external tools — it is a pure language-model "
+            "agent that reasons and responds without calling APIs, databases, or external services. "
+            "Attacks that aim to misuse tools (excessive agency, tool argument injection, "
+            "tool-output poisoning) have no surface to land on here. "
+            "If tools are added in future, this step must be re-evaluated."
+        ),
     },
     "tool_output": {
-        "advances": "The tool's response is returned verbatim to the agent with no sanitisation. A compromised external service can inject follow-on instructions here and the agent will trust them.",
-        "blocked":  "Tool output is validated against an expected schema before being fed back to the agent. The malicious content is stripped.",
-        "modified": "Partial filtering catches some of the payload, but residual content still influences the agent.",
-        "absent_step": "No tool output is processed at this step.",
+        "advances": (
+            "The tool-output step is where the result of a tool call — an API response, database "
+            "row, file content, or calculation result — is returned to the agent and added to "
+            "its context for the next reasoning step. "
+            "Here, the tool’s return value is fed back into the agent’s context without any "
+            "schema validation, content classifier, or trust boundary. "
+            "A compromised or attacker-influenced external service could inject follow-on "
+            "instructions inside the tool result, and the agent would treat them as "
+            "authoritative output — indistinguishable from the genuine data it expected. "
+            "The attack propagates into the agent’s next reasoning step."
+        ),
+        "blocked": (
+            "The tool-output step is where the result of a tool call is returned to the agent. "
+            "The tool’s return value is validated against an expected schema or scanned for "
+            "injection-pattern content before being added to the agent’s context. "
+            "Malicious content embedded in the tool response is stripped or rejected here "
+            "before it can influence the agent’s next reasoning step."
+        ),
+        "modified": (
+            "The tool-output step is where the result of a tool call is returned to the agent. "
+            "A partial filter is present and removes some injected content, but residual "
+            "attacker-controlled material still enters the agent’s context and influences "
+            "its next reasoning step."
+        ),
+        "absent_step": (
+            "No tool was called at this step, so there is no tool output to process. "
+            "Either the agent does not use tools, or the attack was stopped before "
+            "reaching the tool-dispatch stage. "
+            "Tool-output poisoning — where an attacker injects instructions through a tool’s "
+            "return value — is not applicable here."
+        ),
     },
     "re_planning": {
-        "advances": "The agent re-plans using the poisoned tool output. The attacker's instruction is now embedded in the agent's updated goal — the manipulation has propagated.",
-        "blocked":  "Re-planning is constrained. The agent cannot revise its goal beyond a defined boundary.",
-        "modified": "Re-planning is partially influenced.",
-        "absent_step": "This agent does not re-plan after tool execution.",
+        "advances": (
+            "The re-planning step is what makes an agent truly ‘agentic’: after a tool runs, "
+            "the agent feeds the tool’s result back into a second LLM reasoning cycle and "
+            "decides what to do next — forming a plan → act → observe → re-plan loop. "
+            "Here, the agent enters that second reasoning cycle using poisoned tool output as input. "
+            "The attacker’s instruction — injected through the tool return value — "
+            "is now embedded in the agent’s updated goal. "
+            "The manipulation has propagated from the tool layer into the planning layer, "
+            "and the agent will now pursue the attacker’s objective in its next action."
+        ),
+        "blocked": (
+            "The re-planning step is the second reasoning cycle an agent runs after a tool result "
+            "comes back — the ‘observe and re-plan’ part of plan → act → observe → re-plan. "
+            "A constraint prevents the attacker’s injected instruction from propagating here — "
+            "this may be a hard limit on planning iterations, a goal-consistency check, "
+            "or an output schema that bounds what the re-planner can emit. "
+            "The manipulation cannot advance further."
+        ),
+        "modified": (
+            "The re-planning step is the second reasoning cycle the agent runs after a tool result "
+            "comes back. "
+            "A partial constraint is present but the re-planner is still partially influenced — "
+            "the agent’s updated goal is shaped by the attacker’s injection, but the full "
+            "attack objective is not achieved."
+        ),
+        "absent_step": (
+            "This agent does not have a re-planning step — it uses the ‘single-shot’ pattern "
+            "where one LLM call both reasons and responds, with no second planning cycle "
+            "that consumes tool results after they come back. "
+            "Re-planning is the loop that makes an agent truly ‘agentic’: "
+            "plan → call a tool → observe the result → re-plan. "
+            "Without this loop, attacks like tool-output poisoning and recursive injection "
+            "— which need the agent to re-enter a planning phase after a tool runs — "
+            "cannot propagate. "
+            "This is a structural limitation of the agent architecture, not a security control: "
+            "if a re-planning loop is added in future, these attack classes become immediately relevant."
+        ),
     },
     "final_answer": {
-        "advances": "The agent returns its response with no output validation. Attacker-controlled content reaches the end user or downstream system — the attack has fully landed.",
-        "blocked":  "An output scrubber or content policy intercepts the response before it leaves the agent. The attacker's content never reaches the caller.",
-        "modified": "The response is partially redacted, but some attacker-influenced content gets through.",
-        "absent_step": "No final-answer step is configured.",
+        "advances": (
+            "The final-answer step is where the agent sends its response back to the caller — "
+            "the user, another service, or a downstream system. "
+            "Here, the response is returned with no output validation: no content policy, "
+            "no secret-redaction filter, no allow-list of tokens permitted in user-visible responses. "
+            "Whatever the AI model produced — attacker-controlled disclosures, injected content, "
+            "command output, or sensitive data — reaches the caller unchanged. "
+            "The attack has fully landed: the payload entered, traversed the pipeline, "
+            "and exited in the response."
+        ),
+        "blocked": (
+            "The final-answer step is where the agent sends its response back to the caller. "
+            "An output scrubber, content policy, or secret-redaction filter intercepts the response "
+            "before it leaves the agent. "
+            "The attacker’s content — whether a disclosed secret, injected instruction, "
+            "or command output — is stripped or replaced before the response reaches the caller. "
+            "This is the last line of defence: the attack traversed the pipeline but was stopped "
+            "before it could cause external harm."
+        ),
+        "modified": (
+            "The final-answer step is where the agent sends its response back to the caller. "
+            "A partial output filter is present — it catches some attacker-controlled content "
+            "(such as structured secrets like SSN patterns or known keywords) but misses "
+            "rephrased, encoded, or context-shifted variants of the same information. "
+            "Some attacker-influenced content still reaches the caller."
+        ),
+        "absent_step": (
+            "This agent does not have a user-facing response step — its output is consumed "
+            "internally rather than returned to an external caller. "
+            "Information-disclosure attacks (system prompt extraction, data exfiltration via "
+            "the response body) cannot reach an external observer through this path. "
+            "However, internal consumption of attacker-influenced output can still cause harm "
+            "within the system."
+        ),
     },
 }
 
