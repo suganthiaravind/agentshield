@@ -7406,6 +7406,12 @@ _HTML_JS = """
         activeTrace = trace;
         resetTrace(trace);
         playFromScene(trace, 0);
+        // Scroll the trace header to the top of the viewport so the
+        // animation + terminal fill the screen.
+        var hdr = trace.querySelector('.emu-trace-header') || trace;
+        setTimeout(function () {
+          hdr.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
       });
     });
   }());
