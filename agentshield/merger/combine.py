@@ -7143,6 +7143,16 @@ _HTML_JS = """
       activeTrace = clone;
       while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
       modalBody.appendChild(clone);
+      // cloneNode does not copy event listeners — wire the clone's play
+      // button so Replay works after the first animation completes.
+      var clonePlayBtn = clone.querySelector('.emu-play-btn');
+      if (clonePlayBtn) {
+        clonePlayBtn.addEventListener('click', function () {
+          clearAllTimers();
+          resetTrace(activeTrace);
+          playFromScene(activeTrace, 0);
+        });
+      }
       if (modalTitle) modalTitle.textContent = attackLabel || 'Behaviour emulation';
       modalOverlay.style.display = 'flex';
       document.body.style.overflow = 'hidden';
