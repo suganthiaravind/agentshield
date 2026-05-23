@@ -899,7 +899,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{_html_escape(outcome)}</span>'
             f'{defence_chip}'
             f'</div>'
-            f'<p class="emu-scene-narrative">{_html_escape(narrative)}</p>'
+            f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
+            f'{_html_escape(narrative)}</p>'
             f'<div class="emu-scene-actors">'
             f'<div class="emu-actor emu-actor-src emu-actor-role-{src_role}"{src_title_attr}>'
             f'<span class="emu-actor-icon">{src_icon}</span>'
@@ -5573,16 +5574,8 @@ footer {
 
 /* Narrative fades in with a short delay so the scene header
    registers first, then the explanation slides up beneath it. */
-@keyframes emu-narrative-appear {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-#emu-modal-body .emu-scene.emu-scene-modal-active .emu-scene-narrative {
-  animation: emu-narrative-appear 420ms 220ms ease-out both;
-}
-
-/* Source actor "charges up" before the packet flies — glows briefly
-   to signal "attack originates here" without requiring a JS class. */
+/* Source actor "charges up" — triggered by JS class emu-scene-charge-ready
+   added after the narrative typewriter completes, just before packet fires. */
 @keyframes emu-actor-charge {
   0%   { box-shadow: none; }
   45%  { box-shadow: 0 0 0 4px rgba(127,29,29,0.15),
@@ -5590,11 +5583,11 @@ footer {
          background: #fef2f2; border-color: #fca5a5; }
   100% { box-shadow: none; background: inherit; border-color: inherit; }
 }
-#emu-modal-body .emu-scene.emu-scene-modal-active .emu-actor-src {
-  animation: emu-actor-charge 900ms 480ms ease-in-out both;
+#emu-modal-body .emu-scene.emu-scene-charge-ready .emu-actor-src {
+  animation: emu-actor-charge 900ms 0ms ease-in-out both;
 }
 /* Blocked scenes: no red charge on the source (attacker doesn't win) */
-#emu-modal-body .emu-scene.emu-scene-blocked.emu-scene-modal-active .emu-actor-src {
+#emu-modal-body .emu-scene.emu-scene-blocked.emu-scene-charge-ready .emu-actor-src {
   animation: none;
 }
 
@@ -7279,6 +7272,24 @@ _HTML_JS = """
     var LINE_STAGGER = 320;    // ms between terminal rows
     var SCENE_CADENCE = 8000;  // ms per scene
 
+    function typewriteNarrative(el, charDelay, onComplete) {
+      if (!el) { if (onComplete) onComplete(); return; }
+      var fullText = el.getAttribute('data-narrative') || el.textContent || '';
+      el.textContent = '';
+      if (!fullText) { if (onComplete) onComplete(); return; }
+      var i = 0;
+      function tick() {
+        if (i < fullText.length) {
+          el.textContent = fullText.slice(0, i + 1);
+          i++;
+          safeTimeout(tick, charDelay);
+        } else {
+          if (onComplete) onComplete();
+        }
+      }
+      safeTimeout(tick, 0);
+    }
+
     function revealTermLines(trace, forScene, atTime) {
       var terminal = trace.querySelector('.emu-terminal');
       var termLines = terminal ? terminal.querySelectorAll('.emu-term-line') : [];
@@ -7300,9 +7311,15 @@ _HTML_JS = """
     function resetTrace(trace) {
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
         s.classList.remove('emu-scene-visible', 'emu-scene-modal-active',
-                           'emu-scene-packet-flying');
+                           'emu-scene-packet-flying', 'emu-scene-charge-ready');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
+        // Restore narrative text cleared by the typewriter
+        var narr = s.querySelector('.emu-scene-narrative');
+        if (narr) {
+          var orig = narr.getAttribute('data-narrative');
+          if (orig !== null) narr.textContent = orig;
+        }
       });
       var fb = trace.querySelector('.emu-trace-final');
       if (fb) fb.classList.remove('emu-trace-final-visible');
@@ -7313,61 +7330,77 @@ _HTML_JS = """
 
     function playFromScene(trace, startIdx) {
       pausedAtScene = -1;
-      var scenes     = trace.querySelectorAll('.emu-trace-steps .emu-scene');
-      var finalBanner= trace.querySelector('.emu-trace-final');
-      var btn        = trace.querySelector('.emu-play-btn');
-      var pauseBtn   = trace.querySelector('[data-action="emu-pause"]');
-      var progressWrap = trace.querySelector('.emu-progress-wrap');
-      var progressFill = trace.querySelector('[data-progress-fill]');
-      var progressLabel= trace.querySelector('[data-progress-label]');
+      var scenes      = trace.querySelectorAll('.emu-trace-steps .emu-scene');
+      var finalBanner = trace.querySelector('.emu-trace-final');
+      var btn         = trace.querySelector('.emu-play-btn');
+      var pauseBtn    = trace.querySelector('[data-action="emu-pause"]');
+      var progressWrap  = trace.querySelector('.emu-progress-wrap');
+      var progressFill  = trace.querySelector('[data-progress-fill]');
+      var progressLabel = trace.querySelector('[data-progress-label]');
+
+      var CHAR_DELAY       = 22;   // ms per character — typewriter speed
+      var POST_TYPE_PAUSE  = 600;  // ms after narrative finishes before packet fires
+      var PACKET_DURATION  = 1800; // ms for packet to travel
+      var SCENE_READ_PAUSE = 2000; // ms reading time after packet lands → next scene
 
       trace.classList.add('emu-trace-playing');
       if (btn) { btn.disabled = true; btn.innerHTML = '&#9654; Playing…'; }
       if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.classList.remove('is-paused'); pauseBtn.innerHTML = '&#9646;&#9646; Pause'; }
       if (progressWrap) progressWrap.style.display = 'flex';
 
-      for (var i = startIdx; i < scenes.length; i++) {
-        (function (idx) {
-          safeTimeout(function () {
-            var scene = scenes[idx];
-            if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
-            if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
-            // Remove modal-active from all other scenes, then activate this one
-            scenes.forEach(function (s) { s.classList.remove('emu-scene-modal-active'); });
-            scene.classList.add('emu-scene-visible', 'emu-scene-modal-active');
+      function runScene(idx) {
+        var scene = scenes[idx];
+        if (!scene) return;
 
-            // Payload: open immediately so it is always readable.
-            var pdNow = scene.querySelector('.emu-scene-payload-details');
-            if (pdNow) pdNow.setAttribute('open', '');
+        if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
+        if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
 
-            // Terminal: hide all lines from previous scene, then reveal
-            // only this scene's rows one by one (data-scene === idx).
-            trace.querySelectorAll('.emu-terminal .emu-term-line')
-                 .forEach(function (l) {
-                   l.classList.remove('emu-term-revealed', 'emu-term-current');
-                 });
-            var termBody2 = trace.querySelector('.emu-terminal-body');
-            if (termBody2) termBody2.scrollTop = 0;
+        // Activate this scene, deactivate others
+        scenes.forEach(function (s) { s.classList.remove('emu-scene-modal-active'); });
+        scene.classList.add('emu-scene-visible', 'emu-scene-modal-active');
 
-            // Arrow: animate the packet flying from src → dst.
-            safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 1500);
+        // Open payload box immediately
+        var pdNow = scene.querySelector('.emu-scene-payload-details');
+        if (pdNow) pdNow.setAttribute('open', '');
 
-            // Reveal this scene's log rows one by one (starts after scene slides in).
-            revealTermLines(trace, idx, 400);
+        // Clear terminal rows from previous scene
+        trace.querySelectorAll('.emu-terminal .emu-term-line')
+             .forEach(function (l) { l.classList.remove('emu-term-revealed', 'emu-term-current'); });
+        var termBody2 = trace.querySelector('.emu-terminal-body');
+        if (termBody2) termBody2.scrollTop = 0;
 
-            if (idx === scenes.length - 1) {
-              safeTimeout(function () {
-                if (finalBanner) finalBanner.classList.add('emu-trace-final-visible');
-                revealTermLines(trace, scenes.length, 0);
-                if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
-                if (pauseBtn) pauseBtn.style.display = 'none';
-                if (progressWrap) progressWrap.style.display = 'none';
-                if (progressFill) progressFill.style.width = '0%';
-              }, 5500);
-            }
-          }, (idx - startIdx) * SCENE_CADENCE);
-        })(i);
+        // Step 1 — typewrite the narrative; everything else chains off the callback
+        var narrativeEl = scene.querySelector('.emu-scene-narrative');
+        typewriteNarrative(narrativeEl, CHAR_DELAY, function () {
+
+          // Step 2 — source actor charges up (subtle glow before packet)
+          safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
+
+          // Step 3 — packet flies across the arrow
+          safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, POST_TYPE_PAUSE);
+
+          // Step 4 — terminal rows appear after packet lands
+          safeTimeout(function () { revealTermLines(trace, idx, 0); },
+                      POST_TYPE_PAUSE + PACKET_DURATION);
+
+          // Step 5 — advance to next scene or show final banner
+          var afterScene = POST_TYPE_PAUSE + PACKET_DURATION + SCENE_READ_PAUSE;
+          if (idx < scenes.length - 1) {
+            safeTimeout(function () { runScene(idx + 1); }, afterScene);
+          } else {
+            safeTimeout(function () {
+              if (finalBanner) finalBanner.classList.add('emu-trace-final-visible');
+              revealTermLines(trace, scenes.length, 0);
+              if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
+              if (pauseBtn) pauseBtn.style.display = 'none';
+              if (progressWrap) progressWrap.style.display = 'none';
+              if (progressFill) progressFill.style.width = '0%';
+            }, afterScene);
+          }
+        });
       }
+
+      runScene(startIdx);
 
       // Wire pause button (once per trace — guard with flag)
       if (pauseBtn && !pauseBtn._wired) {
@@ -7380,8 +7413,8 @@ _HTML_JS = """
           } else {
             clearAllTimers();
             var lastVisible = 0;
-            trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, idx) {
-              if (s.classList.contains('emu-scene-visible') || s.classList.contains('emu-scene-modal-active')) lastVisible = idx;
+            trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, i) {
+              if (s.classList.contains('emu-scene-visible') || s.classList.contains('emu-scene-modal-active')) lastVisible = i;
             });
             pausedAtScene = lastVisible;
             pauseBtn.classList.add('is-paused');
