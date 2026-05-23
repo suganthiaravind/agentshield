@@ -6225,8 +6225,7 @@ footer {
   background: #dcfce7;
   border-color: #16a34a;
 }
-/* Packet traversal: pop in at source, glide to destination, shrink on arrival.
-   Total flight 1 800 ms — slow enough to follow clearly. */
+/* ── ADVANCES: packet crashes through to destination ─────────────────────── */
 @keyframes emu-packet-traverse {
   0%   { left: 0%;                opacity: 0; transform: translateY(-50%) scale(0.4); }
   8%   { left: 1%;                opacity: 1; transform: translateY(-50%) scale(1.18); }
@@ -6249,30 +6248,63 @@ footer {
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line::after {
   border-left-color: #7f1d1d;
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::before  { background: #14532d; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after   { border-left-color: #14532d; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #7c2d12; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #7c2d12; }
 
-/* Destination actor pulse at ≈ 85 % of 1 800 ms = 1 530 ms after
-   emu-scene-packet-flying is added (i.e. ~3 030 ms after scene start) */
-@keyframes emu-actor-receive {
-  0%   { box-shadow: none; }
-  35%  { box-shadow: 0 0 0 5px rgba(127,29,29,0.20),
-                     0 0 16px rgba(127,29,29,0.28); }
-  100% { box-shadow: none; }
-}
-@keyframes emu-actor-receive-blocked {
-  0%   { box-shadow: none; }
-  35%  { box-shadow: 0 0 0 6px rgba(22,163,74,0.32),
-                     0 0 22px rgba(22,163,74,0.44); }
-  100% { box-shadow: none; }
+/* Destination impact: two shockwave rings burst outward — drone smashes
+   through the gate. Fires at 1 530 ms (≈ 85 % of flight). */
+@keyframes emu-impact-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(220,38,38,0.75),
+                     0 0 0 0   rgba(220,38,38,0.35);
+         transform: scale(1); }
+  25%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.55),
+                     0 0 0 14px rgba(220,38,38,0.20);
+         transform: scale(1.13); }
+  65%  { box-shadow: 0 0 0 14px rgba(220,38,38,0.08),
+                     0 0 0 28px rgba(220,38,38,0);
+         transform: scale(1.02); }
+  100% { box-shadow: none; transform: scale(1); }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-actor-receive 700ms 1530ms ease-out both;
+  animation: emu-impact-ring 750ms 1530ms ease-out both;
+}
+
+/* ── BLOCKED: packet hits a barrier at ~60 % of the arrow ────────────────── */
+/* Packet stops mid-flight, shakes on impact, then fades at the barrier. */
+@keyframes emu-packet-traverse-blocked {
+  0%   { left: 0%;   opacity: 0; transform: translateY(-50%) scale(0.4); }
+  8%   { left: 1%;   opacity: 1; transform: translateY(-50%) scale(1.18); }
+  16%  { left: 3%;   opacity: 1; transform: translateY(-50%) scale(1); }
+  68%  { left: 57%;  opacity: 1; transform: translateY(-50%) scale(1); }
+  74%  { left: 60%;  opacity: 1; transform: translateY(-50%) scale(1.22) translateX(5px); }
+  80%  { left: 56%;  opacity: 1; transform: translateY(-50%) scale(0.88) translateX(-4px); }
+  86%  { left: 58%;  opacity: 1; transform: translateY(-50%) scale(1.05) translateX(2px); }
+  100% { left: 58%;  opacity: 0; transform: translateY(-50%) scale(0.5); }
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-packet {
+  animation: emu-packet-traverse-blocked 1800ms cubic-bezier(.33,1,.68,1) both;
+}
+/* Beam stops at the barrier point — attack contained */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::before {
+  width: 61%;
+  background: #14532d;
+}
+/* Arrowhead hidden for blocked — beam doesn't reach destination */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after {
+  opacity: 0;
+}
+/* Destination: "shield held" pulse — fires at 1 380 ms (when packet stops) */
+@keyframes emu-shield-hold {
+  0%   { box-shadow: none; transform: scale(1); }
+  20%  { box-shadow: 0 0 0 5px rgba(22,163,74,0.65),
+                     0 0 0 12px rgba(22,163,74,0.28);
+         transform: scale(1.09); }
+  60%  { box-shadow: 0 0 0 10px rgba(22,163,74,0.08),
+                     0 0 0 22px rgba(22,163,74,0); }
+  100% { box-shadow: none; transform: scale(1); }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-actor-receive-blocked 700ms 1530ms ease-out both;
+  animation: emu-shield-hold 800ms 1380ms ease-out both;
 }
 
 /* Outcome chip stamp-in — when a scene becomes received, the
