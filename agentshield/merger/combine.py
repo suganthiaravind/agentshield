@@ -5547,11 +5547,38 @@ footer {
 }
 #emu-modal-body .emu-trace-steps .emu-scene.emu-scene-modal-active {
   display: block; /* only the active scene shown */
-  animation: emu-scene-slide-in 280ms cubic-bezier(.34,1.2,.64,1);
+  animation: emu-scene-slide-in 480ms cubic-bezier(.25,.46,.45,.94);
 }
 @keyframes emu-scene-slide-in {
-  from { opacity: 0; transform: translateX(16px); }
+  from { opacity: 0; transform: translateX(28px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Narrative fades in with a short delay so the scene header
+   registers first, then the explanation slides up beneath it. */
+@keyframes emu-narrative-appear {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#emu-modal-body .emu-scene.emu-scene-modal-active .emu-scene-narrative {
+  animation: emu-narrative-appear 420ms 220ms ease-out both;
+}
+
+/* Source actor "charges up" before the packet flies — glows briefly
+   to signal "attack originates here" without requiring a JS class. */
+@keyframes emu-actor-charge {
+  0%   { box-shadow: none; }
+  45%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.22),
+                     0 0 22px rgba(220,38,38,0.30);
+         background: #fef2f2; border-color: #fca5a5; }
+  100% { box-shadow: none; background: inherit; border-color: inherit; }
+}
+#emu-modal-body .emu-scene.emu-scene-modal-active .emu-actor-src {
+  animation: emu-actor-charge 900ms 480ms ease-in-out both;
+}
+/* Blocked scenes: no red charge on the source (attacker doesn't win) */
+#emu-modal-body .emu-scene.emu-scene-blocked.emu-scene-modal-active .emu-actor-src {
+  animation: none;
 }
 
 /* Narrative paragraph — prominent plain-English explanation */
@@ -6097,19 +6124,24 @@ footer {
   background: #dcfce7;
   border-color: #16a34a;
 }
-/* Packet traversal: pop in at source, slide to destination, fade on arrival */
+/* Packet traversal: pop in at source, glide to destination, shrink on arrival.
+   Total flight 1 800 ms — slow enough to follow clearly. */
 @keyframes emu-packet-traverse {
-  0%   { left: 0%;               opacity: 0; transform: translateY(-50%) scale(0.4); }
-  10%  { left: 1%;               opacity: 1; transform: translateY(-50%) scale(1.15); }
-  18%  { left: 3%;               opacity: 1; transform: translateY(-50%) scale(1); }
-  82%  { opacity: 1; transform: translateY(-50%) scale(1); }
-  100% { left: calc(100% - 16px); opacity: 0; transform: translateY(-50%) scale(0.6); }
+  0%   { left: 0%;                opacity: 0; transform: translateY(-50%) scale(0.4); }
+  8%   { left: 1%;                opacity: 1; transform: translateY(-50%) scale(1.18); }
+  16%  { left: 3%;                opacity: 1; transform: translateY(-50%) scale(1); }
+  84%  { opacity: 1; transform: translateY(-50%) scale(1); }
+  100% { left: calc(100% - 16px); opacity: 0; transform: translateY(-50%) scale(0.55); }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-packet {
-  animation: emu-packet-traverse 1050ms cubic-bezier(.4,0,.2,1) both;
+  animation: emu-packet-traverse 1800ms cubic-bezier(.33,1,.68,1) both;
 }
 
-/* Beam sweep colours per outcome */
+/* Beam sweep — grows left → right over the same 1 800 ms */
+.emu-arrow-line::before {
+  transition: width 1800ms cubic-bezier(.4,0,.2,1),
+              background 0ms;
+}
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line::before {
   width: 100%;
 }
@@ -6121,25 +6153,25 @@ footer {
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #f97316; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #f97316; }
 
-/* Destination actor pulse when packet arrives (delay ≈ 85% of 1050ms) */
+/* Destination actor pulse at ≈ 85 % of 1 800 ms = 1 530 ms after
+   emu-scene-packet-flying is added (i.e. ~3 030 ms after scene start) */
 @keyframes emu-actor-receive {
   0%   { box-shadow: none; }
-  40%  { box-shadow: 0 0 0 5px rgba(220,38,38,0.25), 0 0 18px rgba(220,38,38,0.35); }
+  35%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.28),
+                     0 0 22px rgba(220,38,38,0.40); }
   100% { box-shadow: none; }
-}
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-actor-receive 500ms 860ms ease-out both;
-}
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-actor-receive 500ms 860ms ease-out both;
 }
 @keyframes emu-actor-receive-blocked {
   0%   { box-shadow: none; }
-  40%  { box-shadow: 0 0 0 5px rgba(22,163,74,0.30), 0 0 18px rgba(22,163,74,0.40); }
+  35%  { box-shadow: 0 0 0 6px rgba(22,163,74,0.32),
+                     0 0 22px rgba(22,163,74,0.44); }
   100% { box-shadow: none; }
 }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
+  animation: emu-actor-receive 700ms 1530ms ease-out both;
+}
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-actor-receive-blocked 500ms 860ms ease-out both;
+  animation: emu-actor-receive-blocked 700ms 1530ms ease-out both;
 }
 
 /* Outcome chip stamp-in — when a scene becomes received, the
@@ -7200,8 +7232,8 @@ _HTML_JS = """
       if (e.key === 'Escape' && modalOverlay.style.display !== 'none') closeModal();
     });
 
-    var LINE_STAGGER = 220;    // ms between terminal rows
-    var SCENE_CADENCE = 3200;  // ms per scene
+    var LINE_STAGGER = 320;    // ms between terminal rows
+    var SCENE_CADENCE = 5500;  // ms per scene
 
     function revealTermLines(trace, forScene, atTime) {
       var terminal = trace.querySelector('.emu-terminal');
@@ -7274,10 +7306,10 @@ _HTML_JS = """
             if (termBody2) termBody2.scrollTop = 0;
 
             // Arrow: animate the packet flying from src → dst.
-            safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 600);
+            safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 1500);
 
-            // Reveal this scene's log rows one by one (starts at 0ms).
-            revealTermLines(trace, idx, 0);
+            // Reveal this scene's log rows one by one (starts after scene slides in).
+            revealTermLines(trace, idx, 400);
 
             if (idx === scenes.length - 1) {
               safeTimeout(function () {
@@ -7287,7 +7319,7 @@ _HTML_JS = """
                 if (pauseBtn) pauseBtn.style.display = 'none';
                 if (progressWrap) progressWrap.style.display = 'none';
                 if (progressFill) progressFill.style.width = '0%';
-              }, 2400);
+              }, 3800);
             }
           }, (idx - startIdx) * SCENE_CADENCE);
         })(i);
