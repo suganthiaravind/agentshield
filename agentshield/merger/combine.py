@@ -833,6 +833,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         '<button type="button" class="emu-pause-btn" '
         'data-action="emu-pause" style="display:none">'
         '&#9646;&#9646; Pause</button>'
+        '<button type="button" class="emu-close-btn" '
+        'data-action="emu-close" style="display:none">'
+        '&#10005; Close</button>'
         '<div class="emu-progress-wrap" style="display:none">'
         '<span class="emu-progress-label" data-progress-label>Step 1</span>'
         '<div class="emu-progress-track">'
@@ -891,17 +894,23 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         narrative = _STEP_NARRATIVE.get(step_key, {}).get(
             outcome, step_behavior or ""
         )
-        # For the user_prompt entry-point, embed a preview of the actual
-        # attack payload so the reader sees exactly what string is injected.
+        # For the user_prompt entry-point, render the payload in a separate
+        # dark callout box so it stands out visually without styling the
+        # whole narrative dark.
+        payload_callout_html = ''
         if step_key == "user_prompt" and outcome == "advances" and emu_payload:
-            _preview = emu_payload[:90].rstrip()
-            if len(emu_payload) > 90:
+            _preview = emu_payload[:160].rstrip()
+            if len(emu_payload) > 160:
                 _preview += "…"
+            payload_callout_html = (
+                f'<div class="emu-scene-payload-callout">'
+                f'{_html_escape(_preview)}'
+                f'</div>'
+            )
             narrative = (
-                f'The attacker\'s payload “{_preview}” enters the agent '
-                f'as ordinary user input — no input filters in place; '
-                f'the agent cannot tell it apart from a legitimate request. '
-                f'The attack moves forward.'
+                f'The payload above enters the agent as ordinary user input '
+                f'— no input filters in place; the agent cannot tell it apart '
+                f'from a legitimate request. The attack moves forward.'
             )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}">'
@@ -912,6 +921,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{_html_escape(outcome)}</span>'
             f'{defence_chip}'
             f'</div>'
+            f'{payload_callout_html}'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
             f'<div class="emu-scene-actors">'
@@ -992,6 +1002,15 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             si, "scene", "SCENE",
             f"{si + 1}/{len(emu_trace)} · {step_label_clean}",
         ))
+        step_k = step.get("step") or ""
+        if step_k == "user_prompt" and emu_payload:
+            _payload_preview = emu_payload[:140].rstrip()
+            if len(emu_payload) > 140:
+                _payload_preview += "…"
+            terminal_lines.append((
+                si, "payload", "PAYLOAD",
+                _payload_preview,
+            ))
         code_b = step.get("code_basis") or []
         if code_b:
             terminal_lines.append((
@@ -1048,10 +1067,11 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             0 if prefix in ("INFO", "SCENE") else 1
         )
         ts = f"00:00:{t_sec:02d}"
+        early = ' data-early="1"' if prefix in ("INFO", "SCENE", "PAYLOAD") else ""
         parts.append(
             f'<div class="emu-term-line '
             f'emu-term-line-{_html_escape(lvl_cls)}" '
-            f'data-scene="{scene_i}">'
+            f'data-scene="{scene_i}"{early}>'
             f'<span class="emu-term-ts">[{ts}]</span> '
             f'<span class="emu-term-prefix">{prefix}</span> '
             f'<span class="emu-term-msg">{_html_escape(msg)}</span>'
@@ -5483,13 +5503,7 @@ footer {
   border-radius: 10px; font-size: 0;          /* hide label until flying */
 }
 .emu-packet-label {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
-  color: #fff; opacity: 0;
-  transition: opacity 200ms ease-out;
-  white-space: nowrap;
-}
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-packet-label {
-  opacity: 1;
+  display: none;  /* label removed — packet is identifiable by shape + motion */
 }
 
 /* Verdict banner — outcome-specific drama */
@@ -5578,11 +5592,11 @@ footer {
 }
 #emu-modal-body .emu-trace-steps .emu-scene.emu-scene-modal-active {
   display: block; /* only the active scene shown */
-  animation: emu-scene-slide-in 480ms cubic-bezier(.25,.46,.45,.94);
+  animation: emu-scene-slide-in 320ms cubic-bezier(.25,.46,.45,.94);
 }
 @keyframes emu-scene-slide-in {
-  from { opacity: 0; transform: translateX(28px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Narrative fades in with a short delay so the scene header
@@ -5604,19 +5618,30 @@ footer {
   animation: none;
 }
 
-/* Narrative paragraph — clean black-on-white; border colour gives outcome signal */
-.emu-scene-narrative {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  background: #ffffff;
-  border-left: 3px solid #6b7280;
-  border-radius: 6px;
-  font-size: 13.5px; line-height: 1.65; color: #111827;
+/* Payload callout — dark code-block style, only on user_prompt scenes */
+.emu-scene-payload-callout {
+  margin: 6px 0 10px;
+  padding: 9px 14px;
+  background: #1e293b;
+  border-left: 3px solid #f87171;
+  border-radius: 5px;
+  font-size: 12.5px; line-height: 1.6;
+  color: #fce7f3;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  word-break: break-word;
 }
-/* Outcome border colours (background/text stay neutral) */
-.emu-scene-advances    .emu-scene-narrative { border-color: #9f1239; }
-.emu-scene-blocked     .emu-scene-narrative { border-color: #15803d; }
-.emu-scene-modified    .emu-scene-narrative { border-color: #b45309; }
+/* Narrative paragraph — warm amber tint; reads below the dark payload callout */
+.emu-scene-narrative {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12.5px; line-height: 1.6; color: #374151;
+}
+.emu-scene-advances    .emu-scene-narrative { border-color: #fca5a5; }
+.emu-scene-blocked     .emu-scene-narrative { border-color: #86efac; }
+.emu-scene-modified    .emu-scene-narrative { border-color: #fdba74; }
 .emu-scene-absent_step .emu-scene-narrative { border-color: #94a3b8; }
 
 /* ⑤ Terminal — pinned at bottom, fixed height */
@@ -5864,6 +5889,17 @@ footer {
   background: #1e40af; color: #fff; border-color: #1e40af;
 }
 .emu-pause-btn.is-paused:hover { background: #1e3a8a; }
+.emu-close-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #fff1f2; color: #be123c;
+  border: 1px solid #fecdd3;
+  padding: 6px 14px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 600;
+  font-family: inherit; cursor: pointer;
+  transition: background 140ms ease;
+  margin-left: auto;
+}
+.emu-close-btn:hover { background: #ffe4e6; }
 
 /* Play-state choreography. When .emu-trace.emu-trace-playing is
    active: all emu-step children start hidden, then each one fades
@@ -5952,7 +5988,20 @@ footer {
   font-size: 10px; font-weight: 700; color: #ffffff;
   background: #475569; border-radius: 50%;
   flex-shrink: 0;
+  transition: background 220ms ease;
 }
+@keyframes emu-badge-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  70%  { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-step-num {
+  animation: emu-badge-pop 400ms cubic-bezier(.34,1.56,.64,1);
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-advances .emu-scene-step-num { background: #dc2626; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-blocked  .emu-scene-step-num { background: #16a34a; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-modified .emu-scene-step-num { background: #d97706; }
 .emu-scene-step-label {
   font-weight: 700; color: #0f172a; font-size: 12px;
   flex: 1 1 auto;
@@ -6148,7 +6197,7 @@ footer {
 }
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-visible {
   display: block;
-  animation: emu-scene-slide-in 480ms cubic-bezier(.25,.46,.45,.94);
+  animation: emu-scene-slide-in 320ms cubic-bezier(.25,.46,.45,.94);
 }
 /* Hide payload details + behavior text during animation — terminal carries the info */
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
@@ -6288,6 +6337,11 @@ footer {
   max-height: 240px;
   overflow-y: auto;
 }
+/* During play: fixed scrollable window so late lines are never off-screen */
+.emu-trace.emu-trace-playing .emu-terminal .emu-terminal-body {
+  max-height: 180px;
+  overflow-y: scroll;
+}
 .emu-term-line {
   display: block;
   white-space: pre-wrap; word-break: break-word;
@@ -6310,6 +6364,8 @@ footer {
 .emu-term-line-info    .emu-term-prefix { color: #60a5fa; }   /* blue */
 .emu-term-line-scene   .emu-term-prefix { color: #c4b5fd; }   /* lilac */
 .emu-term-line-read    .emu-term-prefix { color: #5eead4; }   /* teal */
+.emu-term-line-payload .emu-term-prefix { color: #f9a8d4; }  /* rose — attack payload */
+.emu-term-line-payload .emu-term-msg    { color: #fce7f3; font-style: italic; }
 /* PREDICT + OUTCOME lines: whole line in amber (prefix + message)
    to flag the load-bearing prediction/verdict beats. The outcome
    variants keep their semantic accent (red for advances, green for
@@ -6340,19 +6396,32 @@ footer {
   color: #cbd5e1; font-weight: 700;
 }
 
-/* Streaming-state: during playback, hide all lines, reveal as
-   the matching scene's animation reaches the OUTCOME beat. The
-   terminal is nested inside .emu-trace so a descendant selector
-   is the right scope (not a sibling selector). The reveal rule
-   MUST share the playing-state scope or specificity gives the
-   hide rule the win — that's the bug that left the terminal
-   blank even after lines were class-flagged as revealed. */
+/* Streaming-state: during playback hide all lines with display:none
+   (not opacity) so unrevealed lines take NO height — this means
+   scrollHeight reflects only revealed content, so scrollTop=scrollHeight
+   correctly shows the latest lines without jumping past invisible space. */
 .emu-trace.emu-trace-playing .emu-terminal .emu-term-line {
-  opacity: 0;
-  transition: opacity 200ms ease-out;
+  display: none;
 }
 .emu-trace.emu-trace-playing .emu-terminal .emu-term-line.emu-term-revealed {
-  opacity: 1;
+  display: block;
+  animation: emu-term-fade-in 180ms ease-out;
+}
+@keyframes emu-term-fade-in {
+  from { opacity: 0; transform: translateX(-7px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Blinking cursor shown during typewriter animation */
+.emu-tw-cursor {
+  display: inline-block;
+  color: #d97706;
+  font-weight: 300;
+  margin-left: 1px;
+  animation: emu-tw-blink 530ms step-start infinite;
+}
+@keyframes emu-tw-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
 }
 /* Blink emphasis on PREDICT / OUTCOME / VERDICT lines when they
    reveal — flashes the line to draw the reviewer's eye to the
@@ -7245,7 +7314,7 @@ _HTML_JS = """
     }
 
 
-    var LINE_STAGGER = 320;    // ms between terminal rows
+    var LINE_STAGGER = 180;    // ms between terminal rows
     var SCENE_CADENCE = 8000;  // ms per scene
 
     function typewriteNarrative(el, charDelay, onComplete) {
@@ -7253,13 +7322,22 @@ _HTML_JS = """
       var fullText = el.getAttribute('data-narrative') || el.textContent || '';
       el.textContent = '';
       if (!fullText) { if (onComplete) onComplete(); return; }
+      // Use a text node + cursor span so we can animate the cursor
+      // independently without touching the typed text.
+      var textNode = document.createTextNode('');
+      var cursor = document.createElement('span');
+      cursor.className = 'emu-tw-cursor';
+      cursor.textContent = '▌';
+      el.appendChild(textNode);
+      el.appendChild(cursor);
       var i = 0;
       function tick() {
         if (i < fullText.length) {
-          el.textContent = fullText.slice(0, i + 1);
+          textNode.data = fullText.slice(0, i + 1);
           i++;
           safeTimeout(tick, charDelay);
         } else {
+          if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
           if (onComplete) onComplete();
         }
       }
@@ -7282,6 +7360,16 @@ _HTML_JS = """
           }
         }, atTime + i * LINE_STAGGER);
       });
+      // Extra scroll tick after the last line is revealed, so the browser
+      // has committed the layout change before we measure scrollHeight.
+      if (matching.length > 0) {
+        safeTimeout(function () {
+          if (terminal) {
+            var tbody = terminal.querySelector('.emu-terminal-body');
+            if (tbody) tbody.scrollTop = tbody.scrollHeight;
+          }
+        }, atTime + matching.length * LINE_STAGGER + 60);
+      }
     }
 
     function resetTrace(trace) {
@@ -7311,18 +7399,20 @@ _HTML_JS = """
       var finalBanner = trace.querySelector('.emu-trace-final');
       var btn         = trace.querySelector('.emu-play-btn');
       var pauseBtn    = trace.querySelector('[data-action="emu-pause"]');
+      var closeBtn    = trace.querySelector('[data-action="emu-close"]');
       var progressWrap  = trace.querySelector('.emu-progress-wrap');
       var progressFill  = trace.querySelector('[data-progress-fill]');
       var progressLabel = trace.querySelector('[data-progress-label]');
 
-      var CHAR_DELAY       = 30;   // ms per character — typewriter speed
-      var POST_TYPE_PAUSE  = 600;  // ms after narrative finishes before packet fires
+      var CHAR_DELAY       = 22;   // ms per character — typewriter speed
+      var POST_TYPE_PAUSE  = 350;  // ms after narrative finishes before packet fires
       var PACKET_DURATION  = 1800; // ms for packet to travel
-      var SCENE_READ_PAUSE = 2000; // ms reading time after packet lands → next scene
+      var SCENE_READ_PAUSE = 1400; // ms reading time after packet lands → next scene
 
       trace.classList.add('emu-trace-playing');
       if (btn) { btn.disabled = true; btn.innerHTML = '&#9654; Playing…'; }
       if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.classList.remove('is-paused'); pauseBtn.innerHTML = '&#9646;&#9646; Pause'; }
+      if (closeBtn) closeBtn.style.display = 'inline-flex';
       if (progressWrap) progressWrap.style.display = 'flex';
 
       function runScene(idx) {
@@ -7340,17 +7430,33 @@ _HTML_JS = """
         var pdNow = scene.querySelector('.emu-scene-payload-details');
         if (pdNow) pdNow.setAttribute('open', '');
 
-        // Step 1 — typewrite the narrative; everything else chains off the callback
+        // Step 1 — immediately reveal SCENE + PAYLOAD lines so terminal is never blank
+        (function () {
+          var allLines = trace.querySelectorAll('.emu-terminal .emu-term-line[data-early="1"]');
+          var ei = 0;
+          allLines.forEach(function (ln) {
+            if (parseInt(ln.getAttribute('data-scene') || '-1', 10) === idx) {
+              safeTimeout(function () {
+                ln.classList.add('emu-term-revealed');
+                var tbody = trace.querySelector('.emu-terminal .emu-terminal-body');
+                if (tbody) tbody.scrollTop = tbody.scrollHeight;
+              }, ei * 120);
+              ei++;
+            }
+          });
+        })();
+
+        // Step 2 — typewrite the narrative; everything else chains off the callback
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
         typewriteNarrative(narrativeEl, CHAR_DELAY, function () {
 
-          // Step 2 — source actor charges up (subtle glow before packet)
+          // Step 3 — source actor charges up (subtle glow before packet)
           safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
 
-          // Step 3 — packet flies across the arrow
+          // Step 4 — packet flies across the arrow
           safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, POST_TYPE_PAUSE);
 
-          // Step 4 — terminal rows appear after packet lands
+          // Step 5 — remaining terminal rows (READ/PREDICT/OUTCOME) appear after packet lands
           safeTimeout(function () { revealTermLines(trace, idx, 0); },
                       POST_TYPE_PAUSE + PACKET_DURATION);
 
@@ -7366,6 +7472,7 @@ _HTML_JS = """
               if (pauseBtn) pauseBtn.style.display = 'none';
               if (progressWrap) progressWrap.style.display = 'none';
               if (progressFill) progressFill.style.width = '0%';
+              // Keep Close visible so user can dismiss after watching
             }, afterScene);
           }
         });
@@ -7396,6 +7503,27 @@ _HTML_JS = """
         });
       }
     }
+
+    function closeTrace(trace) {
+      clearAllTimers();
+      resetTrace(trace);
+      activeTrace = null;
+      var closeBtn = trace.querySelector('[data-action="emu-close"]');
+      if (closeBtn) closeBtn.style.display = 'none';
+      var pauseBtn = trace.querySelector('[data-action="emu-pause"]');
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      var progressWrap = trace.querySelector('.emu-progress-wrap');
+      if (progressWrap) progressWrap.style.display = 'none';
+      var btn = trace.querySelector('.emu-play-btn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#9654; Play behaviour emulation'; }
+    }
+
+    document.querySelectorAll('[data-action="emu-close"]').forEach(function (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        var trace = closeBtn.closest('.emu-trace');
+        if (trace) closeTrace(trace);
+      });
+    });
 
     document.querySelectorAll('.emu-play-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
