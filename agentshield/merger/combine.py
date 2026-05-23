@@ -582,10 +582,11 @@ _PIPELINE_STEP_KEYS = (
     "user_prompt", "rag_context", "system_prompt", "planner",
     "tool_choice", "tool_output", "re_planning", "final_answer",
 )
-_ARRIVAL_STAMP: dict[str, str] = {
-    "advances":  "advances · no defences here · landed",
-    "blocked":   "blocked · defence triggered",
-    "modified":  "modified · partially filtered",
+_VERDICT_STAMP: dict[str, tuple[str, str]] = {
+    "lands":        ("attack landed",            "advances"),
+    "blocked":      ("attack blocked",           "blocked"),
+    "partial":      ("partially blocked",        "modified"),
+    "inconclusive": ("inconclusive",             "neutral"),
 }
 
 _PIPELINE_STEP_SHORT = {
@@ -841,6 +842,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
         '<div class="emu-trace-steps">'
     )
+    n_scenes = len(emu_trace)
     for scene_idx, step in enumerate(emu_trace):
         outcome = step.get("outcome") or "advances"
         step_key = step.get("step") or ""
@@ -914,9 +916,16 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
             f'</div>'
-            f'<div class="emu-arrival-stamp emu-arrival-stamp-{_html_escape(outcome)}">'
-            f'{_html_escape(_ARRIVAL_STAMP.get(outcome, outcome))}</div>'
         )
+        # Arrival stamp only on the final scene, using the overall scan verdict
+        if scene_idx == n_scenes - 1:
+            stamp_text, stamp_cls = _VERDICT_STAMP.get(
+                emu_verdict, (emu_verdict, "neutral")
+            )
+            parts.append(
+                f'<div class="emu-arrival-stamp emu-arrival-stamp-{stamp_cls}">'
+                f'{_html_escape(stamp_text)}</div>'
+            )
         if step_input:
             preview = step_input[:60]
             if len(step_input) > 60:
@@ -6102,6 +6111,7 @@ footer {
 .emu-arrival-stamp-advances { color: #7f1d1d; }
 .emu-arrival-stamp-blocked  { color: #14532d; }
 .emu-arrival-stamp-modified { color: #7c2d12; }
+.emu-arrival-stamp-neutral  { color: #475569; }
 @keyframes emu-arrival-blink {
   0%   { opacity: 0; }
   12%  { opacity: 1; }
