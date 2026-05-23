@@ -5493,7 +5493,7 @@ footer {
 #emu-modal-box {
   background: #fff;
   border-radius: 14px;
-  width: min(94vw, 880px);
+  width: min(96vw, 1100px);
   height: min(92vh, 720px);
   display: flex; flex-direction: column;
   box-shadow: 0 24px 64px rgba(15,23,42,0.40);
@@ -7244,26 +7244,22 @@ _HTML_JS = """
             scenes.forEach(function (s) { s.classList.remove('emu-scene-modal-active'); });
             scene.classList.add('emu-scene-visible', 'emu-scene-modal-active');
 
+            // Payload: open immediately when the scene appears so it is
+            // always readable — no need to wait for the packet animation.
+            var pdNow = scene.querySelector('.emu-scene-payload-details');
+            if (pdNow) pdNow.setAttribute('open', '');
+
+            // Terminal: show only lines for THIS scene; clear the previous
+            // scene's lines so the log always reflects the current phase.
+            trace.querySelectorAll('.emu-term-line').forEach(function (l) {
+              l.classList.remove('emu-term-revealed', 'emu-term-current');
+            });
+
             safeTimeout(function () { scene.classList.add('emu-scene-source-pulsing'); }, 150);
-
-            // Payload opens at 400ms — packet hasn't flown yet, giving
-            // ~1.2s of reading time before the arrow animates.
-            safeTimeout(function () {
-              var pd = scene.querySelector('.emu-scene-payload-details');
-              if (pd) pd.setAttribute('open', '');
-            }, 400);
-
             safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 1000);
             safeTimeout(function () { scene.classList.add('emu-scene-received'); }, 2000);
 
             revealTermLines(trace, idx, 1200);
-
-            // Payload collapses 600ms before next scene so the card
-            // is tidy when the next scene fades in.
-            safeTimeout(function () {
-              var pd = scene.querySelector('.emu-scene-payload-details');
-              if (pd) pd.removeAttribute('open');
-            }, SCENE_CADENCE - 600);
 
             if (idx === scenes.length - 1) {
               safeTimeout(function () {
