@@ -1236,6 +1236,14 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
         '<div class="emu-trace-steps">'
     )
+    # Attack-plan card — typewritten in the scene area before step 1 plays
+    if attack_question:
+        parts.append(
+            '<div class="emu-attack-plan-card" style="display:none">'
+            '<span class="emu-ap-label">Attack Plan</span>'
+            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
+            '</div>'
+        )
     n_scenes = len(emu_trace)
     for scene_idx, step in enumerate(emu_trace):
         outcome = step.get("outcome") or "advances"
@@ -1482,16 +1490,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         '</div>'
         '<div class="emu-terminal-body">'
     )
-    # Question line — typewritten as the very first entry before step 1 plays
-    if attack_question:
-        parts.append(
-            f'<div class="emu-term-line emu-term-line-question" data-scene="-1">'
-            f'<span class="emu-term-ts">[00:00:00]</span> '
-            f'<span class="emu-term-prefix">?</span> '
-            f'<span class="emu-term-msg emu-term-question-msg" '
-            f'data-narrative="{_html_escape(attack_question)}"></span>'
-            f'</div>'
-        )
     for li, (scene_i, lvl_cls, prefix, msg) in enumerate(terminal_lines):
         t_sec = max(0, scene_i) * 2 + (
             0 if prefix in ("INFO", "SCENE") else 1
@@ -6232,32 +6230,36 @@ footer {
   border: 1px solid #334155;
   vertical-align: middle;
 }
-/* Question terminal line — typewritten before step 1 */
-.emu-term-line-question {
-  display: none;
-  padding: 5px 8px 7px;
-  background: #0c1a2e;
-  border-bottom: 1px solid #1e3a5f;
-  margin-bottom: 4px;
-}
-.emu-term-line-question.emu-term-revealed {
+/* Attack-plan card — typewritten in the scene area before step 1 */
+.emu-attack-plan-card {
+  margin: 0 0 10px;
+  padding: 11px 16px 13px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 10px;
+  animation: emu-ap-fadein 0.35s ease forwards;
 }
-.emu-term-line-question .emu-term-prefix {
-  color: #60a5fa;
-  font-weight: 700;
-  font-size: 13px;
+@keyframes emu-ap-fadein {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.emu-term-line-question .emu-term-ts {
-  color: #334155;
+.emu-ap-label {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+  padding: 2px 6px;
+  background: #dbeafe;
+  border-radius: 3px;
 }
-.emu-term-question-msg {
-  color: #93c5fd;
-  font-size: 12px;
-  line-height: 1.55;
-  font-style: italic;
+.emu-ap-text {
+  font-size: 13px; line-height: 1.55;
+  color: #1e3a5f;
 }
 /* Payload-firing catalogue intro — shown before pipeline scenes animate */
 .emu-layer-intro {
@@ -8025,12 +8027,12 @@ _HTML_JS = """
                              'emu-lp-landed','emu-lp-blocked-all');
         });
       }
-      // Reset the question line so Replay re-typewriters it
-      var qLine = trace.querySelector('.emu-term-line-question');
-      if (qLine) {
-        qLine.classList.remove('emu-term-revealed');
-        var qMsg = qLine.querySelector('.emu-term-question-msg');
-        if (qMsg) qMsg.textContent = '';
+      // Reset attack-plan card so Replay re-typewriters it
+      var apCard = trace.querySelector('.emu-attack-plan-card');
+      if (apCard) {
+        apCard.style.display = 'none';
+        var apText = apCard.querySelector('.emu-ap-text');
+        if (apText) apText.textContent = '';
       }
     }
 
@@ -8190,16 +8192,16 @@ _HTML_JS = """
 
       // Full start sequence (only when beginning from step 0):
       // 1) payload catalogue intro (seed/mutation pills)
-      // 2) typewrite the guiding question into the terminal
+      // 2) attack-plan card fades in and typewriters the question
       // 3) pipeline step scenes
       if (startIdx === 0) {
         playLayerIntro(trace, function () {
-          var qLine = trace.querySelector('.emu-term-line-question');
-          var qMsg  = qLine ? qLine.querySelector('.emu-term-question-msg') : null;
-          if (qLine && qMsg) {
-            qLine.classList.add('emu-term-revealed');
-            typewriteNarrative(qMsg, CHAR_DELAY, function () {
-              safeTimeout(function () { runScene(0); }, 600);
+          var apCard = trace.querySelector('.emu-attack-plan-card');
+          var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
+          if (apCard && apText) {
+            apCard.style.display = '';
+            typewriteNarrative(apText, CHAR_DELAY, function () {
+              safeTimeout(function () { runScene(0); }, 500);
             });
           } else {
             runScene(0);
