@@ -5604,20 +5604,20 @@ footer {
   animation: none;
 }
 
-/* Narrative paragraph — prominent plain-English explanation */
+/* Narrative paragraph — clean black-on-white; border colour gives outcome signal */
 .emu-scene-narrative {
   margin: 0 0 16px;
   padding: 12px 16px;
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
+  background: #ffffff;
+  border-left: 3px solid #6b7280;
   border-radius: 6px;
-  font-size: 13.5px; line-height: 1.65; color: #1e3a8a;
+  font-size: 13.5px; line-height: 1.65; color: #111827;
 }
-/* Outcome-specific narrative colours */
-.emu-scene-advances  .emu-scene-narrative { background:#fff7ed; border-color:#f97316; color:#7c2d12; }
-.emu-scene-blocked   .emu-scene-narrative { background:#f0fdf4; border-color:#16a34a; color:#14532d; }
-.emu-scene-modified  .emu-scene-narrative { background:#fefce8; border-color:#ca8a04; color:#713f12; }
-.emu-scene-absent_step .emu-scene-narrative { background:#f8fafc; border-color:#94a3b8; color:#475569; }
+/* Outcome border colours (background/text stay neutral) */
+.emu-scene-advances    .emu-scene-narrative { border-color: #9f1239; }
+.emu-scene-blocked     .emu-scene-narrative { border-color: #15803d; }
+.emu-scene-modified    .emu-scene-narrative { border-color: #b45309; }
+.emu-scene-absent_step .emu-scene-narrative { border-color: #94a3b8; }
 
 /* ⑤ Terminal — pinned at bottom, fixed height */
 #emu-modal-body .emu-terminal {
@@ -5666,12 +5666,6 @@ footer {
 #emu-modal-body {
   flex: 1; overflow: hidden;
   display: flex; flex-direction: column;
-}
-/* Override the non-modal opacity:0 animation rules so payload and
-   behaviour text are always fully visible inside the modal. */
-#emu-modal-body .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
-#emu-modal-body .emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
-  opacity: 1 !important; transition: none !important;
 }
 #emu-modal-body .emu-trace {
   flex: 1; display: flex; flex-direction: column;
@@ -6156,16 +6150,10 @@ footer {
   display: block;
   animation: emu-scene-slide-in 480ms cubic-bezier(.25,.46,.45,.94);
 }
+/* Hide payload details + behavior text during animation — terminal carries the info */
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
-  opacity: 0;
-  transition: opacity 280ms ease-out;
-}
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-payload-details,
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-behavior,
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-payload-details,
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-behavior {
-  opacity: 1;
+  display: none;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-source-pulsing
   .emu-actor-src {
