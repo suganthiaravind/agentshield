@@ -5581,6 +5581,15 @@ footer {
   border-left: none; border-right: none; border-bottom: none;
 }
 #emu-modal-body .emu-terminal-body { flex: 1; overflow-y: auto; max-height: none; }
+/* In the modal, hide all terminal lines by default and reveal them
+   one by one via emu-term-revealed. This avoids the opacity-based
+   emu-trace-playing dependency and is straightforward to reason about. */
+#emu-modal-body .emu-terminal .emu-term-line {
+  display: none; opacity: 1; animation: none;
+}
+#emu-modal-body .emu-terminal .emu-term-line.emu-term-revealed {
+  display: block;
+}
 
 /* ⑥ Final verdict banner inside modal */
 #emu-modal-body .emu-trace-final {
@@ -7185,18 +7194,14 @@ _HTML_JS = """
       termLines.forEach(function (ln) {
         if (parseInt(ln.getAttribute('data-scene') || '-1', 10) === forScene) matching.push(ln);
       });
-      matching.forEach(function (ln, idx) {
+      matching.forEach(function (ln, i) {
         safeTimeout(function () {
-          termLines.forEach(function (l) {
-            if (!l.classList.contains('emu-term-scene-header'))
-              l.classList.remove('emu-term-current');
-          });
-          ln.classList.add('emu-term-revealed', 'emu-term-current');
+          ln.classList.add('emu-term-revealed');
           if (terminal) {
             var tbody = terminal.querySelector('.emu-terminal-body');
             if (tbody) tbody.scrollTop = tbody.scrollHeight;
           }
-        }, atTime + idx * LINE_STAGGER);
+        }, atTime + i * LINE_STAGGER);
       });
     }
 
@@ -7209,7 +7214,7 @@ _HTML_JS = """
       });
       var fb = trace.querySelector('.emu-trace-final');
       if (fb) fb.classList.remove('emu-trace-final-visible');
-      trace.querySelectorAll('.emu-term-line').forEach(function (ln) {
+      trace.querySelectorAll('.emu-terminal .emu-term-line').forEach(function (ln) {
         ln.classList.remove('emu-term-revealed', 'emu-term-current');
       });
     }
@@ -7229,8 +7234,6 @@ _HTML_JS = """
       if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.classList.remove('is-paused'); pauseBtn.innerHTML = '&#9646;&#9646; Pause'; }
       if (progressWrap) progressWrap.style.display = 'flex';
 
-      revealTermLines(trace, -1, 0);
-
       for (var i = startIdx; i < scenes.length; i++) {
         (function (idx) {
           safeTimeout(function () {
@@ -7245,34 +7248,20 @@ _HTML_JS = """
             var pdNow = scene.querySelector('.emu-scene-payload-details');
             if (pdNow) pdNow.setAttribute('open', '');
 
-            // Terminal: clear previous scene's lines, then show a
-            // scene-label header followed by this scene's log rows.
-            trace.querySelectorAll('.emu-term-line:not(.emu-term-scene-header)')
+            // Terminal: hide all lines from previous scene, then reveal
+            // only this scene's rows one by one (data-scene === idx).
+            trace.querySelectorAll('.emu-terminal .emu-term-line')
                  .forEach(function (l) {
                    l.classList.remove('emu-term-revealed', 'emu-term-current');
                  });
-            var terminal = trace.querySelector('.emu-terminal');
-            var termBody = terminal ? terminal.querySelector('.emu-terminal-body') : null;
-            if (termBody) {
-              var hdr = termBody.querySelector('.emu-term-scene-header');
-              if (!hdr) {
-                hdr = document.createElement('div');
-                hdr.className = 'emu-term-line emu-term-scene-header';
-                termBody.insertBefore(hdr, termBody.firstChild);
-              }
-              var stepLabelEl = scene.querySelector('.emu-scene-step-label');
-              var stepLabel = stepLabelEl ? stepLabelEl.textContent.trim() : '';
-              hdr.textContent = '── SCENE ' + (idx + 1) + '/' + scenes.length +
-                                ' · ' + stepLabel + ' ──';
-              hdr.classList.add('emu-term-revealed');
-              termBody.scrollTop = 0;
-            }
+            var termBody2 = trace.querySelector('.emu-terminal-body');
+            if (termBody2) termBody2.scrollTop = 0;
 
             // Arrow: animate the packet flying from src → dst.
             safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 600);
 
-            // Reveal this scene's log rows one by one.
-            revealTermLines(trace, idx, 300);
+            // Reveal this scene's log rows one by one (starts at 0ms).
+            revealTermLines(trace, idx, 0);
 
             if (idx === scenes.length - 1) {
               safeTimeout(function () {
