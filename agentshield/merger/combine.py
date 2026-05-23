@@ -7114,10 +7114,9 @@ _HTML_JS = """
   });
 
   // Behaviour-emulator modal + role-play walkthrough.
-  // Clicking Play lifts the .emu-trace into a full-screen modal so
-  // there is enough room for all scenes + the terminal panel, and the
-  // play/pause/progress header stays pinned at the top regardless of
-  // how many scenes scroll by.
+  // Clicking Play CLONES the .emu-trace into a full-screen modal —
+  // the original element (with the Play button) stays in the finding
+  // card untouched, so closing the modal never hides the button.
   (function () {
     var modalOverlay = document.getElementById('emu-modal-overlay');
     var modalBody    = document.getElementById('emu-modal-body');
@@ -7125,12 +7124,7 @@ _HTML_JS = """
     var modalClose   = document.getElementById('emu-modal-close');
     if (!modalOverlay || !modalBody) return;
 
-    var activeTrace   = null;   // the .emu-trace currently in the modal
-    var origParent    = null;   // where to return it after close
-    var origSibling   = null;
-    var placeholder   = null;
-    var savedDetails  = null;   // nearest <details> ancestor (finding-discovered)
-    var savedDetailsOpen = false; // its open state at the time Play was clicked
+    var activeTrace  = null;   // the cloned .emu-trace inside the modal
     var pendingTimers = [];
     var pausedAtScene = -1;
 
@@ -7144,17 +7138,11 @@ _HTML_JS = """
     }
 
     function openModal(trace, attackLabel) {
-      activeTrace  = trace;
-      origParent   = trace.parentNode;
-      origSibling  = trace.nextSibling;
-      // Save the open state of the nearest <details> so we can restore it
-      // on close — some browsers toggle it when a child is moved out.
-      savedDetails = trace.closest('details');
-      savedDetailsOpen = savedDetails ? savedDetails.open : false;
-      placeholder  = document.createElement('div');
-      placeholder.style.cssText = 'height:0;overflow:hidden;';
-      origParent.insertBefore(placeholder, origSibling);
-      modalBody.appendChild(trace);
+      // Deep-clone so the original finding card is never touched.
+      var clone = trace.cloneNode(true);
+      activeTrace = clone;
+      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
+      modalBody.appendChild(clone);
       if (modalTitle) modalTitle.textContent = attackLabel || 'Behaviour emulation';
       modalOverlay.style.display = 'flex';
       document.body.style.overflow = 'hidden';
@@ -7162,25 +7150,10 @@ _HTML_JS = """
 
     function closeModal() {
       clearAllTimers();
-      if (activeTrace && origParent) {
-        origParent.insertBefore(activeTrace, origSibling);
-        // Reset playing state
-        activeTrace.classList.remove('emu-trace-playing');
-        var btn2 = activeTrace.querySelector('.emu-play-btn');
-        if (btn2) { btn2.disabled = false; btn2.innerHTML = '&#9654; Play behaviour emulation'; }
-        var pauseBtn2 = activeTrace.querySelector('[data-action="emu-pause"]');
-        if (pauseBtn2) pauseBtn2.style.display = 'none';
-        var pw = activeTrace.querySelector('.emu-progress-wrap');
-        if (pw) pw.style.display = 'none';
-      }
-      if (placeholder) placeholder.remove();
-      // Restore the <details> open state — some browsers collapse it when
-      // a child element is moved in/out of the DOM.
-      if (savedDetails) savedDetails.open = savedDetailsOpen;
+      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
+      activeTrace = null;
       modalOverlay.style.display = 'none';
       document.body.style.overflow = '';
-      activeTrace = null; origParent = null; origSibling = null; placeholder = null;
-      savedDetails = null; savedDetailsOpen = false;
       pausedAtScene = -1;
     }
 
@@ -7325,8 +7298,8 @@ _HTML_JS = """
     document.querySelectorAll('.emu-play-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var trace = btn.closest('.emu-trace');
-        if (!trace) return;
-        // Determine attack label for modal title
+        // Ignore clicks from inside the modal (the clone also has a play btn)
+        if (!trace || trace.closest('#emu-modal-body')) return;
         var attackLabel = 'Behaviour emulation';
         var finding = trace.closest('.finding');
         if (finding) {
@@ -7334,9 +7307,8 @@ _HTML_JS = """
           if (titleEl) attackLabel = titleEl.textContent.trim();
         }
         clearAllTimers();
-        resetTrace(trace);
-        openModal(trace, attackLabel);
-        playFromScene(trace, 0);
+        openModal(trace, attackLabel);   // creates fresh clone → activeTrace
+        playFromScene(activeTrace, 0);   // animate the clone
       });
     });
   }());
