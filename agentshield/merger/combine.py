@@ -598,7 +598,7 @@ _PIPELINE_STEP_SHORT = {
 # is happening at each pipeline point in non-technical language.
 _STEP_NARRATIVE: dict[str, dict[str, str]] = {
     "user_prompt": {
-        "advances": "No input filter is in place. The attacker's payload enters the agent as ordinary user input — the agent cannot tell it apart from a legitimate request. The attack moves forward.",
+        "advances": "The attacker’s payload enters the agent as ordinary user input — no input filters in place; the agent cannot tell it apart from a legitimate request. The attack moves forward.",
         "blocked":  "An input validation layer intercepts the message before it reaches the agent. The attack is stopped at the front door.",
         "modified": "The input is partially sanitised but the core payload survives. The attack continues in a weakened form.",
         "absent_step": "This agent has no direct user-input pathway at this step.",
@@ -7187,7 +7187,10 @@ _HTML_JS = """
       });
       matching.forEach(function (ln, idx) {
         safeTimeout(function () {
-          termLines.forEach(function (l) { l.classList.remove('emu-term-current'); });
+          termLines.forEach(function (l) {
+            if (!l.classList.contains('emu-term-scene-header'))
+              l.classList.remove('emu-term-current');
+          });
           ln.classList.add('emu-term-revealed', 'emu-term-current');
           if (terminal) {
             var tbody = terminal.querySelector('.emu-terminal-body');
@@ -7199,7 +7202,8 @@ _HTML_JS = """
 
     function resetTrace(trace) {
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
-        s.classList.remove('emu-scene-visible', 'emu-scene-modal-active');
+        s.classList.remove('emu-scene-visible', 'emu-scene-modal-active',
+                           'emu-scene-packet-flying');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
       });
@@ -7264,7 +7268,10 @@ _HTML_JS = """
               termBody.scrollTop = 0;
             }
 
-            // Reveal this scene's log rows one by one (no blinking effects).
+            // Arrow: animate the packet flying from src → dst.
+            safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 600);
+
+            // Reveal this scene's log rows one by one.
             revealTermLines(trace, idx, 300);
 
             if (idx === scenes.length - 1) {
