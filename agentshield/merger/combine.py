@@ -7113,10 +7113,12 @@ _HTML_JS = """
     var modalClose   = document.getElementById('emu-modal-close');
     if (!modalOverlay || !modalBody) return;
 
-    var activeTrace = null;     // the .emu-trace currently in the modal
-    var origParent  = null;     // where to return it after close
-    var origSibling = null;
-    var placeholder = null;
+    var activeTrace   = null;   // the .emu-trace currently in the modal
+    var origParent    = null;   // where to return it after close
+    var origSibling   = null;
+    var placeholder   = null;
+    var savedDetails  = null;   // nearest <details> ancestor (finding-discovered)
+    var savedDetailsOpen = false; // its open state at the time Play was clicked
     var pendingTimers = [];
     var pausedAtScene = -1;
 
@@ -7133,6 +7135,10 @@ _HTML_JS = """
       activeTrace  = trace;
       origParent   = trace.parentNode;
       origSibling  = trace.nextSibling;
+      // Save the open state of the nearest <details> so we can restore it
+      // on close — some browsers toggle it when a child is moved out.
+      savedDetails = trace.closest('details');
+      savedDetailsOpen = savedDetails ? savedDetails.open : false;
       placeholder  = document.createElement('div');
       placeholder.style.cssText = 'height:0;overflow:hidden;';
       origParent.insertBefore(placeholder, origSibling);
@@ -7156,9 +7162,13 @@ _HTML_JS = """
         if (pw) pw.style.display = 'none';
       }
       if (placeholder) placeholder.remove();
+      // Restore the <details> open state — some browsers collapse it when
+      // a child element is moved in/out of the DOM.
+      if (savedDetails) savedDetails.open = savedDetailsOpen;
       modalOverlay.style.display = 'none';
       document.body.style.overflow = '';
       activeTrace = null; origParent = null; origSibling = null; placeholder = null;
+      savedDetails = null; savedDetailsOpen = false;
       pausedAtScene = -1;
     }
 
