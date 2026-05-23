@@ -1236,14 +1236,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
         '<div class="emu-trace-steps">'
     )
-    # Attack-plan card — typewritten in the scene area before step 1 plays
-    if attack_question:
-        parts.append(
-            '<div class="emu-attack-plan-card" style="display:none">'
-            '<span class="emu-ap-label">Attack Plan</span>'
-            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
-            '</div>'
-        )
     n_scenes = len(emu_trace)
     for scene_idx, step in enumerate(emu_trace):
         outcome = step.get("outcome") or "advances"
@@ -1337,6 +1329,14 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                     '— no input filters in place; the agent cannot tell it apart '
                     'from a legitimate request. The attack moves forward.'
                 )
+        ap_card_html = ""
+        if scene_idx == 0 and attack_question:
+            ap_card_html = (
+                '<div class="emu-attack-plan-card" style="display:none">'
+                '<span class="emu-ap-label">Attack Plan</span>'
+                f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
+                '</div>'
+            )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}">'
             f'<div class="emu-scene-header">'
@@ -1346,6 +1346,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{_html_escape(outcome)}</span>'
             f'{defence_chip}'
             f'</div>'
+            f'{ap_card_html}'
             f'{payload_callout_html}'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
@@ -6247,6 +6248,13 @@ footer {
   from { opacity: 0; transform: translateY(-5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.emu-attack-plan-card.emu-ap-fadeout {
+  animation: emu-ap-fadeout 0.35s ease forwards;
+}
+@keyframes emu-ap-fadeout {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-5px); }
+}
 .emu-ap-label {
   flex-shrink: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -8027,10 +8035,11 @@ _HTML_JS = """
                              'emu-lp-landed','emu-lp-blocked-all');
         });
       }
-      // Reset attack-plan card so Replay re-typewriters it
-      var apCard = trace.querySelector('.emu-attack-plan-card');
+      // Reset attack-plan card (inside scene 0) so Replay re-typewriters it
+      var apCard = trace.querySelector('.emu-scene .emu-attack-plan-card');
       if (apCard) {
         apCard.style.display = 'none';
+        apCard.classList.remove('emu-ap-fadeout');
         var apText = apCard.querySelector('.emu-ap-text');
         if (apText) apText.textContent = '';
       }
@@ -8142,6 +8151,30 @@ _HTML_JS = """
         var pdNow = scene.querySelector('.emu-scene-payload-details');
         if (pdNow) pdNow.setAttribute('open', '');
 
+        // For scene 0: show the attack-plan card inside the scene first,
+        // typewrite it, then fade it out before the normal scene content plays.
+        if (idx === 0) {
+          var apCard = scene.querySelector('.emu-attack-plan-card');
+          var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
+          if (apCard && apText) {
+            apCard.style.display = '';
+            typewriteNarrative(apText, CHAR_DELAY, function () {
+              safeTimeout(function () {
+                apCard.classList.add('emu-ap-fadeout');
+                safeTimeout(function () {
+                  apCard.style.display = 'none';
+                  apCard.classList.remove('emu-ap-fadeout');
+                  runSceneContent(idx, scene);
+                }, 350);
+              }, 800);
+            });
+            return;
+          }
+        }
+        runSceneContent(idx, scene);
+      }
+
+      function runSceneContent(idx, scene) {
         // Step 1 — immediately reveal SCENE + PAYLOAD lines so terminal is never blank
         (function () {
           var allLines = trace.querySelectorAll('.emu-terminal .emu-term-line[data-early="1"]');
@@ -8190,23 +8223,10 @@ _HTML_JS = """
         });
       }
 
-      // Full start sequence (only when beginning from step 0):
-      // 1) payload catalogue intro (seed/mutation pills)
-      // 2) attack-plan card fades in and typewriters the question
-      // 3) pipeline step scenes
+      // Payload catalogue intro first, then pipeline scenes (attack plan
+      // is handled inside runScene(0) itself — shows, typewriters, fades out).
       if (startIdx === 0) {
-        playLayerIntro(trace, function () {
-          var apCard = trace.querySelector('.emu-attack-plan-card');
-          var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
-          if (apCard && apText) {
-            apCard.style.display = '';
-            typewriteNarrative(apText, CHAR_DELAY, function () {
-              safeTimeout(function () { runScene(0); }, 500);
-            });
-          } else {
-            runScene(0);
-          }
-        });
+        playLayerIntro(trace, function () { runScene(0); });
       } else {
         runScene(startIdx);
       }
