@@ -1213,18 +1213,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         )
 
     attack_question = _ATTACK_QUESTION.get(emu_attack_class, "")
-    attack_question_html = ""
-    if attack_question:
-        attack_question_html = (
-            f'<div class="emu-attack-question" style="display:none">'
-            f'<span class="emu-aq-label">The question:</span> '
-            f'{_html_escape(attack_question)}'
-            f'</div>'
-        )
 
     parts.append(
         f'<div class="emu-trace"{catalog_attr}>'
-        f'{attack_question_html}'
         f'{layer_intro_html}'
         '<div class="emu-trace-header">'
         '<button type="button" class="emu-play-btn" data-action="emu-play">'
@@ -1491,6 +1482,16 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         '</div>'
         '<div class="emu-terminal-body">'
     )
+    # Question line — typewritten as the very first entry before step 1 plays
+    if attack_question:
+        parts.append(
+            f'<div class="emu-term-line emu-term-line-question" data-scene="-1">'
+            f'<span class="emu-term-ts">[00:00:00]</span> '
+            f'<span class="emu-term-prefix">?</span> '
+            f'<span class="emu-term-msg emu-term-question-msg" '
+            f'data-narrative="{_html_escape(attack_question)}"></span>'
+            f'</div>'
+        )
     for li, (scene_i, lvl_cls, prefix, msg) in enumerate(terminal_lines):
         t_sec = max(0, scene_i) * 2 + (
             0 if prefix in ("INFO", "SCENE") else 1
@@ -6231,27 +6232,32 @@ footer {
   border: 1px solid #334155;
   vertical-align: middle;
 }
-/* Attack-question banner — shown throughout the animation */
-.emu-attack-question {
-  margin-bottom: 10px;
-  padding: 9px 14px;
+/* Question terminal line — typewritten before step 1 */
+.emu-term-line-question {
+  display: none;
+  padding: 5px 8px 7px;
   background: #0c1a2e;
-  border: 1px solid #1e40af;
-  border-left: 3px solid #3b82f6;
-  border-radius: 6px;
-  font-size: 13px; line-height: 1.5;
-  color: #cbd5e1;
-  animation: emu-aq-fadein 0.4s ease forwards;
+  border-bottom: 1px solid #1e3a5f;
+  margin-bottom: 4px;
 }
-.emu-aq-label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: #60a5fa;
-  margin-right: 6px;
+.emu-term-line-question.emu-term-revealed {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
-@keyframes emu-aq-fadein {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+.emu-term-line-question .emu-term-prefix {
+  color: #60a5fa;
+  font-weight: 700;
+  font-size: 13px;
+}
+.emu-term-line-question .emu-term-ts {
+  color: #334155;
+}
+.emu-term-question-msg {
+  color: #93c5fd;
+  font-size: 12px;
+  line-height: 1.55;
+  font-style: italic;
 }
 /* Payload-firing catalogue intro — shown before pipeline scenes animate */
 .emu-layer-intro {
@@ -8019,9 +8025,13 @@ _HTML_JS = """
                              'emu-lp-landed','emu-lp-blocked-all');
         });
       }
-      // Hide the attack-question banner on reset
-      var aq = trace.querySelector('.emu-attack-question');
-      if (aq) aq.style.display = 'none';
+      // Reset the question line so Replay re-typewriters it
+      var qLine = trace.querySelector('.emu-term-line-question');
+      if (qLine) {
+        qLine.classList.remove('emu-term-revealed');
+        var qMsg = qLine.querySelector('.emu-term-question-msg');
+        if (qMsg) qMsg.textContent = '';
+      }
     }
 
     // Animate the payload-firing catalogue intro before the pipeline scenes.
@@ -8178,16 +8188,23 @@ _HTML_JS = """
         });
       }
 
-      // Show the attack-question banner immediately when Play is pressed
+      // Full start sequence (only when beginning from step 0):
+      // 1) payload catalogue intro (seed/mutation pills)
+      // 2) typewrite the guiding question into the terminal
+      // 3) pipeline step scenes
       if (startIdx === 0) {
-        var aq = trace.querySelector('.emu-attack-question');
-        if (aq) { aq.style.display = ''; }
-      }
-
-      // Play the layer-firing catalogue intro (seeds → mutations) first,
-      // then hand off to the pipeline scene animation.
-      if (startIdx === 0) {
-        playLayerIntro(trace, function () { runScene(startIdx); });
+        playLayerIntro(trace, function () {
+          var qLine = trace.querySelector('.emu-term-line-question');
+          var qMsg  = qLine ? qLine.querySelector('.emu-term-question-msg') : null;
+          if (qLine && qMsg) {
+            qLine.classList.add('emu-term-revealed');
+            typewriteNarrative(qMsg, CHAR_DELAY, function () {
+              safeTimeout(function () { runScene(0); }, 600);
+            });
+          } else {
+            runScene(0);
+          }
+        });
       } else {
         runScene(startIdx);
       }
