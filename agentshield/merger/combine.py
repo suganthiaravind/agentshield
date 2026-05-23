@@ -794,6 +794,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     emu_verdict = (emu_data.get("verdict") or "inconclusive").strip()
     emu_conf = emu_data.get("verdict_confidence")
     emu_attack_class = emu_data.get("attack_class") or "unknown"
+    emu_payload = (emu_data.get("catalogue_payload") or "").strip()
 
     def _strip_prefix(lbl: str) -> str:
         return _re.sub(r"^\d+\s*[—\-–]\s*", "", lbl).strip()
@@ -890,6 +891,18 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         narrative = _STEP_NARRATIVE.get(step_key, {}).get(
             outcome, step_behavior or ""
         )
+        # For the user_prompt entry-point, embed a preview of the actual
+        # attack payload so the reader sees exactly what string is injected.
+        if step_key == "user_prompt" and outcome == "advances" and emu_payload:
+            _preview = emu_payload[:90].rstrip()
+            if len(emu_payload) > 90:
+                _preview += "…"
+            narrative = (
+                f'The attacker\'s payload “{_preview}” enters the agent '
+                f'as ordinary user input — no input filters in place; '
+                f'the agent cannot tell it apart from a legitimate request. '
+                f'The attack moves forward.'
+            )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}">'
             f'<div class="emu-scene-header">'
@@ -5583,11 +5596,11 @@ footer {
          background: #fef2f2; border-color: #fca5a5; }
   100% { box-shadow: none; background: inherit; border-color: inherit; }
 }
-#emu-modal-body .emu-scene.emu-scene-charge-ready .emu-actor-src {
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-charge-ready .emu-actor-src {
   animation: emu-actor-charge 900ms 0ms ease-in-out both;
 }
 /* Blocked scenes: no red charge on the source (attacker doesn't win) */
-#emu-modal-body .emu-scene.emu-scene-blocked.emu-scene-charge-ready .emu-actor-src {
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-charge-ready .emu-actor-src {
   animation: none;
 }
 
@@ -6150,7 +6163,9 @@ footer {
   transition: opacity 280ms ease-out;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-payload-details,
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-behavior {
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-scene-behavior,
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-payload-details,
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-behavior {
   opacity: 1;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-source-pulsing
@@ -6365,7 +6380,7 @@ footer {
 }
 .emu-trace.emu-trace-playing .emu-terminal
   [class*="emu-term-line-verdict-"].emu-term-revealed {
-  animation: emu-term-line-blink 380ms ease-out 3;
+  animation: emu-term-verdict-modal-blink 1000ms ease-out both;
 }
 @keyframes emu-term-line-blink {
   0%   { background: transparent; }
@@ -7225,13 +7240,10 @@ _HTML_JS = """
   // the original element (with the Play button) stays in the finding
   // card untouched, so closing the modal never hides the button.
   (function () {
-    var modalOverlay = document.getElementById('emu-modal-overlay');
-    var modalBody    = document.getElementById('emu-modal-body');
-    var modalTitle   = document.getElementById('emu-modal-title');
     var modalClose   = document.getElementById('emu-modal-close');
-    if (!modalOverlay || !modalBody) return;
+    if (modalClose) modalClose.addEventListener('click', function () {});
 
-    var activeTrace  = null;   // the cloned .emu-trace inside the modal
+    var activeTrace  = null;   // .emu-trace currently playing (inline, no modal)
     var pendingTimers = [];
     var pausedAtScene = -1;
 
@@ -7244,43 +7256,6 @@ _HTML_JS = """
       pendingTimers = [];
     }
 
-    function openModal(trace, attackLabel) {
-      // Deep-clone so the original finding card is never touched.
-      var clone = trace.cloneNode(true);
-      activeTrace = clone;
-      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
-      modalBody.appendChild(clone);
-      // cloneNode does not copy event listeners — wire the clone's play
-      // button so Replay works after the first animation completes.
-      var clonePlayBtn = clone.querySelector('.emu-play-btn');
-      if (clonePlayBtn) {
-        clonePlayBtn.addEventListener('click', function () {
-          clearAllTimers();
-          resetTrace(activeTrace);
-          playFromScene(activeTrace, 0);
-        });
-      }
-      if (modalTitle) modalTitle.textContent = attackLabel || 'Behaviour emulation';
-      modalOverlay.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeModal() {
-      clearAllTimers();
-      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
-      activeTrace = null;
-      modalOverlay.style.display = 'none';
-      document.body.style.overflow = '';
-      pausedAtScene = -1;
-    }
-
-    if (modalClose) modalClose.addEventListener('click', closeModal);
-    modalOverlay.addEventListener('click', function (e) {
-      if (e.target === modalOverlay) closeModal();
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && modalOverlay.style.display !== 'none') closeModal();
-    });
 
     var LINE_STAGGER = 320;    // ms between terminal rows
     var SCENE_CADENCE = 8000;  // ms per scene
@@ -7322,8 +7297,9 @@ _HTML_JS = """
     }
 
     function resetTrace(trace) {
+      trace.classList.remove('emu-trace-playing');
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
-        s.classList.remove('emu-scene-visible', 'emu-scene-modal-active',
+        s.classList.remove('emu-scene-visible',
                            'emu-scene-packet-flying', 'emu-scene-charge-ready');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
@@ -7368,19 +7344,13 @@ _HTML_JS = """
         if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
         if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
 
-        // Activate this scene, deactivate others
-        scenes.forEach(function (s) { s.classList.remove('emu-scene-modal-active'); });
-        scene.classList.add('emu-scene-visible', 'emu-scene-modal-active');
+        // Activate this scene (dim others via CSS); terminal lines accumulate inline
+        scenes.forEach(function (s) { s.classList.remove('emu-scene-visible'); });
+        scene.classList.add('emu-scene-visible');
 
         // Open payload box immediately
         var pdNow = scene.querySelector('.emu-scene-payload-details');
         if (pdNow) pdNow.setAttribute('open', '');
-
-        // Clear terminal rows from previous scene
-        trace.querySelectorAll('.emu-terminal .emu-term-line')
-             .forEach(function (l) { l.classList.remove('emu-term-revealed', 'emu-term-current'); });
-        var termBody2 = trace.querySelector('.emu-terminal-body');
-        if (termBody2) termBody2.scrollTop = 0;
 
         // Step 1 — typewrite the narrative; everything else chains off the callback
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
@@ -7427,7 +7397,7 @@ _HTML_JS = """
             clearAllTimers();
             var lastVisible = 0;
             trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, i) {
-              if (s.classList.contains('emu-scene-visible') || s.classList.contains('emu-scene-modal-active')) lastVisible = i;
+              if (s.classList.contains('emu-scene-visible')) lastVisible = i;
             });
             pausedAtScene = lastVisible;
             pauseBtn.classList.add('is-paused');
@@ -7442,17 +7412,12 @@ _HTML_JS = """
     document.querySelectorAll('.emu-play-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var trace = btn.closest('.emu-trace');
-        // Ignore clicks from inside the modal (the clone also has a play btn)
-        if (!trace || trace.closest('#emu-modal-body')) return;
-        var attackLabel = 'Behaviour emulation';
-        var finding = trace.closest('.finding');
-        if (finding) {
-          var titleEl = finding.querySelector('.finding-title, .finding-id');
-          if (titleEl) attackLabel = titleEl.textContent.trim();
-        }
+        if (!trace) return;
         clearAllTimers();
-        openModal(trace, attackLabel);   // creates fresh clone → activeTrace
-        playFromScene(activeTrace, 0);   // animate the clone
+        if (activeTrace && activeTrace !== trace) resetTrace(activeTrace);
+        activeTrace = trace;
+        resetTrace(trace);
+        playFromScene(trace, 0);
       });
     });
   }());
