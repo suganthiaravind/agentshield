@@ -794,7 +794,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     emu_verdict = (emu_data.get("verdict") or "inconclusive").strip()
     emu_conf = emu_data.get("verdict_confidence")
     emu_attack_class = emu_data.get("attack_class") or "unknown"
-    emu_payload = (emu_data.get("catalogue_payload") or "").strip()
+    emu_payload = (emu_data.get("payload_used") or emu_data.get("catalogue_payload") or "").strip()
 
     def _strip_prefix(lbl: str) -> str:
         return _re.sub(r"^\d+\s*[—\-–]\s*", "", lbl).strip()
@@ -1185,7 +1185,10 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
             "targets_steps": [
                 str(s) for s in (entry.get("targets_steps") or [])
             ],
-            "catalogue_payload": str(entry.get("catalogue_payload") or ""),
+            "payload_used": str(entry.get("payload_used") or entry.get("catalogue_payload") or ""),
+            "payload_layer": str(entry.get("payload_layer") or ""),
+            "seed_payloads": list(entry.get("seed_payloads") or []),
+            "mutation_payloads": list(entry.get("mutation_payloads") or []),
             "verdict": verdict,
             "verdict_confidence": conf,
             "verdict_reasoning": str(entry.get("verdict_reasoning") or ""),
@@ -1687,7 +1690,7 @@ def _emulation_to_findings(emulation: dict) -> list[dict]:
             # body content to the pipeline-trace visualisation.
             "_discovered": True,
             "_discovered_title": entry.get("attack_class_label") or attack_class,
-            "_discovered_payload": entry.get("catalogue_payload") or "",
+            "_discovered_payload": entry.get("payload_used") or entry.get("catalogue_payload") or "",
             "_discovered_response": "",
             "_discovered_indicators": [],
             "_discovered_llm_reasoning": entry.get("verdict_reasoning") or "",
@@ -5784,6 +5787,17 @@ footer {
   text-transform: uppercase; color: #94a3b8;
   margin-bottom: 6px;
 }
+.emu-layer-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #1e293b; color: #7dd3fc;
+  border: 1px solid #334155;
+  vertical-align: middle;
+}
 /* Pipeline trace — vertical flow of per-step cards */
 .emu-trace {
   margin-top: 8px;
@@ -8715,7 +8729,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     # carry all the relevant information.
                     if is_emu_card:
                         emu_data = f.get("_emulator_data") or {}
-                        emu_payload = emu_data.get("catalogue_payload") or ""
+                        emu_payload = emu_data.get("payload_used") or emu_data.get("catalogue_payload") or ""
+                        emu_layer = emu_data.get("payload_layer") or ""
                         emu_verdict = emu_data.get("verdict") or "inconclusive"
                         emu_conf = emu_data.get("verdict_confidence")
                         emu_reasoning = emu_data.get("verdict_reasoning") or ""
@@ -8760,13 +8775,19 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                                 f'<span class="emu-reasoning-text">{_html_escape(emu_reasoning)}</span>'
                                 f'</div>'
                             )
-                        # Generic catalogue payload (verbatim, no
-                        # source-code adaptation).
+                        # Payload used — label shows which layer fired.
                         if emu_payload:
+                            layer_chip = ""
+                            if emu_layer:
+                                layer_chip = (
+                                    f' <span class="emu-layer-chip">'
+                                    f'{_html_escape(emu_layer)}</span>'
+                                )
+                            payload_label = "Payload used" if emu_layer else "Catalogue payload"
                             parts.append(
                                 f'<div class="emu-payload">'
                                 f'<span class="emu-payload-label">'
-                                f'Generic catalogue payload</span>'
+                                f'{payload_label}{layer_chip}</span>'
                                 f'{_html_escape(emu_payload)}'
                                 f'</div>'
                             )
