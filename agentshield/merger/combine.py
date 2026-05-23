@@ -7406,11 +7406,17 @@ _HTML_JS = """
         activeTrace = trace;
         resetTrace(trace);
         playFromScene(trace, 0);
-        // Scroll the trace header to the top of the viewport so the
-        // animation + terminal fill the screen.
+        // Scroll so the Replay/Resume buttons sit just below the sticky
+        // tab bar, making them clearly visible before the animation.
         var hdr = trace.querySelector('.emu-trace-header') || trace;
         setTimeout(function () {
-          hdr.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var stickyEl = document.querySelector('.filter-tabnav-sticky');
+          var stickyH  = stickyEl ? stickyEl.getBoundingClientRect().height : 0;
+          var rect     = hdr.getBoundingClientRect();
+          window.scrollTo({
+            top: Math.max(0, window.pageYOffset + rect.top - stickyH - 12),
+            behavior: 'smooth'
+          });
         }, 60);
       });
     });
