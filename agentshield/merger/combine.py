@@ -931,7 +931,10 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'</div>'
             f'<div class="emu-arrow">'
             f'<span class="emu-arrow-label">{_html_escape(arrow_lbl)}</span>'
-            f'<div class="emu-arrow-line"></div>'
+            f'<div class="emu-arrow-line">'
+            f'<span class="emu-gate emu-gate-1" aria-hidden="true"></span>'
+            f'<span class="emu-gate emu-gate-2" aria-hidden="true"></span>'
+            f'</div>'
             f'<span class="emu-packet" aria-hidden="true">'
             f'<span class="emu-packet-label">payload</span></span>'
             f'</div>'
@@ -6099,6 +6102,53 @@ footer {
   transition: border-left-color 400ms ease-out;
   z-index: 2;
 }
+/* Checkpoint gates — vertical bars on the arrow the packet flies through */
+.emu-gate {
+  position: absolute;
+  top: -7px; bottom: -7px;
+  width: 3px;
+  border-radius: 2px;
+  background: #cbd5e1;
+  transform: translateX(-50%);
+  z-index: 4;
+  pointer-events: none;
+  transition: none;
+}
+.emu-gate-1 { left: 33%; }
+.emu-gate-2 { left: 67%; }
+
+/* Gate flashes as packet passes through — advances: red burst */
+@keyframes emu-gate-through {
+  0%   { background: #cbd5e1; box-shadow: none;                               top: -7px;  bottom: -7px; }
+  18%  { background: #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,0.55),
+                                          0 0 14px rgba(239,68,68,0.45);       top: -10px; bottom: -10px; }
+  55%  { background: #fca5a5; box-shadow: 0 0 0 2px rgba(239,68,68,0.15);     top: -8px;  bottom: -8px; }
+  100% { background: #e2e8f0; box-shadow: none;                               top: -7px;  bottom: -7px; }
+}
+/* Gate 1 — packet reaches 33 % at ~600 ms into 1 800 ms flight */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-gate-1 {
+  animation: emu-gate-through 500ms 580ms ease-out both;
+}
+/* Gate 2 — packet reaches 67 % at ~1 200 ms */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-gate-2 {
+  animation: emu-gate-through 500ms 1160ms ease-out both;
+}
+
+/* Blocked: gate-2 becomes a barrier — green wall, packet never passes */
+@keyframes emu-gate-barrier {
+  0%   { background: #cbd5e1; box-shadow: none;                               top: -7px;  bottom: -7px; width: 3px; }
+  20%  { background: #16a34a; box-shadow: 0 0 0 5px rgba(22,163,74,0.60),
+                                          0 0 18px rgba(22,163,74,0.50);       top: -13px; bottom: -13px; width: 5px; }
+  55%  { background: #22c55e; box-shadow: 0 0 0 3px rgba(22,163,74,0.20);     top: -9px;  bottom: -9px;  width: 4px; }
+  100% { background: #4ade80; box-shadow: none;                               top: -7px;  bottom: -7px;  width: 3px; }
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-gate-1 {
+  animation: emu-gate-through 500ms 580ms ease-out both;  /* gate-1 still passed */
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-gate-2 {
+  animation: emu-gate-barrier 700ms 1240ms ease-out both; /* gate-2 holds — barrier! */
+}
+
 .emu-packet {
   position: absolute;
   left: 0; top: 50%;
