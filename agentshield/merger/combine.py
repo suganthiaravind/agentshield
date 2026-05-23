@@ -6146,16 +6146,15 @@ footer {
   animation: emu-arrival-blink 1100ms 1800ms ease-out both;
 }
 
-/* Role-play animation — softer glow instead of harsh pulse,
-   cubic-bezier easing on the packet. */
+/* Role-play animation — one scene at a time inline (mirrors dialog layout).
+   Non-active scenes are hidden; active scene slides in. Terminal stays below
+   and accumulates all lines across scenes. */
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene {
-  opacity: 0.16;
-  filter: grayscale(60%);
-  transition: opacity 320ms ease-out, filter 320ms ease-out;
+  display: none;
 }
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-visible {
-  opacity: 1;
-  filter: none;
+  display: block;
+  animation: emu-scene-slide-in 480ms cubic-bezier(.25,.46,.45,.94);
 }
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
@@ -6272,6 +6271,7 @@ footer {
 }
 .emu-trace.emu-trace-playing .emu-terminal {
   display: block;
+  min-height: 140px;
   animation: emu-terminal-fade-in 280ms ease-out;
 }
 @keyframes emu-terminal-fade-in {
