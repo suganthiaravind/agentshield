@@ -5963,39 +5963,50 @@ footer {
 .emu-arrow {
   position: relative; flex: 1 1 auto;
   display: flex; flex-direction: column; align-items: center;
-  gap: 2px; min-width: 80px;
+  gap: 4px; min-width: 100px;
 }
 .emu-arrow-label {
   font-size: 9px; font-weight: 600; letter-spacing: 0.04em;
-  color: #64748b;
-  font-family: ui-monospace, monospace;
+  color: #64748b; font-family: ui-monospace, monospace;
 }
 .emu-arrow-line {
   position: relative;
-  width: 100%; height: 1.5px;
-  background: #cbd5e1; border-radius: 1px;
+  width: 100%; height: 2px;
+  background: #e2e8f0; border-radius: 1px;
+  overflow: visible;
 }
+/* Beam sweep: a coloured stripe that grows left → right */
+.emu-arrow-line::before {
+  content: ""; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 0%;
+  background: #dc2626; border-radius: 1px;
+  transition: width 1000ms cubic-bezier(.4,0,.2,1),
+              background 0ms;
+  z-index: 1;
+}
+/* Arrowhead */
 .emu-arrow-line::after {
-  content: ""; position: absolute; right: -1px; top: -3px;
-  border-left: 6px solid #cbd5e1;
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
+  content: ""; position: absolute; right: -2px; top: -4px;
+  border-left: 8px solid #e2e8f0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  transition: border-left-color 400ms ease-out;
+  z-index: 2;
 }
 .emu-packet {
   position: absolute;
-  left: 4px; top: 50%;
-  transform: translateY(-50%);
+  left: 0; top: 50%;
+  transform: translateY(-50%) scale(0);
   display: inline-flex; align-items: center; gap: 3px;
-  padding: 2px 7px 2px 5px;
-  border-radius: 10px;
+  padding: 3px 9px 3px 6px;
+  border-radius: 12px;
   background: #dc2626;
-  box-shadow: 0 0 6px rgba(220, 38, 38, 0.55);
-  opacity: 0;
-  transition: left 850ms cubic-bezier(.45,.05,.3,1),
-              opacity 220ms ease-out;
+  box-shadow: 0 2px 10px rgba(220,38,38,0.55);
+  opacity: 0; pointer-events: none;
+  z-index: 3;
 }
-.emu-scene-blocked  .emu-packet { background: #16a34a; box-shadow: 0 0 6px rgba(22,163,74,0.55); }
-.emu-scene-modified .emu-packet { background: #f97316; box-shadow: 0 0 6px rgba(249,115,22,0.55); }
+.emu-scene-blocked  .emu-packet { background: #16a34a; box-shadow: 0 2px 10px rgba(22,163,74,0.55); }
+.emu-scene-modified .emu-packet { background: #f97316; box-shadow: 0 2px 10px rgba(249,115,22,0.55); }
 
 /* Collapsible payload — closed by default, single-line preview */
 .emu-scene-payload-details {
@@ -6086,44 +6097,49 @@ footer {
   background: #dcfce7;
   border-color: #16a34a;
 }
+/* Packet traversal: pop in at source, slide to destination, fade on arrival */
+@keyframes emu-packet-traverse {
+  0%   { left: 0%;               opacity: 0; transform: translateY(-50%) scale(0.4); }
+  10%  { left: 1%;               opacity: 1; transform: translateY(-50%) scale(1.15); }
+  18%  { left: 3%;               opacity: 1; transform: translateY(-50%) scale(1); }
+  82%  { opacity: 1; transform: translateY(-50%) scale(1); }
+  100% { left: calc(100% - 16px); opacity: 0; transform: translateY(-50%) scale(0.6); }
+}
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-packet {
-  left: calc(100% - 14px);
-  opacity: 1;
+  animation: emu-packet-traverse 1050ms cubic-bezier(.4,0,.2,1) both;
 }
 
-/* ===== Wow polish ===== */
+/* Beam sweep colours per outcome */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line::before {
+  width: 100%;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line::after {
+  border-left-color: #dc2626;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::before  { background: #16a34a; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after   { border-left-color: #16a34a; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #f97316; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #f97316; }
 
-/* Glow trail behind the flying packet — a thin streak that fades
-   out, anchored to the packet via pseudo-element. The trail is
-   drawn on the .emu-arrow-line by switching its background to a
-   gradient that animates from left edge to right edge when the
-   packet is in flight. */
-.emu-trace.emu-trace-playing .emu-scene .emu-arrow-line {
-  background: linear-gradient(to right,
-    #cbd5e1 0%, #cbd5e1 100%);
-  transition: background 850ms cubic-bezier(.45,.05,.3,1);
+/* Destination actor pulse when packet arrives (delay ≈ 85% of 1050ms) */
+@keyframes emu-actor-receive {
+  0%   { box-shadow: none; }
+  40%  { box-shadow: 0 0 0 5px rgba(220,38,38,0.25), 0 0 18px rgba(220,38,38,0.35); }
+  100% { box-shadow: none; }
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line {
-  background: linear-gradient(to right,
-    rgba(220, 38, 38, 0.40) 0%,
-    rgba(220, 38, 38, 0.85) 60%,
-    #dc2626 100%);
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
+  animation: emu-actor-receive 500ms 860ms ease-out both;
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line {
-  background: linear-gradient(to right,
-    rgba(22, 163, 74, 0.40) 0%,
-    rgba(22, 163, 74, 0.85) 60%,
-    #16a34a 100%);
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
+  animation: emu-actor-receive 500ms 860ms ease-out both;
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line {
-  background: linear-gradient(to right,
-    rgba(249, 115, 22, 0.40) 0%,
-    rgba(249, 115, 22, 0.85) 60%,
-    #f97316 100%);
+@keyframes emu-actor-receive-blocked {
+  0%   { box-shadow: none; }
+  40%  { box-shadow: 0 0 0 5px rgba(22,163,74,0.30), 0 0 18px rgba(22,163,74,0.40); }
+  100% { box-shadow: none; }
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-received .emu-arrow-line {
-  /* Lit line stays lit after arrival, fading slowly */
-  transition: background 600ms ease-out;
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
+  animation: emu-actor-receive-blocked 500ms 860ms ease-out both;
 }
 
 /* Outcome chip stamp-in — when a scene becomes received, the
