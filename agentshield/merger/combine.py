@@ -5494,7 +5494,7 @@ footer {
   background: #fff;
   border-radius: 14px;
   width: min(96vw, 1100px);
-  height: min(92vh, 720px);
+  height: min(94vh, 800px);
   display: flex; flex-direction: column;
   box-shadow: 0 24px 64px rgba(15,23,42,0.40);
   overflow: hidden;
@@ -5572,7 +5572,7 @@ footer {
 /* ⑤ Terminal — pinned at bottom, fixed height */
 #emu-modal-body .emu-terminal {
   flex-shrink: 0;
-  height: 190px;
+  height: 155px;
   display: flex !important;   /* always visible in modal */
   flex-direction: column;
   border-radius: 0;
@@ -5594,6 +5594,12 @@ footer {
 #emu-modal-body {
   flex: 1; overflow: hidden;
   display: flex; flex-direction: column;
+}
+/* Override the non-modal opacity:0 animation rules so payload and
+   behaviour text are always fully visible inside the modal. */
+#emu-modal-body .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
+#emu-modal-body .emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
+  opacity: 1 !important; transition: none !important;
 }
 #emu-modal-body .emu-trace {
   flex: 1; display: flex; flex-direction: column;
@@ -6178,6 +6184,12 @@ footer {
   color: #cbd5e1;
 }
 .emu-term-line + .emu-term-line { margin-top: 1px; }
+.emu-term-scene-header {
+  color: #7dd3fc; font-style: italic;
+  padding-bottom: 3px; margin-bottom: 2px;
+  border-bottom: 1px solid #334155;
+  display: block !important;
+}
 .emu-term-ts { color: #64748b; }
 .emu-term-prefix {
   display: inline-block;
@@ -7180,8 +7192,8 @@ _HTML_JS = """
       if (e.key === 'Escape' && modalOverlay.style.display !== 'none') closeModal();
     });
 
-    var LINE_STAGGER = 140;
-    var SCENE_CADENCE = 3800;  // ms per scene — generous reading time
+    var LINE_STAGGER = 220;    // ms between terminal rows
+    var SCENE_CADENCE = 3200;  // ms per scene
 
     function revealTermLines(trace, forScene, atTime) {
       var terminal = trace.querySelector('.emu-terminal');
@@ -7204,9 +7216,7 @@ _HTML_JS = """
 
     function resetTrace(trace) {
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
-        s.classList.remove('emu-scene-visible', 'emu-scene-modal-active',
-                           'emu-scene-source-pulsing',
-                           'emu-scene-packet-flying', 'emu-scene-received');
+        s.classList.remove('emu-scene-visible', 'emu-scene-modal-active');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
       });
@@ -7244,22 +7254,35 @@ _HTML_JS = """
             scenes.forEach(function (s) { s.classList.remove('emu-scene-modal-active'); });
             scene.classList.add('emu-scene-visible', 'emu-scene-modal-active');
 
-            // Payload: open immediately when the scene appears so it is
-            // always readable — no need to wait for the packet animation.
+            // Payload: open immediately so it is always readable.
             var pdNow = scene.querySelector('.emu-scene-payload-details');
             if (pdNow) pdNow.setAttribute('open', '');
 
-            // Terminal: show only lines for THIS scene; clear the previous
-            // scene's lines so the log always reflects the current phase.
-            trace.querySelectorAll('.emu-term-line').forEach(function (l) {
-              l.classList.remove('emu-term-revealed', 'emu-term-current');
-            });
+            // Terminal: clear previous scene's lines, then show a
+            // scene-label header followed by this scene's log rows.
+            trace.querySelectorAll('.emu-term-line:not(.emu-term-scene-header)')
+                 .forEach(function (l) {
+                   l.classList.remove('emu-term-revealed', 'emu-term-current');
+                 });
+            var terminal = trace.querySelector('.emu-terminal');
+            var termBody = terminal ? terminal.querySelector('.emu-terminal-body') : null;
+            if (termBody) {
+              var hdr = termBody.querySelector('.emu-term-scene-header');
+              if (!hdr) {
+                hdr = document.createElement('div');
+                hdr.className = 'emu-term-line emu-term-scene-header';
+                termBody.insertBefore(hdr, termBody.firstChild);
+              }
+              var stepLabelEl = scene.querySelector('.emu-scene-step-label');
+              var stepLabel = stepLabelEl ? stepLabelEl.textContent.trim() : '';
+              hdr.textContent = '── SCENE ' + (idx + 1) + '/' + scenes.length +
+                                ' · ' + stepLabel + ' ──';
+              hdr.classList.add('emu-term-revealed');
+              termBody.scrollTop = 0;
+            }
 
-            safeTimeout(function () { scene.classList.add('emu-scene-source-pulsing'); }, 150);
-            safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, 1000);
-            safeTimeout(function () { scene.classList.add('emu-scene-received'); }, 2000);
-
-            revealTermLines(trace, idx, 1200);
+            // Reveal this scene's log rows one by one (no blinking effects).
+            revealTermLines(trace, idx, 300);
 
             if (idx === scenes.length - 1) {
               safeTimeout(function () {
