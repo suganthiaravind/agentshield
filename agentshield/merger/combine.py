@@ -5568,8 +5568,8 @@ footer {
    to signal "attack originates here" without requiring a JS class. */
 @keyframes emu-actor-charge {
   0%   { box-shadow: none; }
-  45%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.22),
-                     0 0 22px rgba(220,38,38,0.30);
+  45%  { box-shadow: 0 0 0 4px rgba(127,29,29,0.15),
+                     0 0 14px rgba(127,29,29,0.20);
          background: #fef2f2; border-color: #fca5a5; }
   100% { box-shadow: none; background: inherit; border-color: inherit; }
 }
@@ -6027,13 +6027,13 @@ footer {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 3px 9px 3px 6px;
   border-radius: 12px;
-  background: #dc2626;
-  box-shadow: 0 2px 10px rgba(220,38,38,0.55);
+  background: #7f1d1d;
+  box-shadow: 0 2px 8px rgba(127,29,29,0.35);
   opacity: 0; pointer-events: none;
   z-index: 3;
 }
-.emu-scene-blocked  .emu-packet { background: #16a34a; box-shadow: 0 2px 10px rgba(22,163,74,0.55); }
-.emu-scene-modified .emu-packet { background: #f97316; box-shadow: 0 2px 10px rgba(249,115,22,0.55); }
+.emu-scene-blocked  .emu-packet { background: #14532d; box-shadow: 0 2px 8px rgba(20,83,45,0.35); }
+.emu-scene-modified .emu-packet { background: #7c2d12; box-shadow: 0 2px 8px rgba(124,45,18,0.35); }
 
 /* Collapsible payload — closed by default, single-line preview */
 .emu-scene-payload-details {
@@ -6146,19 +6146,19 @@ footer {
   width: 100%;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrow-line::after {
-  border-left-color: #dc2626;
+  border-left-color: #7f1d1d;
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::before  { background: #16a34a; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after   { border-left-color: #16a34a; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #f97316; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #f97316; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::before  { background: #14532d; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after   { border-left-color: #14532d; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #7c2d12; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #7c2d12; }
 
 /* Destination actor pulse at ≈ 85 % of 1 800 ms = 1 530 ms after
    emu-scene-packet-flying is added (i.e. ~3 030 ms after scene start) */
 @keyframes emu-actor-receive {
   0%   { box-shadow: none; }
-  35%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.28),
-                     0 0 22px rgba(220,38,38,0.40); }
+  35%  { box-shadow: 0 0 0 5px rgba(127,29,29,0.20),
+                     0 0 16px rgba(127,29,29,0.28); }
   100% { box-shadow: none; }
 }
 @keyframes emu-actor-receive-blocked {
