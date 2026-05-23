@@ -795,6 +795,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     emu_conf = emu_data.get("verdict_confidence")
     emu_attack_class = emu_data.get("attack_class") or "unknown"
     emu_payload = (emu_data.get("payload_used") or emu_data.get("catalogue_payload") or "").strip()
+    emu_layer   = (emu_data.get("payload_layer") or "").strip()
+    seed_payloads     = emu_data.get("seed_payloads") or []
+    mutation_payloads = emu_data.get("mutation_payloads") or []
 
     def _strip_prefix(lbl: str) -> str:
         return _re.sub(r"^\d+\s*[—\-–]\s*", "", lbl).strip()
@@ -825,8 +828,46 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     ]
     n_touched = len(touched)
 
+    import json as _json
+    # Build the payload catalog JSON for the JS animation (seeds → mutations).
+    # Only embed when the new schema is present; JS falls back gracefully when absent.
+    catalog_items: list[dict] = []
+    for sp in seed_payloads:
+        if isinstance(sp, dict):
+            catalog_items.append({"layer": sp.get("layer") or "seed", "text": sp.get("text") or ""})
+    for mp in mutation_payloads:
+        if isinstance(mp, dict):
+            catalog_items.append({"layer": mp.get("layer") or "mutation", "text": mp.get("text") or ""})
+    catalog_attr = (
+        f' data-payload-layer="{_html_escape(emu_layer)}"'
+        f" data-payload-catalog='{_html_escape(_json.dumps(catalog_items))}'"
+    ) if catalog_items else ""
+
+    # Build the static layer intro HTML (hidden; JS drives visibility + animation)
+    layer_intro_html = ""
+    if catalog_items:
+        pills_html = ""
+        for item in catalog_items:
+            lyr = item["layer"]
+            txt = item["text"][:90] + ("…" if len(item["text"]) > 90 else "")
+            lyr_cls = "emu-lp-seed" if lyr.startswith("seed") else "emu-lp-mutation"
+            pills_html += (
+                f'<div class="emu-layer-pill {lyr_cls}" data-layer="{_html_escape(lyr)}">'
+                f'<span class="emu-lp-badge">{_html_escape(lyr)}</span>'
+                f'<span class="emu-lp-text">{_html_escape(txt)}</span>'
+                f'<span class="emu-lp-status"></span>'
+                f'</div>'
+            )
+        layer_intro_html = (
+            '<div class="emu-layer-intro" style="display:none">'
+            '<div class="emu-layer-intro-label">Firing payload catalogue…</div>'
+            f'<div class="emu-layer-pills">{pills_html}</div>'
+            '</div>'
+        )
+
     parts.append(
-        '<div class="emu-trace">'
+        f'<div class="emu-trace"{catalog_attr}>'
+        f'{layer_intro_html}'
         '<div class="emu-trace-header">'
         '<button type="button" class="emu-play-btn" data-action="emu-play">'
         '&#9654; Play behaviour emulation</button>'
@@ -5798,6 +5839,74 @@ footer {
   border: 1px solid #334155;
   vertical-align: middle;
 }
+/* Payload-firing catalogue intro — shown before pipeline scenes animate */
+.emu-layer-intro {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #0f172a;
+  border: 1px solid #1e3a5f;
+  border-radius: 6px;
+}
+.emu-layer-intro-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #38bdf8;
+  margin-bottom: 8px;
+}
+.emu-layer-pills {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.emu-layer-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 200ms, transform 200ms;
+}
+.emu-layer-pill.emu-lp-visible {
+  opacity: 1; transform: translateX(0);
+}
+.emu-lp-badge {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px; border-radius: 3px;
+  background: #1e3a5f; color: #7dd3fc;
+  border: 1px solid #2d5a8e;
+}
+.emu-lp-mutation .emu-lp-badge {
+  background: #3b1f5e; color: #c4b5fd;
+  border-color: #6d3aad;
+}
+.emu-lp-text {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; color: #94a3b8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.emu-lp-status {
+  flex-shrink: 0;
+  font-size: 10px; font-weight: 700;
+  min-width: 52px; text-align: right;
+  color: #475569;
+}
+.emu-layer-pill.emu-lp-trying .emu-lp-status  { color: #f59e0b; }
+.emu-layer-pill.emu-lp-trying .emu-lp-status::after { content: 'trying…'; }
+.emu-layer-pill.emu-lp-skipped .emu-lp-status { color: #64748b; }
+.emu-layer-pill.emu-lp-skipped .emu-lp-status::after { content: 'blocked'; }
+.emu-layer-pill.emu-lp-skipped .emu-lp-badge { opacity: 0.45; }
+.emu-layer-pill.emu-lp-skipped .emu-lp-text  { opacity: 0.35; }
+.emu-layer-pill.emu-lp-landed .emu-lp-status  { color: #f87171; }
+.emu-layer-pill.emu-lp-landed .emu-lp-status::after { content: '✓ fired'; }
+.emu-layer-pill.emu-lp-landed { border-color: #ef4444; background: #1c0a0a; }
+.emu-layer-pill.emu-lp-landed .emu-lp-badge  { background: #7f1d1d; color: #fca5a5; border-color: #ef4444; }
+/* blocked-all final state */
+.emu-layer-pill.emu-lp-blocked-all .emu-lp-status { color: #22c55e; }
+.emu-layer-pill.emu-lp-blocked-all .emu-lp-status::after { content: 'blocked'; }
 /* Pipeline trace — vertical flow of per-step cards */
 .emu-trace {
   margin-top: 8px;
@@ -7487,6 +7596,84 @@ _HTML_JS = """
       trace.querySelectorAll('.emu-terminal .emu-term-line').forEach(function (ln) {
         ln.classList.remove('emu-term-revealed', 'emu-term-current');
       });
+      // Reset layer intro pills so Replay shows the intro fresh
+      var intro = trace.querySelector('.emu-layer-intro');
+      if (intro) {
+        intro.style.display = 'none';
+        intro.querySelectorAll('.emu-layer-pill').forEach(function (p) {
+          p.classList.remove('emu-lp-visible','emu-lp-trying','emu-lp-skipped',
+                             'emu-lp-landed','emu-lp-blocked-all');
+        });
+      }
+    }
+
+    // Animate the payload-firing catalogue intro before the pipeline scenes.
+    // Shows each seed/mutation pill appearing, marks it as "trying",
+    // then "blocked" or "fired", then hides the intro and calls onDone.
+    function playLayerIntro(trace, onDone) {
+      var intro = trace.querySelector('.emu-layer-intro');
+      if (!intro) { onDone(); return; }
+      var catalogRaw = trace.getAttribute('data-payload-catalog') || '[]';
+      var landedLayer = (trace.getAttribute('data-payload-layer') || '').trim();
+      var catalog;
+      try { catalog = JSON.parse(catalogRaw); } catch (e) { onDone(); return; }
+      if (!catalog.length || !landedLayer) { onDone(); return; }
+
+      var pills = intro.querySelectorAll('.emu-layer-pill');
+      intro.style.display = '';
+
+      var PILL_APPEAR   = 260;  // ms between pills appearing
+      var TRY_PAUSE     = 380;  // ms "trying…" shown before outcome
+      var OUTCOME_PAUSE = 220;  // ms outcome shown before next pill
+      var DONE_HOLD     = 600;  // ms after landed pill before hiding intro
+
+      var landedIdx = -1;
+      var blockedAll = (landedLayer === 'blocked-all');
+      if (!blockedAll) {
+        pills.forEach(function (p, i) {
+          if (p.getAttribute('data-layer') === landedLayer) landedIdx = i;
+        });
+      }
+
+      var totalPills = blockedAll ? pills.length : (landedIdx >= 0 ? landedIdx + 1 : pills.length);
+      var t = 0;
+
+      for (var i = 0; i < totalPills; i++) {
+        (function (idx) {
+          var pill = pills[idx];
+          if (!pill) return;
+          var isLanded  = !blockedAll && idx === landedIdx;
+          var isBlocked = !isLanded;
+
+          safeTimeout(function () {
+            pill.classList.add('emu-lp-visible', 'emu-lp-trying');
+          }, t);
+          t += PILL_APPEAR + TRY_PAUSE;
+
+          safeTimeout(function () {
+            pill.classList.remove('emu-lp-trying');
+            if (isLanded) {
+              pill.classList.add('emu-lp-landed');
+            } else if (blockedAll) {
+              pill.classList.add('emu-lp-blocked-all');
+            } else {
+              pill.classList.add('emu-lp-skipped');
+            }
+          }, t);
+          t += OUTCOME_PAUSE;
+        })(i);
+      }
+
+      // After all pills resolved, brief hold then hide intro and run scenes
+      safeTimeout(function () {
+        intro.style.display = 'none';
+        // Reset pill states for replay
+        pills.forEach(function (p) {
+          p.classList.remove('emu-lp-visible','emu-lp-trying','emu-lp-skipped',
+                             'emu-lp-landed','emu-lp-blocked-all');
+        });
+        onDone();
+      }, t + DONE_HOLD);
     }
 
     function playFromScene(trace, startIdx) {
@@ -7574,7 +7761,13 @@ _HTML_JS = """
         });
       }
 
-      runScene(startIdx);
+      // Play the layer-firing catalogue intro (seeds → mutations) first,
+      // then hand off to the pipeline scene animation.
+      if (startIdx === 0) {
+        playLayerIntro(trace, function () { runScene(startIdx); });
+      } else {
+        runScene(startIdx);
+      }
 
       // Wire pause button (once per trace — guard with flag)
       if (pauseBtn && !pauseBtn._wired) {
