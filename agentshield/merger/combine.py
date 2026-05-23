@@ -5627,6 +5627,19 @@ footer {
 #emu-modal-body .emu-terminal .emu-term-line.emu-term-revealed {
   display: block;
 }
+/* Verdict line double-blink in modal — overrides animation:none above */
+@keyframes emu-term-verdict-modal-blink {
+  0%   { opacity: 0; }
+  14%  { opacity: 1; }
+  26%  { opacity: 0; }
+  44%  { opacity: 1; }
+  56%  { opacity: 0; }
+  72%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+#emu-modal-body .emu-terminal [class*="emu-term-line-verdict-"].emu-term-revealed {
+  animation: emu-term-verdict-modal-blink 1000ms ease-out both;
+}
 
 /* ⑥ Final verdict banner inside modal */
 #emu-modal-body .emu-trace-final {
@@ -7338,7 +7351,7 @@ _HTML_JS = """
       var progressFill  = trace.querySelector('[data-progress-fill]');
       var progressLabel = trace.querySelector('[data-progress-label]');
 
-      var CHAR_DELAY       = 22;   // ms per character — typewriter speed
+      var CHAR_DELAY       = 30;   // ms per character — typewriter speed
       var POST_TYPE_PAUSE  = 600;  // ms after narrative finishes before packet fires
       var PACKET_DURATION  = 1800; // ms for packet to travel
       var SCENE_READ_PAUSE = 2000; // ms reading time after packet lands → next scene
