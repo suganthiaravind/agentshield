@@ -616,6 +616,21 @@ _STEP_NARRATIVE: dict[str, dict[str, str]] = {
         "modified": "Some content is filtered, but enough of the payload survives to influence the agent's next action.",
         "absent_step": "This agent does not use RAG retrieval at this step.",
     },
+    # Narrative override for indirect injection — the attacker/user split
+    # must be made explicit here; the generic rag_context text obscures it.
+    "rag_context_indirect": {
+        "advances": (
+            "⚠ The attacker is NOT the person chatting with this agent. "
+            "They pre-poisoned an external document (web page, database entry, memory store) "
+            "before any user ever made a request. "
+            "A legitimate user then triggered the agent to fetch that source — "
+            "and the hidden instructions inside it entered the agent's context window alongside the real content. "
+            "The agent has no way to tell the attacker's text apart from the genuine document."
+        ),
+        "blocked": "Retrieved content is validated for provenance or stripped of instruction-like patterns before being added to context. The injected text is neutralised here.",
+        "modified": "Some injected content is filtered, but residual attacker text still enters the context.",
+        "absent_step": "This agent does not use RAG retrieval at this step.",
+    },
     "system_prompt": {
         "advances": "The system prompt source is not verified at runtime. An attacker who can influence the prompt store can rewrite the agent's core instructions.",
         "blocked":  "The system prompt is integrity-checked or loaded from a locked, immutable source. Tampering is detected.",
@@ -671,6 +686,14 @@ _EMU_STEP_ACTORS: dict[str, tuple[str, str, str, str, str]] = {
         "Agent", "\U0001F916",
         "RAG / knowledge base", "\U0001F4DA",  # 📚
         "retrieval query",
+    ),
+    # Indirect-injection variant: the attacker is IN the external document,
+    # not at the chat interface. The relevant flow is the return: poisoned
+    # content flowing from the doc back into the agent's context.
+    "rag_context_indirect": (
+        "Attacker-poisoned doc", "\U0001F578",  # 🕸
+        "Agent context", "\U0001F916",
+        "poisoned content enters",
     ),
     "system_prompt": (
         "System prompt store", "\U0001F4DC",   # 📜
@@ -743,6 +766,12 @@ _ACTOR_TOOLTIPS: dict[str, str] = {
     "RAG / knowledge base": (
         "Document-retrieval surface — vector search, document "
         "loaders, memory recall. Untrusted by default."
+    ),
+    "Attacker-poisoned doc": (
+        "An external document, web page, or memory entry the "
+        "attacker has pre-poisoned with hidden instructions. "
+        "The attacker is NOT the user — they planted malicious "
+        "text in a source the agent trusts and fetches."
     ),
     "System prompt store": (
         "Where the developer-supplied system instructions live "
@@ -909,8 +938,17 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             '<span class="emu-defence-flag '
             'emu-defence-flag-no">no defence here</span>'
         )
+        # For indirect injection + memory poisoning, the attacker is inside
+        # the external document, not at the chat interface — use the indirect
+        # actor pair so the animation shows the right source.
+        _INDIRECT_CLASSES = {"indirect-prompt-injection", "memory-poisoning"}
+        actor_key = (
+            "rag_context_indirect"
+            if step_key == "rag_context" and emu_attack_class in _INDIRECT_CLASSES
+            else step_key
+        )
         src_lbl, src_icon, dst_lbl, dst_icon, arrow_lbl = (
-            _emu_actors_for_step(step_key)
+            _emu_actors_for_step(actor_key)
         )
         step_input = step.get("input") or ""
         step_behavior = step.get("predicted_behavior") or ""
@@ -927,32 +965,50 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f' aria-label="{_html_escape(dst_tip)}"'
             if dst_tip else ""
         )
-        # Determine attacker vs defender role for colour coding
-        ATTACKER_SOURCES = {"Threat actor", "Tool"}
-        src_role = "attacker" if any(a in src_lbl for a in ("Threat actor",)) else "agent"
+        # Attacker role: Threat actor at user_prompt, poisoned doc at rag_context indirect
+        src_role = (
+            "attacker"
+            if "Threat actor" in src_lbl or "Attacker-poisoned" in src_lbl
+            else "agent"
+        )
         dst_role = "blocked" if outcome == "blocked" else "agent"
 
-        narrative = _STEP_NARRATIVE.get(step_key, {}).get(
-            outcome, step_behavior or ""
+        # Narrative: prefer attack-class-specific override, then generic step narrative
+        narrative = (
+            _STEP_NARRATIVE.get(actor_key, {}).get(outcome)
+            or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
+            or step_behavior
+            or ""
         )
-        # For the user_prompt entry-point, render the payload in a separate
-        # dark callout box so it stands out visually without styling the
-        # whole narrative dark.
+        # Payload callout — shown for user_prompt (direct injection) and
+        # rag_context (indirect injection) so the attacker text is visible.
         payload_callout_html = ''
-        if step_key == "user_prompt" and outcome == "advances" and emu_payload:
+        _show_payload_at = {"user_prompt"} | (
+            {"rag_context"} if emu_attack_class in _INDIRECT_CLASSES else set()
+        )
+        if step_key in _show_payload_at and outcome == "advances" and emu_payload:
             _preview = emu_payload[:160].rstrip()
             if len(emu_payload) > 160:
                 _preview += "…"
+            if step_key == "rag_context":
+                callout_label = (
+                    '<span class="emu-payload-origin-label">'
+                    'Hidden text embedded in the external document:</span>'
+                )
+            else:
+                callout_label = ""
             payload_callout_html = (
                 f'<div class="emu-scene-payload-callout">'
+                f'{callout_label}'
                 f'{_html_escape(_preview)}'
                 f'</div>'
             )
-            narrative = (
-                f'The payload above enters the agent as ordinary user input '
-                f'— no input filters in place; the agent cannot tell it apart '
-                f'from a legitimate request. The attack moves forward.'
-            )
+            if step_key == "user_prompt":
+                narrative = (
+                    'The payload above enters the agent as ordinary user input '
+                    '— no input filters in place; the agent cannot tell it apart '
+                    'from a legitimate request. The attack moves forward.'
+                )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}">'
             f'<div class="emu-scene-header">'
@@ -5666,6 +5722,13 @@ footer {
 }
 
 /* Payload callout — dark code-block style, only on user_prompt scenes */
+.emu-payload-origin-label {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #f59e0b;
+  margin-bottom: 5px;
+}
 .emu-scene-payload-callout {
   margin: 6px 0 10px;
   padding: 9px 14px;
