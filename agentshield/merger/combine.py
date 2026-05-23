@@ -582,6 +582,12 @@ _PIPELINE_STEP_KEYS = (
     "user_prompt", "rag_context", "system_prompt", "planner",
     "tool_choice", "tool_output", "re_planning", "final_answer",
 )
+_ARRIVAL_STAMP: dict[str, str] = {
+    "advances":  "advances · no defences here · landed",
+    "blocked":   "blocked · defence triggered",
+    "modified":  "modified · partially filtered",
+}
+
 _PIPELINE_STEP_SHORT = {
     "user_prompt":   "User Input",
     "rag_context":   "RAG",
@@ -908,6 +914,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
             f'</div>'
+            f'<div class="emu-arrival-stamp emu-arrival-stamp-{_html_escape(outcome)}">'
+            f'{_html_escape(_ARRIVAL_STAMP.get(outcome, outcome))}</div>'
         )
         if step_input:
             preview = step_input[:60]
@@ -6083,6 +6091,32 @@ footer {
   color: #94a3b8; font-weight: 700; margin-right: 2px;
 }
 
+/* Arrival stamp — flashes in after packet lands */
+.emu-arrival-stamp {
+  display: none;
+  opacity: 0;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; text-align: right;
+  margin-top: 3px; padding-right: 2px;
+}
+.emu-arrival-stamp-advances { color: #7f1d1d; }
+.emu-arrival-stamp-blocked  { color: #14532d; }
+.emu-arrival-stamp-modified { color: #7c2d12; }
+@keyframes emu-arrival-blink {
+  0%   { opacity: 0; }
+  12%  { opacity: 1; }
+  24%  { opacity: 0; }
+  42%  { opacity: 1; }
+  54%  { opacity: 0; }
+  68%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+/* Triggered 1800ms after packet-flying added (= when packet reaches dst) */
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-arrival-stamp {
+  display: block;
+  animation: emu-arrival-blink 1100ms 1800ms ease-out both;
+}
+
 /* Role-play animation — softer glow instead of harsh pulse,
    cubic-bezier easing on the packet. */
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene {
@@ -7233,7 +7267,7 @@ _HTML_JS = """
     });
 
     var LINE_STAGGER = 320;    // ms between terminal rows
-    var SCENE_CADENCE = 5500;  // ms per scene
+    var SCENE_CADENCE = 8000;  // ms per scene
 
     function revealTermLines(trace, forScene, atTime) {
       var terminal = trace.querySelector('.emu-terminal');
@@ -7319,7 +7353,7 @@ _HTML_JS = """
                 if (pauseBtn) pauseBtn.style.display = 'none';
                 if (progressWrap) progressWrap.style.display = 'none';
                 if (progressFill) progressFill.style.width = '0%';
-              }, 3800);
+              }, 5500);
             }
           }, (idx - startIdx) * SCENE_CADENCE);
         })(i);
