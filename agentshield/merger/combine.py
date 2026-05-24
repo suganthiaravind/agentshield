@@ -8129,9 +8129,9 @@ _HTML_JS = """
           });
         })();
 
-        // Step 2 — reveal narrative sentence-by-sentence; everything else chains off the callback
+        // Step 2 — typewrite the narrative; everything else chains off the callback
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
-        revealBySentence(narrativeEl, function () {
+        typewriteNarrative(narrativeEl, CHAR_DELAY, function () {
 
           // Step 3 — source actor charges up (subtle glow before packet)
           safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
