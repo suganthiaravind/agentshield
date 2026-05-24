@@ -6905,21 +6905,13 @@ footer {
   to   { opacity: 1; transform: translateX(0); }
 }
 /* Blinking cursor shown during typewriter animation */
-/* Sentence-by-sentence narrative reveal */
-.emu-narrative-sentence {
-  display: inline;
-  opacity: 1;
-  transition: opacity 350ms ease-out;
-}
-.emu-narrative-sentence.emu-sentence-hidden {
+/* Narrative block fade-in */
+.emu-scene-narrative {
   opacity: 0;
 }
-.emu-narrative-sentence.emu-sentence-fadein {
+.emu-scene-narrative.emu-narrative-visible {
   opacity: 1;
-}
-.emu-narrative-sentence.emu-sentence-dim {
-  opacity: 0.08;
-  transition: opacity 300ms ease-in-out;
+  transition: opacity 300ms ease-out;
 }
 .emu-tw-cursor {
   display: inline-block;
@@ -7853,48 +7845,23 @@ _HTML_JS = """
       safeTimeout(tick, 0);
     }
 
-    // Reveal narrative text one sentence at a time.
-    // Each sentence: fades in → reading pause → blink → next sentence.
-    function revealBySentence(el, onComplete) {
+    // Reveal the full narrative as a block: fade in, hold for reading time
+    // proportional to word count, then call onComplete.
+    function revealNarrative(el, onComplete) {
       if (!el) { if (onComplete) onComplete(); return; }
       var fullText = el.getAttribute('data-narrative') || el.textContent || '';
-      el.innerHTML = '';
       if (!fullText) { if (onComplete) onComplete(); return; }
+      el.textContent = fullText;
 
-      var raw = fullText.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [fullText];
-      var sentences = raw.map(function (s) { return s.replace(/\s+$/, ''); })
-                         .filter(function (s) { return s.length > 0; });
-      if (sentences.length === 0) { if (onComplete) onComplete(); return; }
+      var FADEIN_MS = 300;
+      var words     = fullText.trim().split(/\s+/).length;
+      var holdMs    = Math.max(1500, Math.min(3500, words * 180));
 
-      var FADEIN_MS  = 500;   // fade-in duration per sentence
-      var READ_MS    = 1000;  // reading pause after fade-in completes
-      var BLINK_DIM  = 400;   // time dimmed during blink
-      var BLINK_REC  = 400;   // recovery time before next sentence
-
-      var idx = 0;
-      function showNext() {
-        if (idx >= sentences.length) { if (onComplete) onComplete(); return; }
-        var span = document.createElement('span');
-        span.className = 'emu-narrative-sentence emu-sentence-hidden';
-        if (idx > 0) span.textContent = ' ' + sentences[idx];
-        else         span.textContent = sentences[idx];
-        el.appendChild(span);
-        var i = idx;
-        idx++;
-        // Force reflow so the hidden state is committed before we remove it
-        void span.offsetWidth;
-        span.classList.remove('emu-sentence-hidden');
-        span.classList.add('emu-sentence-fadein');
-        // After fade-in + reading time, do one blink then next sentence
-        safeTimeout(function () {
-          span.classList.add('emu-sentence-dim');
-          safeTimeout(function () {
-            span.classList.remove('emu-sentence-dim');
-            safeTimeout(showNext, BLINK_REC);
-          }, BLINK_DIM);
-        }, FADEIN_MS + READ_MS);
-      }
-      showNext();
+      void el.offsetWidth;
+      el.classList.add('emu-narrative-visible');
+      safeTimeout(function () {
+        if (onComplete) onComplete();
+      }, FADEIN_MS + holdMs);
     }
 
     function revealTermLines(trace, forScene, atTime) {
@@ -7932,9 +7899,10 @@ _HTML_JS = """
                            'emu-scene-packet-flying', 'emu-scene-charge-ready');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
-        // Restore narrative text cleared by the typewriter
+        // Reset narrative — restore text and remove visible class so Replay fades in fresh
         var narr = s.querySelector('.emu-scene-narrative');
         if (narr) {
+          narr.classList.remove('emu-narrative-visible');
           var orig = narr.getAttribute('data-narrative');
           if (orig !== null) narr.textContent = orig;
         }
@@ -8129,9 +8097,9 @@ _HTML_JS = """
           });
         })();
 
-        // Step 2 — typewrite the narrative; everything else chains off the callback
+        // Step 2 — fade-in the narrative, hold for reading time, then continue
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
-        typewriteNarrative(narrativeEl, CHAR_DELAY, function () {
+        revealNarrative(narrativeEl, function () {
 
           // Step 3 — source actor charges up (subtle glow before packet)
           safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
