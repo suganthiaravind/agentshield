@@ -1083,6 +1083,14 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
         '<div class="emu-trace-steps">'
     )
+    # Attack-plan card sits ABOVE all scene rows — plays while all steps show as compact
+    if attack_question:
+        parts.append(
+            '<div class="emu-attack-plan-card" style="display:none">'
+            '<span class="emu-ap-label">Attack Plan</span>'
+            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
+            '</div>'
+        )
     n_scenes = len(emu_trace)
     for scene_idx, step in enumerate(emu_trace):
         outcome = step.get("outcome") or "advances"
@@ -1176,14 +1184,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                     '— no input filters in place; the agent cannot tell it apart '
                     'from a legitimate request. The attack moves forward.'
                 )
-        ap_card_html = ""
-        if scene_idx == 0 and attack_question:
-            ap_card_html = (
-                '<div class="emu-attack-plan-card" style="display:none">'
-                '<span class="emu-ap-label">Attack Plan</span>'
-                f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
-                '</div>'
-            )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}">'
             f'<div class="emu-scene-header">'
@@ -1194,7 +1194,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{defence_chip}'
             f'</div>'
             f'<div class="emu-scene-body">'
-            f'{ap_card_html}'
             f'{payload_callout_html}'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
@@ -7917,7 +7916,7 @@ _HTML_JS = """
         });
       }
       // Reset attack-plan card (inside scene 0) so Replay re-typewriters it
-      var apCard = trace.querySelector('.emu-scene .emu-attack-plan-card');
+      var apCard = trace.querySelector('.emu-attack-plan-card');
       if (apCard) {
         apCard.style.display = 'none';
         apCard.classList.remove('emu-ap-fadeout', 'emu-ap-blink');
@@ -8024,29 +8023,12 @@ _HTML_JS = """
         if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
         if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
 
-        // Accordion: expand this scene, keep done scenes visible
-        scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
-        scene.classList.add('emu-scene-active');
-
-        // Scene 0 only: show attack-plan card ALONE first.
-        // Hide normal step content via inline style (beats any CSS specificity),
-        // typewrite the question, blink 2×, fade out, then restore content.
+        // Scene 0: if attack-plan card exists, show it ABOVE the accordion
+        // while ALL scenes stay compact, then expand scene 0 after it fades.
         if (idx === 0) {
-          var apCard = scene.querySelector('.emu-attack-plan-card');
+          var apCard = trace.querySelector('.emu-attack-plan-card');
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
-            var hideSels = [
-              '.emu-scene-narrative', '.emu-scene-actors',
-              '.emu-scene-payload-callout', '.emu-scene-payload-details',
-              '.emu-scene-behavior'
-            ];
-            var hiddenEls = [];
-            hideSels.forEach(function (sel) {
-              scene.querySelectorAll(sel).forEach(function (el) {
-                el.style.setProperty('display', 'none', 'important');
-                hiddenEls.push(el);
-              });
-            });
             apCard.style.display = '';
             typewriteNarrative(apText, CHAR_DELAY, function () {
               apCard.classList.add('emu-ap-blink');
@@ -8056,9 +8038,9 @@ _HTML_JS = """
                 safeTimeout(function () {
                   apCard.style.display = 'none';
                   apCard.classList.remove('emu-ap-fadeout');
-                  // Restore hidden elements
-                  hiddenEls.forEach(function (el) { el.style.removeProperty('display'); });
-                  // Open payload box now that content is back
+                  // Now expand scene 0 and play its content
+                  scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
+                  scene.classList.add('emu-scene-active');
                   var pdNow = scene.querySelector('.emu-scene-payload-details');
                   if (pdNow) pdNow.setAttribute('open', '');
                   runSceneContent(idx, scene);
@@ -8068,6 +8050,10 @@ _HTML_JS = """
             return;
           }
         }
+
+        // Accordion: expand this scene, keep done scenes visible
+        scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
+        scene.classList.add('emu-scene-active');
 
         // All other scenes: open payload box immediately
         var pdNow = scene.querySelector('.emu-scene-payload-details');
