@@ -6248,14 +6248,6 @@ footer {
   from { opacity: 0; transform: translateY(-5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* Hide all normal scene content while attack plan is showing alone */
-.emu-scene.emu-scene-plan-only .emu-scene-narrative,
-.emu-scene.emu-scene-plan-only .emu-scene-actors,
-.emu-scene.emu-scene-plan-only .emu-scene-payload-callout,
-.emu-scene.emu-scene-plan-only .emu-scene-payload-details,
-.emu-scene.emu-scene-plan-only .emu-scene-behavior {
-  display: none !important;
-}
 .emu-attack-plan-card.emu-ap-blink {
   animation: emu-ap-blink 1.6s ease;
 }
@@ -8061,8 +8053,6 @@ _HTML_JS = """
         apCard.classList.remove('emu-ap-fadeout', 'emu-ap-blink');
         var apText = apCard.querySelector('.emu-ap-text');
         if (apText) apText.textContent = '';
-        var s0 = apCard.closest('.emu-scene');
-        if (s0) s0.classList.remove('emu-scene-plan-only');
       }
     }
 
@@ -8168,17 +8158,27 @@ _HTML_JS = """
         scenes.forEach(function (s) { s.classList.remove('emu-scene-visible'); });
         scene.classList.add('emu-scene-visible');
 
-        // Scene 0 only: show attack-plan card ALONE first (all normal step
-        // content hidden via emu-scene-plan-only), typewrite it, blink 2×,
-        // fade out, then reveal normal content and continue.
+        // Scene 0 only: show attack-plan card ALONE first.
+        // Hide normal step content via inline style (beats any CSS specificity),
+        // typewrite the question, blink 2×, fade out, then restore content.
         if (idx === 0) {
           var apCard = scene.querySelector('.emu-attack-plan-card');
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
-            scene.classList.add('emu-scene-plan-only');
+            var hideSels = [
+              '.emu-scene-narrative', '.emu-scene-actors',
+              '.emu-scene-payload-callout', '.emu-scene-payload-details',
+              '.emu-scene-behavior'
+            ];
+            var hiddenEls = [];
+            hideSels.forEach(function (sel) {
+              scene.querySelectorAll(sel).forEach(function (el) {
+                el.style.setProperty('display', 'none', 'important');
+                hiddenEls.push(el);
+              });
+            });
             apCard.style.display = '';
             typewriteNarrative(apText, CHAR_DELAY, function () {
-              // Blink 2× slowly after typewrite finishes
               apCard.classList.add('emu-ap-blink');
               safeTimeout(function () {
                 apCard.classList.remove('emu-ap-blink');
@@ -8186,13 +8186,14 @@ _HTML_JS = """
                 safeTimeout(function () {
                   apCard.style.display = 'none';
                   apCard.classList.remove('emu-ap-fadeout');
-                  scene.classList.remove('emu-scene-plan-only');
-                  // Open payload box now that normal content is revealed
+                  // Restore hidden elements
+                  hiddenEls.forEach(function (el) { el.style.removeProperty('display'); });
+                  // Open payload box now that content is back
                   var pdNow = scene.querySelector('.emu-scene-payload-details');
                   if (pdNow) pdNow.setAttribute('open', '');
                   runSceneContent(idx, scene);
                 }, 380);
-              }, 1600); // blink duration
+              }, 1600);
             });
             return;
           }
