@@ -8166,7 +8166,7 @@ _HTML_JS = """
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
             var hideSels = [
-              '.emu-scene-narrative', '.emu-scene-actors',
+              '.emu-scene-header', '.emu-scene-narrative', '.emu-scene-actors',
               '.emu-scene-payload-callout', '.emu-scene-payload-details',
               '.emu-scene-behavior'
             ];
