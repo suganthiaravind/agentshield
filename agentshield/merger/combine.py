@@ -1010,7 +1010,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         is_hit = key in targeted_steps
         chip_cls = "emu-pipeline-chip emu-pipeline-chip-hit" if is_hit else "emu-pipeline-chip"
         pipeline_chips.append(
-            f'<span class="{chip_cls}" title="{_html_escape(key)}">'
+            f'<span class="{chip_cls}" data-step="{_html_escape(key)}" title="{_html_escape(key)}">'
             f'{_html_escape(label)}</span>'
         )
     # Insert connectors between chips
@@ -1091,6 +1091,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
             '</div>'
         )
+    _LLM_STEP_KEYS = {"planner", "planner_llm", "re_plan"}
     n_scenes = len(emu_trace)
     for scene_idx, step in enumerate(emu_trace):
         outcome = step.get("outcome") or "advances"
@@ -1184,14 +1185,38 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                     '— no input filters in place; the agent cannot tell it apart '
                     'from a legitimate request. The attack moves forward.'
                 )
+        # LLM step markers — thinking animation fires before the packet
+        is_llm_step = step_key in _LLM_STEP_KEYS
+        llm_attr = ' data-llm-step="1"' if is_llm_step else ''
+        thinking_dots_html = (
+            '<span class="emu-thinking-dots" aria-hidden="true">'
+            '<i></i><i></i><i></i></span>'
+        ) if is_llm_step else ''
+
+
+        # Last scene: show overall verdict in the chip, not the raw step outcome
+        if scene_idx == n_scenes - 1:
+            _vstamp_text, _vstamp_cls = _VERDICT_STAMP.get(
+                emu_verdict, (outcome, outcome)
+            )
+            outcome_chip_html = (
+                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(_vstamp_cls)}'
+                f' emu-scene-outcome-verdict">'
+                f'{_html_escape(_vstamp_text)}</span>'
+            )
+        else:
+            outcome_chip_html = (
+                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(outcome)}">'
+                f'{_html_escape(outcome)}</span>'
+            )
         parts.append(
-            f'<div class="{step_cls}" data-step="{scene_idx}">'
+            f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
             f'<div class="emu-scene-header">'
             f'<span class="emu-scene-step-num">{scene_idx + 1}</span>'
             f'<span class="emu-scene-step-label">{_html_escape(step_label_clean)}</span>'
-            f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(outcome)}">'
-            f'{_html_escape(outcome)}</span>'
+            f'{outcome_chip_html}'
             f'{defence_chip}'
+            f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
             f'</div>'
             f'<div class="emu-scene-body">'
             f'{payload_callout_html}'
@@ -1201,6 +1226,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<div class="emu-actor emu-actor-src emu-actor-role-{src_role}"{src_title_attr}>'
             f'<span class="emu-actor-icon">{src_icon}</span>'
             f'<span class="emu-actor-label">{_html_escape(src_lbl)}</span>'
+            f'{thinking_dots_html}'
             f'</div>'
             f'<div class="emu-arrow">'
             f'<span class="emu-arrow-label">{_html_escape(arrow_lbl)}</span>'
@@ -1226,7 +1252,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                 f'<div class="emu-arrival-stamp emu-arrival-stamp-{stamp_cls}">'
                 f'{_html_escape(stamp_text)}</div>'
             )
-        if step_input:
+        # Only show collapsible payload when the callout isn't already displaying it
+        if step_input and not payload_callout_html:
             preview = step_input[:60]
             if len(step_input) > 60:
                 preview += "…"
@@ -1242,21 +1269,21 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                 f'</div>'
                 f'</details>'
             )
-        if step_behavior or step_reasoning:
+        if step_behavior or step_reasoning or citations:
             combined = step_behavior
             if step_reasoning and step_reasoning != step_behavior:
                 combined = (
                     (combined + " ") if combined else ""
                 ) + step_reasoning
+            body_html = (
+                f'<span class="emu-scene-behavior-text">{_html_escape(combined)}</span> '
+                if combined else ""
+            ) + citations
             parts.append(
-                f'<div class="emu-scene-behavior">'
-                f'<span class="emu-scene-behavior-arrow">&rsaquo;</span> '
-                f'{_html_escape(combined)} {citations}'
-                f'</div>'
-            )
-        elif citations:
-            parts.append(
-                f'<div class="emu-scene-behavior">{citations}</div>'
+                f'<details class="emu-scene-tech-detail">'
+                f'<summary class="emu-scene-tech-summary">Technical detail</summary>'
+                f'<div class="emu-scene-tech-body">{body_html}</div>'
+                f'</details>'
             )
         parts.append('</div></div>')  # /emu-scene-body /emu-scene
     parts.append('</div>')  # /emu-trace-steps
@@ -5685,6 +5712,18 @@ footer {
   background: #fee2e2; border-color: #fca5a5;
   color: #991b1b; font-weight: 700;
 }
+/* Active chip — shown during animation on the currently playing step */
+@keyframes emu-pip-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
+  50%       { box-shadow: 0 0 0 6px rgba(59,130,246,0.10); }
+}
+.emu-pipeline-chip.emu-pip-active {
+  background: #1d4ed8; border-color: #1e40af; color: #ffffff;
+  font-weight: 700; transform: scale(1.08);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.35);
+  animation: emu-pip-pulse 1.2s ease-in-out infinite;
+  transition: background 200ms ease, transform 200ms ease;
+}
 .emu-pipeline-arrow {
   font-size: 9px; color: #cbd5e1; flex-shrink: 0;
 }
@@ -5880,24 +5919,24 @@ footer {
   margin-bottom: 5px;
 }
 .emu-scene-payload-callout {
-  margin: 6px 0 10px;
-  padding: 9px 14px;
-  background: #1e293b;
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  background: #0f172a;
   border-left: 3px solid #f87171;
-  border-radius: 5px;
-  font-size: 12.5px; line-height: 1.6;
-  color: #fce7f3;
+  border-radius: 6px;
+  font-size: 12px; line-height: 1.55;
+  color: #e2e8f0;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   word-break: break-word;
+  letter-spacing: 0.01em;
 }
-/* Narrative paragraph — warm amber tint; reads below the dark payload callout */
+/* Narrative paragraph — clean, no background; left accent matches outcome */
 .emu-scene-narrative {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  background: #fffbeb;
-  border-left: 3px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 12.5px; line-height: 1.6; color: #374151;
+  margin: 8px 0 14px;
+  padding: 0 0 0 10px;
+  background: transparent;
+  border-left: 2px solid #e2e8f0;
+  font-size: 12.5px; line-height: 1.65; color: #374151;
 }
 .emu-scene-advances    .emu-scene-narrative { border-color: #fca5a5; }
 .emu-scene-blocked     .emu-scene-narrative { border-color: #86efac; }
@@ -5958,58 +5997,23 @@ footer {
   overflow: hidden;
 }
 
-/* Honesty banner — methodology disclaimer at the top of the
-   panel. Blue palette keeps it visually distinct from the
-   neutral findings body. */
-.emu-honesty-banner {
-  margin: 0 0 14px;
-  padding: 10px 14px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-left: 3px solid #2563eb;
-  border-radius: 8px;
-  font-size: 11.5px; line-height: 1.55;
-  color: #1e3a8a;
-}
-.emu-honesty-banner strong { color: #1d4ed8; font-weight: 700; }
-
-/* Reasoning block — styled analysis note with accent border */
-.emu-reasoning-block {
-  margin: 0 0 14px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #64748b;
-  border-radius: 6px;
-  display: grid;
-  grid-template-columns: 80px 1fr;
-  gap: 10px;
-  align-items: start;
-}
-.emu-reasoning-label {
-  font-size: 9.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.09em;
-  color: #475569; padding-top: 2px;
-}
-.emu-reasoning-text {
-  font-size: 13px; line-height: 1.6;
-  color: #1e293b;
+/* Compact methodology note — one-liner replaces the big blue banner */
+.emu-method-note {
+  margin: 0 0 10px;
+  font-size: 10.5px; color: #94a3b8; font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
-/* Verdict row — pill + confidence on same line, sits above a
-   subtle divider that separates the headline from the reasoning
-   block below. */
+/* Verdict row — pill + confidence on same line */
 .emu-verdict-row {
-  display: flex; align-items: center; gap: 12px;
-  margin: 0 0 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 10px;
   flex-wrap: wrap;
 }
 .emu-verdict {
   display: inline-flex; align-items: center;
   font-size: 10.5px; font-weight: 700;
-  padding: 4px 11px; border-radius: 6px;
+  padding: 3px 10px; border-radius: 5px;
   text-transform: uppercase; letter-spacing: 0.06em;
 }
 .emu-verdict-lands       { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
@@ -6017,90 +6021,137 @@ footer {
 .emu-verdict-blocked     { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
 .emu-verdict-inconclusive { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
 .emu-confidence {
-  font-size: 11.5px; color: #64748b; font-weight: 500;
+  font-size: 11px; color: #94a3b8; font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-/* Generic catalogue payload — softer dark code block with a clear
-   sans-serif label and monospace content. */
+/* Reasoning — collapsed disclosure, light bg when open */
+.emu-reasoning-detail {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+}
+.emu-reasoning-summary {
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer; user-select: none; list-style: none;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.emu-reasoning-summary::-webkit-details-marker { display: none; }
+.emu-reasoning-summary::before {
+  content: "▸"; font-size: 8px; transition: transform 140ms;
+}
+.emu-reasoning-detail[open] .emu-reasoning-summary::before {
+  transform: rotate(90deg);
+}
+.emu-reasoning-text {
+  margin: 6px 0 0; padding: 8px 12px;
+  background: #f8fafc; border-radius: 5px;
+  font-size: 12px; line-height: 1.6; color: #334155;
+  border-left: 2px solid #cbd5e1;
+}
+
+/* Payload block — separated header + body for clarity */
 .emu-payload {
   margin: 0 0 12px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+}
+.emu-payload-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: #1e293b;
+}
+.emu-payload-label {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.emu-payload-body {
   padding: 10px 14px;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 8px;
+  background: #0f172a; color: #e2e8f0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px; line-height: 1.6;
   white-space: pre-wrap; word-break: break-word;
 }
-.emu-payload-label {
-  display: block;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-               Roboto, sans-serif;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: #94a3b8;
-  margin-bottom: 6px;
-}
 .emu-layer-chip {
   display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 3px;
   font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: #1e293b; color: #7dd3fc;
+  background: #0f172a; color: #7dd3fc;
   border: 1px solid #334155;
-  vertical-align: middle;
 }
 /* Attack-plan card — typewritten in the scene area before step 1 */
 .emu-attack-plan-card {
   margin: 0 0 10px;
-  padding: 11px 16px 13px;
-  background: #f0f7ff;
+  padding: 12px 18px 14px;
+  background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-left: 4px solid #3b82f6;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  animation: emu-ap-fadein 0.35s ease forwards;
+  gap: 12px;
+  box-shadow: 0 2px 14px rgba(59,130,246,0.10);
+  animation: emu-ap-fadein 0.45s cubic-bezier(0.22,1,0.36,1) forwards;
 }
 @keyframes emu-ap-fadein {
-  from { opacity: 0; transform: translateY(-5px); }
+  from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.emu-attack-plan-card.emu-ap-blink {
-  animation: emu-ap-blink 1.6s ease;
+/* Border glow pulse — replaces the old opacity blink */
+@keyframes emu-ap-hold-pulse {
+  0%   { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
+         border-left-color: #3b82f6; }
+  35%  { box-shadow: 0 0 0 4px rgba(59,130,246,0.22),
+                     0 2px 24px rgba(59,130,246,0.20);
+         border-left-color: #60a5fa; }
+  70%  { box-shadow: 0 0 0 2px rgba(59,130,246,0.08),
+                     0 2px 14px rgba(59,130,246,0.10);
+         border-left-color: #93c5fd; }
+  100% { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
+         border-left-color: #3b82f6; }
 }
-@keyframes emu-ap-blink {
-  0%   { opacity: 1; }
-  22%  { opacity: 0.15; }
-  44%  { opacity: 1; }
-  66%  { opacity: 0.15; }
-  88%  { opacity: 1; }
-  100% { opacity: 1; }
+.emu-attack-plan-card.emu-ap-hold {
+  animation: emu-ap-hold-pulse 1.4s ease-in-out;
 }
 .emu-attack-plan-card.emu-ap-fadeout {
-  animation: emu-ap-fadeout 0.38s ease forwards;
+  animation: emu-ap-fadeout 0.48s cubic-bezier(0.4,0,1,1) forwards;
 }
 @keyframes emu-ap-fadeout {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-5px); }
+  from { opacity: 1; transform: translateY(0)   scale(1); }
+  to   { opacity: 0; transform: translateY(-14px) scale(0.97); }
 }
 .emu-ap-label {
   flex-shrink: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #2563eb;
-  padding: 2px 6px;
+  color: #1d4ed8;
+  padding: 3px 7px;
   background: #dbeafe;
-  border-radius: 3px;
+  border-radius: 4px;
+  border: 1px solid #bfdbfe;
 }
 .emu-ap-text {
-  font-size: 13px; line-height: 1.55;
+  font-size: 13.5px; line-height: 1.55; font-weight: 500;
   color: #1e3a5f;
 }
+/* Blinking cursor shown during typewriting */
+.emu-ap-text::after {
+  content: '|';
+  margin-left: 1px;
+  color: #3b82f6; font-weight: 700;
+  animation: emu-ap-cursor-blink 0.65s step-end infinite;
+}
+@keyframes emu-ap-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+/* Remove cursor once typewriting is done */
+.emu-ap-text.emu-ap-typed::after { display: none; }
 /* Payload-firing catalogue intro — shown before pipeline scenes animate */
 .emu-layer-intro {
   margin-bottom: 10px;
@@ -6368,7 +6419,24 @@ footer {
 
 .emu-scene-header {
   display: flex; align-items: center; gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: wrap; cursor: default;
+}
+/* Manual expand/collapse toggle — right-hand chevron on every row */
+.emu-scene-toggle-btn {
+  margin-left: auto;
+  background: none; border: none; padding: 2px 4px;
+  font-size: 14px; font-weight: 700; color: #94a3b8;
+  cursor: pointer; line-height: 1;
+  transition: color 150ms ease, transform 200ms ease;
+  flex-shrink: 0;
+}
+.emu-scene-toggle-btn:hover { color: #3b82f6; }
+.emu-scene.emu-scene-expanded-manual .emu-scene-toggle-btn {
+  transform: rotate(90deg); color: #3b82f6;
+}
+/* Manual expansion — same body reveal as emu-scene-active */
+.emu-scene.emu-scene-expanded-manual .emu-scene-body {
+  max-height: 900px; opacity: 1;
 }
 .emu-scene-step-num {
   display: inline-flex; align-items: center; justify-content: center;
@@ -6403,6 +6471,11 @@ footer {
 .emu-scene-outcome-blocked   { background: #d1fae5; color: #065f46; }
 .emu-scene-outcome-modified  { background: #fed7aa; color: #9a3412; }
 .emu-scene-outcome-absent_step { background: #e2e8f0; color: #475569; }
+/* Verdict chip on the last scene — slightly bolder than a plain step chip */
+.emu-scene-outcome-verdict {
+  font-weight: 800; letter-spacing: 0.06em;
+  border: 1px solid currentColor; opacity: 0.85;
+}
 
 /* Compact horizontal actor row — icon+label inline, arrow flexes */
 .emu-scene-actors {
@@ -6490,9 +6563,9 @@ footer {
 /* Checkpoint gates — vertical bars on the arrow the packet flies through */
 .emu-gate {
   position: absolute;
-  top: -7px; bottom: -7px;
-  width: 3px;
-  border-radius: 2px;
+  top: -14px; bottom: -14px;
+  width: 5px;
+  border-radius: 3px;
   background: #cbd5e1;
   transform: translateX(-50%);
   z-index: 4;
@@ -6502,36 +6575,48 @@ footer {
 .emu-gate-1 { left: 33%; }
 .emu-gate-2 { left: 67%; }
 
-/* Gate flashes as packet passes through — advances: red burst */
+/* Gate flashes as packet passes through — advances: bright red burst */
 @keyframes emu-gate-through {
-  0%   { background: #cbd5e1; box-shadow: none;                               top: -7px;  bottom: -7px; }
-  18%  { background: #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,0.55),
-                                          0 0 14px rgba(239,68,68,0.45);       top: -10px; bottom: -10px; }
-  55%  { background: #fca5a5; box-shadow: 0 0 0 2px rgba(239,68,68,0.15);     top: -8px;  bottom: -8px; }
-  100% { background: #e2e8f0; box-shadow: none;                               top: -7px;  bottom: -7px; }
+  0%   { background: #cbd5e1; box-shadow: none;
+         top: -14px; bottom: -14px; width: 5px; }
+  12%  { background: #ef4444;
+         box-shadow: 0 0 0 7px rgba(239,68,68,0.65),
+                     0 0 22px rgba(239,68,68,0.55),
+                     0 0 40px rgba(239,68,68,0.25);
+         top: -20px; bottom: -20px; width: 7px; }
+  50%  { background: #fca5a5;
+         box-shadow: 0 0 0 4px rgba(239,68,68,0.18);
+         top: -16px; bottom: -16px; width: 6px; }
+  100% { background: #e2e8f0; box-shadow: none;
+         top: -14px; bottom: -14px; width: 5px; }
 }
-/* Gate 1 — packet reaches 33 % at ~600 ms into 1 800 ms flight */
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-gate-1 {
-  animation: emu-gate-through 500ms 580ms ease-out both;
+  animation: emu-gate-through 600ms 560ms ease-out both;
 }
-/* Gate 2 — packet reaches 67 % at ~1 200 ms */
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-gate-2 {
-  animation: emu-gate-through 500ms 1160ms ease-out both;
+  animation: emu-gate-through 600ms 1120ms ease-out both;
 }
 
-/* Blocked: gate-2 becomes a barrier — green wall, packet never passes */
+/* Blocked: gate-2 slams into a bright green wall — packet can't pass */
 @keyframes emu-gate-barrier {
-  0%   { background: #cbd5e1; box-shadow: none;                               top: -7px;  bottom: -7px; width: 3px; }
-  20%  { background: #16a34a; box-shadow: 0 0 0 5px rgba(22,163,74,0.60),
-                                          0 0 18px rgba(22,163,74,0.50);       top: -13px; bottom: -13px; width: 5px; }
-  55%  { background: #22c55e; box-shadow: 0 0 0 3px rgba(22,163,74,0.20);     top: -9px;  bottom: -9px;  width: 4px; }
-  100% { background: #4ade80; box-shadow: none;                               top: -7px;  bottom: -7px;  width: 3px; }
+  0%   { background: #cbd5e1; box-shadow: none;
+         top: -14px; bottom: -14px; width: 5px; }
+  15%  { background: #16a34a;
+         box-shadow: 0 0 0 9px rgba(22,163,74,0.70),
+                     0 0 28px rgba(22,163,74,0.60),
+                     0 0 50px rgba(22,163,74,0.30);
+         top: -24px; bottom: -24px; width: 8px; }
+  45%  { background: #22c55e;
+         box-shadow: 0 0 0 5px rgba(22,163,74,0.25);
+         top: -18px; bottom: -18px; width: 6px; }
+  100% { background: #4ade80; box-shadow: 0 0 0 2px rgba(22,163,74,0.15);
+         top: -14px; bottom: -14px; width: 5px; }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-gate-1 {
-  animation: emu-gate-through 500ms 580ms ease-out both;  /* gate-1 still passed */
+  animation: emu-gate-through 600ms 560ms ease-out both;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-gate-2 {
-  animation: emu-gate-barrier 700ms 1240ms ease-out both; /* gate-2 holds — barrier! */
+  animation: emu-gate-barrier 900ms 1200ms ease-out both;
 }
 
 .emu-packet {
@@ -6539,15 +6624,24 @@ footer {
   left: 0; top: 50%;
   transform: translateY(-50%) scale(0);
   display: inline-flex; align-items: center; gap: 3px;
-  padding: 3px 9px 3px 6px;
-  border-radius: 12px;
-  background: #7f1d1d;
-  box-shadow: 0 2px 8px rgba(127,29,29,0.35);
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.35),
+              0 0 12px rgba(220,38,38,0.55);
   opacity: 0; pointer-events: none;
   z-index: 3;
 }
-.emu-scene-blocked  .emu-packet { background: #14532d; box-shadow: 0 2px 8px rgba(20,83,45,0.35); }
-.emu-scene-modified .emu-packet { background: #7c2d12; box-shadow: 0 2px 8px rgba(124,45,18,0.35); }
+.emu-scene-blocked  .emu-packet {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22,163,74,0.35),
+              0 0 12px rgba(22,163,74,0.55);
+}
+.emu-scene-modified .emu-packet {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217,119,6,0.35),
+              0 0 12px rgba(217,119,6,0.55);
+}
 
 /* Collapsible payload — closed by default, single-line preview */
 .emu-scene-payload-details {
@@ -6587,15 +6681,63 @@ footer {
   white-space: pre-wrap; word-break: break-word;
 }
 
-/* Single combined behaviour + outcome reasoning line */
-.emu-scene-behavior {
-  margin: 4px 0 0;
-  font-size: 11px; color: #475569;
-  line-height: 1.5;
+/* LLM thinking indicator — three bouncing dots on the source actor */
+.emu-thinking-dots {
+  display: none;
+  align-items: center; gap: 4px;
+  margin-left: 6px;
 }
-.emu-scene-behavior-arrow {
-  color: #94a3b8; font-weight: 700; margin-right: 2px;
+.emu-thinking-dots i {
+  display: inline-block;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #3b82f6; font-style: normal;
+  animation: emu-think-bounce 1.1s ease-in-out infinite;
+  opacity: 0.5;
 }
+.emu-thinking-dots i:nth-child(2) { animation-delay: 0.18s; }
+.emu-thinking-dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes emu-think-bounce {
+  0%, 55%, 100% { transform: translateY(0);    opacity: 0.45; }
+  28%           { transform: translateY(-5px); opacity: 1; }
+}
+/* Reveal dots and add blue shimmer to actor when scene is thinking */
+.emu-scene.emu-scene-thinking .emu-thinking-dots {
+  display: inline-flex;
+}
+@keyframes emu-actor-think-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(59,130,246,0.20); }
+  50%       { box-shadow: 0 0 0 6px rgba(59,130,246,0.50),
+                          0 0 14px rgba(59,130,246,0.25); }
+}
+.emu-scene.emu-scene-thinking .emu-actor-src {
+  border-color: #93c5fd;
+  animation: emu-actor-think-pulse 1.1s ease-in-out infinite;
+}
+
+/* Technical detail — collapsed by default, de-emphasised */
+.emu-scene-tech-detail {
+  margin: 10px 0 0;
+  font-size: 11px;
+}
+.emu-scene-tech-summary {
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer; user-select: none; list-style: none;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.emu-scene-tech-summary::-webkit-details-marker { display: none; }
+.emu-scene-tech-summary::before {
+  content: "▸"; font-size: 8px; transition: transform 140ms;
+}
+.emu-scene-tech-detail[open] .emu-scene-tech-summary::before {
+  transform: rotate(90deg);
+}
+.emu-scene-tech-body {
+  margin-top: 6px; padding: 7px 10px;
+  background: #f8fafc; border-radius: 4px;
+  font-size: 10.5px; color: #475569; line-height: 1.55;
+}
+.emu-scene-behavior-text { display: block; margin-bottom: 4px; }
 
 /* Arrival stamp — flashes in after packet lands */
 .emu-arrival-stamp {
@@ -6656,7 +6798,7 @@ footer {
 .emu-scene.emu-scene-done.emu-scene-absent_step { border-left-color: #94a3b8; }
 /* Show payload details in accordion (terminal is gone) */
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
-.emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
+.emu-trace.emu-trace-playing .emu-scene .emu-scene-tech-detail {
   display: block;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-source-pulsing
@@ -6706,22 +6848,21 @@ footer {
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #7c2d12; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #7c2d12; }
 
-/* Destination impact: two shockwave rings burst outward — drone smashes
-   through the gate. Fires at 1 530 ms (≈ 85 % of flight). */
+/* Destination impact: shockwave rings burst outward — attack crashes through */
 @keyframes emu-impact-ring {
-  0%   { box-shadow: 0 0 0 0   rgba(220,38,38,0.75),
-                     0 0 0 0   rgba(220,38,38,0.35);
-         transform: scale(1); }
-  25%  { box-shadow: 0 0 0 6px rgba(220,38,38,0.55),
-                     0 0 0 14px rgba(220,38,38,0.20);
-         transform: scale(1.13); }
-  65%  { box-shadow: 0 0 0 14px rgba(220,38,38,0.08),
-                     0 0 0 28px rgba(220,38,38,0);
-         transform: scale(1.02); }
+  0%   { box-shadow: 0 0 0 0   rgba(220,38,38,0.90),
+                     0 0 0 0   rgba(220,38,38,0.50);
+         transform: scale(1); background: inherit; }
+  18%  { box-shadow: 0 0 0 10px rgba(220,38,38,0.70),
+                     0 0 0 24px rgba(220,38,38,0.30);
+         transform: scale(1.18); background: #fef2f2; }
+  45%  { box-shadow: 0 0 0 20px rgba(220,38,38,0.12),
+                     0 0 0 42px rgba(220,38,38,0);
+         transform: scale(1.05); }
   100% { box-shadow: none; transform: scale(1); }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-impact-ring 750ms 1530ms ease-out both;
+  animation: emu-impact-ring 900ms 1520ms ease-out both;
 }
 
 /* ── BLOCKED: packet hits a barrier at ~60 % of the arrow ────────────────── */
@@ -6748,18 +6889,19 @@ footer {
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-arrow-line::after {
   opacity: 0;
 }
-/* Destination: "shield held" pulse — fires at 1 380 ms (when packet stops) */
+/* Destination: shield holds — big green pulse when the defence blocks */
 @keyframes emu-shield-hold {
-  0%   { box-shadow: none; transform: scale(1); }
-  20%  { box-shadow: 0 0 0 5px rgba(22,163,74,0.65),
-                     0 0 0 12px rgba(22,163,74,0.28);
-         transform: scale(1.09); }
-  60%  { box-shadow: 0 0 0 10px rgba(22,163,74,0.08),
-                     0 0 0 22px rgba(22,163,74,0); }
+  0%   { box-shadow: none; transform: scale(1); background: inherit; }
+  20%  { box-shadow: 0 0 0 10px rgba(22,163,74,0.75),
+                     0 0 0 26px rgba(22,163,74,0.35),
+                     0 0 0 44px rgba(22,163,74,0.12);
+         transform: scale(1.16); background: #dcfce7; }
+  60%  { box-shadow: 0 0 0 18px rgba(22,163,74,0.10),
+                     0 0 0 38px rgba(22,163,74,0); }
   100% { box-shadow: none; transform: scale(1); }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-actor-dst {
-  animation: emu-shield-hold 800ms 1380ms ease-out both;
+  animation: emu-shield-hold 1000ms 1340ms ease-out both;
 }
 
 /* Outcome chip stamp-in — when a scene becomes received, the
@@ -7888,9 +8030,15 @@ _HTML_JS = """
 
     function resetTrace(trace) {
       trace.classList.remove('emu-trace-playing');
+      // Clear active pipeline chip
+      trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
+        c.classList.remove('emu-pip-active');
+      });
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
         s.classList.remove('emu-scene-active', 'emu-scene-done',
-                           'emu-scene-packet-flying', 'emu-scene-charge-ready');
+                           'emu-scene-packet-flying', 'emu-scene-charge-ready',
+                           'emu-scene-thinking', 'emu-scene-received',
+                           'emu-scene-expanded-manual');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
         // Reset narrative — restore text and remove visible class so Replay fades in fresh
@@ -7919,9 +8067,9 @@ _HTML_JS = """
       var apCard = trace.querySelector('.emu-attack-plan-card');
       if (apCard) {
         apCard.style.display = 'none';
-        apCard.classList.remove('emu-ap-fadeout', 'emu-ap-blink');
+        apCard.classList.remove('emu-ap-fadeout', 'emu-ap-hold');
         var apText = apCard.querySelector('.emu-ap-text');
-        if (apText) apText.textContent = '';
+        if (apText) { apText.textContent = ''; apText.classList.remove('emu-ap-typed'); }
       }
     }
 
@@ -8016,6 +8164,17 @@ _HTML_JS = """
       if (closeBtn) closeBtn.style.display = 'inline-flex';
       if (progressWrap) progressWrap.style.display = 'flex';
 
+      function activatePipelineChip(trace, scene) {
+        var stepKey = scene ? scene.getAttribute('data-step-key') : null;
+        trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
+          c.classList.remove('emu-pip-active');
+        });
+        if (stepKey) {
+          var chip = trace.querySelector('.emu-pipeline-chip[data-step="' + stepKey + '"]');
+          if (chip) chip.classList.add('emu-pip-active');
+        }
+      }
+
       function runScene(idx) {
         var scene = scenes[idx];
         if (!scene) return;
@@ -8025,31 +8184,41 @@ _HTML_JS = """
 
         // Scene 0: if attack-plan card exists, show it ABOVE the accordion
         // while ALL scenes stay compact, then expand scene 0 after it fades.
+        // Breadcrumb chip is NOT lit until the card fades — the attack plan
+        // phase isn't a pipeline step, so no chip should highlight yet.
         if (idx === 0) {
           var apCard = trace.querySelector('.emu-attack-plan-card');
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
             apCard.style.display = '';
             typewriteNarrative(apText, CHAR_DELAY, function () {
-              apCard.classList.add('emu-ap-blink');
+              // Typing done — hide cursor, then border-glow hold, then exit
+              apText.classList.add('emu-ap-typed');
+              apCard.classList.add('emu-ap-hold');
               safeTimeout(function () {
-                apCard.classList.remove('emu-ap-blink');
+                apCard.classList.remove('emu-ap-hold');
                 apCard.classList.add('emu-ap-fadeout');
                 safeTimeout(function () {
                   apCard.style.display = 'none';
                   apCard.classList.remove('emu-ap-fadeout');
+                  apText.classList.remove('emu-ap-typed');
+                  // Attack plan done — now highlight the breadcrumb chip
+                  activatePipelineChip(trace, scene);
                   // Now expand scene 0 and play its content
                   scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
                   scene.classList.add('emu-scene-active');
                   var pdNow = scene.querySelector('.emu-scene-payload-details');
                   if (pdNow) pdNow.setAttribute('open', '');
                   runSceneContent(idx, scene);
-                }, 380);
-              }, 1600);
+                }, 480);
+              }, 1400);
             });
             return;
           }
         }
+
+        // Highlight the matching pipeline breadcrumb chip (non-attack-plan scenes)
+        activatePipelineChip(trace, scene);
 
         // Accordion: expand this scene, keep done scenes visible
         scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
@@ -8082,18 +8251,33 @@ _HTML_JS = """
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
         revealNarrative(narrativeEl, function () {
 
-          // Step 3 — source actor charges up (subtle glow before packet)
-          safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
+          // Step 3 — LLM steps show thinking dots before the packet fires
+          var THINKING_DURATION = 1400; // ms of "processing" animation
+          var isLlmStep = scene.getAttribute('data-llm-step') === '1';
+          var packetFireAt;
+          if (isLlmStep) {
+            safeTimeout(function () { scene.classList.add('emu-scene-thinking'); }, 200);
+            safeTimeout(function () {
+              scene.classList.remove('emu-scene-thinking');
+              scene.classList.add('emu-scene-charge-ready');
+            }, 200 + THINKING_DURATION);
+            packetFireAt = 200 + THINKING_DURATION + 160;
+          } else {
+            safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
+            packetFireAt = POST_TYPE_PAUSE;
+          }
 
           // Step 4 — packet flies across the arrow
-          safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, POST_TYPE_PAUSE);
+          safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, packetFireAt);
 
-          // Step 5 — remaining terminal rows (READ/PREDICT/OUTCOME) appear after packet lands
-          safeTimeout(function () { revealTermLines(trace, idx, 0); },
-                      POST_TYPE_PAUSE + PACKET_DURATION);
+          // Step 5 — packet lands: stamp in outcome chip + reveal terminal rows
+          safeTimeout(function () {
+            scene.classList.add('emu-scene-received');
+            revealTermLines(trace, idx, 0);
+          }, packetFireAt + PACKET_DURATION);
 
-          // Step 5 — advance to next scene or show final banner
-          var afterScene = POST_TYPE_PAUSE + PACKET_DURATION + SCENE_READ_PAUSE;
+          // Step 6 — advance to next scene or show final banner
+          var afterScene = packetFireAt + PACKET_DURATION + SCENE_READ_PAUSE;
           if (idx < scenes.length - 1) {
             safeTimeout(function () {
               scene.classList.remove('emu-scene-active');
@@ -8102,12 +8286,22 @@ _HTML_JS = """
             }, afterScene);
           } else {
             safeTimeout(function () {
-              if (finalBanner) finalBanner.classList.add('emu-trace-final-visible');
+              if (finalBanner) {
+                finalBanner.classList.add('emu-trace-final-visible');
+                // Scroll the banner into view so it's not hidden below the fold
+                safeTimeout(function () {
+                  finalBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 120);
+              }
               revealTermLines(trace, scenes.length, 0);
               if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
               if (pauseBtn) pauseBtn.style.display = 'none';
               if (progressWrap) progressWrap.style.display = 'none';
               if (progressFill) progressFill.style.width = '0%';
+              // Clear the active pipeline chip now that playback is done
+              trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
+                c.classList.remove('emu-pip-active');
+              });
               // Keep Close visible so user can dismiss after watching
             }, afterScene);
           }
@@ -8164,6 +8358,15 @@ _HTML_JS = """
       closeBtn.addEventListener('click', function () {
         var trace = closeBtn.closest('.emu-trace');
         if (trace) closeTrace(trace);
+      });
+    });
+
+    // Manual expand/collapse toggle — each step row has a › chevron button
+    document.querySelectorAll('.emu-scene-toggle-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var scene = btn.closest('.emu-scene');
+        if (scene) scene.classList.toggle('emu-scene-expanded-manual');
       });
     });
 
@@ -9281,20 +9484,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         emu_conf = emu_data.get("verdict_confidence")
                         emu_reasoning = emu_data.get("verdict_reasoning") or ""
                         emu_trace = emu_data.get("pipeline_trace") or []
-                        # Honesty banner — surfaces the canonical
-                        # positioning paragraph at the top of the
-                        # body so reviewers see methodology + scope
-                        # before reading any conclusion.
+                        # Compact method note replaces the big blue banner
                         parts.append(
-                            '<div class="emu-honesty-banner">'
-                            '<strong>Behaviour emulator:</strong> '
-                            'Statically walks the agent\'s runtime '
-                            'pipeline against OWASP LLM / Agentic '
-                            'Top-10 and MITRE ATLAS attack classes — '
-                            'no live payloads fired, no specific threat '
-                            'actors modelled. Think '
-                            '<strong>structured threat modelling</strong>, '
-                            'not penetration testing.'
+                            '<div class="emu-method-note">'
+                            '&#9432; Static pipeline analysis — '
+                            'no live payloads fired, structured threat modelling.'
                             '</div>'
                         )
                         # Verdict + confidence row.
@@ -9313,28 +9507,34 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'{conf_html}'
                             f'</div>'
                         )
-                        # Verdict reasoning — the summary paragraph.
+                        # Verdict reasoning — collapsible, closed by default
                         if emu_reasoning:
                             parts.append(
-                                f'<div class="emu-reasoning-block">'
-                                f'<span class="emu-reasoning-label">Reasoning</span>'
-                                f'<span class="emu-reasoning-text">{_html_escape(emu_reasoning)}</span>'
-                                f'</div>'
+                                f'<details class="emu-reasoning-detail">'
+                                f'<summary class="emu-reasoning-summary">'
+                                f'Reasoning</summary>'
+                                f'<p class="emu-reasoning-text">'
+                                f'{_html_escape(emu_reasoning)}</p>'
+                                f'</details>'
                             )
-                        # Payload used — label shows which layer fired.
+                        # Payload used — header strip + body
                         if emu_payload:
                             layer_chip = ""
                             if emu_layer:
                                 layer_chip = (
-                                    f' <span class="emu-layer-chip">'
+                                    f'<span class="emu-layer-chip">'
                                     f'{_html_escape(emu_layer)}</span>'
                                 )
                             payload_label = "Payload used" if emu_layer else "Catalogue payload"
                             parts.append(
                                 f'<div class="emu-payload">'
-                                f'<span class="emu-payload-label">'
-                                f'{payload_label}{layer_chip}</span>'
+                                f'<div class="emu-payload-header">'
+                                f'<span class="emu-payload-label">{payload_label}</span>'
+                                f'{layer_chip}'
+                                f'</div>'
+                                f'<div class="emu-payload-body">'
                                 f'{_html_escape(emu_payload)}'
+                                f'</div>'
                                 f'</div>'
                             )
                         # Per-step pipeline trace — scenes + terminal + final
