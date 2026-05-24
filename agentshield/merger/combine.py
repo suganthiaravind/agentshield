@@ -6918,8 +6918,8 @@ footer {
   opacity: 1;
 }
 .emu-narrative-sentence.emu-sentence-dim {
-  opacity: 0.15;
-  transition: opacity 180ms ease-in-out;
+  opacity: 0.08;
+  transition: opacity 300ms ease-in-out;
 }
 .emu-tw-cursor {
   display: inline-block;
@@ -7866,10 +7866,10 @@ _HTML_JS = """
                          .filter(function (s) { return s.length > 0; });
       if (sentences.length === 0) { if (onComplete) onComplete(); return; }
 
-      var FADEIN_MS  = 350;  // fade-in duration per sentence
-      var READ_MS    = 550;  // reading pause after fade-in completes
-      var BLINK_DIM  = 180;  // time dimmed during blink
-      var BLINK_REC  = 180;  // recovery after blink before next sentence
+      var FADEIN_MS  = 500;   // fade-in duration per sentence
+      var READ_MS    = 1000;  // reading pause after fade-in completes
+      var BLINK_DIM  = 400;   // time dimmed during blink
+      var BLINK_REC  = 400;   // recovery time before next sentence
 
       var idx = 0;
       function showNext() {
