@@ -6905,6 +6905,19 @@ footer {
   to   { opacity: 1; transform: translateX(0); }
 }
 /* Blinking cursor shown during typewriter animation */
+/* Sentence-by-sentence narrative reveal */
+.emu-narrative-sentence {
+  display: inline;
+}
+.emu-sentence-flash {
+  animation: emu-sentence-flash 420ms ease-out forwards;
+}
+@keyframes emu-sentence-flash {
+  0%   { opacity: 0; }
+  25%  { opacity: 1; }
+  60%  { opacity: 0.25; }
+  100% { opacity: 1; }
+}
 .emu-tw-cursor {
   display: inline-block;
   color: #d97706;
@@ -7837,6 +7850,45 @@ _HTML_JS = """
       safeTimeout(tick, 0);
     }
 
+    // Reveal narrative text one sentence at a time — each sentence appears
+    // instantly, flashes once, then the next sentence appears.
+    function revealBySentence(el, onComplete) {
+      if (!el) { if (onComplete) onComplete(); return; }
+      var fullText = el.getAttribute('data-narrative') || el.textContent || '';
+      el.textContent = '';
+      if (!fullText) { if (onComplete) onComplete(); return; }
+
+      // Split on sentence-ending punctuation followed by a space or end-of-string.
+      // Keeps the punctuation attached to the preceding sentence.
+      var raw = fullText.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [fullText];
+      var sentences = raw.map(function (s) { return s.replace(/\s+$/, ''); })
+                         .filter(function (s) { return s.length > 0; });
+      if (sentences.length === 0) { if (onComplete) onComplete(); return; }
+
+      var FLASH_MS   = 420;  // how long the flash animation runs
+      var INTER_MS   = 260;  // pause between flash end and next sentence
+
+      var idx = 0;
+      function showNext() {
+        if (idx >= sentences.length) { if (onComplete) onComplete(); return; }
+        var span = document.createElement('span');
+        span.className = 'emu-narrative-sentence';
+        // Add a space between sentences except before the first
+        if (idx > 0) span.textContent = ' ' + sentences[idx];
+        else         span.textContent = sentences[idx];
+        el.appendChild(span);
+        idx++;
+        // Trigger flash animation by forcing reflow then adding the class
+        void span.offsetWidth;
+        span.classList.add('emu-sentence-flash');
+        safeTimeout(function () {
+          span.classList.remove('emu-sentence-flash');
+          safeTimeout(showNext, INTER_MS);
+        }, FLASH_MS);
+      }
+      showNext();
+    }
+
     function revealTermLines(trace, forScene, atTime) {
       var terminal = trace.querySelector('.emu-terminal');
       var termLines = terminal ? terminal.querySelectorAll('.emu-term-line') : [];
@@ -8069,9 +8121,9 @@ _HTML_JS = """
           });
         })();
 
-        // Step 2 — typewrite the narrative; everything else chains off the callback
+        // Step 2 — reveal narrative sentence-by-sentence; everything else chains off the callback
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
-        typewriteNarrative(narrativeEl, CHAR_DELAY, function () {
+        revealBySentence(narrativeEl, function () {
 
           // Step 3 — source actor charges up (subtle glow before packet)
           safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
