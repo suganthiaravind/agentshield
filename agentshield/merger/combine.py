@@ -1193,6 +1193,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{_html_escape(outcome)}</span>'
             f'{defence_chip}'
             f'</div>'
+            f'<div class="emu-scene-body">'
             f'{ap_card_html}'
             f'{payload_callout_html}'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
@@ -1258,7 +1259,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             parts.append(
                 f'<div class="emu-scene-behavior">{citations}</div>'
             )
-        parts.append('</div>')  # /emu-scene
+        parts.append('</div></div>')  # /emu-scene-body /emu-scene
     parts.append('</div>')  # /emu-trace-steps
 
     # Streaming terminal log.
@@ -1326,34 +1327,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         len(emu_trace), f"verdict-{emu_verdict}", "VERDICT",
         f"{verdict_label}{conf_pct}",
     ))
-    parts.append(
-        '<div class="emu-terminal">'
-        '<div class="emu-terminal-header">'
-        '<span class="emu-terminal-light emu-terminal-light-r"></span>'
-        '<span class="emu-terminal-light emu-terminal-light-y"></span>'
-        '<span class="emu-terminal-light emu-terminal-light-g"></span>'
-        '<span class="emu-terminal-title">'
-        'agentshield-emulator — role-play log'
-        '</span>'
-        '</div>'
-        '<div class="emu-terminal-body">'
-    )
-    for li, (scene_i, lvl_cls, prefix, msg) in enumerate(terminal_lines):
-        t_sec = max(0, scene_i) * 2 + (
-            0 if prefix in ("INFO", "SCENE") else 1
-        )
-        ts = f"00:00:{t_sec:02d}"
-        early = ' data-early="1"' if prefix in ("INFO", "SCENE", "PAYLOAD") else ""
-        parts.append(
-            f'<div class="emu-term-line '
-            f'emu-term-line-{_html_escape(lvl_cls)}" '
-            f'data-scene="{scene_i}"{early}>'
-            f'<span class="emu-term-ts">[{ts}]</span> '
-            f'<span class="emu-term-prefix">{prefix}</span> '
-            f'<span class="emu-term-msg">{_html_escape(msg)}</span>'
-            f'</div>'
-        )
-    parts.append('</div></div>')  # /emu-terminal-body /emu-terminal
+    # Terminal HTML rendering removed — accordion layout replaces the terminal.
+    # terminal_lines list kept above for potential future use.
 
     banner_label = {
         "lands": "ATTACK LANDS — predicted",
@@ -6410,12 +6385,12 @@ footer {
   70%  { transform: scale(0.93); }
   100% { transform: scale(1); }
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible .emu-scene-step-num {
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-active .emu-scene-step-num {
   animation: emu-badge-pop 400ms cubic-bezier(.34,1.56,.64,1);
 }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-advances .emu-scene-step-num { background: #dc2626; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-blocked  .emu-scene-step-num { background: #16a34a; }
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-visible.emu-scene-modified .emu-scene-step-num { background: #d97706; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-active.emu-scene-advances .emu-scene-step-num { background: #dc2626; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-active.emu-scene-blocked  .emu-scene-step-num { background: #16a34a; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-active.emu-scene-modified .emu-scene-step-num { background: #d97706; }
 .emu-scene-step-label {
   font-weight: 700; color: #0f172a; font-size: 12px;
   flex: 1 1 auto;
@@ -6650,20 +6625,40 @@ footer {
   animation: emu-arrival-blink 1100ms 1800ms ease-out both;
 }
 
-/* Role-play animation — one scene at a time inline (mirrors dialog layout).
-   Non-active scenes are hidden; active scene slides in. Terminal stays below
-   and accumulates all lines across scenes. */
+/* Accordion — all scenes always visible; body collapses/expands */
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene {
-  display: none;
-}
-.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-visible {
   display: block;
-  animation: emu-scene-slide-in 320ms cubic-bezier(.25,.46,.45,.94);
+  opacity: 0.38;
+  transition: opacity 300ms ease;
 }
-/* Hide payload details + behavior text during animation — terminal carries the info */
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-active,
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-done {
+  opacity: 1;
+}
+.emu-scene-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 480ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 300ms ease;
+  opacity: 0;
+}
+.emu-scene.emu-scene-active .emu-scene-body {
+  max-height: 900px;
+  opacity: 1;
+}
+/* Done scenes: show compact header with outcome-coloured left border */
+.emu-scene.emu-scene-done {
+  border-left: 3px solid transparent;
+  transition: border-color 250ms ease;
+}
+.emu-scene.emu-scene-done.emu-scene-advances { border-left-color: #dc2626; }
+.emu-scene.emu-scene-done.emu-scene-blocked  { border-left-color: #16a34a; }
+.emu-scene.emu-scene-done.emu-scene-modified { border-left-color: #d97706; }
+.emu-scene.emu-scene-done.emu-scene-absent_step { border-left-color: #94a3b8; }
+/* Show payload details in accordion (terminal is gone) */
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-payload-details,
 .emu-trace.emu-trace-playing .emu-scene .emu-scene-behavior {
-  display: none;
+  display: block;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-source-pulsing
   .emu-actor-src {
@@ -7895,7 +7890,7 @@ _HTML_JS = """
     function resetTrace(trace) {
       trace.classList.remove('emu-trace-playing');
       trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
-        s.classList.remove('emu-scene-visible',
+        s.classList.remove('emu-scene-active', 'emu-scene-done',
                            'emu-scene-packet-flying', 'emu-scene-charge-ready');
         var pd = s.querySelector('.emu-scene-payload-details');
         if (pd) pd.removeAttribute('open');
@@ -8029,9 +8024,9 @@ _HTML_JS = """
         if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
         if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
 
-        // Activate this scene (dim others via CSS)
-        scenes.forEach(function (s) { s.classList.remove('emu-scene-visible'); });
-        scene.classList.add('emu-scene-visible');
+        // Accordion: expand this scene, keep done scenes visible
+        scenes.forEach(function (s) { s.classList.remove('emu-scene-active'); });
+        scene.classList.add('emu-scene-active');
 
         // Scene 0 only: show attack-plan card ALONE first.
         // Hide normal step content via inline style (beats any CSS specificity),
@@ -8114,7 +8109,11 @@ _HTML_JS = """
           // Step 5 — advance to next scene or show final banner
           var afterScene = POST_TYPE_PAUSE + PACKET_DURATION + SCENE_READ_PAUSE;
           if (idx < scenes.length - 1) {
-            safeTimeout(function () { runScene(idx + 1); }, afterScene);
+            safeTimeout(function () {
+              scene.classList.remove('emu-scene-active');
+              scene.classList.add('emu-scene-done');
+              safeTimeout(function () { runScene(idx + 1); }, 380);
+            }, afterScene);
           } else {
             safeTimeout(function () {
               if (finalBanner) finalBanner.classList.add('emu-trace-final-visible');
@@ -8149,7 +8148,7 @@ _HTML_JS = """
             clearAllTimers();
             var lastVisible = 0;
             trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, i) {
-              if (s.classList.contains('emu-scene-visible')) lastVisible = i;
+              if (s.classList.contains('emu-scene-active')) lastVisible = i;
             });
             pausedAtScene = lastVisible;
             pauseBtn.classList.add('is-paused');
