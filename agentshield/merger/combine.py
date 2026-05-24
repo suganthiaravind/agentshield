@@ -6908,15 +6908,18 @@ footer {
 /* Sentence-by-sentence narrative reveal */
 .emu-narrative-sentence {
   display: inline;
+  opacity: 1;
+  transition: opacity 350ms ease-out;
 }
-.emu-sentence-flash {
-  animation: emu-sentence-flash 420ms ease-out forwards;
+.emu-narrative-sentence.emu-sentence-hidden {
+  opacity: 0;
 }
-@keyframes emu-sentence-flash {
-  0%   { opacity: 0; }
-  25%  { opacity: 1; }
-  60%  { opacity: 0.25; }
-  100% { opacity: 1; }
+.emu-narrative-sentence.emu-sentence-fadein {
+  opacity: 1;
+}
+.emu-narrative-sentence.emu-sentence-dim {
+  opacity: 0.15;
+  transition: opacity 180ms ease-in-out;
 }
 .emu-tw-cursor {
   display: inline-block;
@@ -7850,41 +7853,46 @@ _HTML_JS = """
       safeTimeout(tick, 0);
     }
 
-    // Reveal narrative text one sentence at a time — each sentence appears
-    // instantly, flashes once, then the next sentence appears.
+    // Reveal narrative text one sentence at a time.
+    // Each sentence: fades in → reading pause → blink → next sentence.
     function revealBySentence(el, onComplete) {
       if (!el) { if (onComplete) onComplete(); return; }
       var fullText = el.getAttribute('data-narrative') || el.textContent || '';
-      el.textContent = '';
+      el.innerHTML = '';
       if (!fullText) { if (onComplete) onComplete(); return; }
 
-      // Split on sentence-ending punctuation followed by a space or end-of-string.
-      // Keeps the punctuation attached to the preceding sentence.
       var raw = fullText.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [fullText];
       var sentences = raw.map(function (s) { return s.replace(/\s+$/, ''); })
                          .filter(function (s) { return s.length > 0; });
       if (sentences.length === 0) { if (onComplete) onComplete(); return; }
 
-      var FLASH_MS   = 420;  // how long the flash animation runs
-      var INTER_MS   = 260;  // pause between flash end and next sentence
+      var FADEIN_MS  = 350;  // fade-in duration per sentence
+      var READ_MS    = 550;  // reading pause after fade-in completes
+      var BLINK_DIM  = 180;  // time dimmed during blink
+      var BLINK_REC  = 180;  // recovery after blink before next sentence
 
       var idx = 0;
       function showNext() {
         if (idx >= sentences.length) { if (onComplete) onComplete(); return; }
         var span = document.createElement('span');
-        span.className = 'emu-narrative-sentence';
-        // Add a space between sentences except before the first
+        span.className = 'emu-narrative-sentence emu-sentence-hidden';
         if (idx > 0) span.textContent = ' ' + sentences[idx];
         else         span.textContent = sentences[idx];
         el.appendChild(span);
+        var i = idx;
         idx++;
-        // Trigger flash animation by forcing reflow then adding the class
+        // Force reflow so the hidden state is committed before we remove it
         void span.offsetWidth;
-        span.classList.add('emu-sentence-flash');
+        span.classList.remove('emu-sentence-hidden');
+        span.classList.add('emu-sentence-fadein');
+        // After fade-in + reading time, do one blink then next sentence
         safeTimeout(function () {
-          span.classList.remove('emu-sentence-flash');
-          safeTimeout(showNext, INTER_MS);
-        }, FLASH_MS);
+          span.classList.add('emu-sentence-dim');
+          safeTimeout(function () {
+            span.classList.remove('emu-sentence-dim');
+            safeTimeout(showNext, BLINK_REC);
+          }, BLINK_DIM);
+        }, FADEIN_MS + READ_MS);
       }
       showNext();
     }
