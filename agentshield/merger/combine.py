@@ -6248,8 +6248,27 @@ footer {
   from { opacity: 0; transform: translateY(-5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Hide all normal scene content while attack plan is showing alone */
+.emu-scene.emu-scene-plan-only .emu-scene-narrative,
+.emu-scene.emu-scene-plan-only .emu-scene-actors,
+.emu-scene.emu-scene-plan-only .emu-scene-payload-callout,
+.emu-scene.emu-scene-plan-only .emu-scene-payload-details,
+.emu-scene.emu-scene-plan-only .emu-scene-behavior {
+  display: none !important;
+}
+.emu-attack-plan-card.emu-ap-blink {
+  animation: emu-ap-blink 1.6s ease;
+}
+@keyframes emu-ap-blink {
+  0%   { opacity: 1; }
+  22%  { opacity: 0.15; }
+  44%  { opacity: 1; }
+  66%  { opacity: 0.15; }
+  88%  { opacity: 1; }
+  100% { opacity: 1; }
+}
 .emu-attack-plan-card.emu-ap-fadeout {
-  animation: emu-ap-fadeout 0.35s ease forwards;
+  animation: emu-ap-fadeout 0.38s ease forwards;
 }
 @keyframes emu-ap-fadeout {
   from { opacity: 1; transform: translateY(0); }
@@ -8039,9 +8058,11 @@ _HTML_JS = """
       var apCard = trace.querySelector('.emu-scene .emu-attack-plan-card');
       if (apCard) {
         apCard.style.display = 'none';
-        apCard.classList.remove('emu-ap-fadeout');
+        apCard.classList.remove('emu-ap-fadeout', 'emu-ap-blink');
         var apText = apCard.querySelector('.emu-ap-text');
         if (apText) apText.textContent = '';
+        var s0 = apCard.closest('.emu-scene');
+        if (s0) s0.classList.remove('emu-scene-plan-only');
       }
     }
 
@@ -8143,34 +8164,43 @@ _HTML_JS = """
         if (progressLabel) progressLabel.textContent = 'Step ' + (idx + 1) + ' of ' + scenes.length;
         if (progressFill) progressFill.style.width = (((idx + 1) / scenes.length) * 100) + '%';
 
-        // Activate this scene (dim others via CSS); terminal lines accumulate inline
+        // Activate this scene (dim others via CSS)
         scenes.forEach(function (s) { s.classList.remove('emu-scene-visible'); });
         scene.classList.add('emu-scene-visible');
 
-        // Open payload box immediately
-        var pdNow = scene.querySelector('.emu-scene-payload-details');
-        if (pdNow) pdNow.setAttribute('open', '');
-
-        // For scene 0: show the attack-plan card inside the scene first,
-        // typewrite it, then fade it out before the normal scene content plays.
+        // Scene 0 only: show attack-plan card ALONE first (all normal step
+        // content hidden via emu-scene-plan-only), typewrite it, blink 2×,
+        // fade out, then reveal normal content and continue.
         if (idx === 0) {
           var apCard = scene.querySelector('.emu-attack-plan-card');
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
+            scene.classList.add('emu-scene-plan-only');
             apCard.style.display = '';
             typewriteNarrative(apText, CHAR_DELAY, function () {
+              // Blink 2× slowly after typewrite finishes
+              apCard.classList.add('emu-ap-blink');
               safeTimeout(function () {
+                apCard.classList.remove('emu-ap-blink');
                 apCard.classList.add('emu-ap-fadeout');
                 safeTimeout(function () {
                   apCard.style.display = 'none';
                   apCard.classList.remove('emu-ap-fadeout');
+                  scene.classList.remove('emu-scene-plan-only');
+                  // Open payload box now that normal content is revealed
+                  var pdNow = scene.querySelector('.emu-scene-payload-details');
+                  if (pdNow) pdNow.setAttribute('open', '');
                   runSceneContent(idx, scene);
-                }, 350);
-              }, 800);
+                }, 380);
+              }, 1600); // blink duration
             });
             return;
           }
         }
+
+        // All other scenes: open payload box immediately
+        var pdNow = scene.querySelector('.emu-scene-payload-details');
+        if (pdNow) pdNow.setAttribute('open', '');
         runSceneContent(idx, scene);
       }
 
