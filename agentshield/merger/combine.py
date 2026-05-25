@@ -128,6 +128,7 @@ class MergeResult:
     tier2_present: bool  # False if .agentshield/tier2-findings.json is missing
     fingerprint_match: bool  # True only if Tier 2 present AND fingerprint matches
     schema_errors: list[SchemaError]  # populated only if Tier 2 was present but invalid
+    target_root: Path | None = None
 
     @property
     def stale(self) -> bool:
@@ -328,6 +329,7 @@ def merge(target_root: Path) -> MergeResult:
         tier2_present=tier2_present,
         fingerprint_match=fingerprint_match,
         schema_errors=schema_errors,
+        target_root=target_root,
     )
 
 
@@ -3566,6 +3568,67 @@ h3 { font-size: 15px; }
   border-radius: 0 4px 4px 0;
   font-size: 12px;
   line-height: 1.5;
+}
+/* Static scan mini code panel — dark code viewer with scanning beam */
+.static-scan-panel {
+  margin: 10px 0 4px;
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  border: 1px solid #1e293b;
+}
+.ssp-header {
+  display: flex; align-items: center; gap: 6px;
+  background: #1e293b; padding: 5px 10px;
+  border-bottom: 1px solid #0f172a;
+}
+.ssp-filename { color: #94a3b8; font-weight: 600; font-size: 11px; }
+.ssp-linelabel { color: #64748b; font-size: 10px; }
+.ssp-badge {
+  margin-left: auto;
+  background: #0f172a; color: #f97316;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 1px 6px; border-radius: 3px;
+  border: 1px solid #f97316;
+}
+.ssp-body {
+  position: relative;
+  background: #0f172a;
+  padding: 6px 0;
+  overflow: hidden;
+}
+.ssp-line, .ssp-line-hit {
+  display: flex; align-items: baseline;
+  padding: 1px 10px; gap: 8px; line-height: 1.6;
+}
+.ssp-lnum { color: #475569; min-width: 24px; text-align: right; user-select: none; flex-shrink: 0; }
+.ssp-code { color: #cbd5e1; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.ssp-line-hit {
+  background: rgba(239, 68, 68, 0.15);
+  border-left: 2px solid #ef4444;
+  padding-left: 8px;
+}
+.ssp-line-hit .ssp-lnum { color: #f87171; }
+.ssp-line-hit .ssp-code { color: #fca5a5; }
+/* Scanning beam — sweeps top→bottom then settles on the hit line */
+.ssp-beam {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #f97316 40%, #fbbf24 60%, transparent);
+  opacity: 0;
+  top: 0;
+  animation: ssp-scan 1.4s 0.3s ease-in-out forwards;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes ssp-scan {
+  0%   { top: 0%;   opacity: 0; }
+  10%  { opacity: 0.9; }
+  80%  { top: 72%;  opacity: 0.9; }
+  90%  { top: 72%;  opacity: 0.5; }
+  100% { top: 72%;  opacity: 0; }
 }
 /* Path B+: inline probe-state badge inside the <summary>, visible
    while the attack-scenario is collapsed. Three variants mirror the
@@ -8998,6 +9061,56 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     parts.append("</div>")
 
 
+def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
+    """Build a dark code panel for a static finding — shows the vulnerable
+    line with surrounding context + a CSS scanning-beam animation."""
+    if target_root is None:
+        return ""
+    file_rel = (f.get("file") or "").strip()
+    line_num = int(f.get("line") or 0)
+    if not file_rel or line_num <= 0:
+        return ""
+    # file_rel may be e.g. "testbed/demo-agent/controller.py" — try relative
+    # to the project root first, then fall back to target_root-relative.
+    candidates = [Path(file_rel), target_root / file_rel, target_root / Path(file_rel).name]
+    src_path = next((p for p in candidates if p.exists()), None)
+    if src_path is None:
+        return ""
+    try:
+        all_lines = src_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    ctx = 3
+    disp_start = max(1, line_num - ctx)
+    disp_end = min(len(all_lines), line_num + ctx)
+    filename = Path(file_rel).name
+    rows = []
+    for i in range(disp_start, disp_end + 1):
+        code = _html_escape(all_lines[i - 1])
+        is_hit = (i == line_num)
+        hit_cls = ' class="ssp-line-hit"' if is_hit else ' class="ssp-line"'
+        rows.append(
+            f'<div{hit_cls}>'
+            f'<span class="ssp-lnum">{i}</span>'
+            f'<span class="ssp-code">{code}</span>'
+            f'</div>'
+        )
+    rows_html = "\n".join(rows)
+    return (
+        f'<div class="static-scan-panel">'
+        f'<div class="ssp-header">'
+        f'<span class="ssp-filename">{_html_escape(filename)}</span>'
+        f'<span class="ssp-linelabel">:{line_num}</span>'
+        f'<span class="ssp-badge">STATIC SCAN</span>'
+        f'</div>'
+        f'<div class="ssp-body">'
+        f'<div class="ssp-beam"></div>'
+        f'{rows_html}'
+        f'</div>'
+        f'</div>'
+    )
+
+
 def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     """Standalone HTML report — single file, embedded CSS, no external deps.
 
@@ -10678,11 +10791,15 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'</div>'
                         )
                     else:
-                        parts.append(
-                            '<div class="attack-disclaimer attack-disclaimer-static">'
-                            '&#8505; Static-only finding'
-                            '</div>'
-                        )
+                        _panel = _static_scan_code_panel(result.target_root, f)
+                        if _panel:
+                            parts.append(_panel)
+                        else:
+                            parts.append(
+                                '<div class="attack-disclaimer attack-disclaimer-static">'
+                                '&#8505; Static-only finding'
+                                '</div>'
+                            )
                     parts.append('</div>')  # /attack-body
                     parts.append('</details>')
                 elif not is_discovered:
@@ -10702,12 +10819,12 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         or "static rule"
                     )
                     open_attr = " open" if static else ""
+                    _ncp = _static_scan_code_panel(result.target_root, f)
                     parts.append(
                         f'<details class="finding-attack-scenario"{open_attr}>'
                         f'<summary><span class="attack-icon" aria-hidden="true">'
                         f'&#9888;</span> Attack scenario '
-                        f'<span class="attack-probe-badge '
-                        f'attack-probe-badge-static" '
+                        f'<span class="attack-probe-badge attack-probe-badge-static" '
                         f'title="Static analysis only — no runtime probe '
                         f'attached for this rule">[ Static scan ]</span> '
                         f'&mdash; {_html_escape(str(rule_short))} '
@@ -10716,15 +10833,15 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f':{_html_escape(str(f.get("line") or 0))}</code>'
                         f'</summary>'
                         f'<div class="attack-body">'
-                        f'<div class="attack-disclaimer '
-                        f'attack-disclaimer-static">'
-                        f'&#8505; Static-only finding &mdash; no runtime '
-                        f'probe attached for this rule. The finding above '
-                        f'comes from static analysis; no curated attack '
-                        f'walkthrough exists for this rule_id yet. The '
-                        f'framework chips on the card describe the threat '
-                        f'model this rule belongs to.'
-                        f'</div></div></details>'
+                        + _ncp
+                        + (
+                            f'<div class="attack-disclaimer attack-disclaimer-static">'
+                            f'&#8505; No curated walkthrough for this rule yet — '
+                            f'see the framework chips above for threat model context.'
+                            f'</div>'
+                            if not _ncp else ''
+                        )
+                        + f'</div></details>'
                     )
                 parts.append("</div>")  # /finding-body
                 parts.append("</div>")  # /finding
