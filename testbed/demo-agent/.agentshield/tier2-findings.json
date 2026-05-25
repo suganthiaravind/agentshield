@@ -1,7 +1,7 @@
 {
   "tier": 2,
-  "scanned_at": "2026-05-21T02:32:52Z",
-  "agentshield_tier1_fingerprint": "4dbafa6d375673bc1ecf614aaccc72f1f813d89e367d2ea01020134ce6b6b12e",
+  "scanned_at": "2026-05-25T17:40:00Z",
+  "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "saige_tier": "2",
   "saige_tier_reasoning": "Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish \u2014 outbound notification) and tools.py:32 (POST to billing-api cancel endpoint \u2014 modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.",
   "scanned_files": [
