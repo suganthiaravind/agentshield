@@ -6093,7 +6093,7 @@ footer {
   display: none;  /* label removed — packet is identifiable by shape + motion */
 }
 
-/* Verdict banner — outcome-specific drama */
+/* Verdict banner keyframes — defined early, rules applied after base */
 @keyframes emu-final-pulse-red {
   0%   { box-shadow: 0 0 0 0   rgba(239,68,68,0.45); }
   60%  { box-shadow: 0 0 0 8px rgba(239,68,68,0);    }
@@ -6103,14 +6103,6 @@ footer {
   0%   { box-shadow: 0 0 0 0   rgba(22,163,74,0.4); }
   70%  { box-shadow: 0 0 0 8px rgba(22,163,74,0);   }
   100% { box-shadow: 0 0 0 0   rgba(22,163,74,0);   }
-}
-.emu-trace-final-lands.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out,
-             emu-final-pulse-red 900ms ease-in-out 300ms 3;
-}
-.emu-trace-final-blocked.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out,
-             emu-final-pulse-green 900ms ease-in-out 300ms 2;
 }
 
 /* ── Emulator modal overlay ────────────────────────────────────── */
@@ -6657,6 +6649,16 @@ footer {
 .emu-trace-final.emu-trace-final-visible {
   display: block;
   animation: emu-final-pop 350ms ease-out;
+}
+/* Outcome-specific overrides — must come AFTER the base rule above
+   so cascade order lets them win at equal specificity */
+.emu-trace-final-lands.emu-trace-final-visible {
+  animation: emu-final-pop 350ms ease-out,
+             emu-final-pulse-red 900ms ease-in-out 300ms 3;
+}
+.emu-trace-final-blocked.emu-trace-final-visible {
+  animation: emu-final-pop 350ms ease-out,
+             emu-final-pulse-green 900ms ease-in-out 300ms 2;
 }
 @keyframes emu-final-pop {
   0%   { opacity: 0; transform: scale(0.95); }
