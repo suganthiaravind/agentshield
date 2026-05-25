@@ -3384,15 +3384,12 @@ h3 { font-size: 15px; }
 /* Framework chips — colour-coded by standard */
 .finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .finding-tag {
-  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
-  background: #f1eee5; color: #5a5547; letter-spacing: 0.03em;
-  border: 1px solid transparent;
-  cursor: pointer;
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+  background: #f1f5f9; color: #475569;
+  border: 1px solid #e2e8f0;
+  letter-spacing: 0.03em; cursor: pointer;
 }
-.finding-tag[data-framework-key^="owasp_llm"]     { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-.finding-tag[data-framework-key^="owasp_agentic"] { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
-.finding-tag[data-framework-key^="mitre_atlas"]   { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
-.finding-tag[data-framework-key^="cwe"]           { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.finding-tag:hover { background: #e2e8f0; color: #1e293b; }
 .finding-snippet {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px; background: #f8fafc;
