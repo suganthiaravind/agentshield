@@ -1132,6 +1132,32 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         step_input = step.get("input") or ""
         step_behavior = step.get("predicted_behavior") or ""
         step_reasoning = step.get("outcome_reasoning") or ""
+        # Build inline code panel HTML (dark snippet shown in right column)
+        _snippet = step.get("code_snippet")
+        if _snippet and _snippet.get("lines"):
+            _line_ref = str(_snippet["hl_start"])
+            if _snippet["hl_end"] != _snippet["hl_start"]:
+                _line_ref += f'–{_snippet["hl_end"]}'
+            _lines_html = ""
+            for _ln in _snippet["lines"]:
+                _hl = ' emu-cp-line-hl' if _ln["highlight"] else ''
+                _lines_html += (
+                    f'<div class="emu-cp-line{_hl}">'
+                    f'<span class="emu-cp-ln">{_ln["num"]}</span>'
+                    f'<span class="emu-cp-code">{_html_escape(_ln["code"])}</span>'
+                    f'</div>'
+                )
+            _code_panel_html = (
+                f'<div class="emu-code-panel">'
+                f'<div class="emu-cp-header">'
+                f'<span class="emu-cp-filename">{_html_escape(_snippet["file"])}</span>'
+                f'<span class="emu-cp-lineref">:{_line_ref}</span>'
+                f'</div>'
+                f'<div class="emu-cp-body">{_lines_html}</div>'
+                f'</div>'
+            )
+        else:
+            _code_panel_html = ""
         src_tip = _actor_tooltip(src_lbl)
         dst_tip = _actor_tooltip(dst_lbl)
         src_title_attr = (
@@ -1223,6 +1249,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'</div>'
             f'<div class="emu-scene-body">'
             f'{payload_callout_html}'
+            f'<div class="emu-scene-content-row">'
+            f'<div class="emu-scene-main">'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
             f'<div class="emu-scene-actors">'
@@ -1244,6 +1272,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-actor-icon">{dst_icon}</span>'
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
+            f'</div>'
+            f'</div>'
+            f'{_code_panel_html}'
             f'</div>'
         )
         # Arrival stamp only on the final scene, using the overall scan verdict
@@ -1374,6 +1405,39 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     parts.append('</div>')  # /emu-trace
 
 
+def _load_code_snippet(source_dir: Path, code_ref: str, ctx: int = 3) -> dict | None:
+    """Read lines for a code_basis ref like 'controller.py:19-21'.
+
+    Returns a dict with file, highlight range, and displayable lines
+    (with ±ctx context lines). Returns None if the file is missing or
+    the ref can't be parsed.
+    """
+    import re as _re
+    m = _re.match(r'^(.+?):(\d+)(?:-(\d+))?$', code_ref.strip())
+    if not m:
+        return None
+    filename, s1, s2 = m.group(1), int(m.group(2)), m.group(3)
+    hl_start, hl_end = s1, (int(s2) if s2 else s1)
+    path = source_dir / filename
+    if not path.exists():
+        return None
+    try:
+        all_lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    disp_start = max(1, hl_start - ctx)
+    disp_end   = min(len(all_lines), hl_end + ctx)
+    lines = [
+        {
+            "num": i,
+            "code": all_lines[i - 1],
+            "highlight": hl_start <= i <= hl_end,
+        }
+        for i in range(disp_start, disp_end + 1)
+    ]
+    return {"file": filename, "hl_start": hl_start, "hl_end": hl_end, "lines": lines}
+
+
 def _load_agent_emulation(agentshield_dir: Path) -> dict:
     """Load `.agentshield/agent-emulation.json` if present.
 
@@ -1436,25 +1500,30 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
             conf = None
         # Per-step pipeline_trace: validate outcomes + carry through.
         trace_out: list[dict] = []
+        source_dir = agentshield_dir.parent
         for tstep in entry.get("pipeline_trace") or []:
             if not isinstance(tstep, dict):
                 continue
             outcome = tstep.get("outcome")
             if outcome not in _VALID_EMULATOR_OUTCOMES:
                 outcome = None
+            code_basis = [str(c) for c in (tstep.get("code_basis") or [])]
+            # Load first code ref as an inline snippet for the animation panel
+            code_snippet = None
+            if code_basis:
+                code_snippet = _load_code_snippet(source_dir, code_basis[0])
             trace_out.append({
                 "step": str(tstep.get("step") or ""),
                 "step_label": str(tstep.get("step_label") or ""),
                 "input": str(tstep.get("input") or ""),
                 "predicted_behavior": str(tstep.get("predicted_behavior") or ""),
-                "code_basis": [
-                    str(c) for c in (tstep.get("code_basis") or [])
-                ],
+                "code_basis": code_basis,
                 "defensive_control_present": bool(
                     tstep.get("defensive_control_present", False)
                 ),
                 "outcome": outcome,
                 "outcome_reasoning": str(tstep.get("outcome_reasoning") or ""),
+                "code_snippet": code_snippet,
             })
         traces_out.append({
             "attack_class": str(entry.get("attack_class") or ""),
@@ -6844,6 +6913,65 @@ footer {
   max-height: 900px;
   opacity: 1;
 }
+
+/* Code panel — dark snippet box, right column of scene body */
+.emu-scene-content-row {
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.emu-scene-main { flex: 1 1 0; min-width: 0; }
+.emu-code-panel {
+  flex: 0 0 260px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 350ms 400ms ease, transform 350ms 400ms ease;
+  overflow: hidden;
+}
+.emu-scene.emu-scene-active .emu-code-panel {
+  opacity: 1;
+  transform: translateX(0);
+}
+.emu-cp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 10px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 9.5px; color: #475569;
+}
+.emu-cp-filename { color: #94a3b8; font-weight: 600; }
+.emu-cp-lineref  { color: #334155; }
+.emu-cp-body { padding: 4px 0; }
+.emu-cp-line {
+  display: flex; gap: 0;
+  padding: 0 8px;
+  white-space: pre;
+}
+.emu-cp-line-hl {
+  background: rgba(239,68,68,0.18);
+  border-left: 2px solid #ef4444;
+  padding-left: 6px;
+}
+.emu-scene-blocked .emu-cp-line-hl {
+  background: rgba(22,163,74,0.15);
+  border-left-color: #22c55e;
+}
+.emu-scene-inconclusive .emu-cp-line-hl {
+  background: rgba(148,163,184,0.12);
+  border-left-color: #64748b;
+}
+.emu-cp-ln {
+  min-width: 24px; text-align: right;
+  color: #334155; font-size: 9px;
+  padding-right: 8px; user-select: none;
+}
+.emu-cp-code { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
+.emu-cp-line-hl .emu-cp-code { color: #fca5a5; }
+.emu-scene-blocked     .emu-cp-line-hl .emu-cp-code { color: #86efac; }
+.emu-scene-inconclusive .emu-cp-line-hl .emu-cp-code { color: #94a3b8; }
 /* Done scenes: show compact header with outcome-coloured left border */
 .emu-scene.emu-scene-done {
   border-left: 3px solid transparent;
