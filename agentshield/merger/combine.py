@@ -12224,6 +12224,7 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
+    _render_solution_diagram(parts)
     _render_design_basis(parts)
     _render_how_it_works(parts)
     if report is not None and report.probe_campaigns:
