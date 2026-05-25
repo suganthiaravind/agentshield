@@ -9102,16 +9102,14 @@ _HTML_JS = """
     });
   });
 
-  // On open: restart static-scan animations + scroll the panel into view
-  // so the summary banner sits near the top and the full code block is visible.
+  // On open: scroll immediately, then start static-scan animations after a
+  // short pause so the beam fires once the panel is fully settled.
   document.querySelectorAll('details.finding-attack-scenario').forEach(function(det) {
     det.addEventListener('toggle', function() {
       if (!det.open) return;
-      // Reset CSS animations so beam + label replay on every open.
+      // Freeze animations while the panel expands so they don't race the open.
       det.querySelectorAll('.ssp-beam, .ssp-issue-label').forEach(function(el) {
         el.style.animation = 'none';
-        void el.offsetWidth; // force reflow
-        el.style.animation = '';
       });
       // Scroll so the "Attack scenario" summary banner sits just below
       // the sticky filter+tab bar — same pattern as the emulator scroll.
@@ -9124,6 +9122,14 @@ _HTML_JS = """
           behavior: 'smooth'
         });
       });
+      // Start the scanning beam + label animations after the panel has settled.
+      setTimeout(function() {
+        if (!det.open) return;
+        det.querySelectorAll('.ssp-beam, .ssp-issue-label').forEach(function(el) {
+          void el.offsetWidth; // force reflow to restart animation
+          el.style.animation = '';
+        });
+      }, 800);
     });
   });
 
