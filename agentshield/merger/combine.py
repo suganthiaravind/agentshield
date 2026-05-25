@@ -3571,64 +3571,103 @@ h3 { font-size: 15px; }
 }
 /* Static scan mini code panel — dark code viewer with scanning beam */
 .static-scan-panel {
-  margin: 10px 0 4px;
-  border-radius: 6px;
+  margin: 12px 0 6px;
+  border-radius: 7px;
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   border: 1px solid #1e293b;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
 .ssp-header {
-  display: flex; align-items: center; gap: 6px;
-  background: #1e293b; padding: 5px 10px;
+  display: flex; align-items: center; gap: 5px;
+  background: #161f2e; padding: 5px 10px;
   border-bottom: 1px solid #0f172a;
 }
-.ssp-filename { color: #94a3b8; font-weight: 600; font-size: 11px; }
-.ssp-linelabel { color: #64748b; font-size: 10px; }
+.ssp-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #ef4444; flex-shrink: 0;
+  box-shadow: 0 0 5px rgba(239,68,68,0.6);
+}
+.ssp-filename { color: #e2e8f0; font-weight: 600; font-size: 11px; }
+.ssp-linelabel { color: #475569; font-size: 10px; }
 .ssp-badge {
   margin-left: auto;
-  background: #0f172a; color: #f97316;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  background: transparent; color: #f97316;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
   padding: 1px 6px; border-radius: 3px;
-  border: 1px solid #f97316;
+  border: 1px solid rgba(249,115,22,0.5);
 }
 .ssp-body {
   position: relative;
-  background: #0f172a;
-  padding: 6px 0;
+  background: #0d1117;
+  padding: 5px 0;
   overflow: hidden;
 }
 .ssp-line, .ssp-line-hit {
-  display: flex; align-items: baseline;
-  padding: 1px 10px; gap: 8px; line-height: 1.6;
+  display: flex; align-items: center;
+  padding: 0 8px 0 0; gap: 0; line-height: 1.75;
 }
-.ssp-lnum { color: #475569; min-width: 24px; text-align: right; user-select: none; flex-shrink: 0; }
-.ssp-code { color: #cbd5e1; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.ssp-marker {
+  width: 14px; flex-shrink: 0; text-align: center;
+  color: #ef4444; font-size: 9px; user-select: none;
+}
+.ssp-lnum {
+  color: #3d4f63; min-width: 26px; text-align: right;
+  user-select: none; flex-shrink: 0; padding-right: 12px;
+  font-size: 10px;
+}
+.ssp-code { color: #8b949e; white-space: pre; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ssp-line-hit {
-  background: rgba(239, 68, 68, 0.15);
+  background: linear-gradient(90deg, rgba(239,68,68,0.13) 0%, rgba(239,68,68,0.04) 100%);
   border-left: 2px solid #ef4444;
-  padding-left: 8px;
 }
 .ssp-line-hit .ssp-lnum { color: #f87171; }
 .ssp-line-hit .ssp-code { color: #fca5a5; }
-/* Scanning beam — sweeps top→bottom then settles on the hit line */
+/* "← issue here" label fades in after beam settles */
+.ssp-issue-label {
+  margin-left: 10px; flex-shrink: 0;
+  color: #ef4444; font-size: 9px; font-weight: 600;
+  letter-spacing: 0.06em; white-space: nowrap;
+  opacity: 0;
+  animation: ssp-label-in 0.35s 1.55s ease forwards;
+}
+@keyframes ssp-label-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Callout footer — shows the finding message */
+.ssp-callout {
+  display: flex; align-items: flex-start; gap: 7px;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  padding: 6px 10px 7px;
+}
+.ssp-callout-icon {
+  color: #f97316; font-size: 11px; flex-shrink: 0; margin-top: 1px;
+}
+.ssp-callout-text {
+  color: #64748b; font-size: 10.5px; line-height: 1.45;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  white-space: normal;
+}
+.ssp-callout-text strong { color: #94a3b8; font-weight: 600; }
+/* Scanning beam — sweeps top→bottom then fades */
 .ssp-beam {
   position: absolute;
-  left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #f97316 40%, #fbbf24 60%, transparent);
-  opacity: 0;
-  top: 0;
-  animation: ssp-scan 1.4s 0.3s ease-in-out forwards;
-  pointer-events: none;
-  z-index: 2;
+  left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #f97316 30%, #fbbf24 50%, #f97316 70%, transparent 100%);
+  opacity: 0; top: 0;
+  animation: ssp-scan 1.5s 0.2s ease-in-out forwards;
+  pointer-events: none; z-index: 2;
+  filter: blur(0.5px);
 }
 @keyframes ssp-scan {
-  0%   { top: 0%;   opacity: 0; }
-  10%  { opacity: 0.9; }
-  80%  { top: 72%;  opacity: 0.9; }
-  90%  { top: 72%;  opacity: 0.5; }
-  100% { top: 72%;  opacity: 0; }
+  0%   { top: 2%;  opacity: 0; }
+  8%   { opacity: 1; }
+  72%  { top: 58%; opacity: 1; }
+  86%  { top: 58%; opacity: 0.6; }
+  100% { top: 58%; opacity: 0; }
 }
 /* Path B+: inline probe-state badge inside the <summary>, visible
    while the attack-scenario is collapsed. Three variants mirror the
@@ -9062,16 +9101,14 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
 
 
 def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
-    """Build a dark code panel for a static finding — shows the vulnerable
-    line with surrounding context + a CSS scanning-beam animation."""
+    """Dark code panel for a static finding — vulnerable line highlighted,
+    scanning beam animation, ▶ gutter marker, and callout footer."""
     if target_root is None:
         return ""
     file_rel = (f.get("file") or "").strip()
     line_num = int(f.get("line") or 0)
     if not file_rel or line_num <= 0:
         return ""
-    # file_rel may be e.g. "testbed/demo-agent/controller.py" — try relative
-    # to the project root first, then fall back to target_root-relative.
     candidates = [Path(file_rel), target_root / file_rel, target_root / Path(file_rel).name]
     src_path = next((p for p in candidates if p.exists()), None)
     if src_path is None:
@@ -9087,18 +9124,41 @@ def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
     rows = []
     for i in range(disp_start, disp_end + 1):
         code = _html_escape(all_lines[i - 1])
-        is_hit = (i == line_num)
-        hit_cls = ' class="ssp-line-hit"' if is_hit else ' class="ssp-line"'
-        rows.append(
-            f'<div{hit_cls}>'
-            f'<span class="ssp-lnum">{i}</span>'
-            f'<span class="ssp-code">{code}</span>'
-            f'</div>'
-        )
+        if i == line_num:
+            rows.append(
+                f'<div class="ssp-line-hit">'
+                f'<span class="ssp-marker">&#9654;</span>'
+                f'<span class="ssp-lnum">{i}</span>'
+                f'<span class="ssp-code">{code}</span>'
+                f'<span class="ssp-issue-label">&#8592; vulnerability</span>'
+                f'</div>'
+            )
+        else:
+            rows.append(
+                f'<div class="ssp-line">'
+                f'<span class="ssp-marker"></span>'
+                f'<span class="ssp-lnum">{i}</span>'
+                f'<span class="ssp-code">{code}</span>'
+                f'</div>'
+            )
     rows_html = "\n".join(rows)
+    # Short callout message — first sentence of the finding message, max 120 chars
+    raw_msg = (f.get("message") or "").strip()
+    short_msg = raw_msg.split(".")[0].strip()
+    if len(short_msg) > 120:
+        short_msg = short_msg[:117] + "…"
+    callout_html = (
+        f'<div class="ssp-callout">'
+        f'<span class="ssp-callout-icon">&#9888;</span>'
+        f'<span class="ssp-callout-text">'
+        f'<strong>Gap identified:</strong> {_html_escape(short_msg)}'
+        f'</span>'
+        f'</div>'
+    ) if short_msg else ""
     return (
         f'<div class="static-scan-panel">'
         f'<div class="ssp-header">'
+        f'<span class="ssp-dot"></span>'
         f'<span class="ssp-filename">{_html_escape(filename)}</span>'
         f'<span class="ssp-linelabel">:{line_num}</span>'
         f'<span class="ssp-badge">STATIC SCAN</span>'
@@ -9107,6 +9167,7 @@ def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
         f'<div class="ssp-beam"></div>'
         f'{rows_html}'
         f'</div>'
+        f'{callout_html}'
         f'</div>'
     )
 
