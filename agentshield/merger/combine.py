@@ -12592,7 +12592,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'five industry security frameworks driving every AgentShield '
         'control. Below them, AgentShield in four parts: the target '
         'you&rsquo;re shipping &rarr; the static scan &rarr; the '
-        'simulated probe &rarr; the unified report.</p>'
+        'behaviour emulation &rarr; the unified report.</p>'
     )
     parts.append(
         '<div class="solution-diagram-wrap">'
@@ -12799,11 +12799,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="155" y="595" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="10" '
         'fill="#94a3b8" font-style="italic">'
-        '(optionally a live endpoint</text>'
-        '<text x="155" y="611" text-anchor="middle" '
-        'font-family="system-ui, sans-serif" font-size="10" '
-        'fill="#94a3b8" font-style="italic">'
-        'for the probe to reach)</text>'
+        'no live endpoint required</text>'
 
         # chevron 01 → 02
         '<path d="M 300 420 L 313 420" stroke="#cbd5e1" '
@@ -12878,14 +12874,12 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'stroke-width="2" fill="none" marker-end="url(#sd-chev)"/>'
 
         # =========================================================
-        # CHAPTER 03 — THE PROBE (orange accent, "OPTIONAL" tag)
+        # CHAPTER 03 — BEHAVIOUR EMULATION (orange accent)
         # =========================================================
         '<g filter="url(#sd-shadow)">'
         '<rect x="617" y="220" width="280" height="410" rx="14" '
         'fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>'
         '</g>'
-        # Dashed top stripe signals "optional" — same color
-        # vocabulary as the rest, the dash carries the meaning.
         '<rect x="617" y="220" width="280" height="6" '
         'fill="#f97316"/>'
 
@@ -12904,15 +12898,15 @@ def _render_solution_diagram(parts: list[str]) -> None:
 
         '<text x="757" y="402" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="18" '
-        'font-weight="700" fill="#0f172a">Simulated probe</text>'
+        'font-weight="700" fill="#0f172a">Behaviour emulation</text>'
         '<text x="757" y="425" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
         'fill="#64748b" font-style="italic">'
-        'fires attacks at the live</text>'
+        'emulates attacks offline &mdash;</text>'
         '<text x="757" y="442" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
         'fill="#64748b" font-style="italic">'
-        'agent &mdash; catches what static can&rsquo;t.</text>'
+        'catches what static can&rsquo;t.</text>'
 
         '<line x1="642" y1="470" x2="872" y2="470" '
         'stroke="#e2e8f0" stroke-width="1"/>'
@@ -12920,19 +12914,25 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="757" y="495" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'font-weight="700" fill="#94a3b8" letter-spacing="0.18em">'
-        'TWO MODES</text>'
+        'HOW IT WORKS</text>'
         '<text x="757" y="521" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
-        'font-weight="600" fill="#0f172a">Verify mode</text>'
+        'font-weight="600" fill="#0f172a">13 attack classes</text>'
         '<text x="757" y="537" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
-        'fill="#64748b">canned payloads vs static findings</text>'
-        '<text x="757" y="568" text-anchor="middle" '
+        'fill="#64748b">OWASP LLM / Agentic + MITRE ATLAS</text>'
+        '<text x="757" y="562" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
-        'font-weight="600" fill="#0f172a">Explore mode</text>'
-        '<text x="757" y="584" text-anchor="middle" '
+        'font-weight="600" fill="#0f172a">Seed &rarr; mutation escalation</text>'
+        '<text x="757" y="578" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
-        'fill="#64748b">LLM brainstorms target-specific attacks</text>'
+        'fill="#64748b">8 attempts per class &middot; 104 total</text>'
+        '<text x="757" y="603" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="12" '
+        'font-weight="600" fill="#0f172a">Copilot plays all 4 roles</text>'
+        '<text x="757" y="619" text-anchor="middle" '
+        'font-family="system-ui, sans-serif" font-size="9" '
+        'fill="#64748b">Planner · Attacker · Agent · Judge</text>'
 
         # chevron 03 → 04
         '<path d="M 902 420 L 915 420" stroke="#cbd5e1" '
