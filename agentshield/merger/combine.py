@@ -9022,15 +9022,22 @@ _HTML_JS = """
     });
   });
 
-  // Restart static-scan panel animations every time the attack-scenario
-  // <details> is opened — CSS animations only fire once on first render.
+  // On open: restart static-scan animations + scroll the panel into view
+  // so the summary banner sits near the top and the full code block is visible.
   document.querySelectorAll('details.finding-attack-scenario').forEach(function(det) {
     det.addEventListener('toggle', function() {
       if (!det.open) return;
+      // Reset CSS animations so beam + label replay on every open.
       det.querySelectorAll('.ssp-beam, .ssp-issue-label').forEach(function(el) {
         el.style.animation = 'none';
-        void el.offsetWidth; // force reflow so the browser resets the timeline
+        void el.offsetWidth; // force reflow
         el.style.animation = '';
+      });
+      // Scroll the summary into view with a small top offset so the sticky
+      // filter bar doesn't cover it and the full panel body is visible.
+      requestAnimationFrame(function() {
+        var top = det.getBoundingClientRect().top + window.scrollY - 72;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
       });
     });
   });
@@ -10657,7 +10664,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'<div class="attack-step">'
                         f'<span class="attack-step-num">1</span>'
                         f'<div class="attack-step-body">'
-                        f'<div class="attack-step-label">How the attacker acts</div>'
+                        f'<div class="attack-step-label">How the attacker can act</div>'
                         f'<pre class="attack-payload">'
                         f'{_html_escape(scenario.attacker_input)}'
                         f'</pre></div></div>'
