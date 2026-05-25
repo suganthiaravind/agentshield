@@ -1111,13 +1111,12 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             for c in code_basis if isinstance(c, str)
         )
         defence_present = step.get("defensive_control_present", False)
-        defence_chip = (
-            '<span class="emu-defence-flag '
-            'emu-defence-flag-yes">defence present</span>'
-            if defence_present else
-            '<span class="emu-defence-flag '
-            'emu-defence-flag-no">no defence here</span>'
-        )
+        if defence_present:
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-yes">defence present</span>'
+        elif outcome == "inconclusive":
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">not applicable</span>'
+        else:
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-no">no defence here</span>'
         # For indirect injection + memory poisoning, the attacker is inside
         # the external document, not at the chat interface — use the indirect
         # actor pair so the animation shows the right source.
@@ -6317,6 +6316,7 @@ footer {
 }
 .emu-defence-flag-yes { background: #d1fae5; color: #065f46; }
 .emu-defence-flag-no  { background: #fee2e2; color: #991b1b; }
+.emu-defence-flag-na  { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
 
 /* Behaviour-emulator header — Play button on the left, sits above
    the scene strip with breathing room. */
@@ -6653,6 +6653,24 @@ footer {
   animation: emu-gate-barrier 900ms 1200ms ease-out both;
 }
 
+/* Inconclusive: muted grey pulse — step not applicable, no threat */
+@keyframes emu-gate-muted {
+  0%   { background: #cbd5e1; box-shadow: none;
+         top: -14px; bottom: -14px; width: 5px; }
+  12%  { background: #94a3b8;
+         box-shadow: 0 0 0 4px rgba(148,163,184,0.35),
+                     0 0 12px rgba(148,163,184,0.20);
+         top: -17px; bottom: -17px; width: 5px; }
+  100% { background: #e2e8f0; box-shadow: none;
+         top: -14px; bottom: -14px; width: 5px; }
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-gate-1 {
+  animation: emu-gate-muted 600ms 560ms ease-out both;
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-gate-2 {
+  animation: emu-gate-muted 600ms 1120ms ease-out both;
+}
+
 .emu-packet {
   position: absolute;
   left: 0; top: 50%;
@@ -6675,6 +6693,11 @@ footer {
   background: #d97706;
   box-shadow: 0 0 0 3px rgba(217,119,6,0.35),
               0 0 12px rgba(217,119,6,0.55);
+}
+.emu-scene-inconclusive .emu-packet {
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148,163,184,0.25),
+              0 0 8px rgba(148,163,184,0.30);
 }
 
 /* Collapsible payload — closed by default, single-line preview */
@@ -6881,6 +6904,8 @@ footer {
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::before { background: #7c2d12; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-modified.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #7c2d12; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-arrow-line::before { background: #94a3b8; }
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-arrow-line::after  { border-left-color: #94a3b8; }
 
 /* Destination impact: shockwave rings burst outward — attack crashes through */
 @keyframes emu-impact-ring {
@@ -6897,6 +6922,17 @@ footer {
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-actor-dst {
   animation: emu-impact-ring 900ms 1520ms ease-out both;
+}
+/* Inconclusive: suppress red impact ring, use a soft grey touch instead */
+@keyframes emu-touch-ring {
+  0%   { box-shadow: none; transform: scale(1); }
+  30%  { box-shadow: 0 0 0 8px rgba(148,163,184,0.20),
+                     0 0 0 18px rgba(148,163,184,0.08);
+         transform: scale(1.04); }
+  100% { box-shadow: none; transform: scale(1); }
+}
+.emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-actor-dst {
+  animation: emu-touch-ring 600ms 1520ms ease-out both;
 }
 
 /* ── BLOCKED: packet hits a barrier at ~60 % of the arrow ────────────────── */
