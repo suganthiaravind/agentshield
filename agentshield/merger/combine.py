@@ -3502,7 +3502,6 @@ h3 { font-size: 15px; }
   border-radius: 8px;
   background: #fdf8f2;
   overflow: hidden;
-  scroll-margin-top: 68px;
 }
 .finding-attack-scenario > summary {
   cursor: pointer; user-select: none;
@@ -9034,10 +9033,16 @@ _HTML_JS = """
         void el.offsetWidth; // force reflow
         el.style.animation = '';
       });
-      // Scroll so the "Attack scenario" summary banner is at the top.
-      // scroll-margin-top on the element handles the sticky bar offset.
+      // Scroll so the "Attack scenario" summary banner sits just below
+      // the sticky filter+tab bar — same pattern as the emulator scroll.
       requestAnimationFrame(function() {
-        det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var stickyEl = document.querySelector('.filter-tabnav-sticky');
+        var stickyH  = stickyEl ? stickyEl.getBoundingClientRect().bottom : 80;
+        var rect = det.getBoundingClientRect();
+        window.scrollTo({
+          top: Math.max(0, window.pageYOffset + rect.top - stickyH - 8),
+          behavior: 'smooth'
+        });
       });
     });
   });
