@@ -7852,7 +7852,7 @@ footer {
   color: #374151;
   margin: 8px 0;
 }
-/* ── Stage 3 inline collapsible: Reading your results ── */
+/* ── Stage 3 inline collapsible: Behaviour emulator guide ── */
 .emu-stage3-results {
   margin: 18px 0 4px;
   border: 1px solid #d1d5db;
@@ -13945,12 +13945,12 @@ def _render_how_it_works(parts: list[str]) -> None:
 
         '</ol>'
     )
-    # Collapsible 'Reading your results' sub-section inside Stage 3
+    # Collapsible 'Behaviour emulator guide' sub-section inside Stage 3
     parts.append(
         '<details class="emu-stage3-results">'
         '<summary class="emu-stage3-results-summary">'
         '<span class="emu-stage3-chevron">&#9658;</span>'
-        'Reading your results'
+        'Behaviour emulator guide'
         '</summary>'
         '<div class="emu-stage3-results-body">'
     )
