@@ -14519,21 +14519,6 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '</tbody></table>'
     )
 
-    # Closing callout box
-    parts.append(
-        '<div class="emu-ref-design-callout">'
-        '<div class="emu-ref-design-callout-title">&#9654; Reading emulator results as a design checklist</div>'
-        '<p>After a scan, go to the <strong>Coverage tab &rarr; Behaviour Emulator</strong> '
-        'and filter for <em>attack landed</em> and <em>partially blocked</em> verdicts. '
-        'For each one, open the attack scenario and read the <strong>step trace</strong>: '
-        'the first step that shows <em>no defence</em> is where the control is missing. '
-        'Cross-reference with the table above to pick the right control for that step. '
-        'Add the control, commit, re-run the Tier 1 scan to refresh the fingerprint, '
-        'then re-run the emulator. A well-defended agent shows <em>attack blocked</em> '
-        'or <em>inconclusive</em> on every class.</p>'
-        '</div>'
-    )
-
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /how-it-works emu-ref-section
