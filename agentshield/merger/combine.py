@@ -3502,6 +3502,7 @@ h3 { font-size: 15px; }
   border-radius: 8px;
   background: #fdf8f2;
   overflow: hidden;
+  scroll-margin-top: 68px;
 }
 .finding-attack-scenario > summary {
   cursor: pointer; user-select: none;
@@ -9033,11 +9034,10 @@ _HTML_JS = """
         void el.offsetWidth; // force reflow
         el.style.animation = '';
       });
-      // Scroll the summary into view with a small top offset so the sticky
-      // filter bar doesn't cover it and the full panel body is visible.
+      // Scroll so the "Attack scenario" summary banner is at the top.
+      // scroll-margin-top on the element handles the sticky bar offset.
       requestAnimationFrame(function() {
-        var top = det.getBoundingClientRect().top + window.scrollY - 72;
-        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        det.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
   });
