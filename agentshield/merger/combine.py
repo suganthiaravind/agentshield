@@ -14203,60 +14203,6 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '</tbody></table>'
     )
 
-    # ── Section D: How to read the animation ────────────────────────────────
-    parts.append('<h4 class="emu-ref-h">D &mdash; How to read the emulator animation</h4>')
-    parts.append(
-        '<p class="emu-ref-note">Click <strong>Play</strong> on any emulator card '
-        '(Coverage tab &rarr; Behaviour Emulator) to step through the attack '
-        'scene by scene. Each element of the animation has a specific meaning:</p>'
-    )
-    parts.append('<div class="emu-ref-anim-list">')
-    anim_rows = [
-        ("Attack Plan card",
-         "Blue banner typewriting the guiding question for the attack class. "
-         "Holds briefly then fades out before scene 1 — no pipeline step "
-         "is highlighted during this intro."),
-        ("Pipeline breadcrumb",
-         "Strip of 8 step chips above the accordion. The chip for the "
-         "currently-playing step turns blue; steps not targeted by this "
-         "attack class are skipped."),
-        ("Scene accordion rows",
-         "One collapsible row per targeted pipeline step. The active row expands "
-         "to show source + destination actors and the animated packet; done rows "
-         "collapse with a red border (advances) or green border (blocked)."),
-        ("Gate animations",
-         "Two gate markers at 33 % and 67 % of the arrow. Blocked: second gate "
-         "closes into a thick barrier and the packet reverses. Advances: both "
-         "gates flash open and the packet flies through."),
-        ("Destination actor reactions",
-         "Advances &rarr; red shockwave ring pulses around the destination box "
-         "(attack landed). Blocked &rarr; green concentric rings pulse "
-         "(defence held)."),
-        ("LLM thinking dots",
-         "Three blue bouncing dots appear in the source actor box for ~1.4 s "
-         "before the packet fires on a Planner step — signalling "
-         "LLM deliberation."),
-        ("Terminal log",
-         "Black scrolling box below the accordion streaming PAYLOAD, READ "
-         "(code citations), PREDICT (predicted behaviour), OUTCOME "
-         "(advances / blocked + defence present)."),
-        ("Final verdict banner",
-         "Coloured banner after the last scene — red (attack landed), "
-         "amber (partially blocked), green (attack blocked), blue (inconclusive). "
-         "Click <strong>Replay</strong> to rewatch."),
-    ]
-    for i, (title, desc) in enumerate(anim_rows, 1):
-        parts.append(
-            f'<div class="emu-ref-anim-row">'
-            f'<div class="emu-ref-anim-key">'
-            f'<span class="emu-ref-anim-n">{i:02d}</span>'
-            f'<span class="emu-ref-anim-title">{title}</span>'
-            f'</div>'
-            f'<div class="emu-ref-anim-desc">{desc}</div>'
-            f'</div>'
-        )
-    parts.append('</div>')  # /emu-ref-anim-list
-
     # ── Section E: Seed → mutation escalation ──────────────────────────────
     parts.append('<h4 class="emu-ref-h">E &mdash; Seed &rarr; mutation escalation</h4>')
     parts.append(
