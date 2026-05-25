@@ -13911,20 +13911,6 @@ def _render_how_it_works(parts: list[str]) -> None:
 
         '</ol>'
 
-        # Summary box
-        '<div class="emu-ref-design-callout" style="margin-top:16px">'
-        '<div class="emu-ref-design-callout-title">One linear sequence per attack class</div>'
-        '<p>For each of the 13 attack classes, the emulator runs a single, '
-        'ordered sequence: <strong>Seed 1 &rarr; Seed 2 &rarr; Seed 3 &rarr; '
-        'Mutation 1 &rarr; &hellip; &rarr; Mutation 5</strong>. '
-        'It stops at the first payload that lands. '
-        'If all 8 are blocked, it records <code>blocked-all</code>. '
-        'The Play animation walks through <strong>every payload that was tried</strong>, '
-        'in order — each scene shows one payload firing through the targeted '
-        'pipeline steps so you can see exactly where each attempt advanced '
-        'and where a defence stopped it.</p>'
-        '</div>'
-
         '</div>'  # /3A sub-box
 
         '</div>'  # /how-stage-body
