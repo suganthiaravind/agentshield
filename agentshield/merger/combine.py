@@ -1114,7 +1114,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         if defence_present:
             defence_chip = '<span class="emu-defence-flag emu-defence-flag-yes">defence present</span>'
         elif outcome == "inconclusive":
-            defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">not applicable</span>'
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">no attack surface</span>'
         else:
             defence_chip = '<span class="emu-defence-flag emu-defence-flag-no">no defence here</span>'
         # For indirect injection + memory poisoning, the attacker is inside
@@ -1280,8 +1280,8 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'{_code_panel_html}'
             f'</div>'
         )
-        # Arrival stamp only on the final scene, using the overall scan verdict
-        if scene_idx == n_scenes - 1:
+        # Arrival stamp only on the final scene; skip for inconclusive (no attack surface — stamp would imply a reached verdict)
+        if scene_idx == n_scenes - 1 and emu_verdict != "inconclusive":
             stamp_text, stamp_cls = _VERDICT_STAMP.get(
                 emu_verdict, (emu_verdict, "neutral")
             )
