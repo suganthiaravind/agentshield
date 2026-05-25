@@ -1,10 +1,12 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-23T18:52:36.296540Z",
-  "agentshield_tier1_fingerprint": "4dbafa6d375673bc1ecf614aaccc72f1f813d89e367d2ea01020134ce6b6b12e",
+  "scanned_at": "2026-05-25T17:25:40.858384Z",
+  "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "scanned_files": [
     "config.py",
     "controller.py",
+    "guard/__init__.py",
+    "guard/input_filter.py",
     "memory.py",
     "notifications.py",
     "orchestrator.py",
@@ -52,7 +54,7 @@
       "category": "detect",
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
-      "line": 21,
+      "line": 26,
       "message": "User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).",
       "language": "python",
       "framework_mappings": {
@@ -80,7 +82,7 @@
       "category": "detect",
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
-      "line": 21,
+      "line": 26,
       "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
@@ -114,7 +116,7 @@
       "category": "detect",
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
-      "line": 34,
+      "line": 39,
       "message": "User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).",
       "language": "python",
       "framework_mappings": {
@@ -142,7 +144,7 @@
       "category": "detect",
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
-      "line": 34,
+      "line": 39,
       "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
