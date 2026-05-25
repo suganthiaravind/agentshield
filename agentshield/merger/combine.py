@@ -3498,9 +3498,9 @@ h3 { font-size: 15px; }
    being mistaken for an actual incident alert. */
 .finding-attack-scenario {
   margin-top: 10px;
-  border: 1px solid #e9c8a5;
+  border: 1px solid #e2d4c0;
   border-radius: 8px;
-  background: #fcf5ec;
+  background: #fdf8f2;
   overflow: hidden;
 }
 .finding-attack-scenario > summary {
@@ -3512,17 +3512,45 @@ h3 { font-size: 15px; }
 }
 .finding-attack-scenario > summary::marker,
 .finding-attack-scenario > summary::-webkit-details-marker { color: #b67a3a; }
-.finding-attack-scenario > summary:hover { background: #f7ebd8; }
+.finding-attack-scenario > summary:hover { background: #f7ede0; }
 .finding-attack-scenario .attack-icon {
   display: inline-block;
   font-size: 13px; color: #b86a1a;
   margin-right: 2px;
 }
 .finding-attack-scenario[open] > summary {
-  border-bottom: 1px solid #e9c8a5;
-  background: #f7ebd8;
+  border-bottom: 1px solid #e2d4c0;
+  background: #f7ede0;
 }
-.finding-attack-scenario .attack-body { padding: 10px 14px 12px; }
+/* Three-step numbered layout */
+.finding-attack-scenario .attack-body {
+  padding: 0;
+}
+.attack-step {
+  display: flex; gap: 11px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(226,212,192,0.6);
+  position: relative;
+}
+.attack-step:last-of-type { border-bottom: none; }
+.attack-step-num {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: #c2752a; color: #fff;
+  font-size: 9px; font-weight: 800; letter-spacing: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+  box-shadow: 0 1px 3px rgba(194,117,42,0.35);
+}
+.attack-step-body { flex: 1; min-width: 0; }
+.attack-step-label {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; color: #9a6428; margin-bottom: 4px;
+}
+.attack-step-text {
+  font-size: 12.5px; color: var(--text); line-height: 1.55;
+}
+/* Keep legacy .attack-section / .attack-label / .attack-text for the
+   simulation + probe sections that reuse those classes */
 .finding-attack-scenario .attack-section { margin-bottom: 10px; }
 .finding-attack-scenario .attack-section:last-of-type { margin-bottom: 6px; }
 .finding-attack-scenario .attack-label {
@@ -3536,11 +3564,11 @@ h3 { font-size: 15px; }
 .finding-attack-scenario .attack-payload {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  background: #2a2620; color: #f5f0e6;
-  padding: 8px 12px; border-radius: 4px;
+  font-size: 11.5px;
+  background: #1c1a17; color: #e8dcc8;
+  padding: 8px 11px; border-radius: 5px;
   white-space: pre-wrap; word-break: break-word; overflow-x: auto;
-  line-height: 1.5;
+  line-height: 1.5; border: 1px solid #2e2b25;
 }
 .finding-attack-scenario .attack-disclaimer {
   margin-top: 8px;
@@ -10626,25 +10654,31 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     )
                     parts.append('<div class="attack-body">')
                     parts.append(
-                        f'<div class="attack-section">'
-                        f'<div class="attack-label">What the attacker sends</div>'
+                        f'<div class="attack-step">'
+                        f'<span class="attack-step-num">1</span>'
+                        f'<div class="attack-step-body">'
+                        f'<div class="attack-step-label">How the attacker acts</div>'
                         f'<pre class="attack-payload">'
                         f'{_html_escape(scenario.attacker_input)}'
-                        f'</pre></div>'
+                        f'</pre></div></div>'
                     )
                     parts.append(
-                        f'<div class="attack-section">'
-                        f'<div class="attack-label">How it lands</div>'
-                        f'<div class="attack-text">'
+                        f'<div class="attack-step">'
+                        f'<span class="attack-step-num">2</span>'
+                        f'<div class="attack-step-body">'
+                        f'<div class="attack-step-label">How it lands</div>'
+                        f'<div class="attack-step-text">'
                         f'{_html_escape(scenario.code_path)}'
-                        f'</div></div>'
+                        f'</div></div></div>'
                     )
                     parts.append(
-                        f'<div class="attack-section">'
-                        f'<div class="attack-label">What the attacker gets</div>'
-                        f'<div class="attack-text">'
+                        f'<div class="attack-step">'
+                        f'<span class="attack-step-num">3</span>'
+                        f'<div class="attack-step-body">'
+                        f'<div class="attack-step-label">What the attacker gets</div>'
+                        f'<div class="attack-step-text">'
                         f'{_html_escape(scenario.impact)}'
-                        f'</div></div>'
+                        f'</div></div></div>'
                     )
                     # v4: walkthrough rendering. When the narrative has a
                     # structured `simulation` (actor → target scenes), we
