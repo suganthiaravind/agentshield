@@ -7852,6 +7852,40 @@ footer {
   color: #374151;
   margin: 8px 0;
 }
+/* ── Stage 3 inline collapsible: Reading your results ── */
+.emu-stage3-results {
+  margin: 18px 0 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.emu-stage3-results-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  background: #f8fafc;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.emu-stage3-results-summary::-webkit-details-marker { display: none; }
+.emu-stage3-results-summary:hover { background: #f1f5f9; }
+.emu-stage3-chevron {
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.2s;
+}
+.emu-stage3-results[open] > .emu-stage3-results-summary .emu-stage3-chevron {
+  transform: rotate(90deg);
+}
+.emu-stage3-results-body {
+  padding: 16px 18px 10px;
+  border-top: 1px solid #e2e8f0;
+}
 .emu-ref-note strong { color: var(--text); }
 .emu-ref-note code   { font-size: 11.5px; background: rgba(0,0,0,0.05); border-radius: 3px; padding: 1px 4px; }
 .emu-ref-mutation-list { list-style: none; padding: 0; margin: 8px 0; }
@@ -13910,7 +13944,19 @@ def _render_how_it_works(parts: list[str]) -> None:
         '</li>'
 
         '</ol>'
-
+    )
+    # Collapsible 'Reading your results' sub-section inside Stage 3
+    parts.append(
+        '<details class="emu-stage3-results">'
+        '<summary class="emu-stage3-results-summary">'
+        '<span class="emu-stage3-chevron">&#9658;</span>'
+        'Reading your results'
+        '</summary>'
+        '<div class="emu-stage3-results-body">'
+    )
+    _render_emulator_reference_body(parts)
+    parts.append('</div></details>')
+    parts.append(
         '</div>'  # /3A sub-box
 
         '</div>'  # /how-stage-body
@@ -13987,29 +14033,11 @@ def _render_how_it_works(parts: list[str]) -> None:
 
 
 
-def _render_emulator_reference(parts: list[str]) -> None:
-    """Render the Behaviour Emulator deep-dive section in the Reference tab.
 
-    Covers: pipeline step reference, the 13 attack classes, verdict guide,
-    how to read the animation UI, and the seed->mutation escalation structure.
-    Positioned after _render_how_it_works so readers who want a quick overview
-    get the flowchart first and can drill into this for the full detail.
+def _render_emulator_reference_body(parts: list[str]) -> None:
+    """Render sections A-G of the Behaviour Emulator reference.
+    Called from both the Reference tab and the Stage 3 inline collapsible.
     """
-    parts.append('<div class="how-it-works emu-ref-section">')
-    parts.append('<details class="ref-section">')
-    parts.append(
-        '<summary class="ref-section-summary">'
-        '<span class="ref-section-chevron">&#9658;</span>'
-        '<span class="ref-section-heading">'
-        '<span class="ref-section-title">Behaviour Emulator &mdash; reading your results</span>'
-        '<span class="ref-section-teaser">Pipeline steps, 13 attack classes, verdict meanings, '
-        'animation guide, and seed &rarr; mutation structure.</span>'
-        '</span>'
-        '<span class="ref-section-hint"></span>'
-        '</summary>'
-    )
-    parts.append('<div class="ref-section-body">')
-
     # ── Section A: Pipeline step reference ──────────────────────────────────
     parts.append('<h4 class="emu-ref-h">A &mdash; The 8 pipeline steps AgentShield walks</h4>')
     parts.append(
@@ -14505,6 +14533,31 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '</tbody></table>'
     )
 
+
+def _render_emulator_reference(parts: list[str]) -> None:
+    """Render the Behaviour Emulator deep-dive section in the Reference tab.
+
+    Covers: pipeline step reference, the 13 attack classes, verdict guide,
+    how to read the animation UI, and the seed->mutation escalation structure.
+    Positioned after _render_how_it_works so readers who want a quick overview
+    get the flowchart first and can drill into this for the full detail.
+    """
+    parts.append('<div class="how-it-works emu-ref-section">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9658;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">Behaviour Emulator &mdash; reading your results</span>'
+        '<span class="ref-section-teaser">Pipeline steps, 13 attack classes, verdict meanings, '
+        'animation guide, and seed &rarr; mutation structure.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+
+    _render_emulator_reference_body(parts)
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /how-it-works emu-ref-section
