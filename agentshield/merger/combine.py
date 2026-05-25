@@ -7784,6 +7784,8 @@ footer {
   color: var(--text);
 }
 .emu-ref-table tr:nth-child(even) td { background: var(--bg); }
+.emu-ref-mut-row td { background: #f5f3ff !important; }
+.emu-ref-mut-row td:first-child { border-left: 3px solid #7c3aed; }
 .emu-ref-table code { font-size: 11.5px; background: rgba(0,0,0,0.05); border-radius: 3px; padding: 1px 4px; }
 .emu-ref-verdict { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .emu-ref-verdict-lands    { background: #fee2e2; color: #b91c1c; }
@@ -7801,29 +7803,48 @@ footer {
   margin-right: 3px;
   white-space: nowrap;
 }
-.emu-ref-anim-box {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin: 10px 0 16px;
-}
-.emu-ref-anim-card {
-  background: var(--bg);
-  border: 1px solid var(--border);
+.emu-ref-anim-list {
+  margin: 12px 0 20px;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 10px 12px;
+  overflow: hidden;
 }
-.emu-ref-anim-card-title {
+.emu-ref-anim-row {
+  display: flex;
+  align-items: baseline;
+  border-bottom: 1px solid #f1f5f9;
+}
+.emu-ref-anim-row:last-child { border-bottom: none; }
+.emu-ref-anim-row:nth-child(even) { background: #f8fafc; }
+.emu-ref-anim-key {
+  flex-shrink: 0;
+  width: 176px;
+  padding: 9px 12px 9px 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  border-right: 1px solid #f1f5f9;
+}
+.emu-ref-anim-n {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  min-width: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.emu-ref-anim-title {
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--text);
-  margin-bottom: 5px;
+  color: #1e293b;
+  line-height: 1.4;
 }
-.emu-ref-anim-card p {
-  font-size: 12px;
+.emu-ref-anim-desc {
+  flex: 1;
+  padding: 9px 14px;
+  font-size: 11.5px;
   line-height: 1.55;
-  color: #374151;
-  margin: 0;
+  color: #475569;
 }
 .emu-ref-note {
   font-size: 12.5px;
@@ -14294,58 +14315,52 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '(Coverage tab &rarr; Behaviour Emulator) to step through the attack '
         'scene by scene. Each element of the animation has a specific meaning:</p>'
     )
-    parts.append('<div class="emu-ref-anim-box">')
-    anim_cards = [
+    parts.append('<div class="emu-ref-anim-list">')
+    anim_rows = [
         ("Attack Plan card",
-         "A blue banner appears first, typewriting the guiding question for this "
-         "attack class (“Can an attacker overwrite the agent’s "
-         "instructions…?”). It holds for a moment then fades out before "
-         "the first scene starts. No pipeline step is highlighted during this phase."),
+         "Blue banner typewriting the guiding question for the attack class. "
+         "Holds briefly then fades out before scene 1 — no pipeline step "
+         "is highlighted during this intro."),
         ("Pipeline breadcrumb",
-         "A horizontal strip of 8 chips (User Input → RAG → System Prompt "
-         "→ Planner LLM → Tool Call → Tool Output → Re-plan "
-         "→ Response) above the accordion. The chip for the currently-playing "
-         "step turns blue. Steps not targeted by this attack class are skipped."),
+         "Strip of 8 step chips above the accordion. The chip for the "
+         "currently-playing step turns blue; steps not targeted by this "
+         "attack class are skipped."),
         ("Scene accordion rows",
-         "Each targeted pipeline step is a collapsible row. During playback the active "
-         "row expands to show the source and destination actor boxes, the animated "
-         "packet, and the narrative text. Done rows collapse and show a coloured "
-         "left border (red = advances, green = blocked)."),
+         "One collapsible row per targeted pipeline step. The active row expands "
+         "to show source + destination actors and the animated packet; done rows "
+         "collapse with a red border (advances) or green border (blocked)."),
         ("Gate animations",
-         "Two gate markers sit at 33 % and 67 % of the arrow. "
-         "For a ‘blocked’ step the second gate grows into a thick green "
-         "barrier and the packet reverses. For an ‘advances’ step both "
-         "gates flash open (green chevrons) and the packet flies through to the "
-         "destination actor."),
+         "Two gate markers at 33 % and 67 % of the arrow. Blocked: second gate "
+         "closes into a thick barrier and the packet reverses. Advances: both "
+         "gates flash open and the packet flies through."),
         ("Destination actor reactions",
-         "On ‘advances’: a red shockwave ring (impact ring) pulses around "
-         "the destination actor box — the attack landed. On ‘blocked’: "
-         "green concentric rings (shield hold) pulse around the destination, "
-         "indicating the defence absorbed the packet."),
+         "Advances &rarr; red shockwave ring pulses around the destination box "
+         "(attack landed). Blocked &rarr; green concentric rings pulse "
+         "(defence held)."),
         ("LLM thinking dots",
-         "Before the packet fires on a Planner LLM step, three blue bouncing dots "
-         "appear inside the source actor box for ~1.4 s. This indicates the LLM is "
-         "processing the payload — the deliberation before the agent decides "
-         "whether to comply or refuse."),
+         "Three blue bouncing dots appear in the source actor box for ~1.4 s "
+         "before the packet fires on a Planner step — signalling "
+         "LLM deliberation."),
         ("Terminal log",
-         "A black scrolling box below the accordion streams the machine-readable "
-         "trace: PAYLOAD (the active payload text), READ (code locations Copilot "
-         "cited), PREDICT (what happens at this step), OUTCOME (advances / blocked "
-         "+ whether a defence was present)."),
+         "Black scrolling box below the accordion streaming PAYLOAD, READ "
+         "(code citations), PREDICT (predicted behaviour), OUTCOME "
+         "(advances / blocked + defence present)."),
         ("Final verdict banner",
-         "After the last scene, a coloured banner scrolls into view: "
-         "“attack landed” (red), “partially blocked” (amber), "
-         "“attack blocked” (green), or “inconclusive” (blue). "
-         "Click Replay to re-run the animation for this attack class."),
+         "Coloured banner after the last scene — red (attack landed), "
+         "amber (partially blocked), green (attack blocked), blue (inconclusive). "
+         "Click <strong>Replay</strong> to rewatch."),
     ]
-    for title, desc in anim_cards:
+    for i, (title, desc) in enumerate(anim_rows, 1):
         parts.append(
-            f'<div class="emu-ref-anim-card">'
-            f'<div class="emu-ref-anim-card-title">{title}</div>'
-            f'<p>{desc}</p>'
+            f'<div class="emu-ref-anim-row">'
+            f'<div class="emu-ref-anim-key">'
+            f'<span class="emu-ref-anim-n">{i:02d}</span>'
+            f'<span class="emu-ref-anim-title">{title}</span>'
+            f'</div>'
+            f'<div class="emu-ref-anim-desc">{desc}</div>'
             f'</div>'
         )
-    parts.append('</div>')  # /emu-ref-anim-box
+    parts.append('</div>')  # /emu-ref-anim-list
 
     # ── Section E: Seed → mutation escalation ──────────────────────────────
     parts.append('<h4 class="emu-ref-h">E &mdash; Seed &rarr; mutation escalation</h4>')
@@ -14397,7 +14412,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<td>If this lands after seed 2 was blocked, the agent conflates user '
         'messages with developer-level instructions.</td>'
         '</tr>'
-        '<tr style="background:#1e1040">'
+        '<tr class="emu-ref-mut-row">'
         '<td><strong>Mutation 1</strong></td>'
         '<td>Keyword / regex bypass</td>'
         '<td><span class="emu-lp-dynamic" style="display:inline-block;margin-right:4px">&#9654; generated</span>'
@@ -14407,7 +14422,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<td>If this lands, the deny-list is brittle — it matched the exact words '
         'but not the semantic intent.</td>'
         '</tr>'
-        '<tr style="background:#1e1040">'
+        '<tr class="emu-ref-mut-row">'
         '<td><strong>Mutation 2</strong></td>'
         '<td>Semantic classifier bypass</td>'
         '<td><span class="emu-lp-dynamic" style="display:inline-block;margin-right:4px">&#9654; generated</span>'
@@ -14417,7 +14432,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<td>If this lands, the classifier has a training blind spot for '
         'indirection or uncommon framing patterns.</td>'
         '</tr>'
-        '<tr style="background:#1e1040">'
+        '<tr class="emu-ref-mut-row">'
         '<td><strong>Mutation 3</strong></td>'
         '<td>System-prompt instruction gap</td>'
         '<td><span class="emu-lp-dynamic" style="display:inline-block;margin-right:4px">&#9654; generated</span>'
@@ -14429,7 +14444,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<td>If this lands, the system-prompt instruction is too narrow — '
         'it blocks the exact wording but not the logical goal.</td>'
         '</tr>'
-        '<tr style="background:#1e1040">'
+        '<tr class="emu-ref-mut-row">'
         '<td><strong>Mutation 4</strong></td>'
         '<td>HITL / confirmation gate bypass</td>'
         '<td><span class="emu-lp-dynamic" style="display:inline-block;margin-right:4px">&#9654; generated</span>'
@@ -14440,7 +14455,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         'engineering rather than enforced cryptographically or at the '
         'infrastructure layer.</td>'
         '</tr>'
-        '<tr style="background:#1e1040">'
+        '<tr class="emu-ref-mut-row">'
         '<td><strong>Mutation 5</strong></td>'
         '<td>Output scrubber / deep encoding</td>'
         '<td><span class="emu-lp-dynamic" style="display:inline-block;margin-right:4px">&#9654; generated</span>'
