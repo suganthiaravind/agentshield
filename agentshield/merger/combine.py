@@ -1132,30 +1132,33 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         step_input = step.get("input") or ""
         step_behavior = step.get("predicted_behavior") or ""
         step_reasoning = step.get("outcome_reasoning") or ""
-        # Build inline code panel HTML (dark snippet shown in right column)
-        _snippet = step.get("code_snippet")
-        if _snippet and _snippet.get("lines"):
-            _line_ref = str(_snippet["hl_start"])
-            if _snippet["hl_end"] != _snippet["hl_start"]:
-                _line_ref += f'–{_snippet["hl_end"]}'
-            _lines_html = ""
-            for _ln in _snippet["lines"]:
-                _hl = ' emu-cp-line-hl' if _ln["highlight"] else ''
-                _lines_html += (
-                    f'<div class="emu-cp-line{_hl}">'
-                    f'<span class="emu-cp-ln">{_ln["num"]}</span>'
-                    f'<span class="emu-cp-code">{_html_escape(_ln["code"])}</span>'
-                    f'</div>'
-                )
-            _code_panel_html = (
-                f'<div class="emu-code-panel">'
-                f'<div class="emu-cp-header">'
-                f'<span class="emu-cp-filename">{_html_escape(_snippet["file"])}</span>'
-                f'<span class="emu-cp-lineref">:{_line_ref}</span>'
+        # Build inline code panel HTML (dark snippet(s) shown in right column)
+        def _build_one_panel(snip: dict) -> str:
+            _lr = str(snip["hl_start"])
+            if snip["hl_end"] != snip["hl_start"]:
+                _lr += f'–{snip["hl_end"]}'
+            _lh = "".join(
+                f'<div class="emu-cp-line{" emu-cp-line-hl" if ln["highlight"] else ""}">'
+                f'<span class="emu-cp-ln">{ln["num"]}</span>'
+                f'<span class="emu-cp-code">{_html_escape(ln["code"])}</span>'
                 f'</div>'
-                f'<div class="emu-cp-body">{_lines_html}</div>'
-                f'</div>'
+                for ln in snip["lines"]
             )
+            return (
+                f'<div class="emu-cp-header">'
+                f'<span class="emu-cp-filename">{_html_escape(snip["file"])}</span>'
+                f'<span class="emu-cp-lineref">:{_lr}</span>'
+                f'</div>'
+                f'<div class="emu-cp-body">{_lh}</div>'
+            )
+
+        _snippets = step.get("code_snippets") or (
+            [step["code_snippet"]] if step.get("code_snippet") else []
+        )
+        if _snippets:
+            _divider = '<div class="emu-cp-divider"></div>' if len(_snippets) > 1 else ''
+            _inner = _divider.join(_build_one_panel(s) for s in _snippets)
+            _code_panel_html = f'<div class="emu-code-panel">{_inner}</div>'
         else:
             _code_panel_html = ""
         src_tip = _actor_tooltip(src_lbl)
@@ -1508,10 +1511,17 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
             if outcome not in _VALID_EMULATOR_OUTCOMES:
                 outcome = None
             code_basis = [str(c) for c in (tstep.get("code_basis") or [])]
-            # Load first code ref as an inline snippet for the animation panel
-            code_snippet = None
-            if code_basis:
-                code_snippet = _load_code_snippet(source_dir, code_basis[0])
+            # Load up to two distinct-file snippets for the animation panel
+            code_snippets: list[dict] = []
+            seen_files: set[str] = set()
+            for _ref in code_basis:
+                _s = _load_code_snippet(source_dir, _ref)
+                if _s and _s["file"] not in seen_files:
+                    code_snippets.append(_s)
+                    seen_files.add(_s["file"])
+                if len(code_snippets) == 2:
+                    break
+            code_snippet = code_snippets[0] if code_snippets else None
             trace_out.append({
                 "step": str(tstep.get("step") or ""),
                 "step_label": str(tstep.get("step_label") or ""),
@@ -1524,6 +1534,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
                 "outcome": outcome,
                 "outcome_reasoning": str(tstep.get("outcome_reasoning") or ""),
                 "code_snippet": code_snippet,
+                "code_snippets": code_snippets,
             })
         traces_out.append({
             "attack_class": str(entry.get("attack_class") or ""),
@@ -6972,6 +6983,9 @@ footer {
 .emu-cp-line-hl .emu-cp-code { color: #fca5a5; }
 .emu-scene-blocked     .emu-cp-line-hl .emu-cp-code { color: #86efac; }
 .emu-scene-inconclusive .emu-cp-line-hl .emu-cp-code { color: #94a3b8; }
+.emu-cp-divider {
+  height: 1px; background: #1e293b; margin: 4px 0;
+}
 /* Done scenes: show compact header with outcome-coloured left border */
 .emu-scene.emu-scene-done {
   border-left: 3px solid transparent;
