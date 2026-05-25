@@ -4919,8 +4919,14 @@ footer {
 .emu-coverage-verdict-inconclusive { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
 .emu-coverage-verdict-not_evaluated { background: #fafafa; color: #6b7280; border: 1px solid #e5e7eb; }
 .emu-coverage-reason {
-  margin-top: 5px;
-  color: #334155; font-size: 11.5px; line-height: 1.5;
+  margin-top: 6px;
+  color: #334155; font-size: 11.5px; line-height: 1.6;
+}
+.emu-coverage-reason-label {
+  display: block;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #64748b;
+  margin-bottom: 3px;
 }
 .emu-coverage-meta {
   margin-top: 5px;
@@ -11416,6 +11422,7 @@ def _render_emulator_coverage_block(
         if reasoning:
             parts.append(
                 f'<div class="emu-coverage-reason">'
+                f'<span class="emu-coverage-reason-label">Reasoning</span>'
                 f'{_html_escape(reasoning)}</div>'
             )
         if step_chips or citation_chips:
