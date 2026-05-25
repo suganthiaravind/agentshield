@@ -3617,24 +3617,35 @@ h3 { font-size: 15px; }
   user-select: none; flex-shrink: 0; padding-right: 12px;
   font-size: 10px;
 }
-.ssp-code { color: #8b949e; white-space: pre; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ssp-code-wrap {
+  flex: 1; display: flex; align-items: center;
+  min-width: 0; gap: 10px; overflow: hidden;
+}
+.ssp-code { color: #8b949e; white-space: pre; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ssp-line-hit {
   background: linear-gradient(90deg, rgba(239,68,68,0.13) 0%, rgba(239,68,68,0.04) 100%);
   border-left: 2px solid #ef4444;
 }
 .ssp-line-hit .ssp-lnum { color: #f87171; }
 .ssp-line-hit .ssp-code { color: #fca5a5; }
-/* "← issue here" label fades in after beam settles */
+/* "← vulnerability" label — fades in then pulses gently twice */
 .ssp-issue-label {
-  margin-left: 10px; flex-shrink: 0;
-  color: #ef4444; font-size: 9px; font-weight: 600;
-  letter-spacing: 0.06em; white-space: nowrap;
+  flex-shrink: 0;
+  color: #ef4444; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.07em; white-space: nowrap;
   opacity: 0;
-  animation: ssp-label-in 0.35s 1.55s ease forwards;
+  animation:
+    ssp-label-in   0.4s  1.5s  ease         forwards,
+    ssp-label-glow 0.9s  2.0s  ease-in-out  2;
 }
 @keyframes ssp-label-in {
-  from { opacity: 0; transform: translateX(-4px); }
+  from { opacity: 0; transform: translateX(-3px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ssp-label-glow {
+  0%   { color: #ef4444; }
+  50%  { color: #fca5a5; text-shadow: 0 0 7px rgba(239,68,68,0.55); }
+  100% { color: #ef4444; }
 }
 /* Callout footer — shows the finding message */
 .ssp-callout {
@@ -9129,8 +9140,10 @@ def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
                 f'<div class="ssp-line-hit">'
                 f'<span class="ssp-marker">&#9654;</span>'
                 f'<span class="ssp-lnum">{i}</span>'
+                f'<span class="ssp-code-wrap">'
                 f'<span class="ssp-code">{code}</span>'
                 f'<span class="ssp-issue-label">&#8592; vulnerability</span>'
+                f'</span>'
                 f'</div>'
             )
         else:
@@ -9138,7 +9151,7 @@ def _static_scan_code_panel(target_root: Path | None, f: dict) -> str:
                 f'<div class="ssp-line">'
                 f'<span class="ssp-marker"></span>'
                 f'<span class="ssp-lnum">{i}</span>'
-                f'<span class="ssp-code">{code}</span>'
+                f'<span class="ssp-code-wrap"><span class="ssp-code">{code}</span></span>'
                 f'</div>'
             )
     rows_html = "\n".join(rows)
