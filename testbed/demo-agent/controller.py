@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from config import client, MODEL
+from guard.input_filter import is_safe as _input_safe
 
 app = Flask(__name__)
 chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)
@@ -17,6 +18,10 @@ chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)
 @app.route("/chat", methods=["POST"])
 def chat():
     user_message = request.json["message"]
+    # Layer-1 guard: keyword deny-list blocks obvious injection probes.
+    # Bypassed by indirect / role-play framings — see partial-defense-bypass trace.
+    if not _input_safe(user_message):
+        return jsonify({"error": "Request blocked by input filter."}), 400
     # DELIBERATE — D001-fw should fire: user_message → chain.invoke without sanitiser.
     response = chain.invoke(user_message)
     return jsonify({"reply": response.content})
