@@ -6094,23 +6094,23 @@ footer {
 }
 
 /* Verdict banner — outcome-specific drama */
-@keyframes emu-final-shake {
-  0%,100% { transform: translateX(0); }
-  20%      { transform: translateX(-4px); }
-  40%      { transform: translateX(4px); }
-  60%      { transform: translateX(-3px); }
-  80%      { transform: translateX(3px); }
+@keyframes emu-final-pulse-red {
+  0%   { box-shadow: 0 0 0 0   rgba(239,68,68,0.45); }
+  60%  { box-shadow: 0 0 0 8px rgba(239,68,68,0);    }
+  100% { box-shadow: 0 0 0 0   rgba(239,68,68,0);    }
 }
 @keyframes emu-final-pulse-green {
-  0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.4); }
-  70%  { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
-  100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+  0%   { box-shadow: 0 0 0 0   rgba(22,163,74,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(22,163,74,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(22,163,74,0);   }
 }
 .emu-trace-final-lands.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out, emu-final-shake 450ms ease-out 300ms;
+  animation: emu-final-pop 350ms ease-out,
+             emu-final-pulse-red 900ms ease-in-out 300ms 3;
 }
 .emu-trace-final-blocked.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out, emu-final-pulse-green 600ms ease-out 300ms;
+  animation: emu-final-pop 350ms ease-out,
+             emu-final-pulse-green 900ms ease-in-out 300ms 2;
 }
 
 /* ── Emulator modal overlay ────────────────────────────────────── */
