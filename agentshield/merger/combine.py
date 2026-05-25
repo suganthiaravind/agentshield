@@ -4921,16 +4921,19 @@ footer {
 .emu-coverage-reason {
   margin-top: 8px;
   padding: 8px 10px;
-  background: rgba(0,0,0,0.03);
-  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+  border-left: 3px solid #94a3b8;
   border-radius: 0 4px 4px 0;
   color: #1e293b; font-size: 12px; line-height: 1.65;
 }
 .emu-coverage-reason-label {
-  display: block;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: #64748b;
-  margin-bottom: 4px;
+  display: table;
+  padding: 1px 7px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: #334155;
+  margin-bottom: 6px;
 }
 .emu-coverage-meta {
   margin-top: 5px;
