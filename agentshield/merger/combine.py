@@ -3324,51 +3324,95 @@ h3 { font-size: 15px; }
 .finding {
   background: var(--panel);
   border: 1px solid var(--border);
+  border-left-width: 3px;
   border-radius: 8px;
-  padding: 14px 18px;
-  margin-bottom: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 12px 16px 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   transition: box-shadow 160ms ease, border-color 160ms ease;
   counter-increment: finding-counter;
 }
-/* Sequential number tag in the top-left of each card — small,
-   muted, tabular-nums so the digits line up vertically as the
-   reviewer scrolls. */
+/* Severity left-border colours — instant visual triage */
+.finding[data-severity="critical"] { border-left-color: #ef4444; }
+.finding[data-severity="high"]     { border-left-color: #f97316; }
+.finding[data-severity="medium"]   { border-left-color: #eab308; }
+.finding[data-severity="low"]      { border-left-color: #22c55e; }
+.finding[data-severity="info"]     { border-left-color: #94a3b8; }
+/* Counter pill — compact, right of the first flex gap */
 .finding > .finding-header::before {
   content: "#" counter(finding-counter);
   display: inline-flex; align-items: center;
-  font-size: 11px; font-weight: 700;
-  color: var(--text-muted);
-  background: #f1f5f9;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: 10px; font-weight: 700;
+  color: #94a3b8;
+  background: #f8fafc;
+  padding: 1px 6px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  margin-right: 2px;
+  flex-shrink: 0;
 }
 .finding:hover {
   border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  border-left-width: 3px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 .finding:last-child { margin-bottom: 0; }
-/* Inside a severity-group <details>, indent the cards slightly so
-   they read as children of the group header. */
 .sev-group .finding { margin-left: 4px; margin-right: 4px; }
-.finding-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.finding-rule { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-                font-size: 12px; color: var(--text); font-weight: 600; }
-.finding-meta { color: var(--text-muted); font-size: 12px; margin-bottom: 6px;
-                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.finding-message { color: var(--text); font-size: 13px; margin-bottom: 8px; }
-.finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.finding-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;  /* F.32 */
-               background: #f1eee5; color: #5a5547; letter-spacing: 0.02em; }
-.finding-snippet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-                   font-size: 12px; background: #f5f3ec; padding: 6px 10px;
-                   border-radius: 4px; margin: 6px 0; color: #2a2620; overflow-x: auto; }
-.finding-remediation { font-size: 12px; color: var(--text-muted); margin-top: 6px;
-                       padding-left: 12px; border-left: 2px solid var(--border); }
+/* Header: counter + pills on one row, rule name below as the anchor */
+.finding-header {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; margin-bottom: 6px;
+}
+.finding-rule {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; color: #0f172a; font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.finding-meta {
+  color: var(--text-muted); font-size: 11px; margin-bottom: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  display: flex; align-items: center; gap: 4px;
+}
+.finding-meta::before {
+  content: "◈";
+  font-size: 9px; color: #cbd5e1; flex-shrink: 0;
+}
+.finding-message {
+  color: #334155; font-size: 13px; margin-bottom: 8px; line-height: 1.5;
+}
+/* Framework chips — colour-coded by standard */
+.finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.finding-tag {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+  background: #f1eee5; color: #5a5547; letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.finding-tag[data-framework-key^="owasp_llm"]     { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.finding-tag[data-framework-key^="owasp_agentic"] { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+.finding-tag[data-framework-key^="mitre_atlas"]   { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.finding-tag[data-framework-key^="cwe"]           { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.finding-snippet {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px; border-radius: 5px;
+  margin: 4px 0 8px; color: #334155; overflow-x: auto;
+}
+/* Fix/Copilot block — distinct panel, not just an indented paragraph */
+.finding-remediation {
+  font-size: 12px; color: #475569; margin-top: 6px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 0 5px 5px 0;
+  line-height: 1.55;
+}
+.finding-remediation strong {
+  color: #0f172a; font-weight: 700; margin-right: 4px;
+}
 
 /* Simulated Probe capture (LLM-adversary explore mode) — collapsible
    panel that mirrors the static-finding Attack scenario shape. Same
