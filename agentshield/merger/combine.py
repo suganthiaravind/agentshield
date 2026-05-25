@@ -8994,6 +8994,19 @@ _HTML_JS = """
     });
   });
 
+  // Restart static-scan panel animations every time the attack-scenario
+  // <details> is opened — CSS animations only fire once on first render.
+  document.querySelectorAll('details.finding-attack-scenario').forEach(function(det) {
+    det.addEventListener('toggle', function() {
+      if (!det.open) return;
+      det.querySelectorAll('.ssp-beam, .ssp-issue-label').forEach(function(el) {
+        el.style.animation = 'none';
+        void el.offsetWidth; // force reflow so the browser resets the timeline
+        el.style.animation = '';
+      });
+    });
+  });
+
   // initial render
   applyFilter();
 })();
