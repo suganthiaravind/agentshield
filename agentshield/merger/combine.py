@@ -1113,7 +1113,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         defence_present = step.get("defensive_control_present", False)
         if defence_present:
             defence_chip = '<span class="emu-defence-flag emu-defence-flag-yes">defence present</span>'
-        elif outcome == "inconclusive":
+        elif outcome == "absent_step":
             defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">no attack surface</span>'
         else:
             defence_chip = '<span class="emu-defence-flag emu-defence-flag-no">no defence here</span>'
