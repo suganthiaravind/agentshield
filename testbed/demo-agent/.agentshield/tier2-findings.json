@@ -1,0 +1,361 @@
+{
+  "tier": 2,
+  "scanned_at": "2026-05-21T02:32:52Z",
+  "agentshield_tier1_fingerprint": "4dbafa6d375673bc1ecf614aaccc72f1f813d89e367d2ea01020134ce6b6b12e",
+  "saige_tier": "2",
+  "saige_tier_reasoning": "Autonomous LLM-driven control flow at controller.py:21 (chain.invoke with user-supplied input) and at tools.py:14 (LLM output drives a Python eval branch). State-changing operations confirmed at notifications.py:24 (sns.publish \u2014 outbound notification) and tools.py:32 (POST to billing-api cancel endpoint \u2014 modifies subscription state). All targets are internal services (internal-pg.local, billing-api.internal, support-replies SNS topic). No customer-facing endpoint reached directly. Classified Tier 2 because state changes are internal-only; would be Tier 3 if the SNS topic delivered to customer email.",
+  "scanned_files": [
+    "config.py",
+    "controller.py",
+    "memory.py",
+    "notifications.py",
+    "tools.py"
+  ],
+  "skipped_files": [],
+  "findings": [
+    {
+      "rule_id": "AS-C-D-LLM01-002",
+      "category": "detect",
+      "severity": "high",
+      "file": "testbed/demo-agent/controller.py",
+      "line": 30,
+      "snippet": "docs = WebBaseLoader(article_url).load()",
+      "message": "Untrusted document loader: article_url is user-supplied (from request body) and fetched without an allowlist. Indirect prompt-injection surface \u2014 attacker-controlled webpage content flows into the LLM via the summarise prompt.",
+      "owasp_llm": [
+        "LLM01"
+      ],
+      "owasp_agentic": [
+        "T1",
+        "T6"
+      ],
+      "mitre_atlas": [],
+      "cwe": [
+        "CWE-94"
+      ],
+      "remediation": "Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted user input \u2014 pass through a guardrail layer before the LLM call."
+    },
+    {
+      "rule_id": "AS-C-D-AGENTIC_T1-001",
+      "category": "detect",
+      "severity": "medium",
+      "file": "testbed/demo-agent/memory.py",
+      "line": 17,
+      "snippet": "memory.setdefault(session_id, []).append({\"user\": user_message, \"assistant\": llm_response})",
+      "message": "Memory poisoning surface: both user input and raw LLM output are persisted to session memory without validation. Future turns retrieve this content as 'trusted context'; an attacker can plant instructions in turn N that influence turn N+1.",
+      "owasp_llm": [],
+      "owasp_agentic": [
+        "T1"
+      ],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Validate memory writes the same way you'd validate database writes \u2014 schema-check or pass through a content moderation classifier on persistence."
+    },
+    {
+      "rule_id": "AS-C-DF-LLM06-001",
+      "category": "defend",
+      "severity": "high",
+      "file": "testbed/demo-agent/tools.py",
+      "line": 26,
+      "snippet": "@tool def cancel_subscription(customer_id: str)",
+      "message": "Destructive tool registered without a human-in-the-loop approval gate. The `cancel_subscription` tool name starts with a destructive verb and the body POSTs to a billing API; the agent can invoke it autonomously if the planner decides to.",
+      "owasp_llm": [
+        "LLM06"
+      ],
+      "owasp_agentic": [
+        "T2",
+        "T10"
+      ],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Wire a HumanApprovalCallbackHandler (LangChain) or LangGraph interrupt_before on this tool node. Require explicit confirmation before any subscription mutation."
+    },
+    {
+      "rule_id": "AS-C-DF-LLM10-001",
+      "category": "defend",
+      "severity": "medium",
+      "file": "testbed/demo-agent/controller.py",
+      "line": 14,
+      "snippet": "chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)",
+      "message": "ChatOpenAI client instantiated without explicit timeout or max_tokens cap. A slow or runaway model call has no upper bound \u2014 DoS / cost exposure.",
+      "owasp_llm": [
+        "LLM10"
+      ],
+      "owasp_agentic": [
+        "T4"
+      ],
+      "mitre_atlas": [],
+      "cwe": [
+        "CWE-400"
+      ],
+      "remediation": "Pass timeout=30 (or whatever per-call ceiling fits your latency budget) and max_tokens=2000 to the ChatOpenAI constructor."
+    },
+    {
+      "rule_id": "AS-C-R-LLM02-002",
+      "category": "respond",
+      "severity": "high",
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 24,
+      "snippet": "sns.publish(TopicArn=\"...\", Message=reply_body, ...)",
+      "message": "LLM output published to SNS without scrubbing. The reply_body is a Bedrock-generated string that may inadvertently include PII echoed from the customer ticket, internal identifiers from the system prompt, or hallucinated content. SNS subscribers receive it unfiltered.",
+      "owasp_llm": [
+        "LLM02"
+      ],
+      "owasp_agentic": [
+        "T8"
+      ],
+      "mitre_atlas": [
+        "AML.T0057"
+      ],
+      "cwe": [
+        "CWE-200"
+      ],
+      "remediation": "Apply an output scrubber (Presidio AnonymizerEngine, or a regex-based redactor for the specific patterns you handle) on reply_body before sns.publish. Apply at the publisher edge, not at the LLM call site, since the call site is far from the eventual recipient."
+    },
+    {
+      "rule_id": "AS-C-R-LLM10-001",
+      "category": "respond",
+      "severity": "medium",
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 14,
+      "snippet": "response = client.chat.completions.create(...)",
+      "message": "LLM call has no surrounding audit logging. No structured logger setup (no structlog / langsmith / OpenTelemetry / langchain.callbacks); no logger.info around the call. Without an audit trail, incident response can't reconstruct what the model saw or returned.",
+      "owasp_llm": [
+        "LLM10"
+      ],
+      "owasp_agentic": [
+        "T8"
+      ],
+      "mitre_atlas": [
+        "AML.T0024"
+      ],
+      "cwe": [],
+      "remediation": "Add structured logging around every LLM invocation. Capture: input prompt (hashed), model id, latency, token counts, output (hashed). Recommended: LangSmith or OpenTelemetry traces."
+    }
+  ],
+  "tier1_fp_callouts": [
+    {
+      "tier1_finding_index": 0,
+      "file": "testbed/demo-agent/config.py",
+      "line": 7,
+      "tier1_rule": "agentshield.detect.hardcoded-llm-credentials",
+      "verdict": "TP",
+      "reasoning": "client = OpenAI(api_key=\"sk-proj-DEMO...\") \u2014 literal API key passed to constructor, no env-var indirection, no secrets manager. Real credential exposure if config.py ever ships."
+    },
+    {
+      "tier1_finding_index": 1,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 21,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
+      "verdict": "TP",
+      "reasoning": "request.json['message'] flows directly into chain.invoke(user_message) at controller.py:21 with no sanitiser between them \u2014 classic untrusted-input-to-LLM sink."
+    },
+    {
+      "tier1_finding_index": 2,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 21,
+      "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
+      "verdict": "FP",
+      "reasoning": "controller.py:21 is the public /chat endpoint handling direct user HTTP input \u2014 there's no X-Internal-Caller header check or any peer-identity trust signal in this route. The peer-input rule misfires; the LLM01-001 finding at the same line is the correct one."
+    },
+    {
+      "tier1_finding_index": 3,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 34,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
+      "verdict": "TP",
+      "reasoning": "User-controlled article_url (request.json.get('url', '')) is fetched by WebBaseLoader and its content flows into chain.invoke() at line 34 \u2014 indirect prompt-injection sink via the retrieved document body."
+    },
+    {
+      "tier1_finding_index": 4,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 34,
+      "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
+      "verdict": "FP",
+      "reasoning": "controller.py:34 is part of the /summarise public endpoint \u2014 no X-Internal-Caller check, no peer-identity signal; input is direct user HTTP input. Peer-agent rule misfires here."
+    },
+    {
+      "tier1_finding_index": 5,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 63,
+      "tier1_rule": "agentshield.detect.agent-communication-poisoning",
+      "verdict": "TP",
+      "reasoning": "delegate() at orchestrator.py:63 forwards raw user_input verbatim to DOWNSTREAM_AGENT_URL with no sanitiser. Comment block at lines 54-61 explicitly calls this out as the T12 Agent Communication Poisoning pattern \u2014 exactly the trust-boundary failure the rule catches."
+    },
+    {
+      "tier1_finding_index": 6,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 87,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
+      "verdict": "TP",
+      "reasoning": "peer_message (request.json.get('message', '')) flows directly into chain.invoke({'input': peer_message}) at line 87 with no sanitiser. Untrusted-input-to-LLM holds regardless of whether the input is user-typed or peer-supplied."
+    },
+    {
+      "tier1_finding_index": 7,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 87,
+      "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
+      "verdict": "TP",
+      "reasoning": "receive_from_peer() trusts the X-Internal-Caller header as proof of peer identity (lines 82-83) with no signature/JWT/mTLS verification \u2014 anyone on the internal network can set the header. Payload then flows to chain.invoke at line 87. Textbook T13 Rogue Agents pattern."
+    },
+    {
+      "tier1_finding_index": 8,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 110,
+      "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
+      "verdict": "TP",
+      "reasoning": "debug_endpoint() reads user_input from request.json and feeds it to chain.invoke({'input': user_input}) at line 110 \u2014 user-input-to-LLM with no sanitiser. The accompanying LLM07 leak at line 116 amplifies the impact."
+    },
+    {
+      "tier1_finding_index": 9,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 110,
+      "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
+      "verdict": "FP",
+      "reasoning": "debug_endpoint() does not consult X-Internal-Caller or any peer-identity header; the body is direct user HTTP input. The real defect at this route is the system-prompt leak in the exception handler (caught correctly by AS-S-D-LLM07-002 at line 116), not peer-agent trust."
+    },
+    {
+      "tier1_finding_index": 10,
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 116,
+      "tier1_rule": "agentshield.detect.system-prompt-leak-via-tool-output",
+      "verdict": "TP",
+      "reasoning": "Exception handler at line 116 returns `active_system_prompt: SYSTEM_PROMPT` directly in the JSON response. SYSTEM_PROMPT (lines 91-95) contains the embedded escalation key SK-OPS-7741-PRIVATE \u2014 both the system prompt and the secret leak to anyone who can trigger an exception."
+    },
+    {
+      "tier1_finding_index": 11,
+      "file": "testbed/demo-agent/tools.py",
+      "line": 21,
+      "tier1_rule": "agentshield.detect.llm-output-to-code-execution",
+      "verdict": "TP",
+      "reasoning": "tools.py:21 calls eval(code) where code = response.choices[0].message.content (line 19) \u2014 LLM output is fed directly into Python's eval() with no validation, no AST allowlist, no sandbox. Direct RCE primitive."
+    },
+    {
+      "tier1_finding_index": 12,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast03-network-unrestricted",
+      "verdict": "TP",
+      "reasoning": "Frontmatter declares `permissions.network: true` with no `network.allow:` allow-list \u2014 unrestricted outbound network access. AST03 correctly fires."
+    },
+    {
+      "tier1_finding_index": 13,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast03-wildcard-file-read",
+      "verdict": "TP",
+      "reasoning": "permissions.files.read pattern `~/.config/demo-agent/**` uses the recursive `**` glob \u2014 wildcard file-read access covering every file under the config directory. AST03 wildcard-read variant."
+    },
+    {
+      "tier1_finding_index": 14,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast04-missing-author-identity",
+      "verdict": "TP",
+      "reasoning": "Author block has only `name: Demo Co` \u2014 no DID, no signed handle, no public-key reference. Provenance is unverifiable; an attacker republishing the bundle as 'Demo Co' is indistinguishable from the legitimate publisher."
+    },
+    {
+      "tier1_finding_index": 15,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-content-hash",
+      "verdict": "TP",
+      "reasoning": "Frontmatter declares no `content_hash` / `checksum` / `integrity` field \u2014 loader has no way to verify the bundle payload matches what the manifest describes. AST07 integrity gap."
+    },
+    {
+      "tier1_finding_index": 16,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-signature",
+      "verdict": "TP",
+      "reasoning": "Frontmatter declares no `signature` field \u2014 bundle authenticity is unverifiable independent of integrity. Companion to the missing content_hash finding."
+    },
+    {
+      "tier1_finding_index": 17,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast08-permission-combo-across-skills",
+      "verdict": "TP",
+      "reasoning": "Combined permissions across the two manifests: demo-agent-helper grants `network: true` + filesystem read/write; billing grants `shell: true`. The compound (network egress + shell exec + filesystem write) is the RCE-to-exfil pair AST08 watches for \u2014 neither skill on its own grants the dangerous combo, but together they do."
+    },
+    {
+      "tier1_finding_index": 18,
+      "file": "SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast08-permission-combo-across-skills",
+      "verdict": "TP",
+      "reasoning": "Second emission of the same cross-skill combo, reported from the billing-side perspective. Both reports describe the same compound permission; either fix (drop network from the helper OR drop shell from billing OR split the skills across separate agents) resolves both."
+    },
+    {
+      "tier1_finding_index": 19,
+      "file": "config.yaml",
+      "line": 17,
+      "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
+      "verdict": "TP",
+      "reasoning": "Literal Anthropic API key `sk-ant-api03-AbCdEf...` hard-coded in the bundled YAML. Ships verbatim to every consumer of the bundle (registry pulls, git clones, container images, CI logs). Rotation is forever \u2014 bundle history exposes it."
+    },
+    {
+      "tier1_finding_index": 20,
+      "file": "config.yaml",
+      "line": 21,
+      "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
+      "verdict": "TP",
+      "reasoning": "Literal OpenAI API key `sk-proj-AbCdEf...` hard-coded in the bundled YAML. Same shipping path as line 17."
+    },
+    {
+      "tier1_finding_index": 21,
+      "file": "config.yaml",
+      "line": 25,
+      "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
+      "verdict": "TP",
+      "reasoning": "Literal AWS access_key_id `AKIAIOSFODNN7EXAMPLE` hard-coded in the bundled YAML. Even if this is the AWS documentation example key, the rule correctly flags the pattern \u2014 production credentials matching the same shape leak the same way."
+    },
+    {
+      "tier1_finding_index": 22,
+      "file": "config.yaml",
+      "line": 29,
+      "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
+      "verdict": "TP",
+      "reasoning": "Literal database password `support_db_password: 2v8XyZ4qPmA9rT6wKn3eRfBhJ5sLcGdU` hard-coded in the bundled YAML."
+    },
+    {
+      "tier1_finding_index": 23,
+      "file": "config.yaml",
+      "line": 30,
+      "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
+      "verdict": "TP",
+      "reasoning": "Literal Slack bot token `xoxb-1234567890123-...` hard-coded in the bundled YAML. Slack tokens grant write access to channels \u2014 exfil pivot if leaked."
+    },
+    {
+      "tier1_finding_index": 24,
+      "file": "skills/billing/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast03-shell-access",
+      "verdict": "TP",
+      "reasoning": "billing skill frontmatter declares `permissions.shell: true`. The skill calls subprocess.run on vetted billing scripts (line 29-30 prose), but the static permission grant is what AST03 catches \u2014 granting shell access is a coarse capability; even narrowed scripts can be attacked via arg injection."
+    },
+    {
+      "tier1_finding_index": 25,
+      "file": "skills/billing/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast04-missing-author-identity",
+      "verdict": "CD",
+      "reasoning": "Author block has `did: did:example:demo-team` \u2014 the `did:example:` method is documented as a non-production placeholder, not a real verifiable identity. The presence of a DID field is closer to compliance than the demo-agent-helper case (which has only `name`), but the placeholder method means provenance is still unverifiable. Mitigatable by switching to a real DID method (did:web, did:key) \u2014 hence CD rather than TP."
+    },
+    {
+      "tier1_finding_index": 26,
+      "file": "skills/billing/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-content-hash",
+      "verdict": "TP",
+      "reasoning": "billing skill frontmatter has no content_hash / checksum / integrity field \u2014 identical defect to the demo-agent-helper SKILL.md case."
+    },
+    {
+      "tier1_finding_index": 27,
+      "file": "skills/billing/SKILL.md",
+      "line": 1,
+      "tier1_rule": "agentshield.detect.ast07-missing-signature",
+      "verdict": "TP",
+      "reasoning": "billing skill frontmatter has no signature field \u2014 identical defect to the demo-agent-helper SKILL.md case."
+    }
+  ]
+}

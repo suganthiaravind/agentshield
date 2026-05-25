@@ -1,2 +1,5 @@
-# AgentShield Tier 2 generated artifacts (do not commit)
+# AgentShield Tier 2 generated artifacts (do not commit for real agents)
+# Exception: demo-agent artifacts are committed so the VDI demo works
+# without needing to re-run the emulator scan on-site.
 .agentshield/
+!.agentshield/

@@ -1,0 +1,14 @@
+target:
+  type: http-generic
+  url: http://localhost:8765/api/agent
+  method: POST
+  auth:
+    kind: none
+  request:
+    content_type: application/json
+    body:
+      message: "{{message}}"
+      session_id: "{{session_id}}"
+  response:
+    reply_text_path: $.reply
+    tool_calls_path: $.tool_calls
