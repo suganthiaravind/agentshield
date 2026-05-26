@@ -9467,7 +9467,7 @@ _HTML_JS = """
                 scene.classList.add('emu-scene-done');
                 safeTimeout(function () { runScene(idx + 1); }, 380);
               } else {
-                if (finalBanner) {
+                if (finalBanner && !onComplete) {
                   finalBanner.classList.add('emu-trace-final-visible');
                   safeTimeout(function () {
                     finalBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -9478,8 +9478,8 @@ _HTML_JS = """
                   c.classList.remove('emu-pip-active');
                 });
                 if (onComplete) {
-                  // More seeds to play — pause briefly then hand off
-                  safeTimeout(onComplete, 1200);
+                  // More seeds to play — hand off quickly, skip verdict linger
+                  safeTimeout(onComplete, 300);
                 } else {
                   if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
                   if (pauseBtn) pauseBtn.style.display = 'none';
@@ -9487,7 +9487,7 @@ _HTML_JS = """
                   if (progressFill) progressFill.style.width = '0%';
                 }
               }
-            }, NARRATIVE_LINGER);
+            }, (idx < scenes.length - 1 || !onComplete) ? NARRATIVE_LINGER : 0);
           });
         }, packetFireAt + PACKET_DURATION);
       }
