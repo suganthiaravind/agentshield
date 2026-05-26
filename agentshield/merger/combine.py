@@ -4870,7 +4870,7 @@ footer {
 }
 .framework-group-summary::-webkit-details-marker { display: none; }
 .framework-group-summary::before {
-  content: "\25B6";
+  content: "\\25B6";
   font-size: 9px;
   color: var(--text-muted);
   transition: transform 0.18s ease;
