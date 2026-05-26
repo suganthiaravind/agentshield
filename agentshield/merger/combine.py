@@ -9270,10 +9270,10 @@ _HTML_JS = """
       var pills = intro.querySelectorAll('.emu-layer-pill');
       intro.style.display = '';
 
-      var PILL_APPEAR   = 260;  // ms between pills appearing
-      var TRY_PAUSE     = 380;  // ms "trying…" shown before outcome
-      var OUTCOME_PAUSE = 220;  // ms outcome shown before next pill
-      var DONE_HOLD     = 600;  // ms after landed pill before hiding intro
+      var PILL_APPEAR   = 130;  // ms between pills appearing
+      var TRY_PAUSE     = 190;  // ms "trying…" shown before outcome
+      var OUTCOME_PAUSE = 110;  // ms outcome shown before next pill
+      var DONE_HOLD     = 300;  // ms after landed pill before hiding intro
 
       var landedIdx = -1;
       var blockedAll = (landedLayer === 'blocked-all');
@@ -9479,7 +9479,7 @@ _HTML_JS = """
                 });
                 if (onComplete) {
                   // More seeds to play — hand off quickly, skip verdict linger
-                  safeTimeout(onComplete, 300);
+                  safeTimeout(onComplete, 150);
                 } else {
                   if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
                   if (pauseBtn) pauseBtn.style.display = 'none';
