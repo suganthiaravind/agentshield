@@ -6045,6 +6045,118 @@ footer {
 .pitch-slide-footer strong { color: #1e293b; }
 .pitch-slide-footer em { color: #2563eb; font-style: italic; }
 
+/* v4: D/D/R framework slide */
+.ddr-slide-card { margin-top: 20px; }
+.ddr-slide-inner { padding: 4px 0; }
+.ddr-slide-hero {
+  font-size: 20px; font-weight: 800; color: #1e293b;
+  text-align: center; margin-bottom: 6px;
+}
+.ddr-slide-sub {
+  font-size: 13px; color: #64748b; text-align: center; margin-bottom: 22px;
+}
+.ddr-cols {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+.ddr-col {
+  border-radius: 12px; padding: 18px 16px 16px;
+  border: 1.5px solid; display: flex; flex-direction: column; gap: 10px;
+}
+.ddr-col-detect  { border-color: #fca5a5; background: #fff5f5; }
+.ddr-col-defend  { border-color: #fcd34d; background: #fffbeb; }
+.ddr-col-respond { border-color: #93c5fd; background: #eff6ff; }
+.ddr-col-badge {
+  display: inline-block; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 20px; align-self: flex-start;
+}
+.ddr-col-detect  .ddr-col-badge { background: #dc2626; color: #fff; }
+.ddr-col-defend  .ddr-col-badge { background: #d97706; color: #fff; }
+.ddr-col-respond .ddr-col-badge { background: #2563eb; color: #fff; }
+.ddr-col-title {
+  font-size: 15px; font-weight: 800; color: #1e293b; line-height: 1.2;
+}
+.ddr-col-def {
+  font-size: 12px; color: #475569; line-height: 1.5; margin-bottom: 4px;
+}
+.ddr-col-items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ddr-col-item {
+  font-size: 12px; color: #334155; line-height: 1.4;
+  display: flex; align-items: flex-start; gap: 7px;
+}
+.ddr-col-item::before {
+  content: "›"; font-weight: 700; font-size: 13px;
+  flex-shrink: 0; margin-top: -1px;
+}
+.ddr-col-detect  .ddr-col-item::before { color: #dc2626; }
+.ddr-col-defend  .ddr-col-item::before { color: #d97706; }
+.ddr-col-respond .ddr-col-item::before { color: #2563eb; }
+.ddr-slide-note {
+  margin-top: 18px; text-align: center;
+  font-size: 12px; color: #64748b; font-style: italic;
+}
+
+/* v4: behaviour emulator explainer slide */
+.emu-slide-card { margin-top: 20px; }
+.emu-slide-inner { padding: 4px 0; }
+.emu-slide-hero {
+  font-size: 20px; font-weight: 800; color: #1e293b;
+  text-align: center; margin-bottom: 6px;
+}
+.emu-slide-sub {
+  font-size: 13px; color: #64748b; text-align: center; margin-bottom: 26px;
+}
+.emu-slide-steps {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.emu-slide-step {
+  border: 1.5px solid #e2e8f0; border-radius: 12px;
+  padding: 16px 14px; background: #f8fafc;
+  display: flex; flex-direction: column; gap: 7px; position: relative;
+}
+.emu-slide-step-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #1e293b; color: #fff;
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.emu-slide-step-title { font-size: 14px; font-weight: 700; color: #1e293b; }
+.emu-slide-step-desc  { font-size: 12px; color: #475569; line-height: 1.5; }
+.emu-slide-step-tag {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: #ede9fe; color: #6d28d9;
+  border-radius: 4px; padding: 1px 6px; align-self: flex-start;
+}
+.emu-slide-divider {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: #94a3b8; font-weight: 300;
+  padding-top: 14px;
+}
+.emu-slide-verdict-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  margin-top: 16px;
+}
+.emu-slide-verdict {
+  border-radius: 10px; padding: 10px 12px; text-align: center;
+  border: 1.5px solid;
+}
+.emu-slide-verdict-label { font-size: 12px; font-weight: 800; }
+.emu-slide-verdict-desc  { font-size: 11px; color: #64748b; margin-top: 3px; line-height: 1.4; }
+.emu-slide-v-lands    { border-color: #fca5a5; background: #fff5f5; }
+.emu-slide-v-lands    .emu-slide-verdict-label { color: #b91c1c; }
+.emu-slide-v-partial  { border-color: #fcd34d; background: #fffbeb; }
+.emu-slide-v-partial  .emu-slide-verdict-label { color: #92400e; }
+.emu-slide-v-blocked  { border-color: #86efac; background: #f0fdf4; }
+.emu-slide-v-blocked  .emu-slide-verdict-label { color: #15803d; }
+.emu-slide-v-inconc   { border-color: #cbd5e1; background: #f8fafc; }
+.emu-slide-v-inconc   .emu-slide-verdict-label { color: #64748b; }
+.emu-slide-note {
+  margin-top: 16px; text-align: center;
+  font-size: 12px; color: #64748b; font-style: italic;
+}
+
 /* v4: "How AgentShield works" flowchart at the bottom of the
    Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
    numbered stage cards stacked vertically with chevron arrows
@@ -12580,6 +12692,8 @@ def _render_reference_panel(
     _render_how_it_works(parts)
     _render_solution_diagram(parts)
     _render_pitch_slide(parts)
+    _render_ddr_slide(parts)
+    _render_emulator_slide(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -14035,6 +14149,200 @@ def _render_pitch_slide(parts: list[str]) -> None:
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /pitch-slide-card
+
+
+def _render_ddr_slide(parts: list[str]) -> None:
+    """Render the Detect / Defend / Respond framework explainer slide."""
+    _COLS = [
+        (
+            "detect", "Detect",
+            "Vulnerability surfaces",
+            "Where the agent is exploitable — code paths an attacker can reach and weaponise.",
+            [
+                "Unsanitised user input flows directly to the LLM",
+                "LLM output fed into eval / exec / shell without sandboxing",
+                "Hardcoded credentials or API keys in source or skill files",
+                "Prompt injection markers in agent-loaded markdown manifests",
+                "Missing approval gate before state-changing tool calls",
+                "System prompt leakage via debug endpoints or model echo-back",
+            ],
+        ),
+        (
+            "defend", "Defend",
+            "Missing controls",
+            "Guards that should exist at each pipeline step but don't — the gaps attackers walk through.",
+            [
+                "No input sanitiser or intent classifier at the user-prompt step",
+                "No anti-injection instruction in the system prompt",
+                "No output scrubber before the response is emitted",
+                "Unbounded LLM call timeouts — enables DoS via slow-drip prompts",
+                "Non-HTTPS outbound fetches leaking data in transit",
+                "Overly permissive tool scopes (cancel, delete, send) with no HITL gate",
+            ],
+        ),
+        (
+            "respond", "Respond",
+            "Observability gaps",
+            "What you can't see after an incident — the blindspots that prevent detection and forensics.",
+            [
+                "No structured audit log of tool calls and their arguments",
+                "No tracing of LLM inputs / outputs for post-incident forensics",
+                "No rate-limiting or anomaly detection on agent invocations",
+                "Missing HITL gates mean high-risk actions leave no approval record",
+                "No correlation between user session and tool-call chain",
+            ],
+        ),
+    ]
+
+    parts.append('<div class="ddr-slide-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9654;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">The D / D / R framework</span>'
+        '<span class="ref-section-teaser">How AgentShield organises findings — '
+        'Detect surfaces attack paths, Defend flags missing controls, '
+        'Respond flags observability gaps.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append('<div class="ddr-slide-inner">')
+    parts.append(
+        '<div class="ddr-slide-hero">Detect &nbsp;&middot;&nbsp; Defend &nbsp;&middot;&nbsp; Respond</div>'
+        '<div class="ddr-slide-sub">Every AgentShield finding belongs to one of three buckets. '
+        'Fix Detect first &mdash; Defend next &mdash; Respond last.</div>'
+    )
+    parts.append('<div class="ddr-cols">')
+    for col_key, col_label, col_title, col_def, col_items in _COLS:
+        parts.append(f'<div class="ddr-col ddr-col-{col_key}">')
+        parts.append(f'<span class="ddr-col-badge">{_html_escape(col_label)}</span>')
+        parts.append(f'<div class="ddr-col-title">{_html_escape(col_title)}</div>')
+        parts.append(f'<div class="ddr-col-def">{_html_escape(col_def)}</div>')
+        parts.append('<ul class="ddr-col-items">')
+        for item in col_items:
+            parts.append(f'<li class="ddr-col-item">{_html_escape(item)}</li>')
+        parts.append('</ul>')
+        parts.append('</div>')
+    parts.append('</div>')  # /ddr-cols
+    parts.append(
+        '<div class="ddr-slide-note">'
+        'Findings in Detect are the highest priority &mdash; they represent open attack paths. '
+        'Defend findings close the doors. Respond findings ensure you can see and recover when something slips through.'
+        '</div>'
+    )
+    parts.append('</div>')  # /ddr-slide-inner
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /ddr-slide-card
+
+
+def _render_emulator_slide(parts: list[str]) -> None:
+    """Render the behaviour emulator explainer slide."""
+    _STEPS = [
+        (
+            "1", "Read source",
+            "Copilot reads every source file in the scanned repo — "
+            "controllers, orchestrators, tools, skill manifests. No live agent required.",
+            None,
+        ),
+        (
+            "2", "Map the pipeline",
+            "8 standard pipeline steps identified from the code: "
+            "User Input → RAG → System Prompt → Planner LLM → "
+            "Tool Call → Tool Output → Re-plan → Response.",
+            "structural",
+        ),
+        (
+            "3", "Build payload catalogue",
+            "For each of 14 catalogued attack classes: 3 seed payloads + up to 5 "
+            "dynamically generated mutations, each crafted to bypass a specific "
+            "defence found at the previous step.",
+            "14 attack classes",
+        ),
+        (
+            "4", "Walk each step",
+            "For every step in the attack path: predict what the code does given "
+            "the payload, whether a defence is present, and the outcome — "
+            "advances / blocked / modified / absent.",
+            "per-step",
+        ),
+        (
+            "5", "Predict verdict",
+            "Step outcomes synthesised into a single verdict with a confidence score (0–100%). "
+            "Blocked seeds trigger mutation generation; emulation stops when a payload lands.",
+            None,
+        ),
+        (
+            "6", "Produce trace",
+            "Per-seed pipeline trace with code citations, actor animations, "
+            "payload catalogue, and Fix guidance — all embedded in the report.",
+            "report output",
+        ),
+    ]
+
+    _VERDICTS = [
+        ("lands",   "emu-slide-v-lands",   "Lands",            "Attack succeeds end-to-end. Fix before ship."),
+        ("partial", "emu-slide-v-partial", "Partially blocked", "Some steps defended, others not. Attacker can pivot."),
+        ("blocked", "emu-slide-v-blocked", "Blocked",          "All steps defended. Attack could not advance."),
+        ("inconc",  "emu-slide-v-inconc",  "Inconclusive",     "Pipeline step absent or evidence insufficient."),
+    ]
+
+    parts.append('<div class="emu-slide-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9654;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">How the behaviour emulator works</span>'
+        '<span class="ref-section-teaser">Copilot walks the agent\'s runtime pipeline from source '
+        'and predicts attack outcomes for 14 classes — no live target, no payloads fired.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append('<div class="emu-slide-inner">')
+    parts.append(
+        '<div class="emu-slide-hero">Static pipeline analysis — no live agent needed</div>'
+        '<div class="emu-slide-sub">Copilot reads the source, maps the pipeline, and predicts '
+        'whether each of 14 catalogued attacks would land, be blocked, or be inconclusive.</div>'
+    )
+    parts.append('<div class="emu-slide-steps">')
+    for num, title, desc, tag in _STEPS:
+        parts.append('<div class="emu-slide-step">')
+        parts.append(f'<div class="emu-slide-step-num">{_html_escape(num)}</div>')
+        parts.append(f'<div class="emu-slide-step-title">{_html_escape(title)}</div>')
+        parts.append(f'<div class="emu-slide-step-desc">{_html_escape(desc)}</div>')
+        if tag:
+            parts.append(f'<span class="emu-slide-step-tag">{_html_escape(tag)}</span>')
+        parts.append('</div>')
+    parts.append('</div>')  # /emu-slide-steps
+
+    # Verdict key
+    parts.append('<div class="emu-slide-verdict-row">')
+    for _, v_cls, v_label, v_desc in _VERDICTS:
+        parts.append(
+            f'<div class="emu-slide-verdict {v_cls}">'
+            f'<div class="emu-slide-verdict-label">{_html_escape(v_label)}</div>'
+            f'<div class="emu-slide-verdict-desc">{_html_escape(v_desc)}</div>'
+            f'</div>'
+        )
+    parts.append('</div>')  # /verdict-row
+
+    parts.append(
+        '<div class="emu-slide-note">'
+        'Adjacent to adversary emulation but methodology-distinct: AgentShield walks the pipeline '
+        'against catalogued attack pattern classes, not specific threat-actor playbooks. '
+        'No live payloads are fired &mdash; this is structured threat modelling from source.'
+        '</div>'
+    )
+    parts.append('</div>')  # /emu-slide-inner
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /emu-slide-card
 
 
 def _render_how_it_works(parts: list[str]) -> None:
