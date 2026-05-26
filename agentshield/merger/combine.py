@@ -1116,6 +1116,10 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         step_label_clean = _strip_prefix(
             step.get("step_label") or step_key or "?"
         )
+        # Auto-append payload layer tag when not already embedded in the label
+        _lc = step_label_clean.lower()
+        if emu_layer and "seed-" not in _lc and "mutation-" not in _lc and "blocked-all" not in _lc:
+            step_label_clean = f"{step_label_clean} ({emu_layer})"
         code_basis = step.get("code_basis") or []
         citations = "".join(
             f'<span class="emu-code-basis-chip">'
