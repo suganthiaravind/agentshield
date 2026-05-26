@@ -991,6 +991,309 @@ def _actor_tooltip(label: str) -> str:
     return _ACTOR_TOOLTIPS.get(label, "")
 
 
+def _get_payload_for_layer(emu_data: dict, layer: str) -> str:
+    """Return the payload text for a given seed/mutation layer."""
+    for sp in (emu_data.get("seed_payloads") or []):
+        if isinstance(sp, dict) and sp.get("layer") == layer:
+            return sp.get("text") or ""
+    for mp in (emu_data.get("mutation_payloads") or []):
+        if isinstance(mp, dict) and mp.get("layer") == layer:
+            return mp.get("text") or ""
+    return emu_data.get("payload_used") or emu_data.get("catalogue_payload") or ""
+
+
+def _render_trace_scenes_block(
+    parts: list[str],
+    trace_steps: list[dict],
+    emu_data: dict,
+    *,
+    layer: str,
+    payload: str,
+    verdict: str,
+    conf,
+    attack_question: str,
+    show_attack_plan: bool,
+    is_seed_wrapper: bool,
+    is_active: bool,
+) -> None:
+    """Render .emu-trace-steps (scenes + attack-plan card) and the verdict
+    banner for one trace. When is_seed_wrapper=True wraps everything in
+    <div class="emu-seed-trace">."""
+    import re as _re
+
+    def _strip_prefix(lbl: str) -> str:
+        return _re.sub(r"^\d+\s*[—\-–]\s*", "", lbl).strip()
+
+    emu_attack_class = emu_data.get("attack_class") or "unknown"
+    _LLM_STEP_KEYS = {"planner", "planner_llm", "re_plan"}
+    _INDIRECT_CLASSES = {"indirect-prompt-injection", "memory-poisoning"}
+    n_scenes = len(trace_steps)
+
+    if is_seed_wrapper:
+        active_cls = " emu-seed-trace-active" if is_active else ""
+        display_style = "" if is_active else ' style="display:none"'
+        parts.append(
+            f'<div class="emu-seed-trace{active_cls}" data-layer="{_html_escape(layer)}"{display_style}>'
+        )
+
+    parts.append('<div class="emu-trace-steps">')
+
+    # Attack-plan card sits ABOVE all scene rows
+    if show_attack_plan and attack_question:
+        parts.append(
+            '<div class="emu-attack-plan-card" style="display:none">'
+            '<span class="emu-ap-label">Attack Plan</span>'
+            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
+            '</div>'
+        )
+
+    for scene_idx, step in enumerate(trace_steps):
+        outcome = step.get("outcome") or "advances"
+        step_key = step.get("step") or ""
+        step_cls = "emu-scene " f"emu-scene-{_html_escape(outcome)}"
+        step_label_clean = _strip_prefix(
+            step.get("step_label") or step_key or "?"
+        )
+        # Auto-append payload layer tag when not already embedded in the label
+        _lc = step_label_clean.lower()
+        if layer and "seed-" not in _lc and "mutation-" not in _lc and "blocked-all" not in _lc:
+            step_label_clean = f"{step_label_clean} ({layer})"
+        code_basis = step.get("code_basis") or []
+        citations = "".join(
+            f'<span class="emu-code-basis-chip">'
+            f'{_html_escape(str(c))}</span>'
+            for c in code_basis if isinstance(c, str)
+        )
+        defence_present = step.get("defensive_control_present", False)
+        if defence_present:
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-yes">defence present</span>'
+        elif outcome == "absent_step":
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">no attack surface</span>'
+        else:
+            defence_chip = '<span class="emu-defence-flag emu-defence-flag-no">no defence here</span>'
+
+        actor_key = (
+            "rag_context_indirect"
+            if step_key == "rag_context" and emu_attack_class in _INDIRECT_CLASSES
+            else step_key
+        )
+        src_lbl, src_icon, dst_lbl, dst_icon, arrow_lbl = (
+            _emu_actors_for_step(actor_key)
+        )
+        step_input = step.get("input") or ""
+        step_behavior = step.get("predicted_behavior") or ""
+        step_reasoning = step.get("outcome_reasoning") or ""
+
+        def _build_one_panel(snip: dict) -> str:
+            _lr = str(snip["hl_start"])
+            if snip["hl_end"] != snip["hl_start"]:
+                _lr += f'–{snip["hl_end"]}'
+            _lh = "".join(
+                f'<div class="emu-cp-line{" emu-cp-line-hl" if ln["highlight"] else ""}">'
+                f'<span class="emu-cp-ln">{ln["num"]}</span>'
+                f'<span class="emu-cp-code">{_html_escape(ln["code"])}</span>'
+                f'</div>'
+                for ln in snip["lines"]
+            )
+            return (
+                f'<div class="emu-cp-header">'
+                f'<span class="emu-cp-filename">{_html_escape(snip["file"])}</span>'
+                f'<span class="emu-cp-lineref">:{_lr}</span>'
+                f'</div>'
+                f'<div class="emu-cp-body">{_lh}</div>'
+            )
+
+        _snippets = step.get("code_snippets") or (
+            [step["code_snippet"]] if step.get("code_snippet") else []
+        )
+        if _snippets:
+            _divider = '<div class="emu-cp-divider"></div>' if len(_snippets) > 1 else ''
+            _inner = _divider.join(_build_one_panel(s) for s in _snippets)
+            _code_panel_html = f'<div class="emu-code-panel">{_inner}</div>'
+        else:
+            _code_panel_html = ""
+
+        src_tip = _actor_tooltip(src_lbl)
+        dst_tip = _actor_tooltip(dst_lbl)
+        src_title_attr = (
+            f' data-tip="{_html_escape(src_tip)}"'
+            f' aria-label="{_html_escape(src_tip)}"'
+            if src_tip else ""
+        )
+        dst_title_attr = (
+            f' data-tip="{_html_escape(dst_tip)}"'
+            f' aria-label="{_html_escape(dst_tip)}"'
+            if dst_tip else ""
+        )
+        src_role = (
+            "attacker"
+            if "Threat actor" in src_lbl or "Attacker-poisoned" in src_lbl
+            else "agent"
+        )
+        dst_role = "blocked" if outcome == "blocked" else "agent"
+
+        narrative = (
+            step_reasoning
+            or step_behavior
+            or _STEP_NARRATIVE.get(actor_key, {}).get(outcome)
+            or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
+            or ""
+        )
+        payload_callout_html = ''
+        _show_payload_at = {"user_prompt"} | (
+            {"rag_context"} if emu_attack_class in _INDIRECT_CLASSES else set()
+        )
+        if step_key in _show_payload_at and outcome == "advances" and payload:
+            _preview = payload[:160].rstrip()
+            if len(payload) > 160:
+                _preview += "…"
+            if step_key == "rag_context":
+                callout_label = (
+                    '<span class="emu-payload-origin-label">'
+                    'Hidden text embedded in the external document:</span>'
+                )
+            else:
+                callout_label = ""
+            payload_callout_html = (
+                f'<div class="emu-scene-payload-callout">'
+                f'{callout_label}'
+                f'{_html_escape(_preview)}'
+                f'</div>'
+            )
+            if step_key == "user_prompt":
+                narrative = (
+                    'The payload above enters the agent as ordinary user input '
+                    '— no input filters in place; the agent cannot tell it apart '
+                    'from a legitimate request. The attack moves forward.'
+                )
+
+        is_llm_step = step_key in _LLM_STEP_KEYS
+        llm_attr = ' data-llm-step="1"' if is_llm_step else ''
+        thinking_dots_html = (
+            '<span class="emu-thinking-dots" aria-hidden="true">'
+            '<i></i><i></i><i></i></span>'
+        ) if is_llm_step else ''
+
+        # Last scene: show overall verdict in the chip, not the raw step outcome
+        if scene_idx == n_scenes - 1:
+            _vstamp_text, _vstamp_cls = _VERDICT_STAMP.get(
+                verdict, (outcome, outcome)
+            )
+            outcome_chip_html = (
+                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(_vstamp_cls)}'
+                f' emu-scene-outcome-verdict">'
+                f'{_html_escape(_vstamp_text)}</span>'
+            )
+        else:
+            outcome_chip_html = (
+                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(outcome)}">'
+                f'{_html_escape(outcome)}</span>'
+            )
+
+        if step_input and not payload_callout_html:
+            _prev = step_input[:60] + ("…" if len(step_input) > 60 else "")
+            payload_first_html = (
+                f'<details class="emu-scene-payload-details">'
+                f'<summary>'
+                f'<span class="emu-scene-payload-label">payload</span>'
+                f'<code class="emu-scene-payload-preview">'
+                f'{_html_escape(_prev)}</code>'
+                f'</summary>'
+                f'<div class="emu-scene-payload">'
+                f'{_html_escape(step_input)}'
+                f'</div>'
+                f'</details>'
+            )
+        else:
+            payload_first_html = ""
+
+        parts.append(
+            f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
+            f'<div class="emu-scene-header">'
+            f'<span class="emu-scene-step-num">{scene_idx + 1}</span>'
+            f'<span class="emu-scene-step-label">{_html_escape(step_label_clean)}</span>'
+            f'{outcome_chip_html}'
+            f'{defence_chip}'
+            f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
+            f'</div>'
+            f'<div class="emu-scene-body">'
+            f'{payload_callout_html}{payload_first_html}'
+            f'<div class="emu-scene-content-row">'
+            f'<div class="emu-scene-main">'
+            f'<div class="emu-scene-actors">'
+            f'<div class="emu-actor emu-actor-src emu-actor-role-{src_role}"{src_title_attr}>'
+            f'<span class="emu-actor-icon">{src_icon}</span>'
+            f'<span class="emu-actor-label">{_html_escape(src_lbl)}</span>'
+            f'{thinking_dots_html}'
+            f'</div>'
+            f'<div class="emu-arrow">'
+            f'<span class="emu-arrow-label">{_html_escape(arrow_lbl)}</span>'
+            f'<div class="emu-arrow-line">'
+            f'<span class="emu-gate emu-gate-1" aria-hidden="true"></span>'
+            f'<span class="emu-gate emu-gate-2" aria-hidden="true"></span>'
+            f'</div>'
+            f'<span class="emu-packet" aria-hidden="true">'
+            f'<span class="emu-packet-label">payload</span></span>'
+            f'</div>'
+            f'<div class="emu-actor emu-actor-dst emu-actor-role-{dst_role}"{dst_title_attr}>'
+            f'<span class="emu-actor-icon">{dst_icon}</span>'
+            f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
+            f'</div>'
+            f'</div>'
+            f'<span class="emu-narrative-tag">REASONING</span>'
+            f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
+            f'{_html_escape(narrative)}</p>'
+            f'</div>'
+            f'{_code_panel_html}'
+            f'</div>'
+        )
+        # Arrival stamp only on the final scene; skip for inconclusive
+        if scene_idx == n_scenes - 1 and verdict != "inconclusive":
+            stamp_text, stamp_cls = _VERDICT_STAMP.get(
+                verdict, (verdict, "neutral")
+            )
+            parts.append(
+                f'<div class="emu-arrival-stamp emu-arrival-stamp-{stamp_cls}">'
+                f'{_html_escape(stamp_text)}</div>'
+            )
+        if step_behavior or step_reasoning or citations:
+            combined = step_behavior
+            if step_reasoning and step_reasoning != step_behavior:
+                combined = (
+                    (combined + " ") if combined else ""
+                ) + step_reasoning
+            body_html = (
+                f'<span class="emu-scene-behavior-text">{_html_escape(combined)}</span> '
+                if combined else ""
+            ) + citations
+            parts.append(
+                f'<details class="emu-scene-tech-detail">'
+                f'<summary class="emu-scene-tech-summary">Technical detail</summary>'
+                f'<div class="emu-scene-tech-body">{body_html}</div>'
+                f'</details>'
+            )
+        parts.append('</div></div>')  # /emu-scene-body /emu-scene
+
+    parts.append('</div>')  # /emu-trace-steps
+
+    # Verdict banner
+    banner_label = {
+        "lands": "ATTACK LANDS — predicted",
+        "partial": "PARTIAL — defence missing at some step",
+        "blocked": "ATTACK BLOCKED — defence working",
+        "inconclusive": "INCONCLUSIVE — see reasoning",
+    }.get(verdict, "(unknown verdict)")
+    parts.append(
+        f'<div class="emu-trace-final '
+        f'emu-trace-final-{_html_escape(verdict)}">'
+        f'{_html_escape(banner_label)}'
+        f'</div>'
+    )
+
+    if is_seed_wrapper:
+        parts.append('</div>')  # /emu-seed-trace
+
+
 def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     """Emit the <div class="emu-trace">...</div> markup — the role-play
     scenes (actors + arrow + packet + payload + behaviour line), the
@@ -1109,337 +1412,76 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         '</div>'
         '</div>'
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
-        '<div class="emu-trace-steps">'
     )
-    # Attack-plan card sits ABOVE all scene rows — plays while all steps show as compact
-    if attack_question:
-        parts.append(
-            '<div class="emu-attack-plan-card" style="display:none">'
-            '<span class="emu-ap-label">Attack Plan</span>'
-            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
-            '</div>'
-        )
-    _LLM_STEP_KEYS = {"planner", "planner_llm", "re_plan"}
-    n_scenes = len(emu_trace)
-    for scene_idx, step in enumerate(emu_trace):
-        outcome = step.get("outcome") or "advances"
-        step_key = step.get("step") or ""
-        step_cls = "emu-scene " f"emu-scene-{_html_escape(outcome)}"
-        step_label_clean = _strip_prefix(
-            step.get("step_label") or step_key or "?"
-        )
-        # Auto-append payload layer tag when not already embedded in the label
-        _lc = step_label_clean.lower()
-        if emu_layer and "seed-" not in _lc and "mutation-" not in _lc and "blocked-all" not in _lc:
-            step_label_clean = f"{step_label_clean} ({emu_layer})"
-        code_basis = step.get("code_basis") or []
-        citations = "".join(
-            f'<span class="emu-code-basis-chip">'
-            f'{_html_escape(str(c))}</span>'
-            for c in code_basis if isinstance(c, str)
-        )
-        defence_present = step.get("defensive_control_present", False)
-        if defence_present:
-            defence_chip = '<span class="emu-defence-flag emu-defence-flag-yes">defence present</span>'
-        elif outcome == "absent_step":
-            defence_chip = '<span class="emu-defence-flag emu-defence-flag-na">no attack surface</span>'
-        else:
-            defence_chip = '<span class="emu-defence-flag emu-defence-flag-no">no defence here</span>'
-        # For indirect injection + memory poisoning, the attacker is inside
-        # the external document, not at the chat interface — use the indirect
-        # actor pair so the animation shows the right source.
-        _INDIRECT_CLASSES = {"indirect-prompt-injection", "memory-poisoning"}
-        actor_key = (
-            "rag_context_indirect"
-            if step_key == "rag_context" and emu_attack_class in _INDIRECT_CLASSES
-            else step_key
-        )
-        src_lbl, src_icon, dst_lbl, dst_icon, arrow_lbl = (
-            _emu_actors_for_step(actor_key)
-        )
-        step_input = step.get("input") or ""
-        step_behavior = step.get("predicted_behavior") or ""
-        step_reasoning = step.get("outcome_reasoning") or ""
-        # Build inline code panel HTML (dark snippet(s) shown in right column)
-        def _build_one_panel(snip: dict) -> str:
-            _lr = str(snip["hl_start"])
-            if snip["hl_end"] != snip["hl_start"]:
-                _lr += f'–{snip["hl_end"]}'
-            _lh = "".join(
-                f'<div class="emu-cp-line{" emu-cp-line-hl" if ln["highlight"] else ""}">'
-                f'<span class="emu-cp-ln">{ln["num"]}</span>'
-                f'<span class="emu-cp-code">{_html_escape(ln["code"])}</span>'
-                f'</div>'
-                for ln in snip["lines"]
-            )
-            return (
-                f'<div class="emu-cp-header">'
-                f'<span class="emu-cp-filename">{_html_escape(snip["file"])}</span>'
-                f'<span class="emu-cp-lineref">:{_lr}</span>'
-                f'</div>'
-                f'<div class="emu-cp-body">{_lh}</div>'
-            )
 
-        _snippets = step.get("code_snippets") or (
-            [step["code_snippet"]] if step.get("code_snippet") else []
-        )
-        if _snippets:
-            _divider = '<div class="emu-cp-divider"></div>' if len(_snippets) > 1 else ''
-            _inner = _divider.join(_build_one_panel(s) for s in _snippets)
-            _code_panel_html = f'<div class="emu-code-panel">{_inner}</div>'
-        else:
-            _code_panel_html = ""
-        src_tip = _actor_tooltip(src_lbl)
-        dst_tip = _actor_tooltip(dst_lbl)
-        src_title_attr = (
-            f' data-tip="{_html_escape(src_tip)}"'
-            f' aria-label="{_html_escape(src_tip)}"'
-            if src_tip else ""
-        )
-        dst_title_attr = (
-            f' data-tip="{_html_escape(dst_tip)}"'
-            f' aria-label="{_html_escape(dst_tip)}"'
-            if dst_tip else ""
-        )
-        # Attacker role: Threat actor at user_prompt, poisoned doc at rag_context indirect
-        src_role = (
-            "attacker"
-            if "Threat actor" in src_lbl or "Attacker-poisoned" in src_lbl
-            else "agent"
-        )
-        dst_role = "blocked" if outcome == "blocked" else "agent"
+    seed_traces = emu_data.get("seed_traces") or {}
+    use_seed_tabs = bool(seed_traces)
 
-        # Narrative: prefer actual outcome_reasoning from the trace (payload-specific),
-        # fall back to canned step narrative only when no specific reasoning was written.
-        narrative = (
-            step_reasoning
-            or step_behavior
-            or _STEP_NARRATIVE.get(actor_key, {}).get(outcome)
-            or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
-            or ""
-        )
-        # Payload callout — shown for user_prompt (direct injection) and
-        # rag_context (indirect injection) so the attacker text is visible.
-        payload_callout_html = ''
-        _show_payload_at = {"user_prompt"} | (
-            {"rag_context"} if emu_attack_class in _INDIRECT_CLASSES else set()
-        )
-        if step_key in _show_payload_at and outcome == "advances" and emu_payload:
-            _preview = emu_payload[:160].rstrip()
-            if len(emu_payload) > 160:
-                _preview += "…"
-            if step_key == "rag_context":
-                callout_label = (
-                    '<span class="emu-payload-origin-label">'
-                    'Hidden text embedded in the external document:</span>'
-                )
-            else:
-                callout_label = ""
-            payload_callout_html = (
-                f'<div class="emu-scene-payload-callout">'
-                f'{callout_label}'
-                f'{_html_escape(_preview)}'
-                f'</div>'
-            )
-            if step_key == "user_prompt":
-                narrative = (
-                    'The payload above enters the agent as ordinary user input '
-                    '— no input filters in place; the agent cannot tell it apart '
-                    'from a legitimate request. The attack moves forward.'
-                )
-        # LLM step markers — thinking animation fires before the packet
-        is_llm_step = step_key in _LLM_STEP_KEYS
-        llm_attr = ' data-llm-step="1"' if is_llm_step else ''
-        thinking_dots_html = (
-            '<span class="emu-thinking-dots" aria-hidden="true">'
-            '<i></i><i></i><i></i></span>'
-        ) if is_llm_step else ''
+    if use_seed_tabs:
+        # Build ordered layer list from catalogue (seeds first, then mutations)
+        ordered_layers: list[str] = []
+        for item in catalog_items:
+            lyr = item["layer"]
+            if lyr in seed_traces and lyr not in ordered_layers:
+                ordered_layers.append(lyr)
+        # Also include any layers in seed_traces not in catalog
+        for lyr in seed_traces:
+            if lyr not in ordered_layers:
+                ordered_layers.append(lyr)
 
-
-        # Last scene: show overall verdict in the chip, not the raw step outcome
-        if scene_idx == n_scenes - 1:
-            _vstamp_text, _vstamp_cls = _VERDICT_STAMP.get(
-                emu_verdict, (outcome, outcome)
+        # Seed tab bar
+        parts.append('<div class="emu-seed-tabs">')
+        for lyr in ordered_layers:
+            lyr_steps = seed_traces[lyr]
+            lyr_last_outcome = (
+                (lyr_steps[-1].get("outcome") or "blocked") if lyr_steps else "blocked"
             )
-            outcome_chip_html = (
-                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(_vstamp_cls)}'
-                f' emu-scene-outcome-verdict">'
-                f'{_html_escape(_vstamp_text)}</span>'
+            is_lyr_active = (lyr == emu_layer)
+            tab_active_cls = " emu-seed-tab-active" if is_lyr_active else ""
+            badge_cls = (
+                "emu-seed-tab-badge-landed"
+                if lyr_last_outcome == "advances"
+                else "emu-seed-tab-badge-blocked"
             )
-        else:
-            outcome_chip_html = (
-                f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(outcome)}">'
-                f'{_html_escape(outcome)}</span>'
-            )
-        # Pre-build payload block so it can appear first in the step body.
-        # payload_callout_html already covers user_prompt/rag_context advancing;
-        # for all other steps we build the collapsible here instead of after.
-        if step_input and not payload_callout_html:
-            _prev = step_input[:60] + ("…" if len(step_input) > 60 else "")
-            payload_first_html = (
-                f'<details class="emu-scene-payload-details">'
-                f'<summary>'
-                f'<span class="emu-scene-payload-label">payload</span>'
-                f'<code class="emu-scene-payload-preview">'
-                f'{_html_escape(_prev)}</code>'
-                f'</summary>'
-                f'<div class="emu-scene-payload">'
-                f'{_html_escape(step_input)}'
-                f'</div>'
-                f'</details>'
-            )
-        else:
-            payload_first_html = ""
-
-        # Order: payload → animation → narrative (reasoning)
-        parts.append(
-            f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
-            f'<div class="emu-scene-header">'
-            f'<span class="emu-scene-step-num">{scene_idx + 1}</span>'
-            f'<span class="emu-scene-step-label">{_html_escape(step_label_clean)}</span>'
-            f'{outcome_chip_html}'
-            f'{defence_chip}'
-            f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
-            f'</div>'
-            f'<div class="emu-scene-body">'
-            f'{payload_callout_html}{payload_first_html}'
-            f'<div class="emu-scene-content-row">'
-            f'<div class="emu-scene-main">'
-            f'<div class="emu-scene-actors">'
-            f'<div class="emu-actor emu-actor-src emu-actor-role-{src_role}"{src_title_attr}>'
-            f'<span class="emu-actor-icon">{src_icon}</span>'
-            f'<span class="emu-actor-label">{_html_escape(src_lbl)}</span>'
-            f'{thinking_dots_html}'
-            f'</div>'
-            f'<div class="emu-arrow">'
-            f'<span class="emu-arrow-label">{_html_escape(arrow_lbl)}</span>'
-            f'<div class="emu-arrow-line">'
-            f'<span class="emu-gate emu-gate-1" aria-hidden="true"></span>'
-            f'<span class="emu-gate emu-gate-2" aria-hidden="true"></span>'
-            f'</div>'
-            f'<span class="emu-packet" aria-hidden="true">'
-            f'<span class="emu-packet-label">payload</span></span>'
-            f'</div>'
-            f'<div class="emu-actor emu-actor-dst emu-actor-role-{dst_role}"{dst_title_attr}>'
-            f'<span class="emu-actor-icon">{dst_icon}</span>'
-            f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
-            f'</div>'
-            f'</div>'
-            f'<span class="emu-narrative-tag">REASONING</span>'
-            f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
-            f'{_html_escape(narrative)}</p>'
-            f'</div>'
-            f'{_code_panel_html}'
-            f'</div>'
-        )
-        # Arrival stamp only on the final scene; skip for inconclusive
-        if scene_idx == n_scenes - 1 and emu_verdict != "inconclusive":
-            stamp_text, stamp_cls = _VERDICT_STAMP.get(
-                emu_verdict, (emu_verdict, "neutral")
-            )
+            badge_text = "landed" if lyr_last_outcome == "advances" else "blocked"
             parts.append(
-                f'<div class="emu-arrival-stamp emu-arrival-stamp-{stamp_cls}">'
-                f'{_html_escape(stamp_text)}</div>'
+                f'<button class="emu-seed-tab{tab_active_cls}" data-layer="{_html_escape(lyr)}">'
+                f'{_html_escape(lyr)}'
+                f'<span class="emu-seed-tab-badge {badge_cls}">{_html_escape(badge_text)}</span>'
+                f'</button>'
             )
-        if step_behavior or step_reasoning or citations:
-            combined = step_behavior
-            if step_reasoning and step_reasoning != step_behavior:
-                combined = (
-                    (combined + " ") if combined else ""
-                ) + step_reasoning
-            body_html = (
-                f'<span class="emu-scene-behavior-text">{_html_escape(combined)}</span> '
-                if combined else ""
-            ) + citations
-            parts.append(
-                f'<details class="emu-scene-tech-detail">'
-                f'<summary class="emu-scene-tech-summary">Technical detail</summary>'
-                f'<div class="emu-scene-tech-body">{body_html}</div>'
-                f'</details>'
-            )
-        parts.append('</div></div>')  # /emu-scene-body /emu-scene
-    parts.append('</div>')  # /emu-trace-steps
+        parts.append('</div>')  # /emu-seed-tabs
 
-    # Streaming terminal log.
-    terminal_lines: list[tuple[int, str, str, str]] = []
-    terminal_lines.append((
-        -1, "info", "INFO",
-        f"role-play start · {emu_attack_class} · "
-        f"{len(emu_trace)} of 8 pipeline steps",
-    ))
-    for si, step in enumerate(emu_trace):
-        outcome_l = step.get("outcome") or "advances"
-        step_label_clean = _re.sub(
-            r"^\d+\s*[—\-–]\s*", "",
-            step.get("step_label") or step.get("step", "?"),
-        ).strip()
-        terminal_lines.append((
-            si, "scene", "SCENE",
-            f"{si + 1}/{len(emu_trace)} · {step_label_clean}",
-        ))
-        step_k = step.get("step") or ""
-        if step_k == "user_prompt" and emu_payload:
-            _payload_preview = emu_payload[:140].rstrip()
-            if len(emu_payload) > 140:
-                _payload_preview += "…"
-            terminal_lines.append((
-                si, "payload", "PAYLOAD",
-                _payload_preview,
-            ))
-        code_b = step.get("code_basis") or []
-        if code_b:
-            terminal_lines.append((
-                si, "read", "READ",
-                ", ".join(
-                    str(c) for c in code_b if isinstance(c, str)
-                ),
-            ))
-        pb = (step.get("predicted_behavior") or "").strip()
-        if pb:
-            terminal_lines.append((
-                si, "predict", "PREDICT",
-                pb[:160] + ("…" if len(pb) > 160 else ""),
-            ))
-        or_ = (step.get("outcome_reasoning") or "").strip()
-        defence_word = (
-            "defence present"
-            if step.get("defensive_control_present")
-            else "no defence here"
+        for lyr in ordered_layers:
+            lyr_trace = seed_traces[lyr]
+            lyr_payload = _get_payload_for_layer(emu_data, lyr)
+            is_lyr_active = (lyr == emu_layer)
+            lyr_verdict = emu_verdict if is_lyr_active else "blocked"
+            lyr_conf = emu_conf if is_lyr_active else None
+            _render_trace_scenes_block(
+                parts, lyr_trace, emu_data,
+                layer=lyr,
+                payload=lyr_payload,
+                verdict=lyr_verdict,
+                conf=lyr_conf,
+                attack_question=attack_question,
+                show_attack_plan=is_lyr_active,
+                is_seed_wrapper=True,
+                is_active=is_lyr_active,
+            )
+    else:
+        _render_trace_scenes_block(
+            parts, emu_trace, emu_data,
+            layer=emu_layer,
+            payload=emu_payload,
+            verdict=emu_verdict,
+            conf=emu_conf,
+            attack_question=attack_question,
+            show_attack_plan=True,
+            is_seed_wrapper=False,
+            is_active=True,
         )
-        terminal_lines.append((
-            si, f"outcome-{outcome_l}", "OUTCOME",
-            f"{outcome_l} · {defence_word}"
-            + (f" · {or_}" if or_ else ""),
-        ))
-    verdict_label = {
-        "lands": "ATTACK LANDS — predicted",
-        "partial": "PARTIAL — defence missing at some step",
-        "blocked": "ATTACK BLOCKED — defence working",
-        "inconclusive": "INCONCLUSIVE — see reasoning",
-    }.get(emu_verdict, "(unknown)")
-    conf_pct = (
-        f" · confidence {int(round(emu_conf * 100))}%"
-        if isinstance(emu_conf, (int, float)) else ""
-    )
-    terminal_lines.append((
-        len(emu_trace), f"verdict-{emu_verdict}", "VERDICT",
-        f"{verdict_label}{conf_pct}",
-    ))
-    # Terminal HTML rendering removed — accordion layout replaces the terminal.
-    # terminal_lines list kept above for potential future use.
 
-    banner_label = {
-        "lands": "ATTACK LANDS — predicted",
-        "partial": "PARTIAL — defence missing at some step",
-        "blocked": "ATTACK BLOCKED — defence working",
-        "inconclusive": "INCONCLUSIVE — see reasoning",
-    }.get(emu_verdict, "(unknown verdict)")
-    parts.append(
-        f'<div class="emu-trace-final '
-        f'emu-trace-final-{_html_escape(emu_verdict)}">'
-        f'{_html_escape(banner_label)}'
-        f'</div>'
-    )
     parts.append('</div>')  # /emu-trace
 
 
@@ -1474,6 +1516,49 @@ def _load_code_snippet(source_dir: Path, code_ref: str, ctx: int = 3) -> dict | 
         for i in range(disp_start, disp_end + 1)
     ]
     return {"file": filename, "hl_start": hl_start, "hl_end": hl_end, "lines": lines}
+
+
+def _normalize_trace_steps(steps: list, source_dir: "Path") -> list:
+    """Normalize a raw pipeline_trace steps list into validated dicts.
+
+    Validates outcome enums, loads code snippets, and returns a list of
+    step dicts ready for the renderer. Used by both pipeline_trace and
+    each per-seed entry in seed_traces.
+    """
+    trace_out: list[dict] = []
+    for tstep in steps:
+        if not isinstance(tstep, dict):
+            continue
+        outcome = tstep.get("outcome")
+        if outcome not in _VALID_EMULATOR_OUTCOMES:
+            outcome = None
+        code_basis = [str(c) for c in (tstep.get("code_basis") or [])]
+        # Load up to two distinct-file snippets for the animation panel
+        code_snippets: list[dict] = []
+        seen_files: set[str] = set()
+        for _ref in code_basis:
+            _s = _load_code_snippet(source_dir, _ref)
+            if _s and _s["file"] not in seen_files:
+                code_snippets.append(_s)
+                seen_files.add(_s["file"])
+            if len(code_snippets) == 2:
+                break
+        code_snippet = code_snippets[0] if code_snippets else None
+        trace_out.append({
+            "step": str(tstep.get("step") or ""),
+            "step_label": str(tstep.get("step_label") or ""),
+            "input": str(tstep.get("input") or ""),
+            "predicted_behavior": str(tstep.get("predicted_behavior") or ""),
+            "code_basis": code_basis,
+            "defensive_control_present": bool(
+                tstep.get("defensive_control_present", False)
+            ),
+            "outcome": outcome,
+            "outcome_reasoning": str(tstep.get("outcome_reasoning") or ""),
+            "code_snippet": code_snippet,
+            "code_snippets": code_snippets,
+        })
+    return trace_out
 
 
 def _load_agent_emulation(agentshield_dir: Path) -> dict:
@@ -1537,40 +1622,19 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         except (TypeError, ValueError):
             conf = None
         # Per-step pipeline_trace: validate outcomes + carry through.
-        trace_out: list[dict] = []
         source_dir = agentshield_dir.parent
-        for tstep in entry.get("pipeline_trace") or []:
-            if not isinstance(tstep, dict):
-                continue
-            outcome = tstep.get("outcome")
-            if outcome not in _VALID_EMULATOR_OUTCOMES:
-                outcome = None
-            code_basis = [str(c) for c in (tstep.get("code_basis") or [])]
-            # Load up to two distinct-file snippets for the animation panel
-            code_snippets: list[dict] = []
-            seen_files: set[str] = set()
-            for _ref in code_basis:
-                _s = _load_code_snippet(source_dir, _ref)
-                if _s and _s["file"] not in seen_files:
-                    code_snippets.append(_s)
-                    seen_files.add(_s["file"])
-                if len(code_snippets) == 2:
-                    break
-            code_snippet = code_snippets[0] if code_snippets else None
-            trace_out.append({
-                "step": str(tstep.get("step") or ""),
-                "step_label": str(tstep.get("step_label") or ""),
-                "input": str(tstep.get("input") or ""),
-                "predicted_behavior": str(tstep.get("predicted_behavior") or ""),
-                "code_basis": code_basis,
-                "defensive_control_present": bool(
-                    tstep.get("defensive_control_present", False)
-                ),
-                "outcome": outcome,
-                "outcome_reasoning": str(tstep.get("outcome_reasoning") or ""),
-                "code_snippet": code_snippet,
-                "code_snippets": code_snippets,
-            })
+        trace_out = _normalize_trace_steps(
+            entry.get("pipeline_trace") or [], source_dir
+        )
+        # Per-seed traces: normalize each seed's step list independently.
+        seed_traces_raw = entry.get("seed_traces") or {}
+        seed_traces_out: dict[str, list[dict]] = {}
+        if isinstance(seed_traces_raw, dict):
+            for lyr, lyr_steps in seed_traces_raw.items():
+                if isinstance(lyr_steps, list):
+                    seed_traces_out[str(lyr)] = _normalize_trace_steps(
+                        lyr_steps, source_dir
+                    )
         traces_out.append({
             "attack_class": str(entry.get("attack_class") or ""),
             "attack_class_label": str(entry.get("attack_class_label") or ""),
@@ -1586,6 +1650,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
             "verdict_reasoning": str(entry.get("verdict_reasoning") or ""),
             "frameworks": entry.get("frameworks") or {},
             "pipeline_trace": trace_out,
+            "seed_traces": seed_traces_out,
         })
 
     return {
@@ -5126,6 +5191,30 @@ footer {
 .io-agent-surface-none {
   font-size: 11px; color: var(--text-muted); margin: 4px 0 0;
 }
+
+/* Seed-tab switcher — shown above the trace steps when seed_traces has multiple entries */
+.emu-seed-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin: 10px 0 12px;
+}
+.emu-seed-tab {
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border: 1.5px solid var(--border); border-radius: 20px;
+  background: var(--bg); color: var(--text-muted);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: border-color 160ms, color 160ms, background 160ms;
+}
+.emu-seed-tab:hover { background: #f1f5f9; }
+.emu-seed-tab.emu-seed-tab-active {
+  border-color: #3b82f6; color: #1d4ed8;
+  background: #eff6ff;
+}
+.emu-seed-tab-badge {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+}
+.emu-seed-tab-badge-landed  { background: #fde8e8; color: #c81e1e; }
+.emu-seed-tab-badge-blocked { background: #f0fdf4; color: #16a34a; }
+.emu-seed-trace { display: block; }
 
 /* Emulator coverage block — bottom of the Input & Output tab.
    Lists every catalogued attack class with its verdict so a
@@ -8730,7 +8819,7 @@ _HTML_JS = """
       trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
         c.classList.remove('emu-pip-active');
       });
-      trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s) {
+      trace.querySelectorAll('.emu-scene').forEach(function (s) {
         s.classList.remove('emu-scene-active', 'emu-scene-done',
                            'emu-scene-packet-flying', 'emu-scene-charge-ready',
                            'emu-scene-thinking', 'emu-scene-received',
@@ -8745,8 +8834,7 @@ _HTML_JS = """
           if (orig !== null) narr.textContent = orig;
         }
       });
-      var fb = trace.querySelector('.emu-trace-final');
-      if (fb) fb.classList.remove('emu-trace-final-visible');
+      trace.querySelectorAll('.emu-trace-final').forEach(function(fb){ fb.classList.remove('emu-trace-final-visible'); });
       trace.querySelectorAll('.emu-terminal .emu-term-line').forEach(function (ln) {
         ln.classList.remove('emu-term-revealed', 'emu-term-current');
       });
@@ -8840,8 +8928,10 @@ _HTML_JS = """
 
     function playFromScene(trace, startIdx) {
       pausedAtScene = -1;
-      var scenes      = trace.querySelectorAll('.emu-trace-steps .emu-scene');
-      var finalBanner = trace.querySelector('.emu-trace-final');
+      var activeSeed  = trace.querySelector('.emu-seed-trace.emu-seed-trace-active');
+      var stepsRoot   = activeSeed || trace;
+      var scenes      = stepsRoot.querySelectorAll('.emu-trace-steps .emu-scene');
+      var finalBanner = stepsRoot.querySelector('.emu-trace-final');
       var btn         = trace.querySelector('.emu-play-btn');
       var pauseBtn    = trace.querySelector('[data-action="emu-pause"]');
       var closeBtn    = trace.querySelector('[data-action="emu-close"]');
@@ -9018,7 +9108,9 @@ _HTML_JS = """
           } else {
             clearAllTimers();
             var lastVisible = 0;
-            trace.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, i) {
+            var pauseActiveSeed = trace.querySelector('.emu-seed-trace.emu-seed-trace-active');
+            var pauseStepsRoot = pauseActiveSeed || trace;
+            pauseStepsRoot.querySelectorAll('.emu-trace-steps .emu-scene').forEach(function (s, i) {
               if (s.classList.contains('emu-scene-active')) lastVisible = i;
             });
             pausedAtScene = lastVisible;
@@ -9049,6 +9141,35 @@ _HTML_JS = """
       closeBtn.addEventListener('click', function () {
         var trace = closeBtn.closest('.emu-trace');
         if (trace) closeTrace(trace);
+      });
+    });
+
+    document.querySelectorAll('.emu-seed-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var trace = tab.closest('.emu-trace');
+        if (!trace) return;
+        // Stop any running animation
+        var playBtn = trace.querySelector('.emu-play-btn');
+        if (trace.classList.contains('emu-trace-playing')) {
+          clearAllTimers();
+          resetTrace(trace);
+          activeTrace = null;
+          var pauseBtn2 = trace.querySelector('[data-action="emu-pause"]');
+          if (pauseBtn2) pauseBtn2.style.display = 'none';
+          var progressWrap2 = trace.querySelector('.emu-progress-wrap');
+          if (progressWrap2) progressWrap2.style.display = 'none';
+          if (playBtn) { playBtn.disabled = false; playBtn.innerHTML = '&#9654; Play behaviour emulation'; }
+        }
+        // Switch active tab
+        trace.querySelectorAll('.emu-seed-tab').forEach(function(t) { t.classList.remove('emu-seed-tab-active'); });
+        tab.classList.add('emu-seed-tab-active');
+        // Switch active seed trace
+        var layer = tab.getAttribute('data-layer');
+        trace.querySelectorAll('.emu-seed-trace').forEach(function(st) {
+          var isTarget = st.getAttribute('data-layer') === layer;
+          st.style.display = isTarget ? '' : 'none';
+          st.classList.toggle('emu-seed-trace-active', isTarget);
+        });
       });
     });
 
