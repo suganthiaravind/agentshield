@@ -12257,9 +12257,9 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
-    _render_solution_diagram(parts)
     _render_design_basis(parts)
     _render_how_it_works(parts)
+    _render_solution_diagram(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -12530,11 +12530,11 @@ def _render_design_basis(parts: list[str]) -> None:
             "one schema so the reviewer sees a single ranked report.",
         ),
         (
-            "Two-phase pipeline (static + runtime probe)",
+            "Two-phase pipeline (static + behaviour emulation)",
             "Phase 1 catalogues every risk the ruleset knows about. "
-            "Phase 2, when a target is configured, fires each attack at "
-            "the running agent and adds explore-mode discoveries. "
-            "Designed to run together on every agent.",
+            "Phase 2 emulates 13 attack classes offline against a "
+            "simulated version of the agent &mdash; no live endpoint "
+            "required. Designed to run together on every agent.",
         ),
     ]
 
@@ -12558,15 +12558,13 @@ def _render_design_basis(parts: list[str]) -> None:
         'frameworks drive every AgentShield control &mdash; each one is '
         'built to enforce specific guidance from a published standard, '
         'so the check tells you exactly where your agent diverges. '
-        'Explore-mode discoveries (the red-tinted simulated probes) '
-        'cover behavioural attacks the static rule pack can&rsquo;t '
-        'catch on its own &mdash; authority escalation, memory '
-        'poisoning, tool chaining, and similar agent-class issues. The '
-        'default run uses a curated catalogue applicable to any '
-        'tool-using agent; with a real LLM adversarial backend '
-        'configured, the same slot generates payloads tuned to your '
-        'specific target. A small set of internal design pillars then '
-        'keeps the report consistent across engines.</p>'
+        'The behaviour emulator covers attacks the static rule pack '
+        'can&rsquo;t catch on its own &mdash; authority escalation, '
+        'memory poisoning, tool chaining, and similar agent-class issues '
+        '&mdash; by emulating 13 attack classes offline against a '
+        'simulated version of the agent, with no live endpoint required. '
+        'A small set of internal design pillars keeps the report '
+        'consistent across engines.</p>'
     )
 
     parts.append('<h4 class="design-subhead">Security frameworks</h4>')
