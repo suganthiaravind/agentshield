@@ -117,6 +117,10 @@ class CombinedReport:
     # is per-pipeline-step, not per-turn. Empty dict with
     # `present: False` when no emulation has been run.
     agent_emulation: dict = field(default_factory=lambda: {"present": False})
+    git_branch: str = ""
+    git_commit: str = ""
+    git_repo_name: str = ""
+    scan_duration_seconds: int | None = None
 
 
 @dataclass
@@ -222,6 +226,10 @@ def merge(target_root: Path) -> MergeResult:
 
     tier1_findings_raw = tier1.get("findings", [])
     tier1_fingerprint = tier1.get("agentshield_tier1_fingerprint", "")
+    git_branch = tier1.get("git_branch", "")
+    git_commit = tier1.get("git_commit", "")
+    git_repo_name = tier1.get("git_repo_name", "")
+    scan_duration_seconds = tier1.get("scan_duration_seconds")
 
     tier2_present = tier2_path.exists()
     tier2: dict[str, Any] = {}
@@ -322,6 +330,10 @@ def merge(target_root: Path) -> MergeResult:
         probe_discovered=probe_discovered,
         probe_campaigns=probe_campaigns,
         agent_emulation=agent_emulation,
+        git_branch=git_branch,
+        git_commit=git_commit,
+        git_repo_name=git_repo_name,
+        scan_duration_seconds=scan_duration_seconds,
     )
 
     return MergeResult(
@@ -9513,10 +9525,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             scanned_display = f"{_ts.day} {_ts.strftime('%b %Y, %H:%M')} UTC"
         except ValueError:
             scanned_display = r.tier2_scanned_at
-    repo_target = "agentshield-demo / customer-support-agent"
-    branch = "main"
-    commit = "7a3c1f2"
-    scan_duration = "42s"
+    repo_target = r.git_repo_name or "unknown"
+    branch = r.git_branch or "unknown"
+    commit = r.git_commit or "unknown"
+    _dur = r.scan_duration_seconds
+    scan_duration = f"{_dur}s" if _dur is not None else ""
     total_findings = sum(sev_total.values())
     parts.append('<div class="report-header">')
     parts.append("<h1>AgentShield Pre-Production Review Report</h1>")
@@ -9526,8 +9539,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f"branch {_html_escape(branch)} "
             f"&middot; commit {_html_escape(commit)} "
             f"&middot; {_html_escape(scanned_display)} "
-            f"&middot; scan took {_html_escape(scan_duration)}. "
-            f"<strong>Findings in this scan: {total_findings}</strong>"
+            + (f"&middot; scan took {_html_escape(scan_duration)} " if scan_duration else "")
+            + f"<strong>Findings in this scan: {total_findings}</strong>"
         )
     else:
         subtitle = (

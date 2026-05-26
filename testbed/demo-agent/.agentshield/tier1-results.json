@@ -1,6 +1,6 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-26T05:33:25.458899Z",
+  "scanned_at": "2026-05-26T12:39:57.239528Z",
   "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "scanned_files": [
     "config.py",
@@ -855,5 +855,9 @@
       },
       "remediation": "Sign the canonical skill payload with an ed25519 key and publish the signature in the manifest."
     }
-  ]
+  ],
+  "git_branch": "v4",
+  "git_commit": "518aabf",
+  "git_repo_name": "demo-agent",
+  "scan_duration_seconds": 19
 }

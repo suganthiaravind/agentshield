@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -211,6 +212,31 @@ def ensure_gitignored(target_root: Path) -> bool:
     return True
 
 
+def _git_meta(target_root: Path) -> dict:
+    """Return git branch, short commit, and repo name for target_root.
+    Falls back to empty strings if git is unavailable or the directory
+    is not a git repository."""
+    def _run(*args: str) -> str:
+        try:
+            return subprocess.check_output(
+                ["git", "-C", str(target_root)] + list(args),
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except Exception:
+            return ""
+
+    branch = _run("rev-parse", "--abbrev-ref", "HEAD")
+    if branch == "HEAD":
+        branch = _run("describe", "--tags", "--exact-match") or _run("rev-parse", "--short", "HEAD")
+    commit = _run("rev-parse", "--short", "HEAD")
+    return {
+        "branch": branch,
+        "commit": commit,
+        "repo_name": target_root.name,
+    }
+
+
 def emit_skills(
     target_root: Path,
     findings: list[dict],
@@ -218,6 +244,7 @@ def emit_skills(
     *,
     now_utc: datetime | None = None,
     output_dir: Path | None = None,
+    scan_started_at: datetime | None = None,
 ) -> EmitResult:
     """Render Tier 2 contract files + tier1-results.json into the target,
     and fix-skill `.md` files into the developer-facing output directory.
@@ -275,9 +302,15 @@ def emit_skills(
         fix_skill_emitted.append(dst)
 
     fingerprint = compute_tier1_fingerprint(findings)
-    ts = (now_utc or datetime.now(timezone.utc)).isoformat()
+    now = now_utc or datetime.now(timezone.utc)
+    ts = now.isoformat()
     if ts.endswith("+00:00"):
         ts = ts[:-6] + "Z"
+
+    git = _git_meta(target_root)
+    scan_duration_s: int | None = None
+    if scan_started_at is not None:
+        scan_duration_s = max(0, round((now - scan_started_at).total_seconds()))
 
     tier1_payload = {
         "tier": 1,
@@ -285,6 +318,10 @@ def emit_skills(
         "agentshield_tier1_fingerprint": fingerprint,
         "scanned_files": list(scanned_files),
         "findings": list(findings),
+        "git_branch": git["branch"],
+        "git_commit": git["commit"],
+        "git_repo_name": git["repo_name"],
+        "scan_duration_seconds": scan_duration_s,
     }
     tier1_path = contract_dir / "tier1-results.json"
     tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n")

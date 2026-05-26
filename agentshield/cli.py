@@ -510,6 +510,8 @@ def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
 
 def cmd_scan(args: argparse.Namespace) -> int:
     """Tier 1 (semgrep) + emit Tier 2 skill files into the target."""
+    from datetime import datetime, timezone as _tz
+    _scan_started_at = datetime.now(_tz.utc)
     print(f"[agentshield] scan target: {args.path}")
 
     exclude_patterns = list(args.exclude or [])
@@ -650,6 +652,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             findings_dicts,
             scanned_files_rel,
             output_dir=default_output_dir(),
+            scan_started_at=_scan_started_at,
         )
     except FileNotFoundError as exc:
         print(f"[agentshield] ERROR emitting Tier 2 skill files: {exc}", file=sys.stderr)
