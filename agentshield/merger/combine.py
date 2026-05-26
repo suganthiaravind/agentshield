@@ -13020,9 +13020,6 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'font-family="ui-monospace, monospace" font-size="10" '
         'fill="#64748b">HTML &nbsp;&middot;&nbsp; Markdown '
         '&nbsp;&middot;&nbsp; JSON &nbsp;&middot;&nbsp; SARIF</text>'
-        # FIX.MD highlight — clean outlined badge
-        '<rect x="918" y="524" width="270" height="50" rx="3" '
-        'fill="#ffffff" stroke="#1e293b" stroke-width="1.5"/>'
         '<text x="1053" y="545" text-anchor="middle" '
         'font-family="ui-monospace, SFMono-Regular, Menlo, monospace" '
         'font-size="12" font-weight="700" fill="#0f172a">'
