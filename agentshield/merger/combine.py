@@ -1253,6 +1253,27 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                 f'<span class="emu-scene-outcome emu-scene-outcome-{_html_escape(outcome)}">'
                 f'{_html_escape(outcome)}</span>'
             )
+        # Pre-build payload block so it can appear first in the step body.
+        # payload_callout_html already covers user_prompt/rag_context advancing;
+        # for all other steps we build the collapsible here instead of after.
+        if step_input and not payload_callout_html:
+            _prev = step_input[:60] + ("…" if len(step_input) > 60 else "")
+            payload_first_html = (
+                f'<details class="emu-scene-payload-details">'
+                f'<summary>'
+                f'<span class="emu-scene-payload-label">payload</span>'
+                f'<code class="emu-scene-payload-preview">'
+                f'{_html_escape(_prev)}</code>'
+                f'</summary>'
+                f'<div class="emu-scene-payload">'
+                f'{_html_escape(step_input)}'
+                f'</div>'
+                f'</details>'
+            )
+        else:
+            payload_first_html = ""
+
+        # Order: payload → animation → narrative (reasoning)
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
             f'<div class="emu-scene-header">'
@@ -1263,11 +1284,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
             f'</div>'
             f'<div class="emu-scene-body">'
-            f'{payload_callout_html}'
+            f'{payload_callout_html}{payload_first_html}'
             f'<div class="emu-scene-content-row">'
             f'<div class="emu-scene-main">'
-            f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
-            f'{_html_escape(narrative)}</p>'
             f'<div class="emu-scene-actors">'
             f'<div class="emu-actor emu-actor-src emu-actor-role-{src_role}"{src_title_attr}>'
             f'<span class="emu-actor-icon">{src_icon}</span>'
@@ -1288,11 +1307,13 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
             f'</div>'
+            f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
+            f'{_html_escape(narrative)}</p>'
             f'</div>'
             f'{_code_panel_html}'
             f'</div>'
         )
-        # Arrival stamp only on the final scene; skip for inconclusive (no attack surface — stamp would imply a reached verdict)
+        # Arrival stamp only on the final scene; skip for inconclusive
         if scene_idx == n_scenes - 1 and emu_verdict != "inconclusive":
             stamp_text, stamp_cls = _VERDICT_STAMP.get(
                 emu_verdict, (emu_verdict, "neutral")
@@ -1300,23 +1321,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             parts.append(
                 f'<div class="emu-arrival-stamp emu-arrival-stamp-{stamp_cls}">'
                 f'{_html_escape(stamp_text)}</div>'
-            )
-        # Only show collapsible payload when the callout isn't already displaying it
-        if step_input and not payload_callout_html:
-            preview = step_input[:60]
-            if len(step_input) > 60:
-                preview += "…"
-            parts.append(
-                f'<details class="emu-scene-payload-details">'
-                f'<summary>'
-                f'<span class="emu-scene-payload-label">payload</span>'
-                f'<code class="emu-scene-payload-preview">'
-                f'{_html_escape(preview)}</code>'
-                f'</summary>'
-                f'<div class="emu-scene-payload">'
-                f'{_html_escape(step_input)}'
-                f'</div>'
-                f'</details>'
             )
         if step_behavior or step_reasoning or citations:
             combined = step_behavior
