@@ -4857,7 +4857,10 @@ footer {
 }
 .framework-group:last-child { margin-bottom: 0; }
 .framework-group-summary {
-  display: flex; align-items: center; gap: 10px;
+  display: grid;
+  grid-template-columns: 16px 260px 1fr auto;
+  align-items: center;
+  column-gap: 12px;
   padding: 9px 14px;
   cursor: pointer;
   list-style: none;
@@ -4874,7 +4877,7 @@ footer {
   font-size: 9px;
   color: var(--text-muted);
   transition: transform 0.18s ease;
-  flex-shrink: 0;
+  justify-self: center;
 }
 .framework-group[open] > .framework-group-summary::before {
   transform: rotate(90deg);
@@ -4882,11 +4885,11 @@ footer {
 .framework-group-name {
   font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--text);
-  flex-shrink: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .framework-group-counts {
-  display: flex; flex-wrap: wrap; gap: 4px 6px;
-  flex: 1;
+  display: flex; flex-wrap: nowrap; gap: 6px;
+  align-items: center;
 }
 .cov-badge {
   display: inline-block;
