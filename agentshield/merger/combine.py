@@ -6157,94 +6157,147 @@ footer {
   font-size: 12px; color: #64748b; font-style: italic;
 }
 
-/* v4: Scan flow slide — compact flowchart for the Reference tab */
-.scan-flow-card {
+/* v4: Scan flow slide — professional dark-theme pipeline diagram */
+.sf2-card {
   margin-top: 20px;
-  background: var(--panel);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: 22px 24px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  background: linear-gradient(145deg, #0d1425 0%, #131d33 60%, #0f1929 100%);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 28px 26px;
+  position: relative;
+  overflow: hidden;
 }
-.scan-flow-inner { display: flex; flex-direction: column; align-items: center; gap: 0; }
-.scan-flow-node {
-  width: 100%; max-width: 680px;
-  background: #f8fafc;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 14px 20px;
-  text-align: center;
+.sf2-card::before {
+  content: ''; position: absolute; top: -80px; right: -80px;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 68%);
+  pointer-events: none;
 }
-.scan-flow-node-title {
-  font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 4px;
+.sf2-card::after {
+  content: ''; position: absolute; bottom: -50px; left: -50px;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(139,92,246,0.05) 0%, transparent 68%);
+  pointer-events: none;
 }
-.scan-flow-node-sub {
-  font-size: 11.5px; color: #64748b;
+.sf2-card .ref-section-header { color: #64748b; }
+.sf2-card .ref-section-icon { color: #6366f1; }
+.sf2-header { margin-bottom: 22px; }
+.sf2-eyebrow {
+  font-size: 10px; font-weight: 800; letter-spacing: .15em;
+  text-transform: uppercase; margin-bottom: 6px;
+  background: linear-gradient(90deg, #818cf8, #a78bfa);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
 }
-.scan-flow-arrow {
-  font-size: 20px; color: #94a3b8; line-height: 1; padding: 4px 0;
-  user-select: none;
+.sf2-title { font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.sf2-subtitle { font-size: 12px; color: #475569; }
+.sf2-phase-sep {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0 10px;
 }
-.scan-flow-engines {
-  display: flex; gap: 10px; width: 100%; max-width: 680px;
+.sf2-phase-label {
+  font-size: 9px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: #2d3f5a; white-space: nowrap;
 }
-.scan-flow-engine {
-  flex: 1; border-radius: 10px; padding: 14px 12px; text-align: center;
-  border: 1.5px solid;
+.sf2-phase-rule { flex: 1; height: 1px; background: rgba(255,255,255,0.04); }
+.sf2-vline-wrap { display: flex; justify-content: center; padding: 2px 0; }
+.sf2-vline {
+  width: 1px; height: 26px;
+  background: linear-gradient(180deg, rgba(99,102,241,0.45) 0%, rgba(99,102,241,0.1) 100%);
 }
-.scan-flow-engine-t1 { background: #eff6ff; border-color: #93c5fd; }
-.scan-flow-engine-t2 { background: #f0fdf4; border-color: #86efac; }
-.scan-flow-engine-em { background: #fdf4ff; border-color: #d8b4fe; }
-.scan-flow-engine-label {
-  font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; margin-bottom: 5px;
+/* Input node */
+.sf2-input-node {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-left: 3px solid #6366f1;
+  border-radius: 10px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px;
 }
-.scan-flow-engine-t1 .scan-flow-engine-label { color: #2563eb; }
-.scan-flow-engine-t2 .scan-flow-engine-label { color: #16a34a; }
-.scan-flow-engine-em .scan-flow-engine-label { color: #9333ea; }
-.scan-flow-engine-name {
-  font-size: 12.5px; font-weight: 600; color: #1e293b; margin-bottom: 4px;
+.sf2-input-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.sf2-input-name { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 7px; }
+.sf2-input-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.sf2-chip {
+  font-size: 10px; color: #64748b;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 4px; padding: 2px 7px;
 }
-.scan-flow-engine-detail {
-  font-size: 11px; color: #64748b; line-height: 1.45;
+/* Engine cards */
+.sf2-engines { display: flex; gap: 10px; }
+.sf2-engine {
+  flex: 1; border-radius: 10px; padding: 15px 13px;
+  position: relative; overflow: hidden;
 }
-.scan-flow-merge-node {
-  width: 100%; max-width: 680px;
-  background: #f1f5f9;
-  border: 1.5px solid #94a3b8;
-  border-radius: 10px;
-  padding: 12px 20px;
-  text-align: center;
+.sf2-engine::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px; border-radius: 10px 10px 0 0;
 }
-.scan-flow-merge-label {
-  font-size: 11px; font-weight: 700; color: #475569;
-  letter-spacing: .05em; text-transform: uppercase; margin-bottom: 3px;
+.sf2-engine-t1 {
+  background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18);
+  box-shadow: 0 0 18px rgba(59,130,246,0.05);
 }
-.scan-flow-merge-cmd {
-  font-family: monospace; font-size: 13px; font-weight: 700; color: #1e293b;
+.sf2-engine-t1::before { background: linear-gradient(90deg,#1d4ed8,#60a5fa); }
+.sf2-engine-t2 {
+  background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.18);
+  box-shadow: 0 0 18px rgba(16,185,129,0.05);
 }
-.scan-flow-output-node {
-  width: 100%; max-width: 680px;
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-  border-radius: 10px;
-  padding: 16px 20px;
-  text-align: center;
+.sf2-engine-t2::before { background: linear-gradient(90deg,#065f46,#34d399); }
+.sf2-engine-t3 {
+  background: rgba(139,92,246,0.07); border: 1px solid rgba(139,92,246,0.18);
+  box-shadow: 0 0 18px rgba(139,92,246,0.05);
 }
-.scan-flow-output-title {
-  font-size: 13px; font-weight: 700; color: #f8fafc; margin-bottom: 8px;
+.sf2-engine-t3::before { background: linear-gradient(90deg,#5b21b6,#c084fc); }
+.sf2-engine-tier {
+  font-size: 9px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; margin-bottom: 7px;
 }
-.scan-flow-output-formats {
-  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+.sf2-engine-t1 .sf2-engine-tier { color: #60a5fa; }
+.sf2-engine-t2 .sf2-engine-tier { color: #34d399; }
+.sf2-engine-t3 .sf2-engine-tier { color: #c084fc; }
+.sf2-engine-name { font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 2px; }
+.sf2-engine-sub { font-size: 10px; color: #334155; margin-bottom: 9px; }
+.sf2-engine-bullets { list-style: none; padding: 0; margin: 0 0 9px; }
+.sf2-engine-bullets li {
+  font-size: 10.5px; color: #4b6280;
+  padding: 2px 0; display: flex; align-items: baseline; gap: 5px;
 }
-.scan-flow-fmt {
-  font-size: 11px; font-weight: 600; padding: 3px 10px;
-  border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);
-  color: #e2e8f0;
+.sf2-engine-bullets li::before { content: '›'; opacity: 0.45; }
+.sf2-engine-file {
+  font-family: monospace; font-size: 9px; color: #2d4060;
+  background: rgba(0,0,0,0.25); border-radius: 3px;
+  padding: 3px 6px; display: inline-block;
 }
-.scan-flow-fmt-html { background: rgba(59,130,246,0.35); }
-.scan-flow-fmt-md   { background: rgba(16,185,129,0.35); }
-.scan-flow-fmt-sarif{ background: rgba(245,158,11,0.35); }
-.scan-flow-fmt-json { background: rgba(168,85,247,0.35); }
+/* Merge node */
+.sf2-merge-node {
+  background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.18);
+  border-radius: 10px; padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px;
+}
+.sf2-merge-badge {
+  font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 5px; padding: 4px 10px; white-space: nowrap;
+}
+.sf2-merge-body { flex: 1; }
+.sf2-merge-cmd {
+  font-family: monospace; font-size: 14px; font-weight: 700;
+  color: #fbbf24; display: block; margin-bottom: 2px;
+}
+.sf2-merge-desc { font-size: 10.5px; color: #334155; }
+/* Output node */
+.sf2-output-node {
+  background: linear-gradient(135deg, rgba(99,102,241,0.11) 0%, rgba(139,92,246,0.07) 100%);
+  border: 1px solid rgba(99,102,241,0.22);
+  border-radius: 10px; padding: 20px 22px; text-align: center;
+  box-shadow: 0 0 28px rgba(99,102,241,0.07);
+}
+.sf2-output-name { font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.sf2-output-desc { font-size: 11px; color: #334155; margin-bottom: 13px; }
+.sf2-fmt-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.sf2-fmt { font-size: 11px; font-weight: 600; padding: 4px 14px; border-radius: 20px; }
+.sf2-fmt-html  { background: rgba(59,130,246,0.16); border: 1px solid rgba(59,130,246,0.32); color: #93c5fd; }
+.sf2-fmt-md    { background: rgba(16,185,129,0.16); border: 1px solid rgba(16,185,129,0.32); color: #6ee7b7; }
+.sf2-fmt-sarif { background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.32); color: #fcd34d; }
+.sf2-fmt-json  { background: rgba(139,92,246,0.16); border: 1px solid rgba(139,92,246,0.32); color: #c4b5fd; }
 
 /* v4: "How AgentShield works" flowchart at the bottom of the
    Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
@@ -14436,12 +14489,8 @@ def _render_emulator_slide(parts: list[str]) -> None:
 
 
 def _render_scan_flow_slide(parts: list[str]) -> None:
-    """Compact scan-pipeline flowchart for the Reference tab.
-
-    Shows the three parallel engines (Tier 1 / Tier 2 / Emulator),
-    the merge step, and the unified report output formats in one slide.
-    """
-    parts.append('<div class="scan-flow-card">')
+    """Professional dark-theme scan pipeline diagram for the Reference tab."""
+    parts.append('<div class="sf2-card">')
     parts.append(
         '<details class="ref-section" open>'
         '<summary class="ref-section-header">'
@@ -14450,78 +14499,141 @@ def _render_scan_flow_slide(parts: list[str]) -> None:
         '</summary>'
         '<div class="ref-section-body">'
     )
-    parts.append('<div class="scan-flow-inner">')
 
-    # Input node
+    # Header
     parts.append(
-        '<div class="scan-flow-node">'
-        '<div class="scan-flow-node-title">Your agent repo</div>'
-        '<div class="scan-flow-node-sub">Python / JS / Java source &nbsp;&bull;&nbsp; '
-        'skill manifests &nbsp;&bull;&nbsp; config files</div>'
-        '</div>'
-    )
-    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
-
-    # Three parallel engines
-    parts.append('<div class="scan-flow-engines">')
-
-    parts.append(
-        '<div class="scan-flow-engine scan-flow-engine-t1">'
-        '<div class="scan-flow-engine-label">Tier 1</div>'
-        '<div class="scan-flow-engine-name">Semgrep Rules</div>'
-        '<div class="scan-flow-engine-detail">70+ security rules<br>'
-        'code &amp; manifests<br>'
-        '<em>tier1-results.json</em></div>'
-        '</div>'
-    )
-    parts.append(
-        '<div class="scan-flow-engine scan-flow-engine-t2">'
-        '<div class="scan-flow-engine-label">Tier 2</div>'
-        '<div class="scan-flow-engine-name">Copilot LLM judge</div>'
-        '<div class="scan-flow-engine-detail">TP / FP validation<br>'
-        'novel finding discovery<br>'
-        '<em>tier2-findings.json</em></div>'
-        '</div>'
-    )
-    parts.append(
-        '<div class="scan-flow-engine scan-flow-engine-em">'
-        '<div class="scan-flow-engine-label">Tier 3</div>'
-        '<div class="scan-flow-engine-name">Behaviour Emulator</div>'
-        '<div class="scan-flow-engine-detail">8 pipeline steps<br>'
-        '14 attack classes<br>'
-        '<em>agent-emulation.json</em></div>'
-        '</div>'
-    )
-
-    parts.append('</div>')  # /scan-flow-engines
-    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
-
-    # Merge step
-    parts.append(
-        '<div class="scan-flow-merge-node">'
-        '<div class="scan-flow-merge-label">Merger</div>'
-        '<div class="scan-flow-merge-cmd">agentshield merge</div>'
-        '</div>'
-    )
-    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
-
-    # Output node
-    parts.append(
-        '<div class="scan-flow-output-node">'
-        '<div class="scan-flow-output-title">Unified Security Report</div>'
-        '<div class="scan-flow-output-formats">'
-        '<span class="scan-flow-fmt scan-flow-fmt-html">HTML</span>'
-        '<span class="scan-flow-fmt scan-flow-fmt-md">Markdown</span>'
-        '<span class="scan-flow-fmt scan-flow-fmt-sarif">SARIF</span>'
-        '<span class="scan-flow-fmt scan-flow-fmt-json">JSON</span>'
+        '<div class="sf2-header">'
+        '<div class="sf2-eyebrow">Scan Pipeline</div>'
+        '<div class="sf2-title">How AgentShield scans</div>'
+        '<div class="sf2-subtitle">'
+        'Static analysis &nbsp;&middot;&nbsp; No live agent required'
+        ' &nbsp;&middot;&nbsp; Runs pre-production'
         '</div>'
         '</div>'
     )
 
-    parts.append('</div>')  # /scan-flow-inner
+    # Phase 01 — INPUT
+    parts.append(
+        '<div class="sf2-phase-sep">'
+        '<span class="sf2-phase-label">01 &nbsp; Input</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="sf2-input-node">'
+        '<div class="sf2-input-icon">&#128193;</div>'
+        '<div>'
+        '<div class="sf2-input-name">Your Agent Repository</div>'
+        '<div class="sf2-input-chips">'
+        '<span class="sf2-chip">Python / JS / Java</span>'
+        '<span class="sf2-chip">Skill manifests</span>'
+        '<span class="sf2-chip">Config files</span>'
+        '<span class="sf2-chip">Tool definitions</span>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="sf2-vline-wrap"><div class="sf2-vline"></div></div>')
+
+    # Phase 02 — PARALLEL ANALYSIS
+    parts.append(
+        '<div class="sf2-phase-sep">'
+        '<span class="sf2-phase-label">02 &nbsp; Parallel Analysis</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append('<div class="sf2-engines">')
+
+    parts.append(
+        '<div class="sf2-engine sf2-engine-t1">'
+        '<div class="sf2-engine-tier">Tier 1</div>'
+        '<div class="sf2-engine-name">Semgrep Rules</div>'
+        '<div class="sf2-engine-sub">Rule-based static scanning</div>'
+        '<ul class="sf2-engine-bullets">'
+        '<li>70+ security rules</li>'
+        '<li>Code &amp; manifests</li>'
+        '<li>Instant, deterministic</li>'
+        '</ul>'
+        '<span class="sf2-engine-file">tier1-results.json</span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="sf2-engine sf2-engine-t2">'
+        '<div class="sf2-engine-tier">Tier 2</div>'
+        '<div class="sf2-engine-name">Copilot LLM judge</div>'
+        '<div class="sf2-engine-sub">Intelligent validation layer</div>'
+        '<ul class="sf2-engine-bullets">'
+        '<li>TP / FP classification</li>'
+        '<li>Novel finding discovery</li>'
+        '<li>Fix guidance generation</li>'
+        '</ul>'
+        '<span class="sf2-engine-file">tier2-findings.json</span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="sf2-engine sf2-engine-t3">'
+        '<div class="sf2-engine-tier">Tier 3</div>'
+        '<div class="sf2-engine-name">Behaviour Emulator</div>'
+        '<div class="sf2-engine-sub">Adversary class simulation</div>'
+        '<ul class="sf2-engine-bullets">'
+        '<li>8 pipeline steps mapped</li>'
+        '<li>14 attack classes tested</li>'
+        '<li>Seed + mutation probes</li>'
+        '</ul>'
+        '<span class="sf2-engine-file">agent-emulation.json</span>'
+        '</div>'
+    )
+
+    parts.append('</div>')  # /sf2-engines
+    parts.append('<div class="sf2-vline-wrap"><div class="sf2-vline"></div></div>')
+
+    # Phase 03 — SYNTHESIS
+    parts.append(
+        '<div class="sf2-phase-sep">'
+        '<span class="sf2-phase-label">03 &nbsp; Synthesis</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="sf2-merge-node">'
+        '<div class="sf2-merge-badge">Merger</div>'
+        '<div class="sf2-merge-body">'
+        '<code class="sf2-merge-cmd">agentshield merge</code>'
+        '<div class="sf2-merge-desc">'
+        'Deduplication &nbsp;&middot;&nbsp; D/D/R classification'
+        ' &nbsp;&middot;&nbsp; Fix guidance assembly'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    parts.append('<div class="sf2-vline-wrap"><div class="sf2-vline"></div></div>')
+
+    # Phase 04 — OUTPUT
+    parts.append(
+        '<div class="sf2-phase-sep">'
+        '<span class="sf2-phase-label">04 &nbsp; Output</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="sf2-output-node">'
+        '<div class="sf2-output-name">Unified Security Report</div>'
+        '<div class="sf2-output-desc">'
+        'D/D/R findings &nbsp;&middot;&nbsp; Fix guidance'
+        ' &nbsp;&middot;&nbsp; OWASP&nbsp;LLM / MITRE&nbsp;ATLAS / CWE mappings'
+        '</div>'
+        '<div class="sf2-fmt-row">'
+        '<span class="sf2-fmt sf2-fmt-html">HTML</span>'
+        '<span class="sf2-fmt sf2-fmt-md">Markdown</span>'
+        '<span class="sf2-fmt sf2-fmt-sarif">SARIF</span>'
+        '<span class="sf2-fmt sf2-fmt-json">JSON</span>'
+        '</div>'
+        '</div>'
+    )
+
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
-    parts.append('</div>')  # /scan-flow-card
+    parts.append('</div>')  # /sf2-card
 
 
 def _render_how_it_works(parts: list[str]) -> None:
