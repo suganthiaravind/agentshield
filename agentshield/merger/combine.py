@@ -1309,6 +1309,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
             f'</div>'
+            f'<span class="emu-narrative-tag">REASONING</span>'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
             f'</div>'
@@ -7503,7 +7504,23 @@ footer {
   to   { opacity: 1; transform: translateX(0); }
 }
 /* Blinking cursor shown during typewriter animation */
-/* Narrative block fade-in */
+/* Reasoning tag + narrative fade-in together after packet lands */
+.emu-narrative-tag {
+  display: inline-block;
+  opacity: 0;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 2px 7px;
+  margin-bottom: 5px;
+}
+.emu-narrative-tag.emu-narrative-tag-visible {
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
 .emu-scene-narrative {
   opacity: 0;
 }
@@ -8633,8 +8650,14 @@ _HTML_JS = """
 
       var FADEIN_MS = 300;
       var words     = fullText.trim().split(/\s+/).length;
-      var holdMs    = Math.max(1500, Math.min(3500, words * 180));
+      var holdMs    = Math.max(1800, Math.min(4000, words * 200));
 
+      // Reveal the REASONING tag sibling if present
+      var tagEl = el.previousElementSibling;
+      if (tagEl && tagEl.classList.contains('emu-narrative-tag')) {
+        void tagEl.offsetWidth;
+        tagEl.classList.add('emu-narrative-tag-visible');
+      }
       void el.offsetWidth;
       el.classList.add('emu-narrative-visible');
       safeTimeout(function () {
@@ -8795,10 +8818,10 @@ _HTML_JS = """
       var progressFill  = trace.querySelector('[data-progress-fill]');
       var progressLabel = trace.querySelector('[data-progress-label]');
 
-      var CHAR_DELAY       = 22;   // ms per character — typewriter speed
-      var POST_TYPE_PAUSE  = 350;  // ms after narrative finishes before packet fires
-      var PACKET_DURATION  = 1800; // ms for packet to travel
-      var SCENE_READ_PAUSE = 1400; // ms reading time after packet lands → next scene
+      var CHAR_DELAY         = 22;   // ms per character — typewriter speed
+      var POST_TYPE_PAUSE    = 350;  // ms before packet fires
+      var PACKET_DURATION    = 1800; // ms for packet to travel
+      var NARRATIVE_LINGER   = 900;  // extra pause after reasoning finishes before next scene
 
       trace.classList.add('emu-trace-playing');
       if (btn) { btn.disabled = true; btn.innerHTML = '&#9654; Playing…'; }
@@ -8909,46 +8932,40 @@ _HTML_JS = """
         // Step 3 — packet flies across the arrow
         safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, packetFireAt);
 
-        // Step 4 — packet lands: stamp in outcome chip + reveal terminal rows
+        // Step 4 — packet lands: stamp outcome chip + reveal terminal rows
         safeTimeout(function () {
           scene.classList.add('emu-scene-received');
           revealTermLines(trace, idx, 0);
-          // Step 5 — narrative reveals AFTER the packet lands so the
-          // reasoning follows the animation, not precedes it
-          revealNarrative(narrativeEl, function () {});
-        }, packetFireAt + PACKET_DURATION);
 
-        // Step 6 — advance to next scene or show final banner
-        (function () {
-          var afterScene = packetFireAt + PACKET_DURATION + SCENE_READ_PAUSE;
-          if (idx < scenes.length - 1) {
+          // Step 5 — reasoning fades in after the packet lands;
+          // advance to the next scene only after the reader has had
+          // time to read it (revealNarrative holdMs + NARRATIVE_LINGER).
+          revealNarrative(narrativeEl, function () {
             safeTimeout(function () {
-              scene.classList.remove('emu-scene-active');
-              scene.classList.add('emu-scene-done');
-              safeTimeout(function () { runScene(idx + 1); }, 380);
-            }, afterScene);
-          } else {
-            safeTimeout(function () {
-              if (finalBanner) {
-                finalBanner.classList.add('emu-trace-final-visible');
-                // Scroll the banner into view so it's not hidden below the fold
-                safeTimeout(function () {
-                  finalBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 120);
+              // Step 6 — advance to next scene or show final banner
+              if (idx < scenes.length - 1) {
+                scene.classList.remove('emu-scene-active');
+                scene.classList.add('emu-scene-done');
+                safeTimeout(function () { runScene(idx + 1); }, 380);
+              } else {
+                if (finalBanner) {
+                  finalBanner.classList.add('emu-trace-final-visible');
+                  safeTimeout(function () {
+                    finalBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }, 120);
+                }
+                revealTermLines(trace, scenes.length, 0);
+                if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
+                if (pauseBtn) pauseBtn.style.display = 'none';
+                if (progressWrap) progressWrap.style.display = 'none';
+                if (progressFill) progressFill.style.width = '0%';
+                trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
+                  c.classList.remove('emu-pip-active');
+                });
               }
-              revealTermLines(trace, scenes.length, 0);
-              if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
-              if (pauseBtn) pauseBtn.style.display = 'none';
-              if (progressWrap) progressWrap.style.display = 'none';
-              if (progressFill) progressFill.style.width = '0%';
-              // Clear the active pipeline chip now that playback is done
-              trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
-                c.classList.remove('emu-pip-active');
-              });
-              // Keep Close visible so user can dismiss after watching
-            }, afterScene);
-          }
-        })();
+            }, NARRATIVE_LINGER);
+          });
+        }, packetFireAt + PACKET_DURATION);
       }
 
       // Payload catalogue intro first, then pipeline scenes (attack plan
