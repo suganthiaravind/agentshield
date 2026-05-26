@@ -1394,7 +1394,6 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
 
     parts.append(
         f'<div class="emu-trace"{catalog_attr}>'
-        f'{layer_intro_html}'
         '<div class="emu-trace-header">'
         '<button type="button" class="emu-play-btn" data-action="emu-play">'
         '&#9654; Play behaviour emulation</button>'
@@ -1412,6 +1411,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         '</div>'
         '</div>'
         f'<div class="emu-pipeline-header">{pipeline_html}</div>'
+        f'{layer_intro_html}'
     )
 
     seed_traces = emu_data.get("seed_traces") or {}
