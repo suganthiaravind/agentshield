@@ -4849,22 +4849,62 @@ footer {
   font-size: 12px; color: var(--text-muted); margin: 0 0 18px; line-height: 1.5;
 }
 
-.framework-group { margin-bottom: 22px; }
-.framework-group:last-child { margin-bottom: 0; }
-.framework-group-header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
+.framework-group {
   margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.framework-group:last-child { margin-bottom: 0; }
+.framework-group-summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background: var(--panel);
+  border-bottom: 1px solid transparent;
+}
+.framework-group[open] > .framework-group-summary {
+  border-bottom-color: var(--border);
+}
+.framework-group-summary::-webkit-details-marker { display: none; }
+.framework-group-summary::before {
+  content: "\25B6";
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+.framework-group[open] > .framework-group-summary::before {
+  transform: rotate(90deg);
 }
 .framework-group-name {
-  font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--text);
+  flex-shrink: 0;
 }
+.framework-group-counts {
+  display: flex; flex-wrap: wrap; gap: 4px 6px;
+  flex: 1;
+}
+.cov-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cov-badge-issues { background: #fbe6e3; color: #8a1d15; border: 1px solid #e9b4ad; }
+.cov-badge-clean  { background: #e3f1e5; color: #1f6b3a; border: 1px solid #b3d6b9; }
+.cov-badge-gap    { background: #f0ede4; color: #6e6655; border: 1px solid #d9d2bf; }
 .framework-group-link {
   font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 600;
+  flex-shrink: 0; margin-left: auto;
 }
 .framework-group-link:hover { text-decoration: underline; }
+.framework-group-body { padding: 12px 14px 10px; }
 .framework-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
 .framework-items {
   display: grid;
@@ -11230,32 +11270,21 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         in_scope = len(items_issues) + len(items_clean)
         total = in_scope + len(items_gap)
 
-        parts.append('<div class="framework-group">')
+        parts.append('<details class="framework-group">')
+        # Summary row: framework name + reference link + count badges
         parts.append(
-            f'<div class="framework-group-header">'
+            f'<summary class="framework-group-summary">'
             f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
+            f'<span class="framework-group-counts">'
+            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} with issues</span>'
+            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} clean</span>'
+            f'<span class="cov-badge cov-badge-gap">{len(items_gap)} not scanned</span>'
+            f'</span>'
             f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
-            f'target="_blank" rel="noopener">reference &rarr;</a>'
-            f'</div>'
+            f'target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a>'
+            f'</summary>'
         )
-        parts.append('<div class="coverage-summary">')
-        parts.append(
-            f'<span class="cov-headline">'
-            f'{in_scope}/{total} in scope</span>'
-        )
-        parts.append(
-            f'<span class="cov-stat cov-stat-issues">'
-            f'{len(items_issues)} with issues</span>'
-        )
-        parts.append(
-            f'<span class="cov-stat cov-stat-clean">'
-            f'{len(items_clean)} clean</span>'
-        )
-        parts.append(
-            f'<span class="cov-stat cov-stat-gap">'
-            f'{len(items_gap)} not scanned</span>'
-        )
-        parts.append('</div>')
+        parts.append('<div class="framework-group-body">')
         if k_key in _CURATED_NOTE:
             parts.append(
                 f'<div class="coverage-fw-note">'
@@ -11264,7 +11293,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             )
         parts.append('<div class="coverage-chips">')
         for item, count in items_issues:
-            # v4: "with issues" chips double as framework filters — same
+            # v4: "with issues" chips double as framework filters -- same
             # `data-framework-key` contract as the per-finding tags, so
             # the existing toggle handler picks them up without changes.
             # Clicking an issue chip scopes the D/D/R findings to that
@@ -11318,7 +11347,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 )
             parts.append('</ul>')
             parts.append('</details>')
-        parts.append('</div>')  # /framework-group
+        parts.append('</div>')  # /framework-group-body
+        parts.append('</details>')  # /framework-group
     parts.append("</div>")  # /coverage-card
 
     # ---- Emulator coverage block (bottom of Coverage tab) ----
