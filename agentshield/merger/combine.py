@@ -2532,7 +2532,7 @@ def _render_ruled_out_block(
         if reason:
             parts.append(
                 f'<div class="ruled-out-reason">'
-                f'<strong>Copilot reasoning:</strong> '
+                f'<strong>Reasoning:</strong> '
                 f'{_html_escape(reason)}'
                 f'</div>'
             )
@@ -2747,7 +2747,7 @@ def render_combined_markdown(result: MergeResult) -> str:
             if f.get("remediation"):
                 lines.append(f"- **Remediation:** {f['remediation']}")
             if origin == "tier1" and f.get("_tier2_reasoning"):
-                lines.append(f"- **Copilot reasoning:** {f['_tier2_reasoning']}")
+                lines.append(f"- **Reasoning:** {f['_tier2_reasoning']}")
             lines.append("")
 
     # 7. Coverage matrix
@@ -10146,7 +10146,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 else:
                     parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
                 if f.get("message"):
-                    parts.append(f'<div class="finding-message">{_html_escape(f["message"])}</div>')
+                    parts.append(f'<div class="finding-message"><strong>Rule description:</strong> {_html_escape(f["message"])}</div>')
                 # Body: collapsible. Frameworks + snippet + remediation +
                 # Copilot reasoning live inside .finding-body so they hide
                 # when the user collapses the card.
@@ -10185,7 +10185,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 if f.get("remediation"):
                     parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
                 if origin == "tier1" and f.get("_tier2_reasoning"):
-                    parts.append(f'<div class="finding-remediation"><strong>Copilot reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                    parts.append(f'<div class="finding-remediation"><strong>Reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
                 # Probe-discovered findings get a collapsible Simulated
                 # Probe panel — same shape as the static-finding attack
                 # scenario, but the body carries the actual payload sent,
