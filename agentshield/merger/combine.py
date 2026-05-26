@@ -5111,6 +5111,21 @@ footer {
   border: 1.5px solid currentColor;
   width: 6px; height: 6px;
 }
+.io-col-section-surface { margin-top: 16px; }
+.io-agent-surface-summary {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  margin: 4px 0 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.io-agent-fw {
+  font-size: 11px; font-weight: 400; color: var(--text-muted);
+}
+.io-count-surface {
+  color: var(--text-muted); font-weight: 500;
+}
+.io-count-surface .io-dot { background: var(--text-muted); }
+.io-agent-surface-none {
+  font-size: 11px; color: var(--text-muted); margin: 4px 0 0;
+}
 
 /* Emulator coverage block — bottom of the Input & Output tab.
    Lists every catalogued attack class with its verdict so a
@@ -11666,6 +11681,66 @@ def _fix_file_targets(r: Any) -> dict[str, tuple[int, list[str]]]:
     }
 
 
+def _count_agent_entry_points(repo_root: "Path", code_files: list[str]) -> dict:
+    """Scan source files for known agent instantiation / invocation patterns.
+
+    Returns {total, by_file: {basename: [framework, ...]}, frameworks: [str]}.
+    Only reads files that exist; silently skips unreadable ones.
+    """
+    import re
+    from os.path import basename as _bn
+
+    _PATTERNS: list[tuple[re.Pattern, str]] = [
+        (re.compile(r'\bAgentExecutor\s*\('), "LangChain"),
+        (re.compile(r'\bcreate_react_agent\s*\('), "LangChain"),
+        (re.compile(r'\bcreate_openai_tools_agent\s*\('), "LangChain"),
+        (re.compile(r'\bcreate_tool_calling_agent\s*\('), "LangChain"),
+        (re.compile(r'\binitialize_agent\s*\('), "LangChain"),
+        (re.compile(r'\bchain\.invoke\s*\('), "LangChain"),
+        (re.compile(r'\bStateGraph\s*\('), "LangGraph"),
+        (re.compile(r'\bBedrockAgentRuntime\b'), "AWS Bedrock"),
+        (re.compile(r'\binvoke_agent\s*\('), "AWS Bedrock"),
+        (re.compile(r'\bLlmAgent\s*\('), "Google ADK"),
+        (re.compile(r'\bReActAgent\b'), "LlamaIndex"),
+        (re.compile(r'\bFunctionCallingAgent\b'), "LlamaIndex"),
+        (re.compile(r'\bAiServices\.(builder|create)\s*\('), "LangChain4j"),
+        (re.compile(r'\bAgent\s*\(\s*name\s*='), "OpenAI Agents"),
+    ]
+
+    total = 0
+    by_file: dict[str, list[str]] = {}
+    seen_frameworks: list[str] = []
+
+    for path_str in code_files:
+        from pathlib import Path as _Path
+        p = _Path(path_str)
+        if not p.is_absolute():
+            # tier1 paths are CWD-relative; tier2 paths are bare basenames —
+            # try CWD-relative first, fall back to repo_root / basename.
+            if not p.exists():
+                p = repo_root / _bn(path_str)
+        if not p.exists():
+            continue
+        try:
+            text = p.read_text(errors="replace")
+        except Exception:
+            continue
+        file_fws: list[str] = []
+        for pat, fw in _PATTERNS:
+            hits = pat.findall(text)
+            if hits:
+                total += len(hits)
+                file_fws.extend([fw] * len(hits))
+                if fw not in seen_frameworks:
+                    seen_frameworks.append(fw)
+        if file_fws:
+            # dedupe frameworks per file while preserving first-seen order
+            deduped = list(dict.fromkeys(file_fws))
+            by_file[_bn(path_str)] = deduped
+
+    return {"total": total, "by_file": by_file, "frameworks": seen_frameworks}
+
+
 def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     """Render the Input & Output panel as a pipeline diagram:
     INPUT (scanned files) → AGENTSHIELD (engines + totals) → OUTPUT (artifacts).
@@ -11729,6 +11804,10 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     bundle_files.sort(key=lambda p: (-file_counts.get(basename(p), 0), p))
     md_sorted = md_files  # back-compat alias for the rendering loop
     total_input = len(code_files) + len(md_sorted) + len(bundle_files)
+
+    # Attack-surface context: count agent entry points across scanned code files
+    repo_root = r.tier1_path.parent.parent
+    agent_surface = _count_agent_entry_points(repo_root, code_files)
 
     # ---- Output: fixed by writer naming convention. Fix-files carry the
     # per-file targets they address (count + which input files); HTML
@@ -11835,6 +11914,31 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         for path in bundle_files:
             parts.append(_file_li(path))
         parts.append('</ul>')
+
+    # ---- Attack surface context ----
+    parts.append('<div class="io-col-section io-col-section-surface">Agent surface</div>')
+    if agent_surface["total"] > 0:
+        fw_str = " &middot; ".join(_html_escape(fw) for fw in agent_surface["frameworks"])
+        parts.append(
+            f'<div class="io-agent-surface-summary">'
+            f'{agent_surface["total"]} entry point{"s" if agent_surface["total"] != 1 else ""}'
+            f'<span class="io-agent-fw">&middot; {fw_str}</span>'
+            f'</div>'
+        )
+        parts.append('<ul class="io-col-list">')
+        for fname, fws in agent_surface["by_file"].items():
+            fw_label = ", ".join(fws)
+            parts.append(
+                f'<li><code>{_html_escape(fname)}</code>'
+                f'<span class="io-count io-count-surface">'
+                f'<span class="io-dot"></span>{_html_escape(fw_label)}</span></li>'
+            )
+        parts.append('</ul>')
+    else:
+        parts.append(
+            '<p class="io-agent-surface-none">'
+            'No recognised agent entry points detected in scanned files.</p>'
+        )
     parts.append('</div>')  # /io-pipeline-col input
 
     # ===== Arrow =====
