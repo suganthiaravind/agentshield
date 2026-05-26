@@ -1,6 +1,6 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-25T20:30:20.467705Z",
+  "scanned_at": "2026-05-26T05:33:25.458899Z",
   "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "scanned_files": [
     "config.py",
@@ -83,7 +83,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
       "line": 26,
-      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
+      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with the behaviour emulator (Phase 2) to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
@@ -145,7 +145,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/controller.py",
       "line": 39,
-      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
+      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with the behaviour emulator (Phase 2) to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
@@ -177,7 +177,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/orchestrator.py",
       "line": 63,
-      "message": "User-controlled input is forwarded verbatim to another agent's HTTP endpoint without sanitisation or trust-boundary enforcement. The downstream agent receives the attacker's payload as if it came from a trusted internal caller \u2014 the upstream agent's authority is laundered onto the downstream call (OWASP Agentic T12 \u2014 Agent Communication Poisoning). Pair this rule with a runtime probe (Path B) to verify the downstream agent actually accepts and acts on the forwarded payload.",
+      "message": "User-controlled input is forwarded verbatim to another agent's HTTP endpoint without sanitisation or trust-boundary enforcement. The downstream agent receives the attacker's payload as if it came from a trusted internal caller \u2014 the upstream agent's authority is laundered onto the downstream call (OWASP Agentic T12 \u2014 Agent Communication Poisoning). Pair this rule with the behaviour emulator (Phase 2) to verify the downstream agent actually accepts and acts on the forwarded payload.",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
@@ -237,7 +237,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/orchestrator.py",
       "line": 87,
-      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
+      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with the behaviour emulator (Phase 2) to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
@@ -299,7 +299,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/orchestrator.py",
       "line": 110,
-      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with a runtime probe to confirm the LLM acts on attacker-controlled \"peer\" input.",
+      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with the behaviour emulator (Phase 2) to confirm the LLM acts on attacker-controlled \"peer\" input.",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
@@ -331,7 +331,7 @@
       "severity": "high",
       "file": "testbed/demo-agent/orchestrator.py",
       "line": 116,
-      "message": "A code path exposes the agent's system prompt (or any variable named like a prompt template) in a user-reachable response \u2014 typically an error handler that includes the active prompt for \"debugging\". The prompt itself often carries secrets (escalation keys, internal IDs, tool descriptions) and is by definition meant to stay opaque to the user. Pair with a runtime probe that requests the prompt explicitly to confirm the model accepts the extraction request (MITRE ATLAS AML.T0056 \u2014 System Prompt Disclosure; OWASP LLM07 \u2014 System Prompt Leakage).",
+      "message": "A code path exposes the agent's system prompt (or any variable named like a prompt template) in a user-reachable response \u2014 typically an error handler that includes the active prompt for \"debugging\". The prompt itself often carries secrets (escalation keys, internal IDs, tool descriptions) and is by definition meant to stay opaque to the user. Pair with the behaviour emulator (Phase 2) to confirm the model accepts the extraction request (MITRE ATLAS AML.T0056 \u2014 System Prompt Disclosure; OWASP LLM07 \u2014 System Prompt Leakage).",
       "language": "python",
       "framework_mappings": {
         "owasp_llm": [
