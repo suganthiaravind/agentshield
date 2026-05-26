@@ -12895,7 +12895,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="456" y="572" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">'
-        '14 controls &middot; SKILL.md / AGENT.md / configs</text>'
+        '14 rules &middot; SKILL.md / AGENT.md / configs</text>'
         '<text x="456" y="595" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
         'font-weight="600" fill="#0f172a">'
@@ -12903,7 +12903,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="456" y="610" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">'
-        '74 checks &middot; interpretive review in your IDE</text>'
+        '74 rules &middot; interpretive review in your IDE</text>'
 
         # chevron 02 → 03
         '<path d="M 601 420 L 614 420" stroke="#cbd5e1" '
@@ -13023,7 +13023,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="1053" y="545" text-anchor="middle" '
         'font-family="ui-monospace, SFMono-Regular, Menlo, monospace" '
         'font-size="12" font-weight="700" fill="#0f172a">'
-        'FIX.MD per finding</text>'
+        'FIX.MD per finding type</text>'
         '<text x="1053" y="561" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">'
@@ -13031,7 +13031,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="1053" y="596" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b" font-style="italic">'
-        '1 file per finding &middot; AI-ready remediation</text>'
+        '1 file per finding type &middot; AI-ready remediation</text>'
 
         '</g>'  # close translate(0,20) wrapper for the chapter strip
 
