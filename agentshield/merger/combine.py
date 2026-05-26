@@ -12965,7 +12965,7 @@ def _render_reference_panel(
     _render_design_basis(parts)
     _render_how_it_works(parts)
     _render_solution_diagram(parts)
-    _render_install_slide(parts)
+
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
