@@ -6299,6 +6299,70 @@ footer {
 .sf2-fmt-sarif { background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.32); color: #fcd34d; }
 .sf2-fmt-json  { background: rgba(139,92,246,0.16); border: 1px solid rgba(139,92,246,0.32); color: #c4b5fd; }
 
+/* v4: Installation instructions slide */
+.inst-prereqs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.inst-prereq {
+  font-size: 11px; color: #64748b;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px; padding: 5px 11px;
+}
+.inst-prereq em { color: #2d3f5a; font-style: italic; }
+.inst-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .inst-grid { grid-template-columns: 1fr; } }
+.inst-step {
+  border-radius: 10px; padding: 16px;
+  position: relative; overflow: hidden;
+}
+.inst-step::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px; border-radius: 10px 10px 0 0;
+}
+.inst-step-1 { background: rgba(99,102,241,0.07); border: 1px solid rgba(99,102,241,0.18); }
+.inst-step-1::before { background: linear-gradient(90deg, #4338ca, #818cf8); }
+.inst-step-2 { background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); }
+.inst-step-2::before { background: linear-gradient(90deg, #1d4ed8, #60a5fa); }
+.inst-step-3 { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.18); }
+.inst-step-3::before { background: linear-gradient(90deg, #065f46, #34d399); }
+.inst-step-4 { background: rgba(139,92,246,0.07); border: 1px solid rgba(139,92,246,0.18); }
+.inst-step-4::before { background: linear-gradient(90deg, #5b21b6, #c084fc); }
+.inst-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  font-size: 9.5px; font-weight: 800; margin-bottom: 9px;
+}
+.inst-step-1 .inst-step-num { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+.inst-step-2 .inst-step-num { background: rgba(59,130,246,0.18); color: #93c5fd; }
+.inst-step-3 .inst-step-num { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+.inst-step-4 .inst-step-num { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+.inst-step-title { font-size: 12.5px; font-weight: 700; color: #f1f5f9; margin-bottom: 2px; }
+.inst-step-desc { font-size: 10px; color: #334155; margin-bottom: 10px; }
+.inst-code {
+  background: rgba(0,0,0,0.38);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 6px; padding: 9px 12px;
+  font-family: monospace; font-size: 10.5px; color: #4ade80;
+  line-height: 1.65; white-space: pre; margin-bottom: 9px; overflow-x: auto;
+}
+.inst-human-badge {
+  display: block;
+  font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
+  border-radius: 4px; padding: 3px 8px; margin-bottom: 7px;
+  width: fit-content;
+}
+.inst-human-step {
+  background: rgba(0,0,0,0.2); border: 1px solid rgba(16,185,129,0.1);
+  border-radius: 6px; padding: 9px 11px;
+  font-size: 10.5px; color: #4b6280; line-height: 1.6; margin-bottom: 9px;
+}
+.inst-out-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.inst-out-chip {
+  font-family: monospace; font-size: 9px; color: #2d4060;
+  background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 3px; padding: 2px 7px;
+}
+
 /* v4: "How AgentShield works" flowchart at the bottom of the
    Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
    numbered stage cards stacked vertically with chevron arrows
@@ -12837,6 +12901,7 @@ def _render_reference_panel(
     _render_ddr_slide(parts)
     _render_emulator_slide(parts)
     _render_scan_flow_slide(parts)
+    _render_install_slide(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -14631,6 +14696,135 @@ def _render_scan_flow_slide(parts: list[str]) -> None:
         '</div>'
     )
 
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /sf2-card
+
+
+def _render_install_slide(parts: list[str]) -> None:
+    """Installation instructions slide — 4-step dark 2×2 grid for the Reference tab."""
+    parts.append('<div class="sf2-card">')
+    parts.append(
+        '<details class="ref-section" open>'
+        '<summary class="ref-section-header">'
+        '<span class="ref-section-icon">&#9654;</span>'
+        'Getting started'
+        '</summary>'
+        '<div class="ref-section-body">'
+    )
+
+    # Header
+    parts.append(
+        '<div class="sf2-header">'
+        '<div class="sf2-eyebrow">Setup Guide</div>'
+        '<div class="sf2-title">Getting started with AgentShield</div>'
+        '<div class="sf2-subtitle">'
+        'Four steps from install to report'
+        ' &nbsp;&middot;&nbsp; Python 3.10+'
+        ' &nbsp;&middot;&nbsp; GitHub Copilot required for Tier 2'
+        '</div>'
+        '</div>'
+    )
+
+    # Prerequisites
+    parts.append(
+        '<div class="sf2-phase-sep">'
+        '<span class="sf2-phase-label">Prerequisites</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="inst-prereqs">'
+        '<span class="inst-prereq">&#127822; Python 3.10+</span>'
+        '<span class="inst-prereq">&#9935; Git</span>'
+        '<span class="inst-prereq">&#128187; VS Code</span>'
+        '<span class="inst-prereq">&#129302; GitHub Copilot</span>'
+        '<span class="inst-prereq">&#128270; Semgrep <em>(auto-installed)</em></span>'
+        '</div>'
+    )
+
+    # Steps
+    parts.append(
+        '<div class="sf2-phase-sep" style="margin-top:18px">'
+        '<span class="sf2-phase-label">Steps</span>'
+        '<span class="sf2-phase-rule"></span>'
+        '</div>'
+    )
+    parts.append('<div class="inst-grid">')
+
+    # Step 1 — Clone & Install
+    parts.append(
+        '<div class="inst-step inst-step-1">'
+        '<div class="inst-step-num">01</div>'
+        '<div class="inst-step-title">Clone &amp; Install</div>'
+        '<div class="inst-step-desc">One-time setup</div>'
+        '<div class="inst-code">'
+        'git clone git@github.com:\n'
+        '  suganthiaravind/agentshield.git\n'
+        'cd agentshield\n'
+        'pip install -e &quot;.[semgrep,dev]&quot;'
+        '</div>'
+        '<div class="inst-out-row">'
+        '<span class="inst-out-chip">agentshield CLI</span>'
+        '</div>'
+        '</div>'
+    )
+
+    # Step 2 — Tier 1 Scan
+    parts.append(
+        '<div class="inst-step inst-step-2">'
+        '<div class="inst-step-num">02</div>'
+        '<div class="inst-step-title">Tier 1 Scan</div>'
+        '<div class="inst-step-desc">Static analysis + emit skill files</div>'
+        '<div class="inst-code">'
+        'agentshield scan ./your-agent \\\n'
+        '  --scan-all-files \\\n'
+        '  --exclude &quot;**/tests/**&quot;'
+        '</div>'
+        '<div class="inst-out-row">'
+        '<span class="inst-out-chip">tier1-results.json</span>'
+        '<span class="inst-out-chip">.agentshield/ skills</span>'
+        '</div>'
+        '</div>'
+    )
+
+    # Step 3 — Tier 2 + Emulator (human step)
+    parts.append(
+        '<div class="inst-step inst-step-3">'
+        '<div class="inst-step-num">03</div>'
+        '<div class="inst-step-title">Tier 2 + Emulator</div>'
+        '<div class="inst-step-desc">Copilot reads, walks, writes findings</div>'
+        '<div class="inst-human-badge">&#129302;&nbsp; Copilot step</div>'
+        '<div class="inst-human-step">'
+        'Open the repo in <strong style="color:#6ee7b7">VS Code</strong> with Copilot Chat.'
+        ' Paste the prompt printed by step&nbsp;2. Copilot walks every source file'
+        ' and writes the findings + behaviour emulation JSON.'
+        '</div>'
+        '<div class="inst-out-row">'
+        '<span class="inst-out-chip">tier2-findings.json</span>'
+        '<span class="inst-out-chip">agent-emulation.json</span>'
+        '</div>'
+        '</div>'
+    )
+
+    # Step 4 — Generate Report
+    parts.append(
+        '<div class="inst-step inst-step-4">'
+        '<div class="inst-step-num">04</div>'
+        '<div class="inst-step-title">Generate Report</div>'
+        '<div class="inst-step-desc">Merge all sources into unified report</div>'
+        '<div class="inst-code">'
+        'agentshield merge ./your-agent \\\n'
+        '  --output-html report.html'
+        '</div>'
+        '<div class="inst-out-row">'
+        '<span class="inst-out-chip">report.html</span>'
+        '<span class="inst-out-chip">report-print.html</span>'
+        '</div>'
+        '</div>'
+    )
+
+    parts.append('</div>')  # /inst-grid
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /sf2-card
