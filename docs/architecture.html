@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AgentShield — Architecture</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #1a1d27;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+}
+
+/* ── Slide canvas: 16:9 ─────────────────────── */
+.slide {
+  width: 1280px;
+  height: 720px;
+  background: #0d1117;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header strip ───────────────────────────── */
+.slide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 36px 14px;
+  border-bottom: 1px solid #1e2330;
+  flex-shrink: 0;
+}
+.slide-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: #f0f6ff;
+  letter-spacing: -0.4px;
+}
+.slide-subtitle {
+  font-size: 12px;
+  color: #6b7a99;
+}
+.slide-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #4e9bf5;
+  background: rgba(78,155,245,0.1);
+  border: 1px solid rgba(78,155,245,0.25);
+  border-radius: 100px;
+  padding: 3px 10px;
+}
+
+/* ── Main layout: 5 columns + arrows ───────── */
+.slide-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 148px 28px 1fr 28px 160px 28px 232px;
+  gap: 0;
+  padding: 18px 28px 16px;
+  align-items: stretch;
+}
+
+/* ── Arrows ─────────────────────────────────── */
+.arrow-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.arrow-line {
+  width: 100%;
+  height: 1.5px;
+  background: #2a3148;
+  position: relative;
+}
+.arrow-line::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border-left: 7px solid #2a3148;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.arrow-label {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 8.5px;
+  color: #3d4d6a;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ── Column panels ──────────────────────────── */
+.col {
+  border-radius: 10px;
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid transparent;
+}
+.col-heading {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 2px;
+}
+
+/* ── Input column ───────────────────────────── */
+.col-input {
+  background: #0e1622;
+  border-color: #1a3a6e;
+}
+.col-input .col-heading { color: #4e9bf5; }
+
+/* ── Engine column ───────────────────────────── */
+.col-engine {
+  background: #0d1a17;
+  border-color: #1a4030;
+  gap: 6px;
+}
+.col-engine .col-heading { color: #34d399; }
+
+/* ── Artifacts column ───────────────────────── */
+.col-artifacts {
+  background: #16120a;
+  border-color: #3d2c0a;
+}
+.col-artifacts .col-heading { color: #fbbf24; }
+
+/* ── Output column ───────────────────────────── */
+.col-output {
+  background: #0f0d1e;
+  border-color: #2a235a;
+}
+.col-output .col-heading { color: #a78bfa; }
+
+/* ── Input items ──────────────────────────────── */
+.input-item {
+  display: flex;
+  flex-direction: column;
+  background: #131c2e;
+  border: 1px solid #1e3058;
+  border-radius: 7px;
+  padding: 9px 10px;
+  gap: 3px;
+}
+.input-item-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c9deff;
+}
+.input-item-detail {
+  font-size: 10px;
+  color: #4a6899;
+  line-height: 1.5;
+}
+
+/* ── Engine sub-blocks ───────────────────────── */
+.eng-block {
+  border-radius: 7px;
+  padding: 9px 11px;
+  flex: 1;
+}
+.eng-block-title {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.eng-block-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.eng-chip {
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* Tier 1 */
+.eng-t1 {
+  background: #0a2018;
+  border: 1px solid #1a5c38;
+}
+.eng-t1 .eng-block-title { color: #6ee7b7; }
+.chip-t1 { background: #133d28; color: #6ee7b7; border: 1px solid #1a5c38; }
+
+/* Tier 2 / LLM */
+.eng-t2 {
+  background: #1a120a;
+  border: 2px dashed #92400e;
+}
+.eng-t2 .eng-block-title { color: #fb923c; }
+.chip-t2 { background: #2d1a08; color: #fb923c; border: 1px solid #92400e; }
+
+/* Reporting */
+.eng-rep {
+  background: #0a1a14;
+  border: 1px solid #1a5040;
+}
+.eng-rep .eng-block-title { color: #34d399; }
+.chip-rep { background: #0d2a1e; color: #34d399; border: 1px solid #1a5040; }
+
+/* LLM badge */
+.llm-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  background: rgba(251,146,60,0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251,146,60,0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+/* ── Artifact items ───────────────────────────── */
+.art-item {
+  background: #1e1508;
+  border: 1px solid #3d2c0a;
+  border-radius: 7px;
+  padding: 9px 10px;
+}
+.art-item-name {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fde68a;
+  margin-bottom: 2px;
+}
+.art-item-detail {
+  font-size: 9.5px;
+  color: #78500a;
+  line-height: 1.5;
+}
+
+/* ── Output items ─────────────────────────────── */
+.out-item {
+  background: #13102a;
+  border: 1px solid #2a235a;
+  border-radius: 7px;
+  padding: 9px 11px;
+  flex: 1;
+}
+.out-item-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin-bottom: 3px;
+}
+.out-item-detail {
+  font-size: 10px;
+  color: #4a3d7a;
+  line-height: 1.5;
+}
+.out-tags { display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap; }
+.out-tag {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.tag-d { background: #0e3a4a; color: #22d3ee; }
+.tag-df { background: #3a2a06; color: #f59e0b; }
+.tag-r { background: #3a0a12; color: #f87171; }
+.tag-ci { background: #0a1e3a; color: #60a5fa; }
+
+/* ── Footer ───────────────────────────────────── */
+.slide-footer {
+  flex-shrink: 0;
+  padding: 8px 36px;
+  border-top: 1px solid #1e2330;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-fw {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.fw-chip {
+  font-size: 9px;
+  font-weight: 600;
+  color: #3d4d6a;
+  background: #131828;
+  border: 1px solid #1e2a40;
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+.footer-note {
+  font-size: 9px;
+  color: #2d3a52;
+}
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- Header -->
+  <div class="slide-header">
+    <div>
+      <div class="slide-title">AgentShield — Architecture</div>
+      <div class="slide-subtitle">Pre-production security evaluation pipeline for AI agents</div>
+    </div>
+    <div class="slide-badge">v4</div>
+  </div>
+
+  <!-- Body: 5-column flow -->
+  <div class="slide-body">
+
+    <!-- ① INPUT -->
+    <div class="col col-input">
+      <div class="col-heading">① Input</div>
+
+      <div class="input-item">
+        <div class="input-item-name">Agent Source Code</div>
+        <div class="input-item-detail">Python / Java files<br>controller · tools · guard</div>
+      </div>
+
+      <div class="input-item">
+        <div class="input-item-name">SKILL.md Manifests</div>
+        <div class="input-item-detail">MCP tool configs<br>Claude Code · Cursor</div>
+      </div>
+
+      <div class="input-item">
+        <div class="input-item-name">target.yaml</div>
+        <div class="input-item-detail">Endpoint · auth<br>Request / response map</div>
+      </div>
+    </div>
+
+    <!-- → arrow -->
+    <div class="arrow-col">
+      <div class="arrow-label">scan</div>
+      <div class="arrow-line"></div>
+    </div>
+
+    <!-- ② ENGINE -->
+    <div class="col col-engine">
+      <div class="col-heading">② Core Engine &nbsp;—&nbsp; agentshield/</div>
+
+      <!-- Tier 1 -->
+      <div class="eng-block eng-t1">
+        <div class="eng-block-title">Tier 1 — Static Analysis</div>
+        <div class="eng-block-row">
+          <span class="eng-chip chip-t1">Runner</span>
+          <span class="eng-chip chip-t1">Rules Pack (74 rules)</span>
+          <span class="eng-chip chip-t1">Normalize</span>
+          <span class="eng-chip chip-t1">Manifest Scanner</span>
+          <span class="eng-chip chip-t1">Emitter</span>
+        </div>
+      </div>
+
+      <!-- Tier 2 + Phase 2 -->
+      <div class="eng-block eng-t2">
+        <div class="eng-block-title">
+          Tier 2 + Phase 2
+          <span class="llm-badge">LLM</span>
+          <span style="font-size:9px;font-weight:500;text-transform:none;letter-spacing:0;color:#7a4a20;margin-left:4px;">Copilot / Bedrock</span>
+        </div>
+        <div class="eng-block-row">
+          <span class="eng-chip chip-t2">LLM Scanner</span>
+          <span class="eng-chip chip-t2">Behaviour Emulator</span>
+          <span class="eng-chip chip-t2">Red-team Judge</span>
+          <span class="eng-chip chip-t2">Payload Mutator</span>
+        </div>
+      </div>
+
+      <!-- Reporting -->
+      <div class="eng-block eng-rep">
+        <div class="eng-block-title">Reporting + Mapping</div>
+        <div class="eng-block-row">
+          <span class="eng-chip chip-rep">Merger</span>
+          <span class="eng-chip chip-rep">Frameworks</span>
+          <span class="eng-chip chip-rep">Probe</span>
+          <span class="eng-chip chip-rep">Report</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- → arrow -->
+    <div class="arrow-col">
+      <div class="arrow-label">merge</div>
+      <div class="arrow-line"></div>
+    </div>
+
+    <!-- ③ ARTIFACTS -->
+    <div class="col col-artifacts">
+      <div class="col-heading">③ Artifacts &nbsp;(.agentshield/)</div>
+
+      <div class="art-item">
+        <div class="art-item-name">tier1-results.json</div>
+        <div class="art-item-detail">12 findings · 16 manifest hits</div>
+      </div>
+
+      <div class="art-item">
+        <div class="art-item-name">tier2-findings.json</div>
+        <div class="art-item-detail">LLM scan output · file:line</div>
+      </div>
+
+      <div class="art-item">
+        <div class="art-item-name">agent-emulation.json</div>
+        <div class="art-item-detail">14 classes · 112 attempts</div>
+      </div>
+
+      <div class="art-item">
+        <div class="art-item-name">LLM contract files</div>
+        <div class="art-item-detail">tier2-bootstrap · checklist<br>emulator · judge · mutate</div>
+      </div>
+    </div>
+
+    <!-- → arrow -->
+    <div class="arrow-col">
+      <div class="arrow-line"></div>
+    </div>
+
+    <!-- ④ OUTPUT -->
+    <div class="col col-output">
+      <div class="col-heading">④ Output Reports</div>
+
+      <div class="out-item">
+        <div class="out-item-name">HTML Dashboard</div>
+        <div class="out-item-detail">Interactive D/D/R tabs<br>Emulator animations · coverage</div>
+        <div class="out-tags">
+          <span class="out-tag tag-d">Detect</span>
+          <span class="out-tag tag-df">Defend</span>
+          <span class="out-tag tag-r">Respond</span>
+        </div>
+      </div>
+
+      <div class="out-item">
+        <div class="out-item-name">SARIF 2.1.0</div>
+        <div class="out-item-detail">CI/CD · GitHub Advanced Security<br>IDE inline annotations</div>
+        <div class="out-tags"><span class="out-tag tag-ci">CI/CD</span></div>
+      </div>
+
+      <div class="out-item">
+        <div class="out-item-name">JSON / Markdown</div>
+        <div class="out-item-detail">40 actionable findings<br>Machine-readable · pipeline-ready</div>
+      </div>
+
+      <div class="out-item">
+        <div class="out-item-name">Fix Skills</div>
+        <div class="out-item-detail">Per-finding .md remediation<br>Copilot-ready fix instructions</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="slide-footer">
+    <div class="footer-fw">
+      <span style="font-size:9px;color:#2d3a52;margin-right:4px;">Framework coverage:</span>
+      <span class="fw-chip">OWASP LLM Top 10</span>
+      <span class="fw-chip">OWASP Agentic AI</span>
+      <span class="fw-chip">MITRE ATLAS</span>
+      <span class="fw-chip">NIST AI RMF</span>
+      <span class="fw-chip">CWE</span>
+    </div>
+    <div class="footer-note">LangChain · LlamaIndex · AWS Bedrock · Custom pipelines</div>
+  </div>
+
+</div>
+</body>
+</html>
