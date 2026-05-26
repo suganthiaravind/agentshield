@@ -8,9 +8,9 @@ rules:
       downstream agent receives the attacker's payload as if it came from
       a trusted internal caller — the upstream agent's authority is
       laundered onto the downstream call (OWASP Agentic T12 — Agent
-      Communication Poisoning). Pair this rule with a runtime probe
-      (Path B) to verify the downstream agent actually accepts and acts
-      on the forwarded payload.
+      Communication Poisoning). Pair this rule with the behaviour
+      emulator (Phase 2) to verify the downstream agent actually accepts
+      and acts on the forwarded payload.
     mode: taint
     pattern-sources:
       - patterns:

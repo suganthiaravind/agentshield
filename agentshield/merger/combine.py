@@ -9729,7 +9729,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<span class="metric-bd-sep">·</span>'
             f'<span class="metric-bd-item">{landed_campaigns_n} multi-turn</span>'
             f'</div>'
-            f'<div class="metric-subtitle">what runtime probes confirmed</div>'
+            f'<div class="metric-subtitle">what the behaviour emulator confirmed</div>'
             f'</div>'
         )
     # Behaviour Emulator: lands + partial = actionable. Blocked
@@ -10862,7 +10862,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         badge_html = (
                             '<span class="attack-probe-badge '
                             'attack-probe-badge-static" '
-                            'title="Static analysis only — no runtime probe '
+                            'title="Static analysis only — behaviour emulation not yet run '
                             'ran against the target. The Play button '
                             'animates a canned walkthrough for context.">'
                             '[ Static scan ]</span>'
@@ -12303,7 +12303,7 @@ def _render_framework_mapping_table(
     # Group by scan type. Inside the Copilot provenance there are
     # three distinct scan kinds:
     #   - static Tier 2 checklist (source = "Copilot")
-    #   - the 13 catalogued behaviour-emulator attack classes
+    #   - the 14 catalogued behaviour-emulator attack classes
     #     (synthesised from _EMULATOR_CLASS_LABELS — they live in
     #     the emulator skill, not the rule catalogue)
     #   - the AS-X-* probe / explore-mode scenarios
@@ -12321,7 +12321,7 @@ def _render_framework_mapping_table(
         bucket = r.source if r.source in groups else None
         if bucket:
             groups[bucket].append(r)
-    # Synthesise pseudo-RuleReference entries for the 13 catalogued
+    # Synthesise pseudo-RuleReference entries for the 14 catalogued
     # behaviour-emulator attack classes. They aren't real rules in
     # the YAML / checklist sense, but they ARE controls AgentShield
     # claims coverage for — so they belong in this mapping table.
@@ -12556,7 +12556,7 @@ def _render_design_basis(parts: list[str]) -> None:
         (
             "Two-phase pipeline (static + behaviour emulation)",
             "Phase 1 catalogues every risk the ruleset knows about. "
-            "Phase 2 emulates 13 attack classes offline against a "
+            "Phase 2 emulates 14 attack classes offline against a "
             "simulated version of the agent &mdash; no live endpoint "
             "required. Designed to run together on every agent.",
         ),
@@ -12585,7 +12585,7 @@ def _render_design_basis(parts: list[str]) -> None:
         'The behaviour emulator covers attacks the static rule pack '
         'can&rsquo;t catch on its own &mdash; authority escalation, '
         'memory poisoning, tool chaining, and similar agent-class issues '
-        '&mdash; by emulating 13 attack classes offline against a '
+        '&mdash; by emulating 14 attack classes offline against a '
         'simulated version of the agent, with no live endpoint required. '
         'A small set of internal design pillars keeps the report '
         'consistent across engines.</p>'
@@ -12975,7 +12975,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'HOW IT WORKS</text>'
         '<text x="757" y="521" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
-        'font-weight="600" fill="#0f172a">13 attack classes</text>'
+        'font-weight="600" fill="#0f172a">14 attack classes</text>'
         '<text x="757" y="537" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">OWASP LLM / Agentic + MITRE ATLAS</text>'
@@ -12984,7 +12984,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'font-weight="600" fill="#0f172a">Seed &rarr; mutation escalation</text>'
         '<text x="757" y="578" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
-        'fill="#64748b">8 attempts per class &middot; 104 total</text>'
+        'fill="#64748b">8 attempts per class &middot; 112 total</text>'
         '<text x="757" y="603" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
         'font-weight="600" fill="#0f172a">Copilot plays all 4 roles</text>'
@@ -13652,7 +13652,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">How AgentShield works</span>'
         '<span class="ref-section-teaser">End-to-end pipeline &mdash; '
-        'static analysis plus runtime probe, walked stage by stage.</span>'
+        'static analysis plus behaviour emulation, walked stage by stage.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
         '</summary>'
@@ -13668,10 +13668,10 @@ def _render_how_it_works(parts: list[str]) -> None:
         'into Copilot Chat and it writes the findings. '
         '<strong>Phase 2 &mdash; behaviour emulation</strong> also runs via '
         'Copilot, using the knowledge Phase 1 already collected. '
-        'The emulator fires <strong>13 attack classes</strong> against a '
+        'The emulator fires <strong>14 attack classes</strong> against a '
         'simulated version of your agent &mdash; 3 seed payloads per class '
         'followed by up to 5 dynamically-generated mutations, '
-        '<strong>8 attempts per class, 104 total</strong>. '
+        '<strong>8 attempts per class, 112 total</strong>. '
         'The result drives the animated walkthrough in the '
         'Coverage tab &rarr; Behaviour Emulator &rarr; Play.</p>'
     )
@@ -13861,7 +13861,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         'knowledge gathered by the Phase 1 static scan '
         '(source code, system prompt, tool catalogue, permission manifest, and '
         'Tier 2 Copilot review). Copilot plays <strong>four distinct roles in '
-        'sequence</strong> for each of the 13 catalogued attack classes:'
+        'sequence</strong> for each of the 14 catalogued attack classes:'
         '</p>'
         '<ol class="how-steps">'
 
@@ -14130,10 +14130,10 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
         '</tbody></table>'
     )
 
-    # ── Section B: The 13 attack classes ────────────────────────────────────
-    parts.append('<h4 class="emu-ref-h">B &mdash; The 13 attack classes</h4>')
+    # ── Section B: The 14 attack classes ────────────────────────────────────
+    parts.append('<h4 class="emu-ref-h">B &mdash; The 14 attack classes</h4>')
     parts.append(
-        '<p class="emu-ref-note">AgentShield tests 13 attack classes against every agent. '
+        '<p class="emu-ref-note">AgentShield tests 14 attack classes against every agent. '
         'Each is independent &mdash; blocking one does not protect against others.</p>'
     )
     parts.append(
@@ -14590,7 +14590,7 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
 def _render_emulator_reference(parts: list[str]) -> None:
     """Render the Behaviour Emulator deep-dive section in the Reference tab.
 
-    Covers: pipeline step reference, the 13 attack classes, verdict guide,
+    Covers: pipeline step reference, the 14 attack classes, verdict guide,
     how to read the animation UI, and the seed->mutation escalation structure.
     Positioned after _render_how_it_works so readers who want a quick overview
     get the flowchart first and can drill into this for the full detail.
@@ -14602,7 +14602,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<span class="ref-section-chevron">&#9658;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">Behaviour Emulator &mdash; reading your results</span>'
-        '<span class="ref-section-teaser">Pipeline steps, 13 attack classes, verdict meanings, '
+        '<span class="ref-section-teaser">Pipeline steps, 14 attack classes, verdict meanings, '
         'animation guide, and seed &rarr; mutation structure.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'

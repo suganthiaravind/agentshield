@@ -8,9 +8,8 @@ rules:
       typically an error handler that includes the active prompt for
       "debugging". The prompt itself often carries secrets (escalation
       keys, internal IDs, tool descriptions) and is by definition
-      meant to stay opaque to the user. Pair with a runtime probe that
-      requests the prompt explicitly to confirm the model accepts the
-      extraction request (MITRE ATLAS AML.T0056 — System Prompt
+      meant to stay opaque to the user. Pair with the behaviour emulator
+      (Phase 2) to confirm the model accepts the extraction request (MITRE ATLAS AML.T0056 — System Prompt
       Disclosure; OWASP LLM07 — System Prompt Leakage).
     patterns:
       - pattern-either:

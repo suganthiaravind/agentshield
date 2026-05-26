@@ -9,8 +9,8 @@ rules:
       or input validation. Any peer on the internal network that can set
       the header is implicitly trusted — there is no cryptographic proof
       the caller is the agent it claims to be (OWASP Agentic T13 — Rogue
-      Agents in Multi-Agent Systems). Pair with a runtime probe to
-      confirm the LLM acts on attacker-controlled "peer" input.
+      Agents in Multi-Agent Systems). Pair with the behaviour emulator
+      (Phase 2) to confirm the LLM acts on attacker-controlled "peer" input.
     mode: taint
     pattern-sources:
       - patterns:
