@@ -4,179 +4,206 @@
 <meta charset="UTF-8">
 <title>AgentShield — Getting Started</title>
 <style>
-/* ── Reset ─────────────────────────────────────────────────── */
+/* ── Reset ── */
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;background:#000}
-body{
-  display:flex;align-items:center;justify-content:center;
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-}
+html,body{width:100%;height:100%;background:#111}
+body{display:flex;align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
 
-/* ── Stage: fixed 16:9 canvas ───────────────────────────────── */
-#stage{
-  position:relative;
-  width:1280px;height:720px;
+/* ── Stage ── */
+#stage{position:relative;width:1280px;height:720px;
   background:linear-gradient(145deg,#0d1425 0%,#131d33 60%,#0f1929 100%);
-  overflow:hidden;flex-shrink:0;
-}
+  overflow:hidden;flex-shrink:0}
 .bg-glow{position:absolute;pointer-events:none;border-radius:50%}
-.bg-glow-a{
-  top:-140px;right:-140px;width:480px;height:480px;
-  background:radial-gradient(circle,rgba(99,102,241,.09) 0%,transparent 65%);
-}
-.bg-glow-b{
-  bottom:-100px;left:-100px;width:400px;height:400px;
-  background:radial-gradient(circle,rgba(139,92,246,.07) 0%,transparent 65%);
-}
+.bga{top:-120px;right:-120px;width:420px;height:420px;
+  background:radial-gradient(circle,rgba(99,102,241,.09) 0%,transparent 65%)}
+.bgb{bottom:-80px;left:-80px;width:360px;height:360px;
+  background:radial-gradient(circle,rgba(139,92,246,.06) 0%,transparent 65%)}
 
-/* ── Slide deck ─────────────────────────────────────────────── */
-#deck{position:absolute;inset:0 0 54px 0}
-.slide{
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:44px 68px;
-  opacity:0;transition:opacity .55s ease;pointer-events:none;
-}
+/* ── Slide deck ── */
+#deck{position:absolute;inset:0 0 50px 0}
+.slide{position:absolute;inset:0;opacity:0;
+  transition:opacity .5s ease;pointer-events:none;
+  display:flex;flex-direction:column;padding:18px 24px 14px}
 .slide.active{opacity:1;pointer-events:all}
 
-/* ── Shared typography ──────────────────────────────────────── */
-.eyebrow{
-  font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+/* ─────────────────────────────────────────────
+   TITLE SLIDE
+───────────────────────────────────────────── */
+#s0{align-items:center;justify-content:center;gap:0}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
   background:linear-gradient(90deg,#818cf8,#a78bfa);
   -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;margin-bottom:10px;
-}
-.slide-title{font-size:28px;font-weight:700;color:#f8fafc;line-height:1.2}
-
-/* ── Slide 0: Title ─────────────────────────────────────────── */
-#s0{gap:0}
-.brand{
-  font-size:56px;font-weight:800;color:#f8fafc;
-  letter-spacing:-.02em;margin-bottom:10px;line-height:1;
-}
-.brand span{
-  background:linear-gradient(90deg,#818cf8,#c084fc);
-  -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;
-}
-.brand-sub{font-size:16px;color:#475569;margin-bottom:32px}
-.prereq-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-.prereq-chip{
-  font-size:12.5px;color:#64748b;
+  -webkit-text-fill-color:transparent;margin-bottom:10px}
+.brand{font-size:54px;font-weight:800;color:#f8fafc;
+  letter-spacing:-.02em;margin-bottom:9px;line-height:1}
+.brand span{background:linear-gradient(90deg,#818cf8,#c084fc);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.brand-sub{font-size:15px;color:#475569;margin-bottom:28px}
+.prereq-row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+.prereq-chip{font-size:12px;color:#64748b;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-  border-radius:7px;padding:7px 15px;
-}
+  border-radius:7px;padding:6px 14px}
 
-/* ── Step slides layout ─────────────────────────────────────── */
-.step-layout{width:100%;display:flex;gap:40px;align-items:flex-start}
-.step-meta{flex:0 0 260px;display:flex;flex-direction:column}
-.step-badge{
-  width:46px;height:46px;border-radius:50%;
+/* ─────────────────────────────────────────────
+   STEP HEADER (top bar for slides 1-4)
+───────────────────────────────────────────── */
+.step-header{
+  display:flex;align-items:center;gap:16px;
+  padding:0 4px 12px;flex-shrink:0}
+.sh-badge{width:40px;height:40px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:800;margin-bottom:16px;
-}
-.step-tier{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
-.step-name{font-size:28px;font-weight:700;color:#f8fafc;line-height:1.15;margin-bottom:10px}
-.step-info{font-size:13px;color:#475569;line-height:1.55;margin-bottom:22px}
-.out-label{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#1e3a5f;margin-bottom:7px}
-.out-chips{display:flex;flex-direction:column;gap:6px}
-.out-chip{
-  font-family:'SF Mono',Consolas,monospace;
-  font-size:11px;color:#2d4060;
+  font-size:13px;font-weight:800}
+.sh-meta{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+.sh-tier{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.sh-name{font-size:20px;font-weight:700;color:#f8fafc;line-height:1.15}
+.sh-divider{width:1px;height:38px;background:rgba(255,255,255,.07);flex-shrink:0}
+.sh-desc{font-size:12.5px;color:#475569;line-height:1.5;flex:1}
+.sh-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.out-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.out-chip{font-family:'SF Mono',Consolas,monospace;font-size:10px;color:#2d4060;
   background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);
-  border-radius:4px;padding:4px 11px;
-  opacity:0;transform:translateX(-6px);
-  transition:opacity .35s ease,transform .35s ease;
-  width:fit-content;
-}
+  border-radius:4px;padding:3px 9px;
+  opacity:0;transform:translateY(-4px);
+  transition:opacity .35s ease,transform .35s ease}
 .out-chip.show{opacity:1;transform:none}
 
 /* step colour tokens */
-.s1 .step-badge{background:rgba(99,102,241,.2);color:#a5b4fc}
-.s1 .step-tier{color:#818cf8}
-.s2 .step-badge{background:rgba(59,130,246,.2);color:#93c5fd}
-.s2 .step-tier{color:#60a5fa}
-.s3 .step-badge{background:rgba(16,185,129,.2);color:#6ee7b7}
-.s3 .step-tier{color:#34d399}
-.s4 .step-badge{background:rgba(139,92,246,.2);color:#c4b5fd}
-.s4 .step-tier{color:#c084fc}
+.s1 .sh-badge{background:rgba(99,102,241,.2);color:#a5b4fc}
+.s1 .sh-tier{color:#818cf8}
+.s2 .sh-badge{background:rgba(59,130,246,.2);color:#93c5fd}
+.s2 .sh-tier{color:#60a5fa}
+.s3 .sh-badge{background:rgba(16,185,129,.2);color:#6ee7b7}
+.s3 .sh-tier{color:#34d399}
+.s4 .sh-badge{background:rgba(139,92,246,.2);color:#c4b5fd}
+.s4 .sh-tier{color:#c084fc}
 
-/* ── Terminal window ────────────────────────────────────────── */
-.step-body{flex:1;min-width:0}
-.terminal{
-  background:#080e1a;
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:11px;overflow:hidden;
-  box-shadow:0 10px 40px rgba(0,0,0,.55);
-}
-.term-bar{
-  background:#101623;padding:11px 14px;
-  display:flex;align-items:center;gap:7px;
-  border-bottom:1px solid rgba(255,255,255,.05);
-}
-.dot{width:12px;height:12px;border-radius:50%}
-.dot-r{background:#ff5f56}.dot-y{background:#ffbd2e}.dot-g{background:#27c93f}
-.term-title{flex:1;text-align:center;font-size:11px;color:#2d4060;margin-right:38px}
-.term-body{padding:22px 24px;min-height:220px}
-.term-code{
+/* ─────────────────────────────────────────────
+   VS CODE WINDOW
+───────────────────────────────────────────── */
+.vscode{flex:1;display:flex;flex-direction:column;min-height:0;
+  background:#1e1e1e;border-radius:8px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.06);
+  box-shadow:0 10px 40px rgba(0,0,0,.6)}
+
+/* title bar */
+.vs-titlebar{height:30px;background:#3c3c3c;flex-shrink:0;
+  display:flex;align-items:center;padding:0 10px;gap:7px}
+.vs-dot{width:12px;height:12px;border-radius:50%}
+.vs-dot-r{background:#ff5f56}.vs-dot-y{background:#ffbd2e}.vs-dot-g{background:#27c93f}
+.vs-title-label{flex:1;text-align:center;font-size:11px;color:#969696;
+  margin-right:38px;white-space:nowrap;overflow:hidden}
+
+/* body */
+.vs-body{flex:1;display:flex;min-height:0}
+
+/* activity bar */
+.vs-activity{width:46px;background:#333;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;padding-top:6px;gap:2px}
+.vs-act-icon{width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;opacity:.4;border-left:2px solid transparent;cursor:pointer;
+  transition:opacity .2s}
+.vs-act-icon.on{opacity:1;border-left-color:#fff}
+
+/* sidebar / file tree */
+.vs-sidebar{width:190px;background:#252526;flex-shrink:0;
+  border-right:1px solid rgba(255,255,255,.04);overflow:hidden;
+  display:flex;flex-direction:column}
+.vs-sb-header{font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#bbb;
+  padding:10px 12px 5px;text-transform:uppercase;flex-shrink:0}
+.vs-tree{flex:1;overflow:hidden;padding-bottom:8px}
+.vt{display:flex;align-items:center;gap:4px;
+  padding:2px 8px;font-size:11.5px;color:#ccc;cursor:pointer;
+  border-radius:3px;margin:0 4px;white-space:nowrap;overflow:hidden}
+.vt:hover{background:rgba(255,255,255,.05)}
+.vt.sel{background:#094771;color:#fff}
+.vt .ico{flex-shrink:0;width:15px;text-align:center}
+.vt-i1{padding-left:14px}.vt-i2{padding-left:26px}.vt-i3{padding-left:38px}
+.vt-new{opacity:0;transform:translateX(-6px);
+  transition:opacity .4s ease,transform .4s ease}
+.vt-new.show{opacity:1;transform:none}
+
+/* main editor / content area */
+.vs-main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* tab bar */
+.vs-tabs{height:35px;background:#252526;flex-shrink:0;
+  display:flex;border-bottom:1px solid rgba(0,0,0,.3)}
+.vs-tab{display:flex;align-items:center;padding:0 14px;
+  font-size:12px;color:#969696;background:#2d2d2d;cursor:pointer;
+  border-right:1px solid rgba(0,0,0,.25);gap:6px;white-space:nowrap}
+.vs-tab.on{color:#fff;background:#1e1e1e;border-top:1px solid #007acc}
+.vs-tab-close{opacity:0;font-size:10px;width:14px;text-align:center}
+.vs-tab:hover .vs-tab-close{opacity:.5}
+
+/* terminal panel */
+.vs-term-strip{height:28px;background:#252526;flex-shrink:0;
+  display:flex;align-items:center;padding:0 10px;gap:8px;
+  border-top:1px solid rgba(255,255,255,.05)}
+.vs-term-tab{font-size:11px;color:#ccc;padding:3px 10px;
+  border-radius:3px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.vs-term-tab.on{background:rgba(255,255,255,.08)}
+.vs-term-body{flex:1;background:#1e1e1e;padding:10px 16px;
   font-family:'SF Mono',Consolas,'Courier New',monospace;
-  font-size:13.5px;color:#e2e8f0;line-height:1.75;
-  white-space:pre;
-}
+  font-size:12.5px;line-height:1.72;color:#ccc;white-space:pre;
+  overflow:hidden;min-height:0}
 
 /* cursor blink */
-.cursor{
-  display:inline-block;width:2px;height:15px;
+.cursor{display:inline-block;width:2px;height:13px;
   background:#818cf8;vertical-align:text-bottom;
-  animation:blink .8s step-end infinite;
-}
+  animation:blink .8s step-end infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-/* ── Copilot step (slide 3) ─────────────────────────────────── */
-.copilot-card{
-  flex:1;
-  background:rgba(16,185,129,.05);
-  border:1px solid rgba(16,185,129,.18);
-  border-radius:11px;padding:26px 28px;
-  box-shadow:0 0 30px rgba(16,185,129,.04);
-}
-.copilot-badge{
-  display:inline-flex;align-items:center;gap:7px;
-  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  color:#34d399;background:rgba(16,185,129,.1);
-  border:1px solid rgba(16,185,129,.2);border-radius:5px;
-  padding:5px 12px;margin-bottom:18px;
-}
-.copilot-steps{display:flex;flex-direction:column;gap:12px}
-.cs{
-  display:flex;align-items:flex-start;gap:12px;
-  opacity:0;transform:translateX(10px);
-  transition:opacity .4s ease,transform .4s ease;
-}
-.cs.show{opacity:1;transform:none}
-.cs-num{
-  width:24px;height:24px;border-radius:50%;flex-shrink:0;margin-top:2px;
-  background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.25);
-  display:flex;align-items:center;justify-content:center;
-  font-size:9.5px;font-weight:700;color:#34d399;
-}
-.cs-text{font-size:14px;color:#4b6280;line-height:1.55}
-.cs-text strong{color:#94a3b8}
+/* status bar */
+.vs-statusbar{height:22px;background:#007acc;flex-shrink:0;
+  display:flex;align-items:center;padding:0 8px;gap:0;
+  font-size:11px;color:rgba(255,255,255,.9)}
+.vs-sbi{display:flex;align-items:center;gap:4px;
+  padding:0 7px;height:100%;cursor:pointer;white-space:nowrap}
+.vs-sbi:hover{background:rgba(255,255,255,.12)}
+.vs-sb-right{margin-left:auto}
 
-/* ── Summary slide ──────────────────────────────────────────── */
-#s5 .slide-title{margin-bottom:26px}
+/* ─────────────────────────────────────────────
+   STEP 3: Copilot Chat panel
+───────────────────────────────────────────── */
+.vs-copilot-panel{width:310px;background:#1e1e1e;flex-shrink:0;
+  border-left:1px solid rgba(255,255,255,.07);
+  display:flex;flex-direction:column}
+.vs-cp-header{height:35px;background:#252526;flex-shrink:0;
+  display:flex;align-items:center;padding:0 12px;gap:8px;
+  font-size:12px;color:#ccc;border-bottom:1px solid rgba(0,0,0,.3)}
+.vs-cp-header svg{opacity:.7}
+.vs-cp-msgs{flex:1;overflow:hidden;padding:10px 12px;
+  display:flex;flex-direction:column;gap:10px}
+.cp-msg-user{align-self:flex-end;max-width:90%}
+.cp-bubble-user{background:#0e639c;color:#fff;border-radius:10px 10px 2px 10px;
+  padding:7px 11px;font-size:11.5px;line-height:1.45}
+.cp-msg-bot{display:flex;gap:8px;align-items:flex-start;
+  opacity:0;transform:translateY(6px);
+  transition:opacity .4s ease,transform .4s ease}
+.cp-msg-bot.show{opacity:1;transform:none}
+.cp-bot-icon{width:22px;height:22px;border-radius:50%;
+  background:linear-gradient(135deg,#6366f1,#a78bfa);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;margin-top:2px}
+.cp-bubble-bot{font-size:11.5px;color:#ccc;line-height:1.6}
+.cp-bubble-bot strong{color:#9cdcfe}
+.cp-bubble-bot .cp-ok{color:#4ec9b0;font-weight:600}
+.vs-cp-input{padding:8px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.06)}
+.vs-cp-input-box{background:#3c3c3c;border:1px solid rgba(255,255,255,.1);
+  border-radius:6px;padding:7px 11px;font-size:11.5px;color:#666;
+  display:flex;justify-content:space-between;align-items:center}
+
+/* ─────────────────────────────────────────────
+   SUMMARY SLIDE
+───────────────────────────────────────────── */
+#s5{align-items:center;justify-content:center;gap:0;padding:28px 36px}
+.sum-header{text-align:center;margin-bottom:24px}
 .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%}
-.sum-card{
-  border-radius:10px;padding:18px 20px;
-  position:relative;overflow:hidden;
-  opacity:0;transform:translateY(14px);
-  transition:opacity .4s ease,transform .4s ease;
-}
+.sum-card{border-radius:10px;padding:18px 20px;position:relative;overflow:hidden;
+  opacity:0;transform:translateY(12px);transition:opacity .4s ease,transform .4s ease}
 .sum-card.show{opacity:1;transform:none}
-.sum-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
-}
+.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
 .sc1{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2)}
 .sc1::before{background:linear-gradient(90deg,#4338ca,#818cf8)}
 .sc2{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2)}
@@ -185,222 +212,394 @@ body{
 .sc3::before{background:linear-gradient(90deg,#065f46,#34d399)}
 .sc4{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2)}
 .sc4::before{background:linear-gradient(90deg,#5b21b6,#c084fc)}
-.sum-num{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.sum-num{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
 .sc1 .sum-num{color:#818cf8}.sc2 .sum-num{color:#60a5fa}
 .sc3 .sum-num{color:#34d399}.sc4 .sum-num{color:#c084fc}
-.sum-name{font-size:15.5px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
-.sum-desc{font-size:11px;color:#334155;margin-bottom:9px}
-.sum-cmd{
-  font-family:'SF Mono',Consolas,monospace;
-  font-size:10.5px;color:#4ade80;
-  background:rgba(0,0,0,.3);border-radius:4px;
-  padding:5px 10px;
-}
+.sum-name{font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:3px}
+.sum-desc{font-size:11px;color:#334155;margin-bottom:8px}
+.sum-cmd{font-family:'SF Mono',Consolas,monospace;font-size:10.5px;color:#4ade80;
+  background:rgba(0,0,0,.3);border-radius:4px;padding:5px 10px}
 
-/* ── Controls bar ───────────────────────────────────────────── */
-#controls{
-  position:absolute;bottom:0;left:0;right:0;height:54px;
-  background:rgba(5,10,20,.7);border-top:1px solid rgba(255,255,255,.05);
-  backdrop-filter:blur(8px);
-  display:flex;align-items:center;padding:0 22px;gap:14px;
-}
-.ctrl{
-  background:none;border:none;color:#334155;cursor:pointer;
-  font-size:15px;padding:5px 8px;border-radius:5px;
-  transition:color .2s;line-height:1;
-}
+/* ── Controls ── */
+#controls{position:absolute;bottom:0;left:0;right:0;height:50px;
+  background:rgba(5,10,20,.75);border-top:1px solid rgba(255,255,255,.05);
+  backdrop-filter:blur(8px);display:flex;align-items:center;padding:0 20px;gap:12px}
+.ctrl{background:none;border:none;color:#334155;cursor:pointer;
+  font-size:15px;padding:5px 7px;border-radius:4px;transition:color .2s;line-height:1}
 .ctrl:hover{color:#94a3b8}
-#prog-track{
-  flex:1;height:3px;background:rgba(255,255,255,.07);
-  border-radius:2px;cursor:pointer;position:relative;
-}
-#prog-fill{
-  height:100%;
-  background:linear-gradient(90deg,#6366f1,#a78bfa);
-  border-radius:2px;width:0%;transition:width .3s;
-}
-.indicators{display:flex;gap:5px;align-items:center}
-.ind{
-  width:7px;height:7px;border-radius:50%;
-  background:rgba(255,255,255,.1);cursor:pointer;
-  transition:background .25s,width .25s,border-radius .25s;
-}
-.ind.on{width:20px;border-radius:3px;background:#6366f1}
-#counter{font-size:11px;color:#1e3a5f;min-width:38px;text-align:right}
-.hint{
-  font-size:10px;color:#1a2d4a;letter-spacing:.04em;
-}
+#prog-track{flex:1;height:3px;background:rgba(255,255,255,.07);
+  border-radius:2px;cursor:pointer;position:relative}
+#prog-fill{height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa);
+  border-radius:2px;width:0%;transition:width .3s}
+.inds{display:flex;gap:5px;align-items:center}
+.ind{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.1);
+  cursor:pointer;transition:background .25s,width .25s,border-radius .25s}
+.ind.on{width:18px;border-radius:3px;background:#6366f1}
+#ctr{font-size:11px;color:#1e3a5f;min-width:36px;text-align:right}
+.hint{font-size:10px;color:#1a2d4a;letter-spacing:.03em}
 </style>
 </head>
 <body>
 <div id="stage">
-  <div class="bg-glow bg-glow-a"></div>
-  <div class="bg-glow bg-glow-b"></div>
-
+  <div class="bg-glow bga"></div>
+  <div class="bg-glow bgb"></div>
   <div id="deck">
 
-    <!-- ── Slide 0: Title ── -->
-    <div class="slide active" id="s0">
-      <div class="eyebrow">Pre-production AI Agent Security</div>
-      <div class="brand">Agent<span>Shield</span></div>
-      <div class="brand-sub">Getting started — four steps from clone to full security report</div>
-      <div class="prereq-row">
-        <span class="prereq-chip">🐍 Python 3.10+</span>
-        <span class="prereq-chip">⎇ Git</span>
-        <span class="prereq-chip">💻 VS Code</span>
-        <span class="prereq-chip">🤖 GitHub Copilot</span>
-        <span class="prereq-chip">🔍 Semgrep <em style="color:#1e3a5f">(auto-installed)</em></span>
+  <!-- ════════════════════════════════
+       SLIDE 0 — Title
+  ════════════════════════════════ -->
+  <div class="slide active" id="s0">
+    <div class="eyebrow">Pre-production AI Agent Security</div>
+    <div class="brand">Agent<span>Shield</span></div>
+    <div class="brand-sub">Getting started — four steps from clone to full security report</div>
+    <div class="prereq-row">
+      <span class="prereq-chip">🐍 Python 3.10+</span>
+      <span class="prereq-chip">⎇ Git</span>
+      <span class="prereq-chip">💻 VS Code</span>
+      <span class="prereq-chip">🤖 GitHub Copilot</span>
+      <span class="prereq-chip">🔍 Semgrep <em style="color:#1e3a5f">(auto-installed)</em></span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       SLIDE 1 — Clone & Install
+  ════════════════════════════════ -->
+  <div class="slide s1" id="s1">
+    <!-- Step header: TOP -->
+    <div class="step-header">
+      <div class="sh-badge">01</div>
+      <div class="sh-meta">
+        <span class="sh-tier">Step One</span>
+        <span class="sh-name">Clone &amp; Install</span>
+      </div>
+      <div class="sh-divider"></div>
+      <div class="sh-desc">Clone the AgentShield repo, create a Python virtual environment, and install the CLI with Semgrep bundled.</div>
+      <div class="sh-right">
+        <div class="out-chips">
+          <span class="out-chip" id="oc1a">✓ agentshield CLI</span>
+        </div>
       </div>
     </div>
-
-    <!-- ── Slide 1: Step 01 ── -->
-    <div class="slide s1" id="s1">
-      <div class="step-layout">
-        <div class="step-meta">
-          <div class="step-badge">01</div>
-          <div class="step-tier">Step One</div>
-          <div class="step-name">Clone &amp;<br>Install</div>
-          <div class="step-info">One-time setup. Creates a virtual environment and installs the AgentShield CLI with Semgrep bundled.</div>
-          <div class="out-label">Output</div>
-          <div class="out-chips">
-            <span class="out-chip" id="oc1a">agentshield CLI ready</span>
+    <!-- VS Code window -->
+    <div class="vscode">
+      <div class="vs-titlebar">
+        <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+        <div class="vs-title-label">agentshield — Visual Studio Code</div>
+      </div>
+      <div class="vs-body">
+        <div class="vs-activity">
+          <div class="vs-act-icon on">&#128193;</div>
+          <div class="vs-act-icon">&#128269;</div>
+          <div class="vs-act-icon">&#9135;</div>
+          <div class="vs-act-icon">&#128030;</div>
+        </div>
+        <div class="vs-sidebar">
+          <div class="vs-sb-header">Explorer</div>
+          <div class="vs-tree">
+            <div class="vt"><span class="ico">▶</span> AGENTSHIELD</div>
+            <div class="vt vt-i1"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">your-agent-repo</span></div>
+            <div class="vt vt-i2"><span class="ico">📄</span> controller.py</div>
+            <div class="vt vt-i2"><span class="ico">📄</span> orchestrator.py</div>
+            <div class="vt vt-i2"><span class="ico">📄</span> tools.py</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> pyproject.toml</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> INSTALL.md</div>
           </div>
         </div>
-        <div class="step-body">
-          <div class="terminal">
-            <div class="term-bar">
-              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-              <div class="term-title">zsh — install</div>
+        <div class="vs-main">
+          <div class="vs-tabs">
+            <div class="vs-tab on"><span>⬛</span> TERMINAL <span class="vs-tab-close">✕</span></div>
+          </div>
+          <div class="vs-term-strip">
+            <div class="vs-term-tab on">&#9654; zsh &nbsp; <span style="font-size:9px;opacity:.4">+</span></div>
+            <div style="margin-left:auto;font-size:10px;color:#444;cursor:pointer">&#10005;</div>
+          </div>
+          <div class="vs-term-body" id="tc1"></div>
+        </div>
+      </div>
+      <div class="vs-statusbar">
+        <div class="vs-sbi">&#8594; <strong>main</strong></div>
+        <div class="vs-sbi">&#9888; 0 &nbsp; &#9432; 0</div>
+        <div class="vs-sbi vs-sb-right">Python 3.11.0 &nbsp;|&nbsp; UTF-8 &nbsp;|&nbsp; zsh</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       SLIDE 2 — Tier 1 Scan
+  ════════════════════════════════ -->
+  <div class="slide s2" id="s2">
+    <div class="step-header">
+      <div class="sh-badge">02</div>
+      <div class="sh-meta">
+        <span class="sh-tier">Step Two</span>
+        <span class="sh-name">Tier 1 Scan</span>
+      </div>
+      <div class="sh-divider"></div>
+      <div class="sh-desc">Runs 70+ Semgrep security rules against your agent source code and emits Copilot skill files into <code style="color:#818cf8;font-size:11px">.agentshield/</code></div>
+      <div class="sh-right">
+        <div class="out-chips">
+          <span class="out-chip" id="oc2a">✓ tier1-results.json</span>
+          <span class="out-chip" id="oc2b">✓ .agentshield/ skills</span>
+        </div>
+      </div>
+    </div>
+    <div class="vscode">
+      <div class="vs-titlebar">
+        <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+        <div class="vs-title-label">your-agent-repo — Visual Studio Code</div>
+      </div>
+      <div class="vs-body">
+        <div class="vs-activity">
+          <div class="vs-act-icon on">&#128193;</div>
+          <div class="vs-act-icon">&#128269;</div>
+          <div class="vs-act-icon">&#9135;</div>
+          <div class="vs-act-icon">&#128030;</div>
+        </div>
+        <div class="vs-sidebar">
+          <div class="vs-sb-header">Explorer</div>
+          <div class="vs-tree">
+            <div class="vt vt-i0"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">YOUR-AGENT-REPO</span></div>
+            <div class="vt vt-new vt-i1" id="vt2-agentshield"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">.agentshield</span></div>
+            <div class="vt vt-new vt-i2 sel" id="vt2-skill"><span class="ico">📄</span> SKILL.md</div>
+            <div class="vt vt-new vt-i2" id="vt2-emuski"><span class="ico">📄</span> AGENT_EMULATOR_SKILL.md</div>
+            <div class="vt vt-new vt-i2" id="vt2-t1"><span class="ico">&#128200;</span> tier1-results.json</div>
+            <div class="vt vt-i1" style="color:#dcb67a"><span class="ico">▼</span> <span style="color:#dcb67a">controller.py area</span></div>
+            <div class="vt vt-i2"><span class="ico">📄</span> controller.py</div>
+            <div class="vt vt-i2"><span class="ico">📄</span> orchestrator.py</div>
+            <div class="vt vt-i2"><span class="ico">📄</span> tools.py</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> pyproject.toml</div>
+          </div>
+        </div>
+        <div class="vs-main">
+          <div class="vs-tabs">
+            <div class="vs-tab on"><span>⬛</span> TERMINAL <span class="vs-tab-close">✕</span></div>
+          </div>
+          <div class="vs-term-strip">
+            <div class="vs-term-tab on">&#9654; zsh &nbsp; <span style="font-size:9px;opacity:.4">+</span></div>
+            <div style="margin-left:auto;font-size:10px;color:#444;cursor:pointer">&#10005;</div>
+          </div>
+          <div class="vs-term-body" id="tc2"></div>
+        </div>
+      </div>
+      <div class="vs-statusbar">
+        <div class="vs-sbi">&#8594; <strong>main</strong></div>
+        <div class="vs-sbi" id="s2-err">&#9888; 0 &nbsp; &#9432; 0</div>
+        <div class="vs-sbi vs-sb-right">Python 3.11.0 &nbsp;|&nbsp; UTF-8 &nbsp;|&nbsp; zsh</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       SLIDE 3 — Tier 2 + Copilot
+  ════════════════════════════════ -->
+  <div class="slide s3" id="s3">
+    <div class="step-header">
+      <div class="sh-badge">03</div>
+      <div class="sh-meta">
+        <span class="sh-tier">Step Three</span>
+        <span class="sh-name">Tier 2 + Emulator</span>
+      </div>
+      <div class="sh-divider"></div>
+      <div class="sh-desc">Open VS Code with Copilot Chat. Paste the skill prompts — Copilot reads every source file, validates findings, and runs 14 adversary attack classes.</div>
+      <div class="sh-right">
+        <div class="out-chips">
+          <span class="out-chip" id="oc3a">✓ tier2-findings.json</span>
+          <span class="out-chip" id="oc3b">✓ agent-emulation.json</span>
+        </div>
+      </div>
+    </div>
+    <div class="vscode">
+      <div class="vs-titlebar">
+        <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+        <div class="vs-title-label">SKILL.md — your-agent-repo — Visual Studio Code</div>
+      </div>
+      <div class="vs-body">
+        <div class="vs-activity">
+          <div class="vs-act-icon on">&#128193;</div>
+          <div class="vs-act-icon">&#128269;</div>
+          <div class="vs-act-icon">&#9135;</div>
+          <div class="vs-act-icon">&#128030;</div>
+        </div>
+        <div class="vs-sidebar">
+          <div class="vs-sb-header">Explorer</div>
+          <div class="vs-tree">
+            <div class="vt vt-i0"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">YOUR-AGENT-REPO</span></div>
+            <div class="vt vt-i1"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">.agentshield</span></div>
+            <div class="vt vt-i2 sel"><span class="ico">📄</span> SKILL.md</div>
+            <div class="vt vt-i2"><span class="ico">📄</span> AGENT_EMULATOR_SKILL.md</div>
+            <div class="vt vt-i2"><span class="ico">&#128200;</span> tier1-results.json</div>
+            <div class="vt vt-new vt-i2" id="vt3-t2"><span class="ico" style="color:#4ec9b0">&#128200;</span> <span style="color:#4ec9b0">tier2-findings.json</span></div>
+            <div class="vt vt-new vt-i2" id="vt3-emu"><span class="ico" style="color:#4ec9b0">&#128200;</span> <span style="color:#4ec9b0">agent-emulation.json</span></div>
+            <div class="vt vt-i1"><span class="ico">📄</span> controller.py</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> orchestrator.py</div>
+          </div>
+        </div>
+        <!-- editor shows SKILL.md preview -->
+        <div class="vs-main">
+          <div class="vs-tabs">
+            <div class="vs-tab on" style="color:#9cdcfe"><span style="color:#cccccc">📄</span> SKILL.md <span class="vs-tab-close">✕</span></div>
+          </div>
+          <div style="flex:1;background:#1e1e1e;padding:14px 18px;overflow:hidden;font-family:'SF Mono',Consolas,monospace;font-size:11.5px;line-height:1.65;color:#808080">
+            <span style="color:#608b4e"># AgentShield Tier 2 Skill — OWASP LLM / Agentic Top-10 + MITRE ATLAS</span><br>
+            <span style="color:#808080">## Instructions</span><br>
+            <span style="color:#ccc">You are a security engineer. Read every source file in this</span><br>
+            <span style="color:#ccc">repository and evaluate it against the 62 controls below.</span><br>
+            <span style="color:#ccc">For each control, walk the code and write findings to</span><br>
+            <span style="color:#9cdcfe">.agentshield/tier2-findings.json</span><span style="color:#ccc"> in the schema provided.</span><br>
+            <br>
+            <span style="color:#808080">## Controls</span><br>
+            <span style="color:#569cd6">D001</span> <span style="color:#ccc">Hardcoded LLM credentials ...</span><br>
+            <span style="color:#569cd6">D003</span> <span style="color:#ccc">Unsanitised user input → LLM ...</span><br>
+            <span style="color:#569cd6">D004</span> <span style="color:#ccc">LLM output → eval/exec sink ...</span><br>
+            <span style="color:#4ec9b0">LLM01</span> <span style="color:#ccc">Prompt injection vectors ...</span><br>
+            <span style="color:#4ec9b0">LLM06</span> <span style="color:#ccc">Sensitive information disclosure ...</span><br>
+            <span style="color:#808080">... 57 more controls</span>
+          </div>
+        </div>
+        <!-- Copilot Chat panel -->
+        <div class="vs-copilot-panel">
+          <div class="vs-cp-header">
+            <span style="font-size:14px">🤖</span> Copilot Chat
+          </div>
+          <div class="vs-cp-msgs" id="cp-msgs">
+            <div class="cp-msg-user">
+              <div class="cp-bubble-user">@workspace Here is the AgentShield skill file — please analyse this repo for all 62 controls and write tier2-findings.json</div>
             </div>
-            <div class="term-body"><div class="term-code" id="tc1"></div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Slide 2: Step 02 ── -->
-    <div class="slide s2" id="s2">
-      <div class="step-layout">
-        <div class="step-meta">
-          <div class="step-badge">02</div>
-          <div class="step-tier">Step Two</div>
-          <div class="step-name">Tier 1<br>Scan</div>
-          <div class="step-info">Semgrep runs 70+ security rules against your source. Emits Copilot skill files for the next step.</div>
-          <div class="out-label">Outputs</div>
-          <div class="out-chips">
-            <span class="out-chip" id="oc2a">tier1-results.json</span>
-            <span class="out-chip" id="oc2b">.agentshield/ skills</span>
-          </div>
-        </div>
-        <div class="step-body">
-          <div class="terminal">
-            <div class="term-bar">
-              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-              <div class="term-title">zsh — tier-1-scan</div>
+            <div class="cp-msg-bot" id="cpb1">
+              <div class="cp-bot-icon">🤖</div>
+              <div class="cp-bubble-bot">I'll analyse your agent codebase against all 62 security controls. Reading source files now…</div>
             </div>
-            <div class="term-body"><div class="term-code" id="tc2"></div></div>
+            <div class="cp-msg-bot" id="cpb2">
+              <div class="cp-bot-icon">🤖</div>
+              <div class="cp-bubble-bot">
+                <span class="cp-ok">✓</span> <strong>controller.py</strong> — 3 findings (D003, LLM01, LLM07)<br>
+                <span class="cp-ok">✓</span> <strong>orchestrator.py</strong> — 2 findings (D001, LLM06)<br>
+                <span class="cp-ok">✓</span> <strong>tools.py</strong> — 1 finding (D004)
+              </div>
+            </div>
+            <div class="cp-msg-bot" id="cpb3">
+              <div class="cp-bot-icon">🤖</div>
+              <div class="cp-bubble-bot">
+                Writing <strong>.agentshield/tier2-findings.json</strong>…<br>
+                <span class="cp-ok">✓</span> Done — 6 validated findings written.
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Slide 3: Step 03 ── -->
-    <div class="slide s3" id="s3">
-      <div class="step-layout">
-        <div class="step-meta">
-          <div class="step-badge">03</div>
-          <div class="step-tier">Step Three</div>
-          <div class="step-name">Tier 2 +<br>Emulator</div>
-          <div class="step-info">Copilot walks every source file, validates Tier 1 findings, and simulates 14 adversary attack classes against your pipeline.</div>
-          <div class="out-label">Outputs</div>
-          <div class="out-chips">
-            <span class="out-chip" id="oc3a">tier2-findings.json</span>
-            <span class="out-chip" id="oc3b">agent-emulation.json</span>
-          </div>
-        </div>
-        <div class="step-body">
-          <div class="copilot-card">
-            <div class="copilot-badge">🤖 Copilot step — VS Code only</div>
-            <div class="copilot-steps">
-              <div class="cs" id="cs1">
-                <div class="cs-num">1</div>
-                <div class="cs-text">Open your agent repo in <strong>VS Code</strong> with Copilot Chat active</div>
-              </div>
-              <div class="cs" id="cs2">
-                <div class="cs-num">2</div>
-                <div class="cs-text">Paste the <strong>SKILL.md</strong> prompt (printed at end of step 02) into Copilot Chat</div>
-              </div>
-              <div class="cs" id="cs3">
-                <div class="cs-num">3</div>
-                <div class="cs-text">Copilot reads every source file and writes <strong>tier2-findings.json</strong></div>
-              </div>
-              <div class="cs" id="cs4">
-                <div class="cs-num">4</div>
-                <div class="cs-text">Paste <strong>AGENT_EMULATOR_SKILL.md</strong> — Copilot writes <strong>agent-emulation.json</strong></div>
-              </div>
+          <div class="vs-cp-input">
+            <div class="vs-cp-input-box">
+              <span>Ask Copilot…</span><span style="font-size:14px;opacity:.3">⌅</span>
             </div>
           </div>
         </div>
       </div>
+      <div class="vs-statusbar">
+        <div class="vs-sbi">&#8594; <strong>main</strong></div>
+        <div class="vs-sbi">&#9888; 0 &nbsp; &#9432; 0</div>
+        <div class="vs-sbi vs-sb-right">Copilot ✓ &nbsp;|&nbsp; UTF-8 &nbsp;|&nbsp; Markdown</div>
+      </div>
     </div>
+  </div>
 
-    <!-- ── Slide 4: Step 04 ── -->
-    <div class="slide s4" id="s4">
-      <div class="step-layout">
-        <div class="step-meta">
-          <div class="step-badge">04</div>
-          <div class="step-tier">Step Four</div>
-          <div class="step-name">Generate<br>Report</div>
-          <div class="step-info">Merges Tier 1 + Tier 2 + Emulator into one unified D/D/R report with fix guidance and OWASP / MITRE ATLAS / CWE mappings.</div>
-          <div class="out-label">Outputs</div>
-          <div class="out-chips">
-            <span class="out-chip" id="oc4a">report.html</span>
-            <span class="out-chip" id="oc4b">report-print.html</span>
-          </div>
-        </div>
-        <div class="step-body">
-          <div class="terminal">
-            <div class="term-bar">
-              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-              <div class="term-title">zsh — merge</div>
-            </div>
-            <div class="term-body"><div class="term-code" id="tc4"></div></div>
-          </div>
+  <!-- ════════════════════════════════
+       SLIDE 4 — Generate Report
+  ════════════════════════════════ -->
+  <div class="slide s4" id="s4">
+    <div class="step-header">
+      <div class="sh-badge">04</div>
+      <div class="sh-meta">
+        <span class="sh-tier">Step Four</span>
+        <span class="sh-name">Generate Report</span>
+      </div>
+      <div class="sh-divider"></div>
+      <div class="sh-desc">Merges Tier 1 + Tier 2 + Emulator into a unified D/D/R report with fix guidance, OWASP LLM, MITRE ATLAS, and CWE mappings.</div>
+      <div class="sh-right">
+        <div class="out-chips">
+          <span class="out-chip" id="oc4a">✓ report.html</span>
+          <span class="out-chip" id="oc4b">✓ report-print.html</span>
         </div>
       </div>
     </div>
+    <div class="vscode">
+      <div class="vs-titlebar">
+        <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+        <div class="vs-title-label">your-agent-repo — Visual Studio Code</div>
+      </div>
+      <div class="vs-body">
+        <div class="vs-activity">
+          <div class="vs-act-icon on">&#128193;</div>
+          <div class="vs-act-icon">&#128269;</div>
+          <div class="vs-act-icon">&#9135;</div>
+          <div class="vs-act-icon">&#128030;</div>
+        </div>
+        <div class="vs-sidebar">
+          <div class="vs-sb-header">Explorer</div>
+          <div class="vs-tree">
+            <div class="vt vt-i0"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">YOUR-AGENT-REPO</span></div>
+            <div class="vt vt-i1"><span class="ico" style="color:#dcb67a">▼</span> <span style="color:#dcb67a">.agentshield</span></div>
+            <div class="vt vt-i2"><span class="ico">📄</span> SKILL.md</div>
+            <div class="vt vt-i2"><span class="ico">&#128200;</span> tier1-results.json</div>
+            <div class="vt vt-i2"><span class="ico">&#128200;</span> tier2-findings.json</div>
+            <div class="vt vt-i2"><span class="ico">&#128200;</span> agent-emulation.json</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> controller.py</div>
+            <div class="vt vt-i1"><span class="ico">📄</span> orchestrator.py</div>
+            <div class="vt vt-new vt-i1 sel" id="vt4-rep"><span class="ico" style="color:#4ec9b0">🌐</span> <span style="color:#4ec9b0">report.html</span></div>
+            <div class="vt vt-i1"><span class="ico">📄</span> pyproject.toml</div>
+          </div>
+        </div>
+        <div class="vs-main">
+          <div class="vs-tabs">
+            <div class="vs-tab on"><span>⬛</span> TERMINAL <span class="vs-tab-close">✕</span></div>
+          </div>
+          <div class="vs-term-strip">
+            <div class="vs-term-tab on">&#9654; zsh &nbsp; <span style="font-size:9px;opacity:.4">+</span></div>
+            <div style="margin-left:auto;font-size:10px;color:#444;cursor:pointer">&#10005;</div>
+          </div>
+          <div class="vs-term-body" id="tc4"></div>
+        </div>
+      </div>
+      <div class="vs-statusbar">
+        <div class="vs-sbi">&#8594; <strong>main</strong></div>
+        <div class="vs-sbi">&#9888; 0 &nbsp; &#9432; 0</div>
+        <div class="vs-sbi vs-sb-right">Python 3.11.0 &nbsp;|&nbsp; UTF-8 &nbsp;|&nbsp; zsh</div>
+      </div>
+    </div>
+  </div>
 
-    <!-- ── Slide 5: Summary ── -->
-    <div class="slide" id="s5">
+  <!-- ════════════════════════════════
+       SLIDE 5 — Summary
+  ════════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div class="sum-header">
       <div class="eyebrow" style="margin-bottom:6px">Complete</div>
-      <div class="slide-title">Four steps. One report.</div>
-      <div class="sum-grid" style="margin-top:24px">
-        <div class="sum-card sc1" id="sc1">
-          <div class="sum-num">01 — Clone &amp; Install</div>
-          <div class="sum-name">pip install -e ".[semgrep,dev]"</div>
-          <div class="sum-desc">Python venv · Semgrep auto-bundled · CLI ready</div>
-          <div class="sum-cmd">agentshield --version</div>
-        </div>
-        <div class="sum-card sc2" id="sc2">
-          <div class="sum-num">02 — Tier 1 Scan</div>
-          <div class="sum-name">Semgrep · 70+ rules · skill files emitted</div>
-          <div class="sum-desc">Code + manifests · Deterministic · ~30 s</div>
-          <div class="sum-cmd">agentshield scan ./repo --scan-all-files</div>
-        </div>
-        <div class="sum-card sc3" id="sc3">
-          <div class="sum-num">03 — Tier 2 + Emulator</div>
-          <div class="sum-name">Copilot Chat · LLM judge · 14 attack classes</div>
-          <div class="sum-desc">Paste SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
-          <div class="sum-cmd">tier2-findings.json + agent-emulation.json</div>
-        </div>
-        <div class="sum-card sc4" id="sc4">
-          <div class="sum-num">04 — Generate Report</div>
-          <div class="sum-name">D/D/R · OWASP LLM · MITRE ATLAS · CWE</div>
-          <div class="sum-desc">HTML · Markdown · SARIF · JSON</div>
-          <div class="sum-cmd">agentshield merge ./repo --output-html report.html</div>
-        </div>
+      <div style="font-size:26px;font-weight:700;color:#f8fafc">Four steps. One unified security report.</div>
+    </div>
+    <div class="sum-grid">
+      <div class="sum-card sc1" id="sc1">
+        <div class="sum-num">01 — Clone &amp; Install</div>
+        <div class="sum-name">pip install -e ".[semgrep,dev]"</div>
+        <div class="sum-desc">Python venv · Semgrep auto-bundled · CLI ready</div>
+        <div class="sum-cmd">agentshield --version</div>
+      </div>
+      <div class="sum-card sc2" id="sc2">
+        <div class="sum-num">02 — Tier 1 Scan</div>
+        <div class="sum-name">Semgrep · 70+ rules · skill files emitted</div>
+        <div class="sum-desc">Code + manifests · Deterministic · ~30s</div>
+        <div class="sum-cmd">agentshield scan ./repo --scan-all-files</div>
+      </div>
+      <div class="sum-card sc3" id="sc3">
+        <div class="sum-num">03 — Tier 2 + Emulator</div>
+        <div class="sum-name">Copilot Chat · LLM judge · 14 attack classes</div>
+        <div class="sum-desc">Paste SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
+        <div class="sum-cmd">tier2-findings.json + agent-emulation.json</div>
+      </div>
+      <div class="sum-card sc4" id="sc4">
+        <div class="sum-num">04 — Generate Report</div>
+        <div class="sum-name">D/D/R · OWASP LLM · MITRE ATLAS · CWE</div>
+        <div class="sum-desc">HTML · Markdown · SARIF · JSON</div>
+        <div class="sum-cmd">agentshield merge ./repo --output-html report.html</div>
       </div>
     </div>
+  </div>
 
   </div><!-- /deck -->
 
@@ -410,92 +609,101 @@ body{
     <button class="ctrl" id="btnPlay" title="Play / Pause (Space)">&#9646;&#9646;</button>
     <button class="ctrl" id="btnNext" title="Next (→)">&#9654;</button>
     <div id="prog-track"><div id="prog-fill"></div></div>
-    <div class="indicators" id="inds"></div>
-    <div id="counter">1 / 6</div>
+    <div class="inds" id="inds"></div>
+    <div id="ctr">1 / 6</div>
     <div class="hint">← → Space · P</div>
   </div>
-
 </div><!-- /stage -->
 
 <script>
-// ── Config ───────────────────────────────────────────────────
 const TOTAL = 6;
 const SLIDE_IDS = ['s0','s1','s2','s3','s4','s5'];
+let cur = 0, playing = true;
+let slideTimer = null, twTimer = null;
 
-// Terminal text per step (plain text — rendered verbatim in monospace)
+// ── Terminal scripts ─────────────────────────────────────────
 const SCRIPTS = {
   tc1:
-`$ git clone git@github.com:suganthiaravind/agentshield.git
-$ cd agentshield
-$ python3.11 -m venv .venv
-$ source .venv/bin/activate
-$ pip install -e ".[semgrep,dev]"
-  ✔  Installed agentshield 4.0.0
-$ agentshield --version
+`\x1b[38;2;129;140;248m❯\x1b[0m git clone https://github.com/your-org/agentshield.git
+  Cloning into 'agentshield'...
+  remote: Enumerating objects: 1,284, done.
+  ✔  agentshield cloned
+
+\x1b[38;2;129;140;248m❯\x1b[0m cd agentshield
+
+\x1b[38;2;129;140;248m❯\x1b[0m python3.11 -m venv .venv && source .venv/bin/activate
+  (.venv) activated
+
+\x1b[38;2;129;140;248m❯\x1b[0m pip install -e ".[semgrep,dev]"
+  Collecting agentshield...
+  Installing collected packages: semgrep, agentshield
+  ✔  Successfully installed agentshield 4.0.0
+
+\x1b[38;2;129;140;248m❯\x1b[0m agentshield --version
   agentshield 4.0.0`,
 
   tc2:
-`$ agentshield scan ./your-agent-repo \\
+`\x1b[38;2;96;165;250m❯\x1b[0m agentshield scan ./your-agent-repo \\
       --scan-all-files \\
       --exclude "**/tests/**"
 
-  [agentshield] Running 70+ semgrep rules...
-  [agentshield] ✓  Tier 1: 40 findings
-  [agentshield] ✓  Skill files → .agentshield/SKILL.md
-  [agentshield] ✓  Emulator skill → .agentshield/AGENT_EMULATOR_SKILL.md`,
+  [agentshield] Tier 1 — running 70+ semgrep rules...
+  [agentshield]   scanning controller.py
+  [agentshield]   scanning orchestrator.py
+  [agentshield]   scanning tools.py
+  [agentshield] ✓  Tier 1 complete — 40 raw findings
+  [agentshield] ✓  Wrote .agentshield/tier1-results.json
+  [agentshield] ✓  Wrote .agentshield/SKILL.md
+  [agentshield] ✓  Wrote .agentshield/AGENT_EMULATOR_SKILL.md
+  [agentshield] → Paste SKILL.md into Copilot Chat to run Tier 2`,
 
   tc4:
-`$ agentshield merge ./your-agent-repo \\
+`\x1b[38;2;192;132;252m❯\x1b[0m agentshield merge ./your-agent-repo \\
       --output-html report.html
 
+  [agentshield] merge target: your-agent-repo
   [agentshield] ✓  Tier 1 + Tier 2 fresh; merging.
+  [agentshield] ✓  Behaviour emulation loaded — 14 attack classes
   [agentshield] Net actionable findings: 40
-  [agentshield] ✓  Wrote: report.html
-  [agentshield] ✓  Wrote: report-print.html`,
+  [agentshield] ✓  Wrote unified report: report.html
+  [agentshield] ✓  Wrote print report:   report-print.html`,
 };
 
-// Char delay (ms) and post-finish dwell (ms) per terminal slide
-const TW_SPEED  = { tc1: 22, tc2: 20, tc4: 20 };
-const TW_DWELL  = { tc1: 1400, tc2: 1400, tc4: 1400 };
-
-// Dwell for non-typewriter slides before auto-advance
-const SLIDE_DWELL = { 0: 3800, 3: 1600, 5: 0 };  // 5 = last, no auto-advance
-
-// ── State ────────────────────────────────────────────────────
-let cur = 0, playing = true;
-let slideTimer = null, twTimer = null;
+// ANSI colour support (minimal — just the sequences we use)
+function ansiToHtml(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m(.*?)\x1b\[0m/g,
+             (_,r,g,b,t) => `<span style="color:rgb(${r},${g},${b})">${t}</span>`);
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const clearST = () => { if(slideTimer){clearTimeout(slideTimer);slideTimer=null;} };
 const clearTW = () => { if(twTimer){clearTimeout(twTimer);twTimer=null;} };
-
-function scheduleNext(ms) {
-  if (!playing) return;
-  slideTimer = setTimeout(() => { if (playing) goTo(cur + 1); }, ms);
-}
-
-function showChips(...ids) {
-  ids.forEach((id, i) =>
-    setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 300 + i*280)
-  );
-}
+function scheduleNext(ms){ if(!playing) return; slideTimer=setTimeout(()=>{if(playing)goTo(cur+1);},ms); }
+function showChips(...ids){ ids.forEach((id,i)=>setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},300+i*260)); }
+function showEls(...ids)  { ids.forEach((id,i)=>setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},400+i*320)); }
 
 // ── Typewriter ───────────────────────────────────────────────
-function typeText(targetId, text, charDelay, onDone) {
+function typeText(targetId, rawText, charDelay, onDone) {
   const el = $(targetId);
-  if (!el) { if (onDone) onDone(); return; }
-  el.textContent = '';
-  const cur = document.createElement('span');
-  cur.className = 'cursor';
-  el.appendChild(cur);
+  if (!el) { if(onDone) onDone(); return; }
+  // Render colour spans then type plain chars; we fake it by chunking
+  const plain = rawText.replace(/\x1b\[[\d;]*m/g,'');  // strip ANSI for typing
+  el.innerHTML = '';
+  const curEl = document.createElement('span');
+  curEl.className = 'cursor';
+  el.appendChild(curEl);
   let i = 0;
   function tick() {
-    if (i >= text.length) {
-      setTimeout(() => { cur.remove(); if (onDone) onDone(); }, 400);
+    if (i >= plain.length) {
+      // Replace with fully-coloured version
+      el.innerHTML = ansiToHtml(rawText);
+      if (onDone) setTimeout(onDone, 350);
       return;
     }
-    cur.insertAdjacentText('beforebegin', text[i]);
+    curEl.insertAdjacentText('beforebegin', plain[i]);
     i++;
     twTimer = setTimeout(tick, charDelay);
   }
@@ -505,56 +713,41 @@ function typeText(targetId, text, charDelay, onDone) {
 // ── Per-slide animation ──────────────────────────────────────
 function animateSlide(n) {
   clearTW();
-  switch(n) {
-    case 0:
-      scheduleNext(SLIDE_DWELL[0]);
-      break;
-    case 1:
-      typeText('tc1', SCRIPTS.tc1, TW_SPEED.tc1, () => {
-        showChips('oc1a');
-        scheduleNext(TW_DWELL.tc1);
-      });
-      break;
-    case 2:
-      typeText('tc2', SCRIPTS.tc2, TW_SPEED.tc2, () => {
-        showChips('oc2a','oc2b');
-        scheduleNext(TW_DWELL.tc2);
-      });
-      break;
-    case 3: {
-      const steps = ['cs1','cs2','cs3','cs4'];
-      steps.forEach((id, i) =>
-        setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 500 + i*750)
-      );
-      const totalStepMs = 500 + 3*750 + 750;
-      setTimeout(() => showChips('oc3a','oc3b'), totalStepMs);
-      setTimeout(() => scheduleNext(SLIDE_DWELL[3]), totalStepMs + 900);
-      break;
-    }
-    case 4:
-      typeText('tc4', SCRIPTS.tc4, TW_SPEED.tc4, () => {
-        showChips('oc4a','oc4b');
-        scheduleNext(TW_DWELL.tc4);
-      });
-      break;
-    case 5: {
-      const cards = ['sc1','sc2','sc3','sc4'];
-      cards.forEach((id, i) =>
-        setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 300 + i*350)
-      );
-      // Last slide — stop auto-play
-      setTimeout(() => { playing = false; updateUI(); }, 300 + 3*350 + 350);
-      break;
-    }
+  if (n === 0) {
+    scheduleNext(3800);
+  } else if (n === 1) {
+    typeText('tc1', SCRIPTS.tc1, 18, () => { showChips('oc1a'); scheduleNext(1500); });
+  } else if (n === 2) {
+    typeText('tc2', SCRIPTS.tc2, 16, () => {
+      showEls('vt2-agentshield','vt2-skill','vt2-emuski','vt2-t1');
+      showChips('oc2a','oc2b');
+      scheduleNext(1600);
+    });
+  } else if (n === 3) {
+    ['cpb1','cpb2','cpb3'].forEach((id,i) =>
+      setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 700 + i*1100)
+    );
+    setTimeout(() => showEls('vt3-t2','vt3-emu'), 700+2*1100+800);
+    setTimeout(() => showChips('oc3a','oc3b'), 700+2*1100+1200);
+    setTimeout(() => scheduleNext(1400), 700+2*1100+2000);
+  } else if (n === 4) {
+    typeText('tc4', SCRIPTS.tc4, 18, () => {
+      showEls('vt4-rep');
+      showChips('oc4a','oc4b');
+      scheduleNext(1600);
+    });
+  } else if (n === 5) {
+    ['sc1','sc2','sc3','sc4'].forEach((id,i) =>
+      setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 300+i*350)
+    );
+    setTimeout(() => { playing=false; updateUI(); }, 300+3*350+400);
   }
 }
 
-// ── Reset animated state ─────────────────────────────────────
+// ── Reset state ──────────────────────────────────────────────
 function resetAll() {
-  document.querySelectorAll('.out-chip').forEach(c => c.classList.remove('show'));
-  document.querySelectorAll('.cs').forEach(c => c.classList.remove('show'));
-  document.querySelectorAll('.sum-card').forEach(c => c.classList.remove('show'));
-  ['tc1','tc2','tc4'].forEach(id => { const e=$(id); if(e) e.textContent=''; });
+  document.querySelectorAll('.out-chip,.vt-new,.sum-card,.cp-msg-bot').forEach(c=>c.classList.remove('show'));
+  ['tc1','tc2','tc4'].forEach(id => { const e=$(id); if(e) e.innerHTML=''; });
 }
 
 // ── Navigation ───────────────────────────────────────────────
@@ -571,46 +764,40 @@ function goTo(n) {
 
 function togglePlay() {
   playing = !playing;
-  if (playing) {
-    animateSlide(cur);
-  } else {
-    clearST(); clearTW();
-  }
+  if (playing) { animateSlide(cur); } else { clearST(); clearTW(); }
   updateUI();
 }
 
 // ── UI sync ──────────────────────────────────────────────────
 function updateUI() {
-  $('prog-fill').style.width = (cur / (TOTAL-1) * 100) + '%';
-  $('counter').textContent = (cur+1) + ' / ' + TOTAL;
+  $('prog-fill').style.width = (cur/(TOTAL-1)*100)+'%';
+  $('ctr').textContent = (cur+1)+' / '+TOTAL;
   $('btnPlay').innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
-  document.querySelectorAll('.ind').forEach((d,i) => d.classList.toggle('on', i===cur));
+  document.querySelectorAll('.ind').forEach((d,i)=>d.classList.toggle('on',i===cur));
 }
 
-// ── Build indicator dots ─────────────────────────────────────
+// Build indicator dots
 const indsEl = $('inds');
-for (let i = 0; i < TOTAL; i++) {
-  const d = document.createElement('div');
-  d.className = 'ind' + (i===0 ? ' on' : '');
-  d.addEventListener('click', () => goTo(i));
+for (let i=0;i<TOTAL;i++) {
+  const d=document.createElement('div');
+  d.className='ind'+(i===0?' on':'');
+  d.addEventListener('click',()=>goTo(i));
   indsEl.appendChild(d);
 }
 
-// ── Wire controls ────────────────────────────────────────────
-$('btnPrev').addEventListener('click', () => goTo(cur - 1));
-$('btnNext').addEventListener('click', () => goTo(cur + 1));
-$('btnPlay').addEventListener('click', togglePlay);
-$('prog-track').addEventListener('click', e => {
-  const r = $('prog-track').getBoundingClientRect();
-  goTo(Math.round((e.clientX - r.left) / r.width * (TOTAL - 1)));
+$('btnPrev').addEventListener('click',()=>goTo(cur-1));
+$('btnNext').addEventListener('click',()=>goTo(cur+1));
+$('btnPlay').addEventListener('click',togglePlay);
+$('prog-track').addEventListener('click',e=>{
+  const r=$('prog-track').getBoundingClientRect();
+  goTo(Math.round((e.clientX-r.left)/r.width*(TOTAL-1)));
 });
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(cur+1); }
-  if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(cur-1); }
-  if (e.key === 'p' || e.key === 'P') togglePlay();
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();goTo(cur+1);}
+  if(e.key==='ArrowLeft'){e.preventDefault();goTo(cur-1);}
+  if(e.key==='p'||e.key==='P') togglePlay();
 });
 
-// ── Kick off ─────────────────────────────────────────────────
 updateUI();
 animateSlide(0);
 </script>
