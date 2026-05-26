@@ -6157,6 +6157,95 @@ footer {
   font-size: 12px; color: #64748b; font-style: italic;
 }
 
+/* v4: Scan flow slide — compact flowchart for the Reference tab */
+.scan-flow-card {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.scan-flow-inner { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.scan-flow-node {
+  width: 100%; max-width: 680px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 14px 20px;
+  text-align: center;
+}
+.scan-flow-node-title {
+  font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 4px;
+}
+.scan-flow-node-sub {
+  font-size: 11.5px; color: #64748b;
+}
+.scan-flow-arrow {
+  font-size: 20px; color: #94a3b8; line-height: 1; padding: 4px 0;
+  user-select: none;
+}
+.scan-flow-engines {
+  display: flex; gap: 10px; width: 100%; max-width: 680px;
+}
+.scan-flow-engine {
+  flex: 1; border-radius: 10px; padding: 14px 12px; text-align: center;
+  border: 1.5px solid;
+}
+.scan-flow-engine-t1 { background: #eff6ff; border-color: #93c5fd; }
+.scan-flow-engine-t2 { background: #f0fdf4; border-color: #86efac; }
+.scan-flow-engine-em { background: #fdf4ff; border-color: #d8b4fe; }
+.scan-flow-engine-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; margin-bottom: 5px;
+}
+.scan-flow-engine-t1 .scan-flow-engine-label { color: #2563eb; }
+.scan-flow-engine-t2 .scan-flow-engine-label { color: #16a34a; }
+.scan-flow-engine-em .scan-flow-engine-label { color: #9333ea; }
+.scan-flow-engine-name {
+  font-size: 12.5px; font-weight: 600; color: #1e293b; margin-bottom: 4px;
+}
+.scan-flow-engine-detail {
+  font-size: 11px; color: #64748b; line-height: 1.45;
+}
+.scan-flow-merge-node {
+  width: 100%; max-width: 680px;
+  background: #f1f5f9;
+  border: 1.5px solid #94a3b8;
+  border-radius: 10px;
+  padding: 12px 20px;
+  text-align: center;
+}
+.scan-flow-merge-label {
+  font-size: 11px; font-weight: 700; color: #475569;
+  letter-spacing: .05em; text-transform: uppercase; margin-bottom: 3px;
+}
+.scan-flow-merge-cmd {
+  font-family: monospace; font-size: 13px; font-weight: 700; color: #1e293b;
+}
+.scan-flow-output-node {
+  width: 100%; max-width: 680px;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 10px;
+  padding: 16px 20px;
+  text-align: center;
+}
+.scan-flow-output-title {
+  font-size: 13px; font-weight: 700; color: #f8fafc; margin-bottom: 8px;
+}
+.scan-flow-output-formats {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+}
+.scan-flow-fmt {
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);
+  color: #e2e8f0;
+}
+.scan-flow-fmt-html { background: rgba(59,130,246,0.35); }
+.scan-flow-fmt-md   { background: rgba(16,185,129,0.35); }
+.scan-flow-fmt-sarif{ background: rgba(245,158,11,0.35); }
+.scan-flow-fmt-json { background: rgba(168,85,247,0.35); }
+
 /* v4: "How AgentShield works" flowchart at the bottom of the
    Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
    numbered stage cards stacked vertically with chevron arrows
@@ -12694,6 +12783,7 @@ def _render_reference_panel(
     _render_pitch_slide(parts)
     _render_ddr_slide(parts)
     _render_emulator_slide(parts)
+    _render_scan_flow_slide(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -14343,6 +14433,95 @@ def _render_emulator_slide(parts: list[str]) -> None:
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /emu-slide-card
+
+
+def _render_scan_flow_slide(parts: list[str]) -> None:
+    """Compact scan-pipeline flowchart for the Reference tab.
+
+    Shows the three parallel engines (Tier 1 / Tier 2 / Emulator),
+    the merge step, and the unified report output formats in one slide.
+    """
+    parts.append('<div class="scan-flow-card">')
+    parts.append(
+        '<details class="ref-section" open>'
+        '<summary class="ref-section-header">'
+        '<span class="ref-section-icon">&#9654;</span>'
+        'How AgentShield scans'
+        '</summary>'
+        '<div class="ref-section-body">'
+    )
+    parts.append('<div class="scan-flow-inner">')
+
+    # Input node
+    parts.append(
+        '<div class="scan-flow-node">'
+        '<div class="scan-flow-node-title">Your agent repo</div>'
+        '<div class="scan-flow-node-sub">Python / JS / Java source &nbsp;&bull;&nbsp; '
+        'skill manifests &nbsp;&bull;&nbsp; config files</div>'
+        '</div>'
+    )
+    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
+
+    # Three parallel engines
+    parts.append('<div class="scan-flow-engines">')
+
+    parts.append(
+        '<div class="scan-flow-engine scan-flow-engine-t1">'
+        '<div class="scan-flow-engine-label">Tier 1</div>'
+        '<div class="scan-flow-engine-name">Semgrep Rules</div>'
+        '<div class="scan-flow-engine-detail">70+ security rules<br>'
+        'code &amp; manifests<br>'
+        '<em>tier1-results.json</em></div>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="scan-flow-engine scan-flow-engine-t2">'
+        '<div class="scan-flow-engine-label">Tier 2</div>'
+        '<div class="scan-flow-engine-name">Copilot LLM judge</div>'
+        '<div class="scan-flow-engine-detail">TP / FP validation<br>'
+        'novel finding discovery<br>'
+        '<em>tier2-findings.json</em></div>'
+        '</div>'
+    )
+    parts.append(
+        '<div class="scan-flow-engine scan-flow-engine-em">'
+        '<div class="scan-flow-engine-label">Tier 3</div>'
+        '<div class="scan-flow-engine-name">Behaviour Emulator</div>'
+        '<div class="scan-flow-engine-detail">8 pipeline steps<br>'
+        '14 attack classes<br>'
+        '<em>agent-emulation.json</em></div>'
+        '</div>'
+    )
+
+    parts.append('</div>')  # /scan-flow-engines
+    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
+
+    # Merge step
+    parts.append(
+        '<div class="scan-flow-merge-node">'
+        '<div class="scan-flow-merge-label">Merger</div>'
+        '<div class="scan-flow-merge-cmd">agentshield merge</div>'
+        '</div>'
+    )
+    parts.append('<div class="scan-flow-arrow">&#8595;</div>')
+
+    # Output node
+    parts.append(
+        '<div class="scan-flow-output-node">'
+        '<div class="scan-flow-output-title">Unified Security Report</div>'
+        '<div class="scan-flow-output-formats">'
+        '<span class="scan-flow-fmt scan-flow-fmt-html">HTML</span>'
+        '<span class="scan-flow-fmt scan-flow-fmt-md">Markdown</span>'
+        '<span class="scan-flow-fmt scan-flow-fmt-sarif">SARIF</span>'
+        '<span class="scan-flow-fmt scan-flow-fmt-json">JSON</span>'
+        '</div>'
+        '</div>'
+    )
+
+    parts.append('</div>')  # /scan-flow-inner
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /scan-flow-card
 
 
 def _render_how_it_works(parts: list[str]) -> None:
