@@ -27,14 +27,14 @@ export REPO=/absolute/path/to/your-agent-repo
 
 ---
 
-## 2 — Install AgentShield
+## 2 — Check / install AgentShield
 
 ```bash
-pip install -e ".[semgrep,dev]"
-agentshield --version
+agentshield --version 2>/dev/null || pip install -e ".[semgrep,dev]"
 ```
 
-**What happens:** Installs the AgentShield CLI with Semgrep bundled.  
+**What happens:** If AgentShield is already installed the version is printed and you skip to step 3.  
+If it is not found, it installs the CLI with Semgrep bundled.  
 **Done when you see:** `agentshield 4.x.x`
 
 ---

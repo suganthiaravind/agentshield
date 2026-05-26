@@ -2137,14 +2137,28 @@ def _emulation_to_findings(emulation: dict) -> list[dict]:
         category_letter = {"detect": "D", "defend": "DF", "respond": "R"}.get(
             category, "D"
         )
+        # Extract the first code citation from the pipeline trace so the
+        # finding header shows a real file:line instead of the placeholder.
+        _emu_file = "(behaviour emulator — pipeline trace)"
+        _emu_line = 0
+        for _step in (entry.get("pipeline_trace") or []):
+            _basis = _step.get("code_basis") or []
+            if _basis and _basis[0] and _basis[0] != "absent":
+                _raw = _basis[0]          # e.g. "controller.py:19-21"
+                if ":" in _raw:
+                    _emu_file, _line_part = _raw.rsplit(":", 1)
+                    _emu_line = int(_line_part.split("-")[0]) if _line_part.split("-")[0].isdigit() else 0
+                else:
+                    _emu_file = _raw
+                break
         out.append({
             "rule_id": f"agent-emulator-{attack_class}",
             "rule_id_short": f"emulator-{attack_class}",
             "agentshield_id": f"AS-E-{category_letter}-{entry_idx:03d}",
             "category": category,
             "severity": severity,
-            "file": "(behaviour emulator — pipeline trace)",
-            "line": 0,
+            "file": _emu_file,
+            "line": _emu_line,
             "message": entry.get("attack_class_label") or attack_class,
             "language": "n/a",
             "remediation": _EMULATOR_REMEDIATION.get(attack_class, ""),
@@ -3467,17 +3481,31 @@ h3 { font-size: 15px; }
   font-size: 12.5px; color: #0f172a; font-weight: 700;
   letter-spacing: -0.01em;
 }
+/* Location + Rule description on one line */
 .finding-meta {
-  color: var(--text-muted); font-size: 11px; margin-bottom: 5px;
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 7px; flex-wrap: wrap;
+}
+.finding-meta::before { content: none; }
+.finding-meta-loc {
+  font-size: 9px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: #64748b;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
 }
-.finding-meta::before {
-  content: "◈";
-  font-size: 9px; color: #cbd5e1; flex-shrink: 0;
+.finding-meta-loc-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: #334155;
 }
+.finding-meta-sep { color: #cbd5e1; font-size: 11px; }
 .finding-message {
-  color: #334155; font-size: 13px; margin-bottom: 8px; line-height: 1.5;
+  margin-bottom: 8px;
+  color: #334155; font-size: 12.5px; line-height: 1.55;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.finding-message .fld-label {
+  font-size: 9px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: #64748b; flex-shrink: 0;
 }
 /* Framework chips — colour-coded by standard */
 .finding-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
@@ -3495,19 +3523,23 @@ h3 { font-size: 15px; }
   padding: 6px 10px; border-radius: 5px;
   margin: 4px 0 8px; color: #334155; overflow-x: auto;
 }
-/* Fix/Copilot block — distinct panel, not just an indented paragraph */
+/* Fix / Reasoning block — left accent strip, no heavy box */
 .finding-remediation {
-  font-size: 12px; color: #475569; margin-top: 6px;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #94a3b8;
-  border-radius: 0 5px 5px 0;
-  line-height: 1.55;
+  font-size: 12px; color: #475569; margin-top: 5px;
+  padding: 7px 12px;
+  background: transparent;
+  border-left: 3px solid #e2e8f0;
+  line-height: 1.65;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
 }
-.finding-remediation strong {
-  color: #0f172a; font-weight: 700; margin-right: 4px;
+.finding-remediation.rem-reasoning { border-left-color: #a78bfa; }
+.finding-remediation.rem-fix       { border-left-color: #7dd3fc; }
+.finding-remediation .fld-label {
+  font-size: 9px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; flex-shrink: 0;
 }
+.finding-remediation .fld-label-reasoning { color: #7c3aed; }
+.finding-remediation .fld-label-fix       { color: #0891b2; }
 
 /* Simulated Probe capture (LLM-adversary explore mode) — collapsible
    panel that mirrors the static-finding Attack scenario shape. Same
@@ -6939,21 +6971,18 @@ footer {
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* Border glow pulse — replaces the old opacity blink */
+/* Border glow pulse — 3 slow mild pulses so readers have time */
 @keyframes emu-ap-hold-pulse {
   0%   { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
          border-left-color: #3b82f6; }
-  35%  { box-shadow: 0 0 0 4px rgba(59,130,246,0.22),
-                     0 2px 24px rgba(59,130,246,0.20);
+  40%  { box-shadow: 0 0 0 5px rgba(59,130,246,0.18),
+                     0 2px 28px rgba(59,130,246,0.16);
          border-left-color: #60a5fa; }
-  70%  { box-shadow: 0 0 0 2px rgba(59,130,246,0.08),
-                     0 2px 14px rgba(59,130,246,0.10);
-         border-left-color: #93c5fd; }
   100% { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
          border-left-color: #3b82f6; }
 }
 .emu-attack-plan-card.emu-ap-hold {
-  animation: emu-ap-hold-pulse 1.4s ease-in-out;
+  animation: emu-ap-hold-pulse 1.8s ease-in-out 1 forwards;
 }
 .emu-attack-plan-card.emu-ap-fadeout {
   animation: emu-ap-fadeout 0.48s cubic-bezier(0.4,0,1,1) forwards;
@@ -8990,8 +9019,6 @@ _HTML_JS = """
     b.addEventListener('click', function () { activateTab(b.getAttribute('data-tab')); });
   });
 
-  // F.28a: per-finding expand/collapse removed. Reference-tab D/D/R
-  // sub-groups are now the only collapsible UX in the report.
 
   // ----- v4: ▶ Play simulation — animate attack walkthrough.
   // Two render modes:
@@ -9297,7 +9324,7 @@ _HTML_JS = """
       }, t + DONE_HOLD);
     }
 
-    function playFromScene(trace, startIdx) {
+    function playFromScene(trace, startIdx, onComplete) {
       pausedAtScene = -1;
       var activeSeed  = trace.querySelector('.emu-seed-trace.emu-seed-trace-active');
       var stepsRoot   = activeSeed || trace;
@@ -9368,7 +9395,7 @@ _HTML_JS = """
                   if (pdNow) pdNow.setAttribute('open', '');
                   runSceneContent(idx, scene);
                 }, 480);
-              }, 1400);
+              }, 4500);
             });
             return;
           }
@@ -9447,13 +9474,18 @@ _HTML_JS = """
                   }, 120);
                 }
                 revealTermLines(trace, scenes.length, 0);
-                if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
-                if (pauseBtn) pauseBtn.style.display = 'none';
-                if (progressWrap) progressWrap.style.display = 'none';
-                if (progressFill) progressFill.style.width = '0%';
                 trace.querySelectorAll('.emu-pipeline-chip').forEach(function (c) {
                   c.classList.remove('emu-pip-active');
                 });
+                if (onComplete) {
+                  // More seeds to play — pause briefly then hand off
+                  safeTimeout(onComplete, 1200);
+                } else {
+                  if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
+                  if (pauseBtn) pauseBtn.style.display = 'none';
+                  if (progressWrap) progressWrap.style.display = 'none';
+                  if (progressFill) progressFill.style.width = '0%';
+                }
               }
             }, NARRATIVE_LINGER);
           });
@@ -9561,7 +9593,43 @@ _HTML_JS = """
         if (activeTrace && activeTrace !== trace) resetTrace(activeTrace);
         activeTrace = trace;
         resetTrace(trace);
-        playFromScene(trace, 0);
+        // If multiple seeds exist, play blocked seeds first then the landed seed
+        var _allSeeds = Array.from(trace.querySelectorAll('.emu-seed-trace'));
+        var _landedLayer = (trace.getAttribute('data-payload-layer') || '').trim();
+        if (_allSeeds.length > 1 && _landedLayer) {
+          var _orderedSeeds = _allSeeds.slice().sort(function(a, b) {
+            var aL = a.getAttribute('data-layer') === _landedLayer ? 1 : 0;
+            var bL = b.getAttribute('data-layer') === _landedLayer ? 1 : 0;
+            return aL - bL;
+          });
+          var _si = 0;
+          function _playNextSeed() {
+            if (_si >= _orderedSeeds.length) {
+              if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
+              var _pb = trace.querySelector('[data-action="emu-pause"]');
+              if (_pb) _pb.style.display = 'none';
+              var _pw = trace.querySelector('.emu-progress-wrap');
+              if (_pw) _pw.style.display = 'none';
+              var _pf = trace.querySelector('[data-progress-fill]');
+              if (_pf) _pf.style.width = '0%';
+              return;
+            }
+            var _st = _orderedSeeds[_si++];
+            var _sl = _st.getAttribute('data-layer');
+            trace.querySelectorAll('.emu-seed-tab').forEach(function(t) {
+              t.classList.toggle('emu-seed-tab-active', t.getAttribute('data-layer') === _sl);
+            });
+            _allSeeds.forEach(function(s) {
+              var _active = s === _st;
+              s.style.display = _active ? '' : 'none';
+              s.classList.toggle('emu-seed-trace-active', _active);
+            });
+            playFromScene(trace, 0, _playNextSeed);
+          }
+          _playNextSeed();
+        } else {
+          playFromScene(trace, 0);
+        }
         // Scroll so the Replay/Resume buttons sit just below the sticky
         // tab bar, making them clearly visible before the animation.
         var hdr = trace.querySelector('.emu-trace-header') || trace;
@@ -10645,15 +10713,22 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'Copilot: {v_raw}</span>'
                     )
                 parts.append("</div>")
+                _loc_label = '<span class="finding-meta-loc">Location</span>'
                 if is_discovered:
-                    parts.append(
-                        f'<div class="finding-meta">Probed endpoint: '
-                        f'{_html_escape(file_)}</div>'
-                    )
+                    if line_ and int(line_) > 0:
+                        _loc_val = f'{_html_escape(file_)}:{_html_escape(str(line_))}'
+                    else:
+                        _loc_val = _html_escape(file_)
                 else:
-                    parts.append(f'<div class="finding-meta">{_html_escape(file_)}:{_html_escape(str(line_))}</div>')
+                    _loc_val = f'{_html_escape(file_)}:{_html_escape(str(line_))}'
+                parts.append(f'<div class="finding-meta">{_loc_label}<span class="finding-meta-loc-val">{_loc_val}</span></div>')
                 if f.get("message"):
-                    parts.append(f'<div class="finding-message"><strong>Rule description:</strong> {_html_escape(f["message"])}</div>')
+                    parts.append(
+                        f'<div class="finding-message">'
+                        f'<span class="fld-label">Rule description</span>'
+                        f'{_html_escape(f["message"])}'
+                        f'</div>'
+                    )
                 # Body: collapsible. Frameworks + snippet + remediation +
                 # Copilot reasoning live inside .finding-body so they hide
                 # when the user collapses the card.
@@ -10689,10 +10764,29 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                     parts.append("</div>")
                 if f.get("snippet"):
                     parts.append(f'<div class="finding-snippet">{_html_escape(f["snippet"])}</div>')
-                if f.get("remediation"):
-                    parts.append(f'<div class="finding-remediation"><strong>Fix:</strong> {_html_escape(f["remediation"])}</div>')
+                # Emulator verdict reasoning shown above Fix so it's visible
+                # without expanding the pink attack-scenario panel.
+                if f.get("_emulator_trace") and f.get("_discovered_llm_reasoning"):
+                    parts.append(
+                        f'<div class="finding-remediation rem-reasoning">'
+                        f'<span class="fld-label fld-label-reasoning">Reasoning</span>'
+                        f'<span>{_html_escape(f["_discovered_llm_reasoning"])}</span>'
+                        f'</div>'
+                    )
                 if origin == "tier1" and f.get("_tier2_reasoning"):
-                    parts.append(f'<div class="finding-remediation"><strong>Reasoning:</strong> {_html_escape(f["_tier2_reasoning"])}</div>')
+                    parts.append(
+                        f'<div class="finding-remediation rem-reasoning">'
+                        f'<span class="fld-label fld-label-reasoning">Reasoning</span>'
+                        f'<span>{_html_escape(f["_tier2_reasoning"])}</span>'
+                        f'</div>'
+                    )
+                if f.get("remediation"):
+                    parts.append(
+                        f'<div class="finding-remediation rem-fix">'
+                        f'<span class="fld-label fld-label-fix">Fix</span>'
+                        f'<span>{_html_escape(f["remediation"])}</span>'
+                        f'</div>'
+                    )
                 # Probe-discovered findings get a collapsible Simulated
                 # Probe panel — same shape as the static-finding attack
                 # scenario, but the body carries the actual payload sent,
@@ -10796,36 +10890,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                             f'{conf_html}'
                             f'</div>'
                         )
-                        # Verdict reasoning — collapsible, closed by default
-                        if emu_reasoning:
-                            parts.append(
-                                f'<details class="emu-reasoning-detail">'
-                                f'<summary class="emu-reasoning-summary">'
-                                f'Reasoning</summary>'
-                                f'<p class="emu-reasoning-text">'
-                                f'{_html_escape(emu_reasoning)}</p>'
-                                f'</details>'
-                            )
-                        # Payload used — header strip + body
-                        if emu_payload:
-                            layer_chip = ""
-                            if emu_layer:
-                                layer_chip = (
-                                    f'<span class="emu-layer-chip">'
-                                    f'{_html_escape(emu_layer)}</span>'
-                                )
-                            payload_label = "Payload used" if emu_layer else "Catalogue payload"
-                            parts.append(
-                                f'<div class="emu-payload">'
-                                f'<div class="emu-payload-header">'
-                                f'<span class="emu-payload-label">{payload_label}</span>'
-                                f'{layer_chip}'
-                                f'</div>'
-                                f'<div class="emu-payload-body">'
-                                f'{_html_escape(emu_payload)}'
-                                f'</div>'
-                                f'</div>'
-                            )
+                        # Reasoning and payload are shown outside the pink box;
+                        # omit them here to avoid duplication.
                         # Per-step pipeline trace — scenes + terminal + final
                         # banner are rendered by a shared helper so the same
                         # markup powers the Coverage-tab per-row drilldown.
@@ -10838,6 +10904,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         parts.append('</div>')  # /discovered-body
                         parts.append('</details>')
                         parts.append("</div>")  # /finding-body
+
                         parts.append("</div>")  # /finding
                         continue
                     # Simulator-origin campaigns: surface the campaign-
@@ -10978,6 +11045,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         # for a campaign-discovered finding; the
                         # `discovered` body+details is the whole card.
                         parts.append("</div>")  # /finding-body
+
                         parts.append("</div>")  # /finding
                         continue
                     parts.append(

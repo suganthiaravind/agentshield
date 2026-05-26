@@ -5,18 +5,18 @@
 <title>AgentShield — Quick Start</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;background:#111}
+html,body{width:100%;height:100%;background:#e2e8f0}
 body{display:flex;align-items:center;justify-content:center;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
 
 /* ── Stage ── */
 #stage{position:relative;width:1280px;height:720px;overflow:hidden;flex-shrink:0;
-  background:linear-gradient(145deg,#0d1425 0%,#131d33 55%,#0f1929 100%)}
+  background:#ffffff}
 .bg-glow{position:absolute;pointer-events:none;border-radius:50%}
 .bga{top:-130px;right:-130px;width:440px;height:440px;
-  background:radial-gradient(circle,rgba(99,102,241,.09) 0%,transparent 65%)}
+  background:radial-gradient(circle,rgba(99,102,241,.06) 0%,transparent 65%)}
 .bgb{bottom:-80px;left:-80px;width:360px;height:360px;
-  background:radial-gradient(circle,rgba(139,92,246,.06) 0%,transparent 65%)}
+  background:radial-gradient(circle,rgba(139,92,246,.04) 0%,transparent 65%)}
 
 /* ── Slides ── */
 #deck{position:absolute;inset:0 0 50px 0}
@@ -24,26 +24,64 @@ body{display:flex;align-items:center;justify-content:center;
   pointer-events:none;display:flex;flex-direction:column;padding:20px 26px 14px}
 .slide.active{opacity:1;pointer-events:all}
 .eyebrow{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
-  background:linear-gradient(90deg,#818cf8,#a78bfa);
+  background:linear-gradient(90deg,#6366f1,#8b5cf6);
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;margin-bottom:8px}
 
 /* ════════════════ SLIDE 0 — Title ════════════════ */
-#s0{align-items:center;justify-content:center}
-.brand{font-size:52px;font-weight:800;color:#f8fafc;
-  letter-spacing:-.02em;margin-bottom:8px;line-height:1}
-.brand span{background:linear-gradient(90deg,#818cf8,#c084fc);
+#s0{flex-direction:column;padding:16px 26px 14px}
+.s0-hdr{flex-shrink:0;margin-bottom:10px}
+.brand-sm{font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-.01em}
+.brand-sm span{background:linear-gradient(90deg,#6366f1,#8b5cf6);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.brand-sub{font-size:15px;color:#475569;margin-bottom:22px}
-.clone-first-box{
-  display:flex;align-items:center;gap:14px;
-  background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.25);
-  border-radius:10px;padding:14px 20px;margin-bottom:22px;max-width:620px}
-.clone-first-icon{font-size:22px;flex-shrink:0}
-.clone-first-label{font-size:11px;font-weight:700;letter-spacing:.08em;
-  text-transform:uppercase;color:#22d3ee;margin-bottom:4px}
-.clone-first-cmd{font-family:'SF Mono',Consolas,monospace;
-  font-size:13px;color:#e2e8f0}
+.brand-sub-sm{font-size:12px;color:#64748b;margin-top:2px}
+.s0-body{flex:1;display:flex;gap:16px;min-height:0}
+/* Left action steps */
+.s0-steps{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.s0-step{border-radius:9px;padding:13px 15px;
+  opacity:0;transform:translateX(-10px);
+  transition:opacity .45s ease,transform .45s ease}
+.s0-step.show{opacity:1;transform:none}
+.s0-st{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.s0-title{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px}
+.s0-cmd{font-family:'SF Mono',Consolas,monospace;font-size:10.5px;
+  background:#f1f5f9;border-radius:4px;padding:5px 9px;line-height:1.5;word-break:break-all}
+.s0-step0{background:#f0fdfe;border:1px solid rgba(6,182,212,.35)}
+.s0-step0 .s0-st{color:#0891b2}.s0-step0 .s0-cmd{color:#0e7490}
+.s0-step1{background:#f5f3ff;border:1px solid rgba(99,102,241,.35)}
+.s0-step1 .s0-st{color:#6366f1}.s0-step1 .s0-cmd{color:#4338ca}
+.s0-step2{background:#eff6ff;border:1px solid rgba(59,130,246,.35)}
+.s0-step2 .s0-st{color:#3b82f6}.s0-step2 .s0-cmd{color:#1d4ed8}
+/* Right VS Code mockup for slide 0 */
+.s0-vscode{flex:1;background:#1e1e1e;border-radius:8px;
+  border:1px solid rgba(255,255,255,.06);overflow:hidden;
+  display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.s0-editor{flex:1;display:flex;min-height:0}
+.s0-sidebar{width:160px;flex-shrink:0;background:#252526;
+  border-right:1px solid rgba(0,0,0,.3);padding:8px 0;overflow:hidden}
+.s0-sb-hdr{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:#555;padding:0 10px 6px}
+.s0-tree-item{font-size:11px;padding:3px 10px;display:flex;align-items:center;gap:5px;
+  color:#666;cursor:default;white-space:nowrap}
+.s0-tree-item.qs{color:#a5b4fc;background:rgba(99,102,241,.1)}
+.s0-tree-item.dim{color:#3a3a3a}
+.s0-content{flex:1;padding:14px 18px;
+  font-family:'SF Mono',Consolas,monospace;font-size:12px;
+  line-height:1.8;color:#ccc;overflow:hidden}
+.s0-ln{font-size:11.5px;line-height:1.8}
+.s0-h1{color:#f8fafc;font-weight:700;font-size:13px}
+.s0-h2{color:#9cdcfe;font-size:12px}
+.s0-h2-teal{color:#22d3ee;font-size:12px}
+.s0-comment{color:#3a4a5a}
+.s0-code{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);
+  border-radius:4px;padding:4px 10px;margin:2px 0;display:block;font-size:11px;color:#4ade80}
+.s0-code-teal{border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.07);color:#67e8f9}
+.s0-code-ind{border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.07);color:#a5b4fc}
+.s0-highlight{background:rgba(99,102,241,.15);border-radius:3px;
+  outline:1px solid rgba(99,102,241,.3);padding:2px 4px}
+.s0-cursor{display:inline-block;width:2px;height:12px;
+  background:#818cf8;vertical-align:text-bottom;
+  animation:blink .8s step-end infinite}
 .prereq-row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
 .prereq-chip{font-size:12px;color:#64748b;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
@@ -216,7 +254,10 @@ body{display:flex;align-items:center;justify-content:center;
 .vs-term-tab.on{background:rgba(255,255,255,.07)}
 .vs-term-body{flex:1;background:#1e1e1e;padding:10px 16px;
   font-family:'SF Mono',Consolas,'Courier New',monospace;
-  font-size:12.5px;line-height:1.72;color:#ccc;white-space:pre;overflow:hidden}
+  font-size:12.5px;line-height:1.72;color:#ccc;white-space:pre;overflow-y:auto;overflow-x:hidden}
+.vs-term-body::-webkit-scrollbar{width:5px}
+.vs-term-body::-webkit-scrollbar-track{background:transparent}
+.vs-term-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
 .cursor{display:inline-block;width:2px;height:13px;
   background:#818cf8;vertical-align:text-bottom;
   animation:blink .8s step-end infinite}
@@ -256,20 +297,20 @@ body{display:flex;align-items:center;justify-content:center;
 
 /* ── Controls ── */
 #controls{position:absolute;bottom:0;left:0;right:0;height:50px;
-  background:rgba(5,10,20,.75);border-top:1px solid rgba(255,255,255,.05);
+  background:rgba(248,250,252,.92);border-top:1px solid #e2e8f0;
   backdrop-filter:blur(8px);display:flex;align-items:center;padding:0 20px;gap:12px}
-.ctrl{background:none;border:none;color:#334155;cursor:pointer;
+.ctrl{background:none;border:none;color:#94a3b8;cursor:pointer;
   font-size:15px;padding:5px 7px;border-radius:4px;transition:color .2s;line-height:1}
-.ctrl:hover{color:#94a3b8}
-#prog-track{flex:1;height:3px;background:rgba(255,255,255,.07);border-radius:2px;cursor:pointer}
-#prog-fill{height:100%;background:linear-gradient(90deg,#06b6d4,#6366f1,#a78bfa);
+.ctrl:hover{color:#475569}
+#prog-track{flex:1;height:3px;background:#e2e8f0;border-radius:2px;cursor:pointer}
+#prog-fill{height:100%;background:linear-gradient(90deg,#06b6d4,#6366f1,#8b5cf6);
   border-radius:2px;width:0%;transition:width .3s}
 .inds{display:flex;gap:5px;align-items:center}
-.ind{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.1);
+.ind{width:7px;height:7px;border-radius:50%;background:#cbd5e1;
   cursor:pointer;transition:background .25s,width .25s,border-radius .25s}
 .ind.on{width:18px;border-radius:3px;background:#6366f1}
-#ctr{font-size:11px;color:#1e3a5f;min-width:36px;text-align:right}
-.hint{font-size:10px;color:#1a2d4a}
+#ctr{font-size:11px;color:#94a3b8;min-width:36px;text-align:right}
+.hint{font-size:10px;color:#cbd5e1}
 </style>
 </head>
 <body>
@@ -281,21 +322,76 @@ body{display:flex;align-items:center;justify-content:center;
        SLIDE 0 — Title
   ════════════════════════════════ -->
   <div class="slide active" id="s0">
-    <div class="eyebrow">Pre-production AI Agent Security</div>
-    <div class="brand">Agent<span>Shield</span></div>
-    <div class="brand-sub" style="margin-bottom:20px">Quick start — clone the repo to get QUICKSTART.md, then follow it</div>
-    <div class="clone-first-box">
-      <div class="clone-first-icon">⎇</div>
-      <div>
-        <div class="clone-first-label">Start here — clone AgentShield first</div>
-        <div class="clone-first-cmd">git clone https://github.com/your-org/agentshield.git &amp;&amp; cd agentshield</div>
-      </div>
+    <div class="s0-hdr">
+      <div style="font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-.01em">Getting started with AgentShield</div>
     </div>
-    <div class="prereq-row">
-      <span class="prereq-chip">🐍 Python 3.10+</span>
-      <span class="prereq-chip">💻 VS Code</span>
-      <span class="prereq-chip">🤖 GitHub Copilot</span>
-      <span class="prereq-chip">🔍 Semgrep <em style="color:#1e3a5f">(auto-installed)</em></span>
+    <div class="s0-body">
+      <!-- left: 3 action steps -->
+      <div class="s0-steps">
+        <div class="s0-step s0-step0" id="ss0">
+          <div class="s0-st">Step 0 — Get the tool</div>
+          <div class="s0-title">Clone AgentShield</div>
+          <div class="s0-cmd">git clone https://github.com/your-org/agentshield.git<br>cd agentshield</div>
+        </div>
+        <div class="s0-step s0-step1" id="ss1">
+          <div class="s0-st">Step 1 — Open in VS Code</div>
+          <div class="s0-title">Open the AgentShield folder in VS Code</div>
+          <div class="s0-cmd">code QUICKSTART.md</div>
+        </div>
+        <div class="s0-step s0-step2" id="ss2">
+          <div class="s0-st">Step 2 — Follow QUICKSTART.md</div>
+          <div class="s0-title">Follow QUICKSTART.md for your target repo</div>
+          <div class="s0-cmd">/path/to/your-agent-repo</div>
+        </div>
+      </div>
+      <!-- right: VS Code editor mockup -->
+      <div class="s0-vscode">
+        <div class="vs-titlebar">
+          <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+          <div class="vs-title-lbl">QUICKSTART.md — agentshield — Visual Studio Code</div>
+        </div>
+        <div class="vs-tabs-bar">
+          <div class="vs-tab on" style="border-top:1px solid #818cf8;color:#fff">📄 QUICKSTART.md</div>
+          <div class="vs-tab" style="color:#555">⬛ TERMINAL</div>
+        </div>
+        <div class="s0-editor">
+          <div class="s0-sidebar">
+            <div class="s0-sb-hdr">Explorer</div>
+            <div class="s0-tree-item dim">📁 agentshield/</div>
+            <div class="s0-tree-item dim" style="padding-left:20px">📁 agentshield/</div>
+            <div class="s0-tree-item qs" style="padding-left:20px">📄 QUICKSTART.md</div>
+            <div class="s0-tree-item dim" style="padding-left:20px">📄 INSTALL.md</div>
+            <div class="s0-tree-item dim" style="padding-left:20px">📄 pyproject.toml</div>
+            <div class="s0-tree-item dim" style="padding-left:20px">📄 README.md</div>
+          </div>
+          <div class="s0-content">
+            <div class="s0-ln s0-h1"># AgentShield — Quick Start</div>
+            <div class="s0-ln s0-comment">## Before you begin — you've already cloned the repo.</div>
+            <div class="s0-ln">&nbsp;</div>
+            <div class="s0-ln s0-h2-teal">## 1 — Set your target repo path</div>
+            <div class="s0-ln"><code class="s0-code s0-code-teal">export REPO=<span id="s0-cursor-spot"><span class="s0-cursor"></span></span></code></div>
+            <div class="s0-ln s0-h2">## 2 — Check / install AgentShield</div>
+            <div class="s0-ln"><code class="s0-code s0-code-ind">agentshield --version 2&gt;/dev/null || pip install -e ".[semgrep,dev]"</code></div>
+            <div class="s0-ln">&nbsp;</div>
+            <div class="s0-ln s0-h2">## 2 — Install AgentShield</div>
+            <div class="s0-ln"><code class="s0-code s0-code-ind">pip install -e ".[semgrep,dev]"</code></div>
+            <div class="s0-ln">&nbsp;</div>
+            <div class="s0-ln s0-h2">## 3 — Tier 1 scan</div>
+            <div class="s0-ln"><code class="s0-code">agentshield scan $REPO --scan-all-files</code></div>
+            <div class="s0-ln">&nbsp;</div>
+            <div class="s0-ln s0-h2">## 4 — Tier 2 + Emulator &nbsp;<span style="color:#34d399;font-size:10px">(VS Code + Copilot)</span></div>
+            <div class="s0-ln" style="color:#f1f5f9;font-size:11px">Paste .agentshield/SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
+            <div class="s0-ln">&nbsp;</div>
+            <div class="s0-ln s0-h2">## 5 — Report</div>
+            <div class="s0-ln"><code class="s0-code">agentshield merge $REPO --output-html report.html</code></div>
+          </div>
+        </div>
+        <div class="vs-statusbar">
+          <div class="vs-sbi">⎇ <strong>main</strong></div>
+          <div class="vs-sbi">Markdown</div>
+          <div class="vs-sbi vs-sbi-r">Ln 4, Col 1</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -311,7 +407,7 @@ body{display:flex;align-items:center;justify-content:center;
           <div class="step-name-lg">Clone AgentShield</div>
         </div>
       </div>
-      <div class="step-desc-sm">You need the repo on your machine first — this gives you <code style="color:#22d3ee;font-size:11px">QUICKSTART.md</code> and the CLI source to install.</div>
+      <div class="step-desc-sm">You need AgentShield on your machine first.</div>
     </div>
     <div class="clone-layout">
       <div class="clone-vscode">
@@ -383,7 +479,7 @@ agentshield --version<div class="md-badge md-badge-ind" id="mb1">INSTALL</div></
           <div class="md-code md-code-blue" id="mcs">agentshield scan $REPO --scan-all-files<div class="md-badge md-badge-blue" id="mb2">SCAN</div></div>
 
           <div class="md-h2">## 4 — Tier 2 + Emulator &nbsp;<span style="color:#34d399;font-size:10px">(VS Code + Copilot)</span></div>
-          <div class="md-code" style="color:#808080;border-color:rgba(16,185,129,.2);background:rgba(16,185,129,.04)">Open $REPO in VS Code → paste SKILL.md → paste AGENT_EMULATOR_SKILL.md</div>
+          <div class="md-code" style="color:#f1f5f9;border-color:rgba(16,185,129,.2);background:rgba(16,185,129,.04)">Open $REPO in VS Code → paste SKILL.md → paste AGENT_EMULATOR_SKILL.md</div>
 
           <div class="md-h2">## 5 — Generate report</div>
           <div class="md-code md-code-pur" id="mcm">agentshield merge $REPO --output-html report.html
@@ -527,36 +623,10 @@ open report.html<div class="md-badge md-badge-pur" id="mb4">MERGE</div></div>
   <!-- ════════════════════════════════
        SLIDE 4 — Summary
   ════════════════════════════════ -->
-  <div class="slide" id="s4">
-    <div class="sum-hdr">
-      <div class="eyebrow" style="margin-bottom:6px">Done</div>
-      <div style="font-size:25px;font-weight:700;color:#f8fafc">Clone → follow QUICKSTART.md → one unified report.</div>
-    </div>
-    <div class="sum-grid">
-      <div class="sum-card sc0" id="sc0">
-        <div class="sum-num">Before — Clone AgentShield</div>
-        <div class="sum-name">Gets you QUICKSTART.md + CLI source</div>
-        <div class="sum-desc">One command — everything you need is in the repo</div>
-        <div class="sum-cmd">git clone https://github.com/your-org/agentshield.git</div>
-      </div>
-      <div class="sum-card sc2" id="sc2">
-        <div class="sum-num">Steps 1–2 — Set target + Scan</div>
-        <div class="sum-name">export $REPO → 70+ Semgrep rules fire</div>
-        <div class="sum-desc">Code + manifests · tier1-results.json · skill files emitted</div>
-        <div class="sum-cmd">agentshield scan $REPO --scan-all-files</div>
-      </div>
-      <div class="sum-card sc3" id="sc3">
-        <div class="sum-num">Step 3 — Tier 2 + Emulator</div>
-        <div class="sum-name">Copilot Chat · LLM judge · 14 attack classes</div>
-        <div class="sum-desc">Paste SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
-        <div class="sum-cmd">tier2-findings.json + agent-emulation.json</div>
-      </div>
-      <div class="sum-card sc4" id="sc4">
-        <div class="sum-num">Step 4 — Generate Report</div>
-        <div class="sum-name">D/D/R · OWASP LLM · MITRE ATLAS · CWE</div>
-        <div class="sum-desc">HTML · Markdown · SARIF · JSON</div>
-        <div class="sum-cmd">agentshield merge $REPO --output-html report.html</div>
-      </div>
+  <div class="slide" id="s4" style="align-items:center;justify-content:center;text-align:center">
+    <div class="eyebrow" style="margin-bottom:14px">Done</div>
+    <div style="font-size:34px;font-weight:700;color:#0f172a;line-height:1.3">
+      Clone → follow QUICKSTART.md<br>→ one unified report.
     </div>
   </div>
 
@@ -608,8 +678,8 @@ const EXEC_SCRIPT = [
   { t:'  [agentshield] ✓  40 findings\n', s:8, d:140, col:'#22d3ee' },
   { t:'  [agentshield] ✓  Wrote .agentshield/SKILL.md\n', s:8, d:70, col:'#22d3ee' },
   { t:'  [agentshield] ✓  Wrote .agentshield/AGENT_EMULATOR_SKILL.md\n\n', s:8, d:70, col:'#22d3ee' },
-  { t:'  # Step 3: open VS Code + paste SKILL.md into Copilot Chat\n', s:8, col:'#334155', ph:3 },
-  { t:'  # Copilot reading source files...\n', s:8, d:350, col:'#334155' },
+  { t:'  # Step 3: open VS Code + paste SKILL.md into Copilot Chat\n', s:8, col:'#94a3b8', ph:3 },
+  { t:'  # Copilot reading source files...\n', s:8, d:350, col:'#94a3b8' },
   { t:'  # ✓  tier2-findings.json written\n', s:8, d:450, col:'#22d3ee' },
   { t:'  # ✓  agent-emulation.json written\n\n', s:8, d:350, col:'#22d3ee' },
   { t:'❯ agentshield merge $REPO --output-html report.html\n', s:18, col:'#e2e8f0', ph:4 },
@@ -665,6 +735,7 @@ function runScript(targetId, lines, onDone) {
         const span=document.createElement('span');
         span.style.color=color; span.textContent=chars[ci];
         cur.before(span); ci++;
+        el.scrollTop=el.scrollHeight;
         twTimer=setTimeout(tick,charDelay);
       }
       tick();
@@ -677,7 +748,24 @@ function runScript(targetId, lines, onDone) {
 function animateSlide(n){
   clearTW();
   if(n===0){
-    scheduleNext(3800);
+    // stagger action cards in
+    setTimeout(()=>$('ss0')?.classList.add('show'), 200);
+    setTimeout(()=>$('ss1')?.classList.add('show'), 600);
+    setTimeout(()=>$('ss2')?.classList.add('show'), 1000);
+    // type the repo path into the editor line
+    setTimeout(()=>{
+      const spot=$('s0-cursor-spot'); if(!spot) return;
+      const path='/path/to/your-agent-repo'; // typed after export REPO=
+      let i=0;
+      function typeChar(){
+        if(i>=path.length){ scheduleNext(2800); return; }
+        const s=document.createElement('span');
+        s.style.color='#67e8f9'; s.textContent=path[i]; i++;
+        spot.before(s);
+        twTimer=setTimeout(typeChar,55);
+      }
+      twTimer=setTimeout(typeChar,400);
+    }, 1200);
   } else if(n===1){
     setPhase(0,'active');
     runScript('tc_clone', CLONE_SCRIPT, ()=>{
@@ -699,14 +787,16 @@ function animateSlide(n){
       scheduleNext(1800);
     });
   } else if(n===4){
-    ['sc0','sc2','sc3','sc4'].forEach((id,i)=>
-      setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},280+i*340));
-    setTimeout(()=>{playing=false;updateUI();},280+3*340+400);
+    setTimeout(()=>{playing=false;updateUI();},800);
   }
 }
 
 // ── Reset ─────────────────────────────────────────────────────
 function resetAll(){
+  // reset slide 0 action cards + typed repo path
+  ['ss0','ss1','ss2'].forEach(id=>{const c=$(id);if(c)c.classList.remove('show');});
+  const spot=$('s0-cursor-spot');
+  if(spot){ spot.innerHTML='<span class="s0-cursor"></span>'; }
   document.querySelectorAll('.ann-card,.clone-ann,.cann-file,.sum-card,.md-badge').forEach(c=>c.classList.remove('show'));
   const r=$('exec-result'); if(r) r.style.opacity='0';
   ['tc_clone','exec-term'].forEach(id=>{const e=$(id);if(e)e.innerHTML='';});
