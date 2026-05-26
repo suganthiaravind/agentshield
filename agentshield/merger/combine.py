@@ -11939,7 +11939,7 @@ def _render_emulator_coverage_block(
     total = len(catalogue_order)
     evaluated = total - counts["not_evaluated"]
 
-    open_attr = " open"  # always open — blocked/inconclusive reasoning must be visible
+    open_attr = " open" if static else ""
     parts.append(
         f'<details class="coverage-card emu-coverage-card '
         f'emu-coverage-collapse"{open_attr}>'
