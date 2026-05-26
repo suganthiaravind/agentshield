@@ -1193,11 +1193,13 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         )
         dst_role = "blocked" if outcome == "blocked" else "agent"
 
-        # Narrative: prefer attack-class-specific override, then generic step narrative
+        # Narrative: prefer actual outcome_reasoning from the trace (payload-specific),
+        # fall back to canned step narrative only when no specific reasoning was written.
         narrative = (
-            _STEP_NARRATIVE.get(actor_key, {}).get(outcome)
-            or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
+            step_reasoning
             or step_behavior
+            or _STEP_NARRATIVE.get(actor_key, {}).get(outcome)
+            or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
             or ""
         )
         # Payload callout — shown for user_prompt (direct injection) and
@@ -8887,36 +8889,37 @@ _HTML_JS = """
           });
         })();
 
-        // Step 2 — fade-in the narrative, hold for reading time, then continue
+        // Step 2 — LLM steps show thinking dots before the packet fires
         var narrativeEl = scene.querySelector('.emu-scene-narrative');
-        revealNarrative(narrativeEl, function () {
-
-          // Step 3 — LLM steps show thinking dots before the packet fires
-          var THINKING_DURATION = 1400; // ms of "processing" animation
-          var isLlmStep = scene.getAttribute('data-llm-step') === '1';
-          var packetFireAt;
-          if (isLlmStep) {
-            safeTimeout(function () { scene.classList.add('emu-scene-thinking'); }, 200);
-            safeTimeout(function () {
-              scene.classList.remove('emu-scene-thinking');
-              scene.classList.add('emu-scene-charge-ready');
-            }, 200 + THINKING_DURATION);
-            packetFireAt = 200 + THINKING_DURATION + 160;
-          } else {
-            safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
-            packetFireAt = POST_TYPE_PAUSE;
-          }
-
-          // Step 4 — packet flies across the arrow
-          safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, packetFireAt);
-
-          // Step 5 — packet lands: stamp in outcome chip + reveal terminal rows
+        var THINKING_DURATION = 1400; // ms of "processing" animation
+        var isLlmStep = scene.getAttribute('data-llm-step') === '1';
+        var packetFireAt;
+        if (isLlmStep) {
+          safeTimeout(function () { scene.classList.add('emu-scene-thinking'); }, 200);
           safeTimeout(function () {
-            scene.classList.add('emu-scene-received');
-            revealTermLines(trace, idx, 0);
-          }, packetFireAt + PACKET_DURATION);
+            scene.classList.remove('emu-scene-thinking');
+            scene.classList.add('emu-scene-charge-ready');
+          }, 200 + THINKING_DURATION);
+          packetFireAt = 200 + THINKING_DURATION + 160;
+        } else {
+          safeTimeout(function () { scene.classList.add('emu-scene-charge-ready'); }, 200);
+          packetFireAt = POST_TYPE_PAUSE;
+        }
 
-          // Step 6 — advance to next scene or show final banner
+        // Step 3 — packet flies across the arrow
+        safeTimeout(function () { scene.classList.add('emu-scene-packet-flying'); }, packetFireAt);
+
+        // Step 4 — packet lands: stamp in outcome chip + reveal terminal rows
+        safeTimeout(function () {
+          scene.classList.add('emu-scene-received');
+          revealTermLines(trace, idx, 0);
+          // Step 5 — narrative reveals AFTER the packet lands so the
+          // reasoning follows the animation, not precedes it
+          revealNarrative(narrativeEl, function () {});
+        }, packetFireAt + PACKET_DURATION);
+
+        // Step 6 — advance to next scene or show final banner
+        (function () {
           var afterScene = packetFireAt + PACKET_DURATION + SCENE_READ_PAUSE;
           if (idx < scenes.length - 1) {
             safeTimeout(function () {
@@ -8945,7 +8948,7 @@ _HTML_JS = """
               // Keep Close visible so user can dismiss after watching
             }, afterScene);
           }
-        });
+        })();
       }
 
       // Payload catalogue intro first, then pipeline scenes (attack plan
