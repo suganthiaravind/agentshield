@@ -1,35 +1,45 @@
 # AgentShield — Quick Start
 
-Follow this file top to bottom. The only thing you set is your repo path.
+---
+
+## Before you begin — Clone AgentShield
+
+You need this repo on your machine before you can follow anything below.
+
+```bash
+git clone https://github.com/your-org/agentshield.git
+cd agentshield
+```
+
+> You are now inside the AgentShield repo. This file (`QUICKSTART.md`) is here.  
+> Open it in VS Code and follow the steps below.
 
 ---
 
-## 0 — Set your target
+## 1 — Set your target repo path
 
 ```bash
 export REPO=/absolute/path/to/your-agent-repo
 ```
 
-> Replace `/absolute/path/to/your-agent-repo` with the real path.  
-> Every command below uses `$REPO` — set it once, run everything.
+> Replace `/absolute/path/to/your-agent-repo` with the real path to the agent you want to scan.  
+> Every command below reads `$REPO` — set it once, run everything.
 
 ---
 
-## 1 — Install AgentShield
+## 2 — Install AgentShield
 
 ```bash
-git clone https://github.com/your-org/agentshield.git
-cd agentshield
 pip install -e ".[semgrep,dev]"
 agentshield --version
 ```
 
-**What happens:** Downloads AgentShield and installs the CLI with Semgrep bundled.  
+**What happens:** Installs the AgentShield CLI with Semgrep bundled.  
 **Done when you see:** `agentshield 4.x.x`
 
 ---
 
-## 2 — Run the Tier 1 scan
+## 3 — Run the Tier 1 scan
 
 ```bash
 agentshield scan $REPO --scan-all-files
@@ -41,7 +51,7 @@ Skill files are written to `$REPO/.agentshield/` for the next step.
 
 ---
 
-## 3 — Tier 2 + Behaviour Emulator  *(VS Code + Copilot — no CLI)*
+## 4 — Tier 2 + Behaviour Emulator  *(VS Code + Copilot — no CLI)*
 
 1. Open `$REPO` in **VS Code** with the **GitHub Copilot Chat** extension active.
 2. Open `$REPO/.agentshield/SKILL.md` → copy all contents → paste into Copilot Chat.
@@ -54,7 +64,7 @@ discovers new issues, and simulates 14 adversary attack classes against your pip
 
 ---
 
-## 4 — Generate the unified report
+## 5 — Generate the unified report
 
 ```bash
 agentshield merge $REPO --output-html report.html
@@ -67,14 +77,15 @@ with D/D/R findings, fix guidance, and OWASP LLM / MITRE ATLAS / CWE mappings.
 
 ---
 
-## That's it
+## Summary
 
-| Step | Command | Output |
+| Step | Action | Output |
 |---|---|---|
-| 0 | `export REPO=...` | Target set |
-| 1 | `pip install -e ".[semgrep,dev]"` | `agentshield` CLI |
-| 2 | `agentshield scan $REPO --scan-all-files` | `tier1-results.json` + skill files |
-| 3 | VS Code + Copilot Chat (×2 pastes) | `tier2-findings.json` + `agent-emulation.json` |
-| 4 | `agentshield merge $REPO --output-html report.html` | `report.html` |
+| Before | `git clone …/agentshield && cd agentshield` | This file + CLI source |
+| 1 | `export REPO=…` | Target set |
+| 2 | `pip install -e ".[semgrep,dev]"` | `agentshield` CLI |
+| 3 | `agentshield scan $REPO --scan-all-files` | `tier1-results.json` + skill files |
+| 4 | VS Code + Copilot Chat (×2 pastes) | `tier2-findings.json` + `agent-emulation.json` |
+| 5 | `agentshield merge $REPO --output-html report.html` | `report.html` |
 
 For flags, troubleshooting, and CI integration see [INSTALL.md](./INSTALL.md).

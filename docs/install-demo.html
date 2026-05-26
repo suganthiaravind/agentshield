@@ -23,8 +23,6 @@ body{display:flex;align-items:center;justify-content:center;
 .slide{position:absolute;inset:0;opacity:0;transition:opacity .5s ease;
   pointer-events:none;display:flex;flex-direction:column;padding:20px 26px 14px}
 .slide.active{opacity:1;pointer-events:all}
-
-/* ── Shared ── */
 .eyebrow{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
   background:linear-gradient(90deg,#818cf8,#a78bfa);
   -webkit-background-clip:text;background-clip:text;
@@ -36,21 +34,69 @@ body{display:flex;align-items:center;justify-content:center;
   letter-spacing:-.02em;margin-bottom:8px;line-height:1}
 .brand span{background:linear-gradient(90deg,#818cf8,#c084fc);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.brand-sub{font-size:15px;color:#475569;margin-bottom:28px}
+.brand-sub{font-size:15px;color:#475569;margin-bottom:22px}
+.clone-first-box{
+  display:flex;align-items:center;gap:14px;
+  background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.25);
+  border-radius:10px;padding:14px 20px;margin-bottom:22px;max-width:620px}
+.clone-first-icon{font-size:22px;flex-shrink:0}
+.clone-first-label{font-size:11px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:#22d3ee;margin-bottom:4px}
+.clone-first-cmd{font-family:'SF Mono',Consolas,monospace;
+  font-size:13px;color:#e2e8f0}
 .prereq-row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
 .prereq-chip{font-size:12px;color:#64748b;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
   border-radius:7px;padding:6px 14px}
 
-/* ════════════════ SLIDE 1 — QUICKSTART.md viewer ════════════════ */
-#s1 .slide-title{font-size:18px;font-weight:700;color:#f8fafc;margin-bottom:14px;flex-shrink:0}
-#s1 .slide-title span{font-family:'SF Mono',Consolas,monospace;
+/* ════════════════ SLIDE 1 — Clone AgentShield ════════════════ */
+#s1 .step-hdr{flex-shrink:0;margin-bottom:14px}
+#s1 .step-hdr-top{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.step-badge-teal{width:40px;height:40px;border-radius:50%;flex-shrink:0;
+  background:rgba(6,182,212,.2);color:#22d3ee;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:800}
+.step-tier-teal{font-size:9px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:#22d3ee;margin-bottom:2px}
+.step-name-lg{font-size:20px;font-weight:700;color:#f8fafc;line-height:1.15}
+.step-desc-sm{font-size:12.5px;color:#475569;line-height:1.5;margin-left:52px}
+.clone-layout{flex:1;display:flex;gap:16px;min-height:0}
+.clone-vscode{flex:1;background:#1e1e1e;border-radius:8px;
+  border:1px solid rgba(255,255,255,.06);overflow:hidden;
+  display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.clone-result{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+.clone-result-hdr{font-size:9px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:#1e3a5f}
+.clone-ann{border-radius:9px;padding:14px 16px;
+  opacity:0;transform:translateX(10px);
+  transition:opacity .4s ease,transform .4s ease}
+.clone-ann.show{opacity:1;transform:none}
+.clone-ann-teal{background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2)}
+.clone-ann-ind{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2)}
+.cann-step{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.clone-ann-teal .cann-step{color:#22d3ee}
+.clone-ann-ind .cann-step{color:#818cf8}
+.cann-title{font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.cann-desc{font-size:11px;color:#475569;line-height:1.5}
+.cann-files{margin-top:8px;display:flex;flex-direction:column;gap:3px}
+.cann-file{font-family:'SF Mono',Consolas,monospace;font-size:10px;
+  padding:2px 8px;border-radius:3px;
+  opacity:0;transform:translateX(-5px);
+  transition:opacity .35s ease,transform .35s ease}
+.cann-file.show{opacity:1;transform:none}
+.cann-file-qs{color:#a5b4fc;background:rgba(99,102,241,.12);
+  border:1px solid rgba(99,102,241,.2)}
+.cann-file-other{color:#334155;background:rgba(0,0,0,.2);
+  border:1px solid rgba(255,255,255,.05)}
+
+/* ════════════════ SLIDE 2 — QUICKSTART.md ════════════════ */
+#s2 .slide-title{font-size:18px;font-weight:700;color:#f8fafc;
+  margin-bottom:14px;flex-shrink:0}
+#s2 .slide-title span{font-family:'SF Mono',Consolas,monospace;
   font-size:14px;font-weight:600;color:#818cf8;
   background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.2);
-  border-radius:5px;padding:2px 10px;margin-left:8px}
+  border-radius:5px;padding:2px 10px}
 .qs-layout{flex:1;display:flex;gap:16px;min-height:0}
-
-/* markdown preview panel */
 .qs-md{flex:1;background:#1e1e1e;border-radius:8px;
   border:1px solid rgba(255,255,255,.06);overflow:hidden;
   display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.5)}
@@ -59,108 +105,99 @@ body{display:flex;align-items:center;justify-content:center;
 .vs-dot{width:11px;height:11px;border-radius:50%}
 .vs-dot-r{background:#ff5f56}.vs-dot-y{background:#ffbd2e}.vs-dot-g{background:#27c93f}
 .qs-md-title{flex:1;text-align:center;font-size:11px;color:#666;margin-right:38px}
-.qs-md-body{flex:1;padding:18px 20px;overflow:hidden;
+.qs-md-body{flex:1;padding:16px 20px;overflow:hidden;
   font-family:'SF Mono',Consolas,monospace;font-size:12px;line-height:1.7;color:#ccc}
-.md-h1{font-size:16px;font-weight:700;color:#f8fafc;margin-bottom:6px}
-.md-h2{font-size:13px;font-weight:700;color:#9cdcfe;margin:10px 0 4px}
-.md-p{color:#808080;margin-bottom:4px}
+.md-h1{font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:4px}
+.md-h2{font-size:12.5px;font-weight:700;color:#9cdcfe;margin:9px 0 3px}
+.md-h2-teal{font-size:12.5px;font-weight:700;color:#22d3ee;margin:4px 0 3px}
+.md-note{color:#475569;font-size:11px;font-style:italic;margin-bottom:3px}
 .md-code{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);
-  border-radius:5px;padding:7px 12px;margin:5px 0;
-  font-size:11.5px;color:#4ade80;white-space:pre;line-height:1.6;
-  position:relative}
-.md-code.hl{border-color:rgba(99,102,241,.5);
-  box-shadow:0 0 0 1px rgba(99,102,241,.2);
-  background:rgba(99,102,241,.08)}
-.md-code.hl2{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.08)}
-.md-code.hl3{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.06)}
-.md-code.hl4{border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.08)}
-.md-note{color:#475569;font-size:11px;font-style:italic;margin-bottom:4px}
-.md-hl-badge{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  border-radius:5px;padding:6px 12px;margin:4px 0;
+  font-size:11.5px;color:#4ade80;white-space:pre;line-height:1.6;position:relative}
+.md-code-teal{border-color:rgba(6,182,212,.4);background:rgba(6,182,212,.07);color:#67e8f9}
+.md-code-ind{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.07)}
+.md-code-blue{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.07)}
+.md-code-pur{border-color:rgba(139,92,246,.4);background:rgba(139,92,246,.07)}
+.md-badge{position:absolute;right:8px;top:50%;transform:translateY(-50%);
   font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   padding:2px 7px;border-radius:3px;opacity:0;transition:opacity .4s}
-.md-hl-badge.show{opacity:1}
-.md-badge-1{background:rgba(99,102,241,.2);color:#a5b4fc}
-.md-badge-2{background:rgba(59,130,246,.2);color:#93c5fd}
-.md-badge-4{background:rgba(139,92,246,.2);color:#c4b5fd}
-
-/* annotation panel */
-.qs-ann{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
-.ann-card{border-radius:9px;padding:14px 16px;
+.md-badge.show{opacity:1}
+.md-badge-teal{background:rgba(6,182,212,.2);color:#22d3ee}
+.md-badge-ind{background:rgba(99,102,241,.2);color:#a5b4fc}
+.md-badge-blue{background:rgba(59,130,246,.2);color:#93c5fd}
+.md-badge-pur{background:rgba(139,92,246,.2);color:#c4b5fd}
+.qs-ann{width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:9px}
+.ann-hdr{font-size:9px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:#1e3a5f}
+.ann-card{border-radius:9px;padding:13px 15px;
   opacity:0;transform:translateX(10px);
   transition:opacity .4s ease,transform .4s ease}
 .ann-card.show{opacity:1;transform:none}
-.ann-1{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2)}
-.ann-2{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2)}
-.ann-3{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2)}
-.ann-4{background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2)}
-.ann-step{font-size:9px;font-weight:800;letter-spacing:.1em;
-  text-transform:uppercase;margin-bottom:5px}
-.ann-1 .ann-step{color:#818cf8}.ann-2 .ann-step{color:#60a5fa}
-.ann-3 .ann-step{color:#34d399}.ann-4 .ann-step{color:#c084fc}
-.ann-title{font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
-.ann-desc{font-size:11px;color:#475569;line-height:1.5}
+.ann-teal{background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.18)}
+.ann-ind{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18)}
+.ann-blue{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18)}
+.ann-grn{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18)}
+.ann-pur{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.18)}
+.ann-step{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.ann-teal .ann-step{color:#22d3ee}.ann-ind .ann-step{color:#818cf8}
+.ann-blue .ann-step{color:#60a5fa}.ann-grn .ann-step{color:#34d399}
+.ann-pur .ann-step{color:#c084fc}
+.ann-title{font-size:12.5px;font-weight:700;color:#f1f5f9;margin-bottom:3px}
+.ann-desc{font-size:10.5px;color:#475569;line-height:1.5}
 
-/* ════════════════ SLIDE 2 — Execution ════════════════ */
-#s2 .slide-hdr{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-shrink:0}
-#s2 .slide-hdr-title{font-size:18px;font-weight:700;color:#f8fafc}
-#s2 .slide-hdr-sub{font-size:12px;color:#475569}
+/* ════════════════ SLIDE 3 — Execution ════════════════ */
+#s3 .slide-hdr{display:flex;align-items:center;gap:12px;margin-bottom:13px;flex-shrink:0}
+#s3 .slide-hdr-title{font-size:18px;font-weight:700;color:#f8fafc}
 .exec-layout{flex:1;display:flex;gap:16px;min-height:0}
-
-/* phase tracker */
-.phase-track{width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:0}
-.phase-item{display:flex;align-items:flex-start;gap:12px;padding:0 0 0 4px}
+.phase-track{width:220px;flex-shrink:0;display:flex;flex-direction:column}
+.phase-item{display:flex;align-items:flex-start;gap:10px;padding:0 0 0 2px}
 .phase-icon-col{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
-.phase-circle{width:32px;height:32px;border-radius:50%;flex-shrink:0;
+.phase-circle{width:30px;height:30px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:800;
+  font-size:11px;font-weight:800;
   border:2px solid rgba(255,255,255,.1);
   background:rgba(255,255,255,.04);color:#334155;
-  transition:all .4s ease;position:relative}
-.phase-item.active .phase-circle{
-  border-color:currentColor;background:rgba(99,102,241,.12);color:#818cf8;
-  box-shadow:0 0 0 3px rgba(99,102,241,.15)}
-.phase-item.ph-blue.active .phase-circle{
-  border-color:#60a5fa;background:rgba(59,130,246,.12);color:#60a5fa;
-  box-shadow:0 0 0 3px rgba(59,130,246,.12)}
-.phase-item.ph-green.active .phase-circle{
-  border-color:#34d399;background:rgba(16,185,129,.12);color:#34d399;
-  box-shadow:0 0 0 3px rgba(16,185,129,.1)}
-.phase-item.ph-purple.active .phase-circle{
-  border-color:#c084fc;background:rgba(139,92,246,.12);color:#c084fc;
-  box-shadow:0 0 0 3px rgba(139,92,246,.1)}
-.phase-item.done .phase-circle{
-  border-color:#34d399;background:rgba(16,185,129,.15);color:#34d399}
-.phase-conn{width:2px;height:18px;background:rgba(255,255,255,.06);
-  margin:3px 0 3px 15px;transition:background .4s}
-.phase-item.done + .phase-divider .phase-conn,
-.phase-divider.lit .phase-conn{background:rgba(52,211,153,.25)}
-.phase-body{padding:4px 0 0;flex:1}
-.phase-name{font-size:12.5px;font-weight:700;color:#475569;margin-bottom:2px;
-  transition:color .4s}
-.phase-item.active .phase-name,.phase-item.done .phase-name{color:#f1f5f9}
-.phase-detail{font-size:10.5px;color:#2d3f5a;line-height:1.4;
-  transition:color .4s}
+  transition:all .4s ease}
+.phase-conn{width:2px;height:16px;background:rgba(255,255,255,.06);
+  margin:2px 0 2px 14px;transition:background .5s}
+.phase-conn.lit{background:rgba(52,211,153,.3)}
+.phase-body{padding:3px 0 0;flex:1}
+.phase-name{font-size:12px;font-weight:700;color:#475569;margin-bottom:1px;transition:color .4s}
+.phase-detail{font-size:10px;color:#2d3f5a;line-height:1.35;transition:color .4s}
+
+/* active state per colour */
+.phase-item.active .phase-name{color:#f1f5f9}
 .phase-item.active .phase-detail{color:#64748b}
+.phase-item.done .phase-name{color:#f1f5f9}
 .phase-item.done .phase-detail{color:#34d399;font-weight:600}
-.phase-divider{display:flex;padding-left:0}
+.phase-item.done .phase-circle{border-color:#34d399;background:rgba(16,185,129,.15);color:#34d399;animation:none!important}
 
-/* pulsing ring for active phase */
-@keyframes pulse-ring{0%{box-shadow:0 0 0 3px rgba(99,102,241,.2)}
-  70%{box-shadow:0 0 0 7px rgba(99,102,241,0)}100%{box-shadow:0 0 0 3px rgba(99,102,241,.2)}}
-.phase-item.active .phase-circle{animation:pulse-ring 1.8s ease-in-out infinite}
-.phase-item.ph-blue.active .phase-circle{animation:pulse-blue 1.8s ease-in-out infinite}
-.phase-item.ph-green.active .phase-circle{animation:pulse-green 1.8s ease-in-out infinite}
-.phase-item.ph-purple.active .phase-circle{animation:pulse-purple 1.8s ease-in-out infinite}
-@keyframes pulse-blue{0%{box-shadow:0 0 0 3px rgba(59,130,246,.2)}
-  70%{box-shadow:0 0 0 7px rgba(59,130,246,0)}100%{box-shadow:0 0 0 3px rgba(59,130,246,.2)}}
-@keyframes pulse-green{0%{box-shadow:0 0 0 3px rgba(16,185,129,.15)}
-  70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}100%{box-shadow:0 0 0 3px rgba(16,185,129,.15)}}
-@keyframes pulse-purple{0%{box-shadow:0 0 0 3px rgba(139,92,246,.15)}
-  70%{box-shadow:0 0 0 7px rgba(139,92,246,0)}100%{box-shadow:0 0 0 3px rgba(139,92,246,.15)}}
-.phase-item.done .phase-circle{animation:none!important}
+.ph-teal.active .phase-circle{border-color:#22d3ee;background:rgba(6,182,212,.12);color:#22d3ee}
+.ph-ind.active .phase-circle{border-color:#818cf8;background:rgba(99,102,241,.12);color:#818cf8}
+.ph-blue.active .phase-circle{border-color:#60a5fa;background:rgba(59,130,246,.12);color:#60a5fa}
+.ph-grn.active .phase-circle{border-color:#34d399;background:rgba(16,185,129,.12);color:#34d399}
+.ph-pur.active .phase-circle{border-color:#c084fc;background:rgba(139,92,246,.12);color:#c084fc}
 
-/* VS Code execution window */
-.exec-vscode{flex:1;background:#1e1e1e;border-radius:8px;
+@keyframes pulse-teal{0%{box-shadow:0 0 0 3px rgba(6,182,212,.2)}70%{box-shadow:0 0 0 7px rgba(6,182,212,0)}100%{box-shadow:0 0 0 3px rgba(6,182,212,.2)}}
+@keyframes pulse-ind {0%{box-shadow:0 0 0 3px rgba(99,102,241,.2)}70%{box-shadow:0 0 0 7px rgba(99,102,241,0)}100%{box-shadow:0 0 0 3px rgba(99,102,241,.2)}}
+@keyframes pulse-blue{0%{box-shadow:0 0 0 3px rgba(59,130,246,.2)}70%{box-shadow:0 0 0 7px rgba(59,130,246,0)}100%{box-shadow:0 0 0 3px rgba(59,130,246,.2)}}
+@keyframes pulse-grn {0%{box-shadow:0 0 0 3px rgba(16,185,129,.15)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}100%{box-shadow:0 0 0 3px rgba(16,185,129,.15)}}
+@keyframes pulse-pur {0%{box-shadow:0 0 0 3px rgba(139,92,246,.15)}70%{box-shadow:0 0 0 7px rgba(139,92,246,0)}100%{box-shadow:0 0 0 3px rgba(139,92,246,.15)}}
+.ph-teal.active .phase-circle{animation:pulse-teal 1.8s ease-in-out infinite}
+.ph-ind.active .phase-circle {animation:pulse-ind  1.8s ease-in-out infinite}
+.ph-blue.active .phase-circle{animation:pulse-blue 1.8s ease-in-out infinite}
+.ph-grn.active .phase-circle {animation:pulse-grn  1.8s ease-in-out infinite}
+.ph-pur.active .phase-circle {animation:pulse-pur  1.8s ease-in-out infinite}
+
+.exec-result{margin-top:14px;padding:11px;
+  background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.18);
+  border-radius:8px;opacity:0;transition:opacity .5s;font-size:11px}
+.exec-result-lbl{font-size:9px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:#34d399;margin-bottom:6px}
+.exec-result-files{color:#4b6280;line-height:1.7}
+
+/* VS Code window (shared) */
+.vscode{flex:1;background:#1e1e1e;border-radius:8px;
   border:1px solid rgba(255,255,255,.06);overflow:hidden;
   display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 .vs-titlebar{height:30px;background:#3c3c3c;flex-shrink:0;
@@ -169,19 +206,17 @@ body{display:flex;align-items:center;justify-content:center;
 .vs-tabs-bar{height:34px;background:#252526;flex-shrink:0;
   display:flex;border-bottom:1px solid rgba(0,0,0,.3)}
 .vs-tab{display:flex;align-items:center;padding:0 14px;font-size:12px;
-  color:#969696;background:#2d2d2d;border-right:1px solid rgba(0,0,0,.25);
-  cursor:pointer;gap:5px}
+  color:#969696;background:#2d2d2d;border-right:1px solid rgba(0,0,0,.25);gap:5px}
 .vs-tab.on{color:#fff;background:#1e1e1e;border-top:1px solid #007acc}
 .vs-term-hdr{height:27px;background:#252526;flex-shrink:0;
   display:flex;align-items:center;padding:0 10px;gap:8px;
   border-top:1px solid rgba(255,255,255,.05)}
 .vs-term-tab{font-size:11px;color:#ccc;padding:2px 9px;
-  border-radius:3px;cursor:pointer;display:flex;align-items:center;gap:5px}
+  border-radius:3px;display:flex;align-items:center;gap:5px}
 .vs-term-tab.on{background:rgba(255,255,255,.07)}
 .vs-term-body{flex:1;background:#1e1e1e;padding:10px 16px;
   font-family:'SF Mono',Consolas,'Courier New',monospace;
-  font-size:12.5px;line-height:1.72;color:#ccc;white-space:pre;
-  overflow:hidden;min-height:0}
+  font-size:12.5px;line-height:1.72;color:#ccc;white-space:pre;overflow:hidden}
 .cursor{display:inline-block;width:2px;height:13px;
   background:#818cf8;vertical-align:text-bottom;
   animation:blink .8s step-end infinite}
@@ -193,14 +228,16 @@ body{display:flex;align-items:center;justify-content:center;
 .vs-sbi:hover{background:rgba(255,255,255,.1)}
 .vs-sbi-r{margin-left:auto}
 
-/* ════════════════ SLIDE 3 — Summary ════════════════ */
-#s3{align-items:center;justify-content:center;padding:24px 36px}
-.sum-hdr{text-align:center;margin-bottom:22px}
+/* ════════════════ SLIDE 4 — Summary ════════════════ */
+#s4{align-items:center;justify-content:center;padding:24px 36px}
+.sum-hdr{text-align:center;margin-bottom:20px}
 .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;width:100%}
-.sum-card{border-radius:10px;padding:17px 18px;position:relative;overflow:hidden;
+.sum-card{border-radius:10px;padding:16px 18px;position:relative;overflow:hidden;
   opacity:0;transform:translateY(12px);transition:opacity .4s ease,transform .4s ease}
 .sum-card.show{opacity:1;transform:none}
 .sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.sc0{background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2)}
+.sc0::before{background:linear-gradient(90deg,#0891b2,#22d3ee)}
 .sc1{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2)}
 .sc1::before{background:linear-gradient(90deg,#4338ca,#818cf8)}
 .sc2{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2)}
@@ -210,12 +247,12 @@ body{display:flex;align-items:center;justify-content:center;
 .sc4{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2)}
 .sc4::before{background:linear-gradient(90deg,#5b21b6,#c084fc)}
 .sum-num{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
-.sc1 .sum-num{color:#818cf8}.sc2 .sum-num{color:#60a5fa}
+.sc0 .sum-num{color:#22d3ee}.sc1 .sum-num{color:#818cf8}.sc2 .sum-num{color:#60a5fa}
 .sc3 .sum-num{color:#34d399}.sc4 .sum-num{color:#c084fc}
-.sum-name{font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:3px}
-.sum-desc{font-size:11px;color:#334155;margin-bottom:8px}
-.sum-cmd{font-family:'SF Mono',Consolas,monospace;font-size:10.5px;color:#4ade80;
-  background:rgba(0,0,0,.3);border-radius:4px;padding:5px 10px}
+.sum-name{font-size:14.5px;font-weight:700;color:#f1f5f9;margin-bottom:3px}
+.sum-desc{font-size:10.5px;color:#334155;margin-bottom:7px}
+.sum-cmd{font-family:'SF Mono',Consolas,monospace;font-size:10px;color:#4ade80;
+  background:rgba(0,0,0,.3);border-radius:4px;padding:4px 9px}
 
 /* ── Controls ── */
 #controls{position:absolute;bottom:0;left:0;right:0;height:50px;
@@ -225,7 +262,7 @@ body{display:flex;align-items:center;justify-content:center;
   font-size:15px;padding:5px 7px;border-radius:4px;transition:color .2s;line-height:1}
 .ctrl:hover{color:#94a3b8}
 #prog-track{flex:1;height:3px;background:rgba(255,255,255,.07);border-radius:2px;cursor:pointer}
-#prog-fill{height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa);
+#prog-fill{height:100%;background:linear-gradient(90deg,#06b6d4,#6366f1,#a78bfa);
   border-radius:2px;width:0%;transition:width .3s}
 .inds{display:flex;gap:5px;align-items:center}
 .ind{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.1);
@@ -240,158 +277,223 @@ body{display:flex;align-items:center;justify-content:center;
   <div class="bg-glow bga"></div><div class="bg-glow bgb"></div>
   <div id="deck">
 
-  <!-- ════════ SLIDE 0 — Title ════════ -->
+  <!-- ════════════════════════════════
+       SLIDE 0 — Title
+  ════════════════════════════════ -->
   <div class="slide active" id="s0">
     <div class="eyebrow">Pre-production AI Agent Security</div>
     <div class="brand">Agent<span>Shield</span></div>
-    <div class="brand-sub">Quick start — follow <code style="font-size:13px;color:#818cf8;background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">QUICKSTART.md</code> and run four commands</div>
-    <div class="prereq-row" style="margin-top:26px">
+    <div class="brand-sub" style="margin-bottom:20px">Quick start — clone the repo to get QUICKSTART.md, then follow it</div>
+    <div class="clone-first-box">
+      <div class="clone-first-icon">⎇</div>
+      <div>
+        <div class="clone-first-label">Start here — clone AgentShield first</div>
+        <div class="clone-first-cmd">git clone https://github.com/your-org/agentshield.git &amp;&amp; cd agentshield</div>
+      </div>
+    </div>
+    <div class="prereq-row">
       <span class="prereq-chip">🐍 Python 3.10+</span>
-      <span class="prereq-chip">⎇ Git</span>
       <span class="prereq-chip">💻 VS Code</span>
       <span class="prereq-chip">🤖 GitHub Copilot</span>
       <span class="prereq-chip">🔍 Semgrep <em style="color:#1e3a5f">(auto-installed)</em></span>
     </div>
   </div>
 
-  <!-- ════════ SLIDE 1 — QUICKSTART.md ════════ -->
+  <!-- ════════════════════════════════
+       SLIDE 1 — Clone AgentShield
+  ════════════════════════════════ -->
   <div class="slide" id="s1">
-    <div class="slide-title">Follow <span>QUICKSTART.md</span>
-      <span style="font-size:12px;color:#475569;font-weight:400;font-family:inherit;background:none;border:none;margin-left:12px">
-        Set <code style="color:#818cf8;font-size:11px">$REPO</code> once — every command uses it
-      </span>
-    </div>
-    <div class="qs-layout">
-      <!-- Markdown preview -->
-      <div class="qs-md">
-        <div class="qs-md-bar">
-          <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
-          <div class="qs-md-title">QUICKSTART.md — Visual Studio Code</div>
-        </div>
-        <div class="qs-md-body">
-          <div class="md-h1"># AgentShield — Quick Start</div>
-          <div class="md-note">Follow this file top to bottom. The only thing you set is your repo path.</div>
-          <div style="height:6px"></div>
-
-          <div class="md-h2">## 0 — Set your target</div>
-          <div class="md-code hl">export REPO=/absolute/path/to/your-agent-repo<div class="md-hl-badge md-badge-1" id="b0">SET FIRST</div></div>
-
-          <div class="md-h2">## 1 — Install AgentShield</div>
-          <div class="md-code hl2" id="mc1">git clone https://github.com/your-org/agentshield.git
-pip install -e ".[semgrep,dev]"
-agentshield --version<div class="md-hl-badge md-badge-2" id="b1">INSTALL</div></div>
-
-          <div class="md-h2">## 2 — Run the Tier 1 scan</div>
-          <div class="md-code hl2" id="mc2">agentshield scan $REPO --scan-all-files<div class="md-hl-badge md-badge-2" id="b2">SCAN</div></div>
-
-          <div class="md-h2">## 3 — Tier 2 + Emulator  <span style="color:#34d399;font-size:10px">(VS Code + Copilot)</span></div>
-          <div class="md-code" style="color:#808080;border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)">Open $REPO in VS Code → paste SKILL.md → paste AGENT_EMULATOR_SKILL.md</div>
-
-          <div class="md-h2">## 4 — Generate report</div>
-          <div class="md-code hl4" id="mc4">agentshield merge $REPO --output-html report.html
-open report.html<div class="md-hl-badge md-badge-4" id="b4">MERGE</div></div>
+    <div class="step-hdr">
+      <div class="step-hdr-top">
+        <div class="step-badge-teal">⎇</div>
+        <div>
+          <div class="step-tier-teal">Before anything</div>
+          <div class="step-name-lg">Clone AgentShield</div>
         </div>
       </div>
-
-      <!-- Annotation cards -->
-      <div class="qs-ann">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#1e3a5f;margin-bottom:4px">What each step does</div>
-        <div class="ann-card ann-1 show">
-          <div class="ann-step">Steps 0</div>
-          <div class="ann-title">Point at your repo</div>
-          <div class="ann-desc">One variable. Every command below reads <code style="color:#818cf8;font-size:10px">$REPO</code> — set it once up front.</div>
+      <div class="step-desc-sm">You need the repo on your machine first — this gives you <code style="color:#22d3ee;font-size:11px">QUICKSTART.md</code> and the CLI source to install.</div>
+    </div>
+    <div class="clone-layout">
+      <div class="clone-vscode">
+        <div class="vs-titlebar">
+          <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+          <div class="vs-title-lbl">— Visual Studio Code</div>
         </div>
-        <div class="ann-card ann-2" id="ann1">
-          <div class="ann-step">Step 1 — Install</div>
-          <div class="ann-title">AgentShield CLI installed</div>
-          <div class="ann-desc">Clones the repo, creates a venv, bundles Semgrep. Takes ~60s once. Done when you see <code style="color:#4ade80;font-size:10px">agentshield 4.x.x</code></div>
+        <div class="vs-tabs-bar">
+          <div class="vs-tab on">⬛ TERMINAL</div>
         </div>
-        <div class="ann-card ann-2" id="ann2">
-          <div class="ann-step">Step 2 — Scan</div>
-          <div class="ann-title">Tier 1 static scan runs</div>
-          <div class="ann-desc">70+ Semgrep rules fire against your code. Skill files for Copilot are written to <code style="color:#818cf8;font-size:10px">.agentshield/</code></div>
+        <div class="vs-term-hdr">
+          <div class="vs-term-tab on">▶ zsh <span style="font-size:9px;opacity:.4">+</span></div>
+          <div style="margin-left:auto;font-size:10px;color:#444">✕</div>
         </div>
-        <div class="ann-card ann-3" id="ann3">
-          <div class="ann-step">Step 3 — Copilot</div>
-          <div class="ann-title">Tier 2 + Emulator via VS Code</div>
-          <div class="ann-desc">Paste two skill files into Copilot Chat. Copilot validates findings and simulates 14 adversary attack classes.</div>
+        <div class="vs-term-body" id="tc_clone"></div>
+        <div class="vs-statusbar">
+          <div class="vs-sbi">⎇ <strong>main</strong></div>
+          <div class="vs-sbi vs-sbi-r">zsh</div>
         </div>
-        <div class="ann-card ann-4" id="ann4">
-          <div class="ann-step">Step 4 — Report</div>
-          <div class="ann-title">Unified report generated</div>
-          <div class="ann-desc">Merges all results into one HTML report — D/D/R findings, fix guidance, OWASP LLM, MITRE ATLAS, CWE.</div>
+      </div>
+      <div class="clone-result">
+        <div class="clone-result-hdr" style="margin-bottom:6px">After cloning you have</div>
+        <div class="clone-ann clone-ann-teal" id="cann1">
+          <div class="cann-step">Repo contents</div>
+          <div class="cann-title">agentshield/ is on your machine</div>
+          <div class="cann-files">
+            <span class="cann-file cann-file-qs" id="cf-qs">📄 QUICKSTART.md ← follow this</span>
+            <span class="cann-file cann-file-other" id="cf-in">📄 INSTALL.md</span>
+            <span class="cann-file cann-file-other" id="cf-py">📦 agentshield/</span>
+            <span class="cann-file cann-file-other" id="cf-pp">📄 pyproject.toml</span>
+          </div>
+        </div>
+        <div class="clone-ann clone-ann-ind" id="cann2">
+          <div class="cann-step">Next step</div>
+          <div class="cann-title">Open QUICKSTART.md in VS Code</div>
+          <div class="cann-desc">Set <code style="color:#818cf8;font-size:10px">$REPO</code> to your agent repo path, then follow steps 2–5.</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ════════ SLIDE 2 — Execution ════════ -->
+  <!-- ════════════════════════════════
+       SLIDE 2 — QUICKSTART.md
+  ════════════════════════════════ -->
   <div class="slide" id="s2">
+    <div class="slide-title">Open <span>QUICKSTART.md</span>
+      <span style="font-size:12px;color:#475569;font-weight:400;font-family:inherit;background:none;border:none;margin-left:12px">
+        Set <code style="color:#818cf8;font-size:11px">$REPO</code> once — every command below uses it
+      </span>
+    </div>
+    <div class="qs-layout">
+      <div class="qs-md">
+        <div class="qs-md-bar">
+          <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
+          <div class="qs-md-title">QUICKSTART.md — agentshield — Visual Studio Code</div>
+        </div>
+        <div class="qs-md-body">
+          <div class="md-h1"># AgentShield — Quick Start</div>
+          <div class="md-note">You cloned the repo — now follow this file top to bottom.</div>
+
+          <div class="md-h2-teal">## 1 — Set your target repo path</div>
+          <div class="md-code md-code-teal">export REPO=/absolute/path/to/your-agent-repo<div class="md-badge md-badge-teal" id="mb0">SET FIRST</div></div>
+
+          <div class="md-h2">## 2 — Install AgentShield</div>
+          <div class="md-code md-code-ind" id="mci">pip install -e ".[semgrep,dev]"
+agentshield --version<div class="md-badge md-badge-ind" id="mb1">INSTALL</div></div>
+
+          <div class="md-h2">## 3 — Run the Tier 1 scan</div>
+          <div class="md-code md-code-blue" id="mcs">agentshield scan $REPO --scan-all-files<div class="md-badge md-badge-blue" id="mb2">SCAN</div></div>
+
+          <div class="md-h2">## 4 — Tier 2 + Emulator &nbsp;<span style="color:#34d399;font-size:10px">(VS Code + Copilot)</span></div>
+          <div class="md-code" style="color:#808080;border-color:rgba(16,185,129,.2);background:rgba(16,185,129,.04)">Open $REPO in VS Code → paste SKILL.md → paste AGENT_EMULATOR_SKILL.md</div>
+
+          <div class="md-h2">## 5 — Generate report</div>
+          <div class="md-code md-code-pur" id="mcm">agentshield merge $REPO --output-html report.html
+open report.html<div class="md-badge md-badge-pur" id="mb4">MERGE</div></div>
+        </div>
+      </div>
+      <div class="qs-ann">
+        <div class="ann-hdr" style="margin-bottom:6px">What each block does</div>
+        <div class="ann-card ann-teal show">
+          <div class="ann-step">Step 1</div>
+          <div class="ann-title">Point at your repo</div>
+          <div class="ann-desc">One variable. Set it once up front — every command reads <code style="color:#22d3ee;font-size:10px">$REPO</code>.</div>
+        </div>
+        <div class="ann-card ann-ind" id="ann1">
+          <div class="ann-step">Step 2 — Install</div>
+          <div class="ann-title">AgentShield CLI installed</div>
+          <div class="ann-desc">Bundles Semgrep. ~60s once. Done when you see <code style="color:#4ade80;font-size:10px">agentshield 4.x.x</code></div>
+        </div>
+        <div class="ann-card ann-blue" id="ann2">
+          <div class="ann-step">Step 3 — Scan</div>
+          <div class="ann-title">70+ rules fire against your code</div>
+          <div class="ann-desc">Writes <code style="color:#818cf8;font-size:10px">.agentshield/SKILL.md</code> for the Copilot step.</div>
+        </div>
+        <div class="ann-card ann-grn" id="ann3">
+          <div class="ann-step">Step 4 — Copilot</div>
+          <div class="ann-title">Tier 2 + 14 attack classes</div>
+          <div class="ann-desc">Paste two skill files into Copilot Chat. Writes tier2 + emulation JSON.</div>
+        </div>
+        <div class="ann-card ann-pur" id="ann4">
+          <div class="ann-step">Step 5 — Report</div>
+          <div class="ann-title">Unified HTML report</div>
+          <div class="ann-desc">D/D/R findings · fix guidance · OWASP LLM · MITRE ATLAS · CWE.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       SLIDE 3 — Execution
+  ════════════════════════════════ -->
+  <div class="slide" id="s3">
     <div class="slide-hdr">
       <div>
         <div class="eyebrow" style="margin-bottom:3px">Executing QUICKSTART.md</div>
         <div class="slide-hdr-title">What runs when you follow the file</div>
       </div>
-      <div class="slide-hdr-sub" style="margin-left:auto;text-align:right">
-        <code style="font-size:11px;color:#818cf8;background:rgba(99,102,241,.1);padding:3px 9px;border-radius:4px">$REPO</code> is set to your agent repo path
+      <div style="margin-left:auto;font-size:11.5px;color:#334155">
+        <code style="font-size:11px;color:#22d3ee;background:rgba(6,182,212,.1);padding:3px 9px;border-radius:4px">$REPO</code> = your agent repo path
       </div>
     </div>
     <div class="exec-layout">
-
-      <!-- Phase tracker -->
       <div class="phase-track">
 
-        <div class="phase-item" id="ph1">
+        <div class="phase-item ph-teal" id="ph0">
+          <div class="phase-icon-col">
+            <div class="phase-circle" id="pc0">⎇</div>
+          </div>
+          <div class="phase-body">
+            <div class="phase-name">Clone AgentShield</div>
+            <div class="phase-detail" id="pd0">git clone …/agentshield</div>
+          </div>
+        </div>
+        <div class="phase-conn" id="pconn0"></div>
+
+        <div class="phase-item ph-ind" id="ph1">
           <div class="phase-icon-col">
             <div class="phase-circle" id="pc1">1</div>
           </div>
           <div class="phase-body">
-            <div class="phase-name">Install</div>
-            <div class="phase-detail" id="pd1">pip install agentshield</div>
+            <div class="phase-name">Set target + Install</div>
+            <div class="phase-detail" id="pd1">export $REPO · pip install</div>
           </div>
         </div>
-        <div class="phase-divider" id="pdiv1"><div class="phase-conn"></div></div>
+        <div class="phase-conn" id="pconn1"></div>
 
         <div class="phase-item ph-blue" id="ph2">
           <div class="phase-icon-col">
             <div class="phase-circle" id="pc2">2</div>
           </div>
           <div class="phase-body">
-            <div class="phase-name">Scan</div>
+            <div class="phase-name">Tier 1 Scan</div>
             <div class="phase-detail" id="pd2">agentshield scan $REPO</div>
           </div>
         </div>
-        <div class="phase-divider" id="pdiv2"><div class="phase-conn"></div></div>
+        <div class="phase-conn" id="pconn2"></div>
 
-        <div class="phase-item ph-green" id="ph3">
+        <div class="phase-item ph-grn" id="ph3">
           <div class="phase-icon-col">
             <div class="phase-circle" id="pc3">3</div>
           </div>
           <div class="phase-body">
-            <div class="phase-name">Copilot</div>
+            <div class="phase-name">Copilot Analysis</div>
             <div class="phase-detail" id="pd3">VS Code + Copilot Chat</div>
           </div>
         </div>
-        <div class="phase-divider" id="pdiv3"><div class="phase-conn"></div></div>
+        <div class="phase-conn" id="pconn3"></div>
 
-        <div class="phase-item ph-purple" id="ph4">
+        <div class="phase-item ph-pur" id="ph4">
           <div class="phase-icon-col">
             <div class="phase-circle" id="pc4">4</div>
           </div>
           <div class="phase-body">
-            <div class="phase-name">Merge</div>
+            <div class="phase-name">Generate Report</div>
             <div class="phase-detail" id="pd4">agentshield merge $REPO</div>
           </div>
         </div>
 
-        <!-- output summary (appears at end) -->
-        <div style="margin-top:20px;padding:12px;background:rgba(52,211,153,.06);
-          border:1px solid rgba(52,211,153,.18);border-radius:8px;
-          opacity:0;transition:opacity .5s;font-size:11px"
-          id="exec-result">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;
-            text-transform:uppercase;color:#34d399;margin-bottom:7px">Output</div>
-          <div style="color:#4b6280;line-height:1.7">
+        <div class="exec-result" id="exec-result">
+          <div class="exec-result-lbl">All outputs written</div>
+          <div class="exec-result-files">
             <span style="color:#34d399">✓</span> tier1-results.json<br>
             <span style="color:#34d399">✓</span> tier2-findings.json<br>
             <span style="color:#34d399">✓</span> agent-emulation.json<br>
@@ -400,52 +502,52 @@ open report.html<div class="md-hl-badge md-badge-4" id="b4">MERGE</div></div>
         </div>
       </div>
 
-      <!-- VS Code execution window -->
-      <div class="exec-vscode">
+      <div class="vscode">
         <div class="vs-titlebar">
           <div class="vs-dot vs-dot-r"></div><div class="vs-dot vs-dot-y"></div><div class="vs-dot vs-dot-g"></div>
-          <div class="vs-title-lbl">your-agent-repo — Visual Studio Code</div>
+          <div class="vs-title-lbl">agentshield — Visual Studio Code</div>
         </div>
         <div class="vs-tabs-bar">
           <div class="vs-tab on">⬛ TERMINAL</div>
         </div>
         <div class="vs-term-hdr">
-          <div class="vs-term-tab on">▶ zsh &nbsp;<span style="font-size:9px;opacity:.4">+</span></div>
+          <div class="vs-term-tab on">▶ zsh <span style="font-size:9px;opacity:.4">+</span></div>
           <div style="margin-left:auto;font-size:10px;color:#444">✕</div>
         </div>
         <div class="vs-term-body" id="exec-term"></div>
         <div class="vs-statusbar">
           <div class="vs-sbi">⎇ <strong>main</strong></div>
-          <div class="vs-sbi">⚠ 0 &nbsp; ℹ 0</div>
-          <div class="vs-sbi vs-sbi-r" id="exec-sbar">Python 3.11.0 | zsh</div>
+          <div class="vs-sbi">⚠ 0 ℹ 0</div>
+          <div class="vs-sbi vs-sbi-r">Python 3.11.0 | zsh</div>
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- ════════ SLIDE 3 — Summary ════════ -->
-  <div class="slide" id="s3">
+  <!-- ════════════════════════════════
+       SLIDE 4 — Summary
+  ════════════════════════════════ -->
+  <div class="slide" id="s4">
     <div class="sum-hdr">
       <div class="eyebrow" style="margin-bottom:6px">Done</div>
-      <div style="font-size:26px;font-weight:700;color:#f8fafc">Follow QUICKSTART.md — four commands, one report.</div>
+      <div style="font-size:25px;font-weight:700;color:#f8fafc">Clone → follow QUICKSTART.md → one unified report.</div>
     </div>
     <div class="sum-grid">
-      <div class="sum-card sc1" id="sc1">
-        <div class="sum-num">Step 0 + 1 — Install</div>
-        <div class="sum-name">export REPO= &nbsp;·&nbsp; pip install</div>
-        <div class="sum-desc">Set target once · Semgrep auto-bundled · CLI ready in ~60s</div>
-        <div class="sum-cmd">agentshield --version</div>
+      <div class="sum-card sc0" id="sc0">
+        <div class="sum-num">Before — Clone AgentShield</div>
+        <div class="sum-name">Gets you QUICKSTART.md + CLI source</div>
+        <div class="sum-desc">One command — everything you need is in the repo</div>
+        <div class="sum-cmd">git clone https://github.com/your-org/agentshield.git</div>
       </div>
       <div class="sum-card sc2" id="sc2">
-        <div class="sum-num">Step 2 — Tier 1 Scan</div>
-        <div class="sum-name">70+ Semgrep rules · skill files emitted</div>
-        <div class="sum-desc">Code + manifests · Deterministic · tier1-results.json</div>
+        <div class="sum-num">Steps 1–2 — Set target + Scan</div>
+        <div class="sum-name">export $REPO → 70+ Semgrep rules fire</div>
+        <div class="sum-desc">Code + manifests · tier1-results.json · skill files emitted</div>
         <div class="sum-cmd">agentshield scan $REPO --scan-all-files</div>
       </div>
       <div class="sum-card sc3" id="sc3">
         <div class="sum-num">Step 3 — Tier 2 + Emulator</div>
-        <div class="sum-name">VS Code + Copilot Chat · 14 attack classes</div>
+        <div class="sum-name">Copilot Chat · LLM judge · 14 attack classes</div>
         <div class="sum-desc">Paste SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
         <div class="sum-cmd">tier2-findings.json + agent-emulation.json</div>
       </div>
@@ -459,203 +561,183 @@ open report.html<div class="md-hl-badge md-badge-4" id="b4">MERGE</div></div>
   </div>
 
   </div><!-- /deck -->
-
   <div id="controls">
     <button class="ctrl" id="btnPrev">&#9664;</button>
     <button class="ctrl" id="btnPlay">&#9646;&#9646;</button>
     <button class="ctrl" id="btnNext">&#9654;</button>
     <div id="prog-track"><div id="prog-fill"></div></div>
     <div class="inds" id="inds"></div>
-    <div id="ctr">1 / 4</div>
+    <div id="ctr">1 / 5</div>
     <div class="hint">← → Space · P</div>
   </div>
 </div>
 
 <script>
-const TOTAL = 4;
-const SLIDE_IDS = ['s0','s1','s2','s3'];
+const TOTAL = 5;
+const SLIDE_IDS = ['s0','s1','s2','s3','s4'];
 let cur = 0, playing = true;
 let slideTimer = null, twTimer = null;
 
-// ── Terminal scripts ──
-const EXEC_SCRIPT = [
-  // [text, delayBefore, charDelay, isOutput]
-  { t: '❯ git clone https://github.com/your-org/agentshield.git\n', d:0,   s:18 },
-  { t: '  Cloning into \'agentshield\'... ✔\n',                      d:200, s:8, out:true },
-  { t: '❯ cd agentshield\n',                                         d:100, s:18 },
-  { t: '❯ pip install -e ".[semgrep,dev]"\n',                        d:100, s:18 },
-  { t: '  Installing semgrep, agentshield...\n',                     d:200, s:8, out:true },
-  { t: '  ✔  agentshield 4.0.0 installed\n',                        d:100, s:8, out:true },
-  { t: '❯ agentshield --version\n',                                  d:100, s:18 },
-  { t: '  agentshield 4.0.0\n\n',                                    d:150, s:8, out:true },
-  // phase 2 marker
-  { t: '❯ agentshield scan $REPO --scan-all-files\n',                d:0,   s:18, ph:2 },
-  { t: '  [agentshield] Running 70+ semgrep rules...\n',             d:200, s:8, out:true },
-  { t: '  [agentshield]   scanning controller.py\n',                 d:100, s:8, out:true },
-  { t: '  [agentshield]   scanning orchestrator.py\n',               d:80,  s:8, out:true },
-  { t: '  [agentshield]   scanning tools.py\n',                      d:80,  s:8, out:true },
-  { t: '  [agentshield] ✓  Tier 1: 40 findings\n',                  d:150, s:8, out:true },
-  { t: '  [agentshield] ✓  Wrote tier1-results.json\n',             d:80,  s:8, out:true },
-  { t: '  [agentshield] ✓  Wrote .agentshield/SKILL.md\n',          d:80,  s:8, out:true },
-  { t: '  [agentshield] ✓  Wrote .agentshield/AGENT_EMULATOR_SKILL.md\n\n', d:80, s:8, out:true },
-  // phase 3 marker
-  { t: '  # Opening VS Code + Copilot Chat...\n',                    d:0,   s:8, out:true, ph:3 },
-  { t: '  # Copilot reading source files...\n',                      d:400, s:8, out:true },
-  { t: '  # ✓  tier2-findings.json written\n',                      d:500, s:8, out:true },
-  { t: '  # ✓  agent-emulation.json written\n\n',                   d:400, s:8, out:true },
-  // phase 4 marker
-  { t: '❯ agentshield merge $REPO --output-html report.html\n',      d:0,   s:18, ph:4 },
-  { t: '  [agentshield] ✓  Merging Tier 1 + Tier 2 + Emulator\n',   d:200, s:8, out:true },
-  { t: '  [agentshield] Net actionable findings: 40\n',              d:100, s:8, out:true },
-  { t: '  [agentshield] ✓  Wrote: report.html\n',                   d:100, s:8, out:true },
-  { t: '  [agentshield] ✓  Wrote: report-print.html\n',             d:80,  s:8, out:true },
+// ── Clone terminal script ─────────────────────────────────────
+const CLONE_SCRIPT = [
+  { t:'❯ git clone https://github.com/your-org/agentshield.git\n', s:18, col:'#e2e8f0' },
+  { t:"  Cloning into 'agentshield'...\n", s:8, d:200, col:'#4b6280' },
+  { t:'  remote: Enumerating objects: 1,284, done.\n', s:8, d:80, col:'#4b6280' },
+  { t:'  ✔  Done.\n\n', s:8, d:100, col:'#22d3ee' },
+  { t:'❯ cd agentshield\n', s:18, d:100, col:'#e2e8f0' },
+  { t:'❯ ls\n', s:18, d:80, col:'#e2e8f0' },
+  { t:'  QUICKSTART.md  INSTALL.md  README.md  agentshield/  pyproject.toml\n\n', s:6, d:150, col:'#4b6280' },
+  { t:'❯ code QUICKSTART.md\n', s:18, d:200, col:'#e2e8f0' },
+  { t:'  Opening in VS Code...', s:8, d:300, col:'#4b6280' },
 ];
 
-// ── Helpers ──
+// ── Execution terminal script ─────────────────────────────────
+const EXEC_SCRIPT = [
+  { t:'❯ export REPO=/your/agent/repo\n', s:18, col:'#e2e8f0' },
+  { t:'\n', s:5 },
+  { t:'❯ pip install -e ".[semgrep,dev]"\n', s:18, col:'#e2e8f0', ph:1 },
+  { t:'  Collecting semgrep, agentshield...\n', s:8, d:200, col:'#4b6280' },
+  { t:'  ✔  agentshield 4.0.0 installed\n', s:8, d:100, col:'#22d3ee' },
+  { t:'❯ agentshield --version\n', s:18, d:100, col:'#e2e8f0' },
+  { t:'  agentshield 4.0.0\n\n', s:8, d:120, col:'#4b6280' },
+  { t:'❯ agentshield scan $REPO --scan-all-files\n', s:18, col:'#e2e8f0', ph:2 },
+  { t:'  [agentshield] Running 70+ semgrep rules...\n', s:8, d:180, col:'#4b6280' },
+  { t:'  [agentshield]   scanning controller.py\n', s:8, d:80, col:'#4b6280' },
+  { t:'  [agentshield]   scanning orchestrator.py\n', s:8, d:70, col:'#4b6280' },
+  { t:'  [agentshield]   scanning tools.py\n', s:8, d:70, col:'#4b6280' },
+  { t:'  [agentshield] ✓  40 findings\n', s:8, d:140, col:'#22d3ee' },
+  { t:'  [agentshield] ✓  Wrote .agentshield/SKILL.md\n', s:8, d:70, col:'#22d3ee' },
+  { t:'  [agentshield] ✓  Wrote .agentshield/AGENT_EMULATOR_SKILL.md\n\n', s:8, d:70, col:'#22d3ee' },
+  { t:'  # Step 3: open VS Code + paste SKILL.md into Copilot Chat\n', s:8, col:'#334155', ph:3 },
+  { t:'  # Copilot reading source files...\n', s:8, d:350, col:'#334155' },
+  { t:'  # ✓  tier2-findings.json written\n', s:8, d:450, col:'#22d3ee' },
+  { t:'  # ✓  agent-emulation.json written\n\n', s:8, d:350, col:'#22d3ee' },
+  { t:'❯ agentshield merge $REPO --output-html report.html\n', s:18, col:'#e2e8f0', ph:4 },
+  { t:'  [agentshield] ✓  Merging Tier 1 + Tier 2 + Emulator\n', s:8, d:180, col:'#4b6280' },
+  { t:'  [agentshield] Net actionable findings: 40\n', s:8, d:100, col:'#4b6280' },
+  { t:'  [agentshield] ✓  Wrote: report.html\n', s:8, d:100, col:'#22d3ee' },
+  { t:'  [agentshield] ✓  Wrote: report-print.html\n', s:8, d:80, col:'#22d3ee' },
+];
+
+// ── Helpers ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const clearST = () => { if(slideTimer){clearTimeout(slideTimer);slideTimer=null;} };
 const clearTW = () => { if(twTimer){clearTimeout(twTimer);twTimer=null;} };
 function scheduleNext(ms){ if(!playing) return; slideTimer=setTimeout(()=>{if(playing)goTo(cur+1);},ms); }
-function showEls(...ids){ ids.forEach((id,i)=>setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},300+i*320)); }
+function showEls(...ids){ ids.forEach((id,i)=>setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},320+i*320)); }
 
 function setPhase(n, state) {
-  // state: 'active' | 'done'
-  const el = $('ph'+n);
-  if (!el) return;
-  if (state === 'active') {
-    el.classList.add('active');
-    el.classList.remove('done');
+  const el=$('ph'+n); if(!el) return;
+  if(state==='active'){
+    el.classList.add('active'); el.classList.remove('done');
   } else {
-    el.classList.remove('active');
-    el.classList.add('done');
-    const pc = $('pc'+n);
-    if (pc) pc.textContent = '✓';
-    const pd = $('pd'+n);
-    if (pd) {
-      const labels = {1:'✓ agentshield CLI ready',2:'✓ 40 findings · skill files written',
-                      3:'✓ tier2 + emulation JSON written',4:'✓ report.html ready'};
-      pd.textContent = labels[n] || '';
-    }
-    // light up connector
-    const div = $('pdiv'+n);
-    if (div) div.classList.add('lit');
+    el.classList.remove('active'); el.classList.add('done');
+    const pc=$('pc'+n); if(pc) pc.textContent='✓';
+    const pd=$('pd'+n);
+    const doneLabels={0:'✓ QUICKSTART.md + CLI source',1:'✓ agentshield CLI ready',
+                      2:'✓ 40 findings · skill files',3:'✓ tier2 + emulation JSON',4:'✓ report.html ready'};
+    if(pd) pd.textContent=doneLabels[n]||'';
+    const conn=$('pconn'+n); if(conn) conn.classList.add('lit');
   }
 }
 
-// ── Typewriter for execution terminal ──
-function runExecScript(onDone) {
-  const termEl = $('exec-term');
-  if (!termEl) return;
-  termEl.innerHTML = '';
-  const cursorEl = document.createElement('span');
-  cursorEl.className = 'cursor';
-  termEl.appendChild(cursorEl);
-
-  let lineIdx = 0;
-
-  function runLine() {
-    if (lineIdx >= EXEC_SCRIPT.length) {
-      cursorEl.remove();
-      if (onDone) onDone();
-      return;
+// ── Typewriter ────────────────────────────────────────────────
+function runScript(targetId, lines, onDone) {
+  const el=$(targetId); if(!el){ if(onDone) onDone(); return; }
+  el.innerHTML='';
+  const cur=document.createElement('span'); cur.className='cursor'; el.appendChild(cur);
+  let li=0;
+  function runLine(){
+    if(li>=lines.length){ cur.remove(); if(onDone) setTimeout(onDone,300); return; }
+    const line=lines[li++];
+    if(line.ph) {
+      if(line.ph===1){setPhase(0,'done');setPhase(1,'active');}
+      if(line.ph===2){setPhase(1,'done');setPhase(2,'active');}
+      if(line.ph===3){setPhase(2,'done');setPhase(3,'active');}
+      if(line.ph===4){setPhase(3,'done');setPhase(4,'active');}
     }
-    const line = EXEC_SCRIPT[lineIdx];
-    lineIdx++;
-
-    // Phase marker — trigger phase state change
-    if (line.ph) {
-      if (line.ph === 2) { setPhase(1, 'done'); setPhase(2, 'active'); }
-      if (line.ph === 3) { setPhase(2, 'done'); setPhase(3, 'active'); }
-      if (line.ph === 4) { setPhase(3, 'done'); setPhase(4, 'active'); }
-    }
-
-    const color = line.out ? '#4b6280' : (line.t.startsWith('  #') ? '#334155' : '#e2e8f0');
-    const charDelay = line.s || 20;
-
-    setTimeout(() => {
-      let ci = 0;
-      const chars = line.t;
-      function typeTick() {
-        if (ci >= chars.length) {
-          runLine();
-          return;
-        }
-        const span = document.createElement('span');
-        span.style.color = color;
-        span.textContent = chars[ci];
-        cursorEl.before(span);
-        ci++;
-        twTimer = setTimeout(typeTick, charDelay);
+    const color=line.col||'#ccc';
+    const charDelay=line.s||20;
+    setTimeout(()=>{
+      let ci=0; const chars=line.t||'';
+      function tick(){
+        if(ci>=chars.length){ runLine(); return; }
+        const span=document.createElement('span');
+        span.style.color=color; span.textContent=chars[ci];
+        cur.before(span); ci++;
+        twTimer=setTimeout(tick,charDelay);
       }
-      typeTick();
-    }, line.d || 0);
+      tick();
+    }, line.d||0);
   }
-
-  // start phase 1
-  setPhase(1, 'active');
   runLine();
 }
 
-// ── Per-slide animation ──
-function animateSlide(n) {
+// ── Slide animations ──────────────────────────────────────────
+function animateSlide(n){
   clearTW();
-  if (n === 0) {
-    scheduleNext(3600);
-  } else if (n === 1) {
-    // Show annotation cards one by one
-    ['b0','b1','b2','b4'].forEach((id,i) =>
-      setTimeout(()=>{ const c=$(id); if(c) c.classList.add('show'); }, 300+i*500));
+  if(n===0){
+    scheduleNext(3800);
+  } else if(n===1){
+    setPhase(0,'active');
+    runScript('tc_clone', CLONE_SCRIPT, ()=>{
+      showEls('cann1');
+      setTimeout(()=>{ ['cf-qs','cf-in','cf-py','cf-pp'].forEach((id,i)=>setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},i*250)); },400);
+      setTimeout(()=>showEls('cann2'),1200);
+      scheduleNext(2000);
+    });
+  } else if(n===2){
+    ['mb0','mb1','mb2','mb4'].forEach((id,i)=>
+      setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},400+i*500));
     showEls('ann1','ann2','ann3','ann4');
-    scheduleNext(4800);
-  } else if (n === 2) {
-    runExecScript(() => {
-      setPhase(4, 'done');
-      setTimeout(() => { const r=$('exec-result'); if(r) r.style.opacity='1'; }, 300);
+    scheduleNext(5000);
+  } else if(n===3){
+    setPhase(0,'active');
+    runScript('exec-term', EXEC_SCRIPT, ()=>{
+      setPhase(4,'done');
+      setTimeout(()=>{const r=$('exec-result');if(r)r.style.opacity='1';},300);
       scheduleNext(1800);
     });
-  } else if (n === 3) {
-    ['sc1','sc2','sc3','sc4'].forEach((id,i) =>
-      setTimeout(()=>{ const c=$(id); if(c) c.classList.add('show'); }, 280+i*340));
-    setTimeout(()=>{ playing=false; updateUI(); }, 280+3*340+400);
+  } else if(n===4){
+    ['sc0','sc2','sc3','sc4'].forEach((id,i)=>
+      setTimeout(()=>{const c=$(id);if(c)c.classList.add('show');},280+i*340));
+    setTimeout(()=>{playing=false;updateUI();},280+3*340+400);
   }
 }
 
-// ── Reset ──
-function resetAll() {
-  document.querySelectorAll('.out-chip,.ann-card,.sum-card,.md-hl-badge').forEach(c=>c.classList.remove('show'));
-  const execRes = $('exec-result'); if(execRes) execRes.style.opacity='0';
-  const t=$('exec-term'); if(t) t.innerHTML='';
-  [1,2,3,4].forEach(n=>{
+// ── Reset ─────────────────────────────────────────────────────
+function resetAll(){
+  document.querySelectorAll('.ann-card,.clone-ann,.cann-file,.sum-card,.md-badge').forEach(c=>c.classList.remove('show'));
+  const r=$('exec-result'); if(r) r.style.opacity='0';
+  ['tc_clone','exec-term'].forEach(id=>{const e=$(id);if(e)e.innerHTML='';});
+  [0,1,2,3,4].forEach(n=>{
     const el=$('ph'+n); if(!el) return;
     el.classList.remove('active','done');
-    const pc=$('pc'+n); if(pc) pc.textContent=n;
+    const pc=$('pc'+n); if(pc) pc.textContent=n===0?'⎇':String(n);
     const pd=$('pd'+n);
-    const defaults={1:'pip install agentshield',2:'agentshield scan $REPO',
-                    3:'VS Code + Copilot Chat',4:'agentshield merge $REPO'};
-    if(pd) pd.textContent=defaults[n];
-    const div=$('pdiv'+n); if(div) div.classList.remove('lit');
+    const def={0:'git clone …/agentshield',1:'export $REPO · pip install',
+               2:'agentshield scan $REPO',3:'VS Code + Copilot Chat',4:'agentshield merge $REPO'};
+    if(pd) pd.textContent=def[n]||'';
+    const conn=$('pconn'+n); if(conn) conn.classList.remove('lit');
   });
 }
 
-// ── Navigation ──
-function goTo(n) {
-  if (n<0||n>=TOTAL) return;
-  clearST(); clearTW();
-  resetAll();
+// ── Navigation ────────────────────────────────────────────────
+function goTo(n){
+  if(n<0||n>=TOTAL) return;
+  clearST(); clearTW(); resetAll();
   $(SLIDE_IDS[cur])?.classList.remove('active');
   cur=n;
   $(SLIDE_IDS[cur])?.classList.add('active');
   updateUI();
-  if (playing) animateSlide(cur);
+  if(playing) animateSlide(cur);
 }
-
-function togglePlay() {
+function togglePlay(){
   playing=!playing;
-  if(playing){ animateSlide(cur); } else { clearST(); clearTW(); }
+  if(playing){animateSlide(cur);}else{clearST();clearTW();}
   updateUI();
 }
-
-function updateUI() {
+function updateUI(){
   $('prog-fill').style.width=(cur/(TOTAL-1)*100)+'%';
   $('ctr').textContent=(cur+1)+' / '+TOTAL;
   $('btnPlay').innerHTML=playing?'&#9646;&#9646;':'&#9654;';
