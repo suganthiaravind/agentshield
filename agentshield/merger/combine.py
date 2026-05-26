@@ -1465,7 +1465,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                 verdict=lyr_verdict,
                 conf=lyr_conf,
                 attack_question=attack_question,
-                show_attack_plan=is_lyr_active,
+                show_attack_plan=(lyr == ordered_layers[0]),
                 is_seed_wrapper=True,
                 is_active=is_lyr_active,
             )
