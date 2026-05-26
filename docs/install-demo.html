@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AgentShield — Getting Started</title>
+<style>
+/* ── Reset ─────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000}
+body{
+  display:flex;align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+}
+
+/* ── Stage: fixed 16:9 canvas ───────────────────────────────── */
+#stage{
+  position:relative;
+  width:1280px;height:720px;
+  background:linear-gradient(145deg,#0d1425 0%,#131d33 60%,#0f1929 100%);
+  overflow:hidden;flex-shrink:0;
+}
+.bg-glow{position:absolute;pointer-events:none;border-radius:50%}
+.bg-glow-a{
+  top:-140px;right:-140px;width:480px;height:480px;
+  background:radial-gradient(circle,rgba(99,102,241,.09) 0%,transparent 65%);
+}
+.bg-glow-b{
+  bottom:-100px;left:-100px;width:400px;height:400px;
+  background:radial-gradient(circle,rgba(139,92,246,.07) 0%,transparent 65%);
+}
+
+/* ── Slide deck ─────────────────────────────────────────────── */
+#deck{position:absolute;inset:0 0 54px 0}
+.slide{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:44px 68px;
+  opacity:0;transition:opacity .55s ease;pointer-events:none;
+}
+.slide.active{opacity:1;pointer-events:all}
+
+/* ── Shared typography ──────────────────────────────────────── */
+.eyebrow{
+  font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  background:linear-gradient(90deg,#818cf8,#a78bfa);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;margin-bottom:10px;
+}
+.slide-title{font-size:28px;font-weight:700;color:#f8fafc;line-height:1.2}
+
+/* ── Slide 0: Title ─────────────────────────────────────────── */
+#s0{gap:0}
+.brand{
+  font-size:56px;font-weight:800;color:#f8fafc;
+  letter-spacing:-.02em;margin-bottom:10px;line-height:1;
+}
+.brand span{
+  background:linear-gradient(90deg,#818cf8,#c084fc);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.brand-sub{font-size:16px;color:#475569;margin-bottom:32px}
+.prereq-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.prereq-chip{
+  font-size:12.5px;color:#64748b;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:7px;padding:7px 15px;
+}
+
+/* ── Step slides layout ─────────────────────────────────────── */
+.step-layout{width:100%;display:flex;gap:40px;align-items:flex-start}
+.step-meta{flex:0 0 260px;display:flex;flex-direction:column}
+.step-badge{
+  width:46px;height:46px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;margin-bottom:16px;
+}
+.step-tier{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.step-name{font-size:28px;font-weight:700;color:#f8fafc;line-height:1.15;margin-bottom:10px}
+.step-info{font-size:13px;color:#475569;line-height:1.55;margin-bottom:22px}
+.out-label{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#1e3a5f;margin-bottom:7px}
+.out-chips{display:flex;flex-direction:column;gap:6px}
+.out-chip{
+  font-family:'SF Mono',Consolas,monospace;
+  font-size:11px;color:#2d4060;
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);
+  border-radius:4px;padding:4px 11px;
+  opacity:0;transform:translateX(-6px);
+  transition:opacity .35s ease,transform .35s ease;
+  width:fit-content;
+}
+.out-chip.show{opacity:1;transform:none}
+
+/* step colour tokens */
+.s1 .step-badge{background:rgba(99,102,241,.2);color:#a5b4fc}
+.s1 .step-tier{color:#818cf8}
+.s2 .step-badge{background:rgba(59,130,246,.2);color:#93c5fd}
+.s2 .step-tier{color:#60a5fa}
+.s3 .step-badge{background:rgba(16,185,129,.2);color:#6ee7b7}
+.s3 .step-tier{color:#34d399}
+.s4 .step-badge{background:rgba(139,92,246,.2);color:#c4b5fd}
+.s4 .step-tier{color:#c084fc}
+
+/* ── Terminal window ────────────────────────────────────────── */
+.step-body{flex:1;min-width:0}
+.terminal{
+  background:#080e1a;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:11px;overflow:hidden;
+  box-shadow:0 10px 40px rgba(0,0,0,.55);
+}
+.term-bar{
+  background:#101623;padding:11px 14px;
+  display:flex;align-items:center;gap:7px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.dot{width:12px;height:12px;border-radius:50%}
+.dot-r{background:#ff5f56}.dot-y{background:#ffbd2e}.dot-g{background:#27c93f}
+.term-title{flex:1;text-align:center;font-size:11px;color:#2d4060;margin-right:38px}
+.term-body{padding:22px 24px;min-height:220px}
+.term-code{
+  font-family:'SF Mono',Consolas,'Courier New',monospace;
+  font-size:13.5px;color:#e2e8f0;line-height:1.75;
+  white-space:pre;
+}
+
+/* cursor blink */
+.cursor{
+  display:inline-block;width:2px;height:15px;
+  background:#818cf8;vertical-align:text-bottom;
+  animation:blink .8s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Copilot step (slide 3) ─────────────────────────────────── */
+.copilot-card{
+  flex:1;
+  background:rgba(16,185,129,.05);
+  border:1px solid rgba(16,185,129,.18);
+  border-radius:11px;padding:26px 28px;
+  box-shadow:0 0 30px rgba(16,185,129,.04);
+}
+.copilot-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:#34d399;background:rgba(16,185,129,.1);
+  border:1px solid rgba(16,185,129,.2);border-radius:5px;
+  padding:5px 12px;margin-bottom:18px;
+}
+.copilot-steps{display:flex;flex-direction:column;gap:12px}
+.cs{
+  display:flex;align-items:flex-start;gap:12px;
+  opacity:0;transform:translateX(10px);
+  transition:opacity .4s ease,transform .4s ease;
+}
+.cs.show{opacity:1;transform:none}
+.cs-num{
+  width:24px;height:24px;border-radius:50%;flex-shrink:0;margin-top:2px;
+  background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.25);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9.5px;font-weight:700;color:#34d399;
+}
+.cs-text{font-size:14px;color:#4b6280;line-height:1.55}
+.cs-text strong{color:#94a3b8}
+
+/* ── Summary slide ──────────────────────────────────────────── */
+#s5 .slide-title{margin-bottom:26px}
+.sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%}
+.sum-card{
+  border-radius:10px;padding:18px 20px;
+  position:relative;overflow:hidden;
+  opacity:0;transform:translateY(14px);
+  transition:opacity .4s ease,transform .4s ease;
+}
+.sum-card.show{opacity:1;transform:none}
+.sum-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+}
+.sc1{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2)}
+.sc1::before{background:linear-gradient(90deg,#4338ca,#818cf8)}
+.sc2{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2)}
+.sc2::before{background:linear-gradient(90deg,#1d4ed8,#60a5fa)}
+.sc3{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.2)}
+.sc3::before{background:linear-gradient(90deg,#065f46,#34d399)}
+.sc4{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2)}
+.sc4::before{background:linear-gradient(90deg,#5b21b6,#c084fc)}
+.sum-num{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.sc1 .sum-num{color:#818cf8}.sc2 .sum-num{color:#60a5fa}
+.sc3 .sum-num{color:#34d399}.sc4 .sum-num{color:#c084fc}
+.sum-name{font-size:15.5px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.sum-desc{font-size:11px;color:#334155;margin-bottom:9px}
+.sum-cmd{
+  font-family:'SF Mono',Consolas,monospace;
+  font-size:10.5px;color:#4ade80;
+  background:rgba(0,0,0,.3);border-radius:4px;
+  padding:5px 10px;
+}
+
+/* ── Controls bar ───────────────────────────────────────────── */
+#controls{
+  position:absolute;bottom:0;left:0;right:0;height:54px;
+  background:rgba(5,10,20,.7);border-top:1px solid rgba(255,255,255,.05);
+  backdrop-filter:blur(8px);
+  display:flex;align-items:center;padding:0 22px;gap:14px;
+}
+.ctrl{
+  background:none;border:none;color:#334155;cursor:pointer;
+  font-size:15px;padding:5px 8px;border-radius:5px;
+  transition:color .2s;line-height:1;
+}
+.ctrl:hover{color:#94a3b8}
+#prog-track{
+  flex:1;height:3px;background:rgba(255,255,255,.07);
+  border-radius:2px;cursor:pointer;position:relative;
+}
+#prog-fill{
+  height:100%;
+  background:linear-gradient(90deg,#6366f1,#a78bfa);
+  border-radius:2px;width:0%;transition:width .3s;
+}
+.indicators{display:flex;gap:5px;align-items:center}
+.ind{
+  width:7px;height:7px;border-radius:50%;
+  background:rgba(255,255,255,.1);cursor:pointer;
+  transition:background .25s,width .25s,border-radius .25s;
+}
+.ind.on{width:20px;border-radius:3px;background:#6366f1}
+#counter{font-size:11px;color:#1e3a5f;min-width:38px;text-align:right}
+.hint{
+  font-size:10px;color:#1a2d4a;letter-spacing:.04em;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bg-glow bg-glow-a"></div>
+  <div class="bg-glow bg-glow-b"></div>
+
+  <div id="deck">
+
+    <!-- ── Slide 0: Title ── -->
+    <div class="slide active" id="s0">
+      <div class="eyebrow">Pre-production AI Agent Security</div>
+      <div class="brand">Agent<span>Shield</span></div>
+      <div class="brand-sub">Getting started — four steps from clone to full security report</div>
+      <div class="prereq-row">
+        <span class="prereq-chip">🐍 Python 3.10+</span>
+        <span class="prereq-chip">⎇ Git</span>
+        <span class="prereq-chip">💻 VS Code</span>
+        <span class="prereq-chip">🤖 GitHub Copilot</span>
+        <span class="prereq-chip">🔍 Semgrep <em style="color:#1e3a5f">(auto-installed)</em></span>
+      </div>
+    </div>
+
+    <!-- ── Slide 1: Step 01 ── -->
+    <div class="slide s1" id="s1">
+      <div class="step-layout">
+        <div class="step-meta">
+          <div class="step-badge">01</div>
+          <div class="step-tier">Step One</div>
+          <div class="step-name">Clone &amp;<br>Install</div>
+          <div class="step-info">One-time setup. Creates a virtual environment and installs the AgentShield CLI with Semgrep bundled.</div>
+          <div class="out-label">Output</div>
+          <div class="out-chips">
+            <span class="out-chip" id="oc1a">agentshield CLI ready</span>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="terminal">
+            <div class="term-bar">
+              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+              <div class="term-title">zsh — install</div>
+            </div>
+            <div class="term-body"><div class="term-code" id="tc1"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Slide 2: Step 02 ── -->
+    <div class="slide s2" id="s2">
+      <div class="step-layout">
+        <div class="step-meta">
+          <div class="step-badge">02</div>
+          <div class="step-tier">Step Two</div>
+          <div class="step-name">Tier 1<br>Scan</div>
+          <div class="step-info">Semgrep runs 70+ security rules against your source. Emits Copilot skill files for the next step.</div>
+          <div class="out-label">Outputs</div>
+          <div class="out-chips">
+            <span class="out-chip" id="oc2a">tier1-results.json</span>
+            <span class="out-chip" id="oc2b">.agentshield/ skills</span>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="terminal">
+            <div class="term-bar">
+              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+              <div class="term-title">zsh — tier-1-scan</div>
+            </div>
+            <div class="term-body"><div class="term-code" id="tc2"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Slide 3: Step 03 ── -->
+    <div class="slide s3" id="s3">
+      <div class="step-layout">
+        <div class="step-meta">
+          <div class="step-badge">03</div>
+          <div class="step-tier">Step Three</div>
+          <div class="step-name">Tier 2 +<br>Emulator</div>
+          <div class="step-info">Copilot walks every source file, validates Tier 1 findings, and simulates 14 adversary attack classes against your pipeline.</div>
+          <div class="out-label">Outputs</div>
+          <div class="out-chips">
+            <span class="out-chip" id="oc3a">tier2-findings.json</span>
+            <span class="out-chip" id="oc3b">agent-emulation.json</span>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="copilot-card">
+            <div class="copilot-badge">🤖 Copilot step — VS Code only</div>
+            <div class="copilot-steps">
+              <div class="cs" id="cs1">
+                <div class="cs-num">1</div>
+                <div class="cs-text">Open your agent repo in <strong>VS Code</strong> with Copilot Chat active</div>
+              </div>
+              <div class="cs" id="cs2">
+                <div class="cs-num">2</div>
+                <div class="cs-text">Paste the <strong>SKILL.md</strong> prompt (printed at end of step 02) into Copilot Chat</div>
+              </div>
+              <div class="cs" id="cs3">
+                <div class="cs-num">3</div>
+                <div class="cs-text">Copilot reads every source file and writes <strong>tier2-findings.json</strong></div>
+              </div>
+              <div class="cs" id="cs4">
+                <div class="cs-num">4</div>
+                <div class="cs-text">Paste <strong>AGENT_EMULATOR_SKILL.md</strong> — Copilot writes <strong>agent-emulation.json</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Slide 4: Step 04 ── -->
+    <div class="slide s4" id="s4">
+      <div class="step-layout">
+        <div class="step-meta">
+          <div class="step-badge">04</div>
+          <div class="step-tier">Step Four</div>
+          <div class="step-name">Generate<br>Report</div>
+          <div class="step-info">Merges Tier 1 + Tier 2 + Emulator into one unified D/D/R report with fix guidance and OWASP / MITRE ATLAS / CWE mappings.</div>
+          <div class="out-label">Outputs</div>
+          <div class="out-chips">
+            <span class="out-chip" id="oc4a">report.html</span>
+            <span class="out-chip" id="oc4b">report-print.html</span>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="terminal">
+            <div class="term-bar">
+              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+              <div class="term-title">zsh — merge</div>
+            </div>
+            <div class="term-body"><div class="term-code" id="tc4"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Slide 5: Summary ── -->
+    <div class="slide" id="s5">
+      <div class="eyebrow" style="margin-bottom:6px">Complete</div>
+      <div class="slide-title">Four steps. One report.</div>
+      <div class="sum-grid" style="margin-top:24px">
+        <div class="sum-card sc1" id="sc1">
+          <div class="sum-num">01 — Clone &amp; Install</div>
+          <div class="sum-name">pip install -e ".[semgrep,dev]"</div>
+          <div class="sum-desc">Python venv · Semgrep auto-bundled · CLI ready</div>
+          <div class="sum-cmd">agentshield --version</div>
+        </div>
+        <div class="sum-card sc2" id="sc2">
+          <div class="sum-num">02 — Tier 1 Scan</div>
+          <div class="sum-name">Semgrep · 70+ rules · skill files emitted</div>
+          <div class="sum-desc">Code + manifests · Deterministic · ~30 s</div>
+          <div class="sum-cmd">agentshield scan ./repo --scan-all-files</div>
+        </div>
+        <div class="sum-card sc3" id="sc3">
+          <div class="sum-num">03 — Tier 2 + Emulator</div>
+          <div class="sum-name">Copilot Chat · LLM judge · 14 attack classes</div>
+          <div class="sum-desc">Paste SKILL.md → Paste AGENT_EMULATOR_SKILL.md</div>
+          <div class="sum-cmd">tier2-findings.json + agent-emulation.json</div>
+        </div>
+        <div class="sum-card sc4" id="sc4">
+          <div class="sum-num">04 — Generate Report</div>
+          <div class="sum-name">D/D/R · OWASP LLM · MITRE ATLAS · CWE</div>
+          <div class="sum-desc">HTML · Markdown · SARIF · JSON</div>
+          <div class="sum-cmd">agentshield merge ./repo --output-html report.html</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /deck -->
+
+  <!-- ── Controls ── -->
+  <div id="controls">
+    <button class="ctrl" id="btnPrev" title="Previous (←)">&#9664;</button>
+    <button class="ctrl" id="btnPlay" title="Play / Pause (Space)">&#9646;&#9646;</button>
+    <button class="ctrl" id="btnNext" title="Next (→)">&#9654;</button>
+    <div id="prog-track"><div id="prog-fill"></div></div>
+    <div class="indicators" id="inds"></div>
+    <div id="counter">1 / 6</div>
+    <div class="hint">← → Space · P</div>
+  </div>
+
+</div><!-- /stage -->
+
+<script>
+// ── Config ───────────────────────────────────────────────────
+const TOTAL = 6;
+const SLIDE_IDS = ['s0','s1','s2','s3','s4','s5'];
+
+// Terminal text per step (plain text — rendered verbatim in monospace)
+const SCRIPTS = {
+  tc1:
+`$ git clone git@github.com:suganthiaravind/agentshield.git
+$ cd agentshield
+$ python3.11 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -e ".[semgrep,dev]"
+  ✔  Installed agentshield 4.0.0
+$ agentshield --version
+  agentshield 4.0.0`,
+
+  tc2:
+`$ agentshield scan ./your-agent-repo \\
+      --scan-all-files \\
+      --exclude "**/tests/**"
+
+  [agentshield] Running 70+ semgrep rules...
+  [agentshield] ✓  Tier 1: 40 findings
+  [agentshield] ✓  Skill files → .agentshield/SKILL.md
+  [agentshield] ✓  Emulator skill → .agentshield/AGENT_EMULATOR_SKILL.md`,
+
+  tc4:
+`$ agentshield merge ./your-agent-repo \\
+      --output-html report.html
+
+  [agentshield] ✓  Tier 1 + Tier 2 fresh; merging.
+  [agentshield] Net actionable findings: 40
+  [agentshield] ✓  Wrote: report.html
+  [agentshield] ✓  Wrote: report-print.html`,
+};
+
+// Char delay (ms) and post-finish dwell (ms) per terminal slide
+const TW_SPEED  = { tc1: 22, tc2: 20, tc4: 20 };
+const TW_DWELL  = { tc1: 1400, tc2: 1400, tc4: 1400 };
+
+// Dwell for non-typewriter slides before auto-advance
+const SLIDE_DWELL = { 0: 3800, 3: 1600, 5: 0 };  // 5 = last, no auto-advance
+
+// ── State ────────────────────────────────────────────────────
+let cur = 0, playing = true;
+let slideTimer = null, twTimer = null;
+
+// ── Helpers ──────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const clearST = () => { if(slideTimer){clearTimeout(slideTimer);slideTimer=null;} };
+const clearTW = () => { if(twTimer){clearTimeout(twTimer);twTimer=null;} };
+
+function scheduleNext(ms) {
+  if (!playing) return;
+  slideTimer = setTimeout(() => { if (playing) goTo(cur + 1); }, ms);
+}
+
+function showChips(...ids) {
+  ids.forEach((id, i) =>
+    setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 300 + i*280)
+  );
+}
+
+// ── Typewriter ───────────────────────────────────────────────
+function typeText(targetId, text, charDelay, onDone) {
+  const el = $(targetId);
+  if (!el) { if (onDone) onDone(); return; }
+  el.textContent = '';
+  const cur = document.createElement('span');
+  cur.className = 'cursor';
+  el.appendChild(cur);
+  let i = 0;
+  function tick() {
+    if (i >= text.length) {
+      setTimeout(() => { cur.remove(); if (onDone) onDone(); }, 400);
+      return;
+    }
+    cur.insertAdjacentText('beforebegin', text[i]);
+    i++;
+    twTimer = setTimeout(tick, charDelay);
+  }
+  tick();
+}
+
+// ── Per-slide animation ──────────────────────────────────────
+function animateSlide(n) {
+  clearTW();
+  switch(n) {
+    case 0:
+      scheduleNext(SLIDE_DWELL[0]);
+      break;
+    case 1:
+      typeText('tc1', SCRIPTS.tc1, TW_SPEED.tc1, () => {
+        showChips('oc1a');
+        scheduleNext(TW_DWELL.tc1);
+      });
+      break;
+    case 2:
+      typeText('tc2', SCRIPTS.tc2, TW_SPEED.tc2, () => {
+        showChips('oc2a','oc2b');
+        scheduleNext(TW_DWELL.tc2);
+      });
+      break;
+    case 3: {
+      const steps = ['cs1','cs2','cs3','cs4'];
+      steps.forEach((id, i) =>
+        setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 500 + i*750)
+      );
+      const totalStepMs = 500 + 3*750 + 750;
+      setTimeout(() => showChips('oc3a','oc3b'), totalStepMs);
+      setTimeout(() => scheduleNext(SLIDE_DWELL[3]), totalStepMs + 900);
+      break;
+    }
+    case 4:
+      typeText('tc4', SCRIPTS.tc4, TW_SPEED.tc4, () => {
+        showChips('oc4a','oc4b');
+        scheduleNext(TW_DWELL.tc4);
+      });
+      break;
+    case 5: {
+      const cards = ['sc1','sc2','sc3','sc4'];
+      cards.forEach((id, i) =>
+        setTimeout(() => { const c=$(id); if(c) c.classList.add('show'); }, 300 + i*350)
+      );
+      // Last slide — stop auto-play
+      setTimeout(() => { playing = false; updateUI(); }, 300 + 3*350 + 350);
+      break;
+    }
+  }
+}
+
+// ── Reset animated state ─────────────────────────────────────
+function resetAll() {
+  document.querySelectorAll('.out-chip').forEach(c => c.classList.remove('show'));
+  document.querySelectorAll('.cs').forEach(c => c.classList.remove('show'));
+  document.querySelectorAll('.sum-card').forEach(c => c.classList.remove('show'));
+  ['tc1','tc2','tc4'].forEach(id => { const e=$(id); if(e) e.textContent=''; });
+}
+
+// ── Navigation ───────────────────────────────────────────────
+function goTo(n) {
+  if (n < 0 || n >= TOTAL) return;
+  clearST(); clearTW();
+  resetAll();
+  $(SLIDE_IDS[cur])?.classList.remove('active');
+  cur = n;
+  $(SLIDE_IDS[cur])?.classList.add('active');
+  updateUI();
+  if (playing) animateSlide(cur);
+}
+
+function togglePlay() {
+  playing = !playing;
+  if (playing) {
+    animateSlide(cur);
+  } else {
+    clearST(); clearTW();
+  }
+  updateUI();
+}
+
+// ── UI sync ──────────────────────────────────────────────────
+function updateUI() {
+  $('prog-fill').style.width = (cur / (TOTAL-1) * 100) + '%';
+  $('counter').textContent = (cur+1) + ' / ' + TOTAL;
+  $('btnPlay').innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+  document.querySelectorAll('.ind').forEach((d,i) => d.classList.toggle('on', i===cur));
+}
+
+// ── Build indicator dots ─────────────────────────────────────
+const indsEl = $('inds');
+for (let i = 0; i < TOTAL; i++) {
+  const d = document.createElement('div');
+  d.className = 'ind' + (i===0 ? ' on' : '');
+  d.addEventListener('click', () => goTo(i));
+  indsEl.appendChild(d);
+}
+
+// ── Wire controls ────────────────────────────────────────────
+$('btnPrev').addEventListener('click', () => goTo(cur - 1));
+$('btnNext').addEventListener('click', () => goTo(cur + 1));
+$('btnPlay').addEventListener('click', togglePlay);
+$('prog-track').addEventListener('click', e => {
+  const r = $('prog-track').getBoundingClientRect();
+  goTo(Math.round((e.clientX - r.left) / r.width * (TOTAL - 1)));
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(cur+1); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(cur-1); }
+  if (e.key === 'p' || e.key === 'P') togglePlay();
+});
+
+// ── Kick off ─────────────────────────────────────────────────
+updateUI();
+animateSlide(0);
+</script>
+</body>
+</html>
