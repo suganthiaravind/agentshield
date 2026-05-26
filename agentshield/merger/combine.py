@@ -12964,7 +12964,6 @@ def _render_reference_panel(
     parts.append("</div>")  # /reference-card
     _render_design_basis(parts)
     _render_how_it_works(parts)
-    _render_solution_diagram(parts)
 
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
@@ -13294,6 +13293,7 @@ def _render_design_basis(parts: list[str]) -> None:
         )
     parts.append('</ul>')
 
+    _render_solution_diagram(parts)
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append('</div>')  # /design-card
