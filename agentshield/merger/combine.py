@@ -5992,6 +5992,59 @@ footer {
   line-height: 1.5;
 }
 
+/* v4: pitch slide — "The question before production" two-column card */
+.pitch-slide-card { margin-top: 20px; }
+.pitch-slide-inner {
+  border: 1.5px solid #e5c96a; border-radius: 14px;
+  background: #fffdf0; padding: 28px 32px 24px;
+}
+.pitch-slide-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #92720a; margin-bottom: 10px;
+}
+.pitch-slide-hero {
+  font-size: 22px; font-weight: 800; color: #1e293b;
+  line-height: 1.25; margin-bottom: 24px;
+  text-align: center;
+}
+.pitch-slide-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
+}
+.pitch-col-head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; padding-bottom: 10px;
+  border-bottom: 2px solid currentColor; margin-bottom: 0;
+}
+.pitch-col-head-challenges { color: #c0392b; }
+.pitch-col-head-helps      { color: #1a7f5a; }
+.pitch-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 0; border-bottom: 1px solid #f0f0f0;
+}
+.pitch-row:last-child { border-bottom: none; }
+.pitch-icon {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; margin-top: 1px;
+}
+.pitch-icon-x  { background: #fee2e2; color: #b91c1c; }
+.pitch-icon-ok { background: #dcfce7; color: #15803d; }
+.pitch-row-text {}
+.pitch-row-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+.pitch-row-desc  { font-size: 12px; color: #475569; line-height: 1.5; }
+.pitch-row-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: #eff6ff; color: #1d4ed8; border-radius: 4px;
+  padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+.pitch-slide-footer {
+  text-align: center; margin-top: 20px;
+  font-size: 13px; color: #64748b;
+}
+.pitch-slide-footer strong { color: #1e293b; }
+.pitch-slide-footer em { color: #2563eb; font-style: italic; }
+
 /* v4: "How AgentShield works" flowchart at the bottom of the
    Reference tab. Pure HTML/CSS — no SVG, prints cleanly. Five
    numbered stage cards stacked vertically with chevron arrows
@@ -12526,6 +12579,7 @@ def _render_reference_panel(
     _render_design_basis(parts)
     _render_how_it_works(parts)
     _render_solution_diagram(parts)
+    _render_pitch_slide(parts)
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
 
@@ -13877,6 +13931,110 @@ def _render_one_campaign(parts: list[str], c: dict) -> None:
         )
     parts.append('</div>')  # /rt-campaign-body
     parts.append('</div>')  # /rt-campaign
+
+
+def _render_pitch_slide(parts: list[str]) -> None:
+    """Render the 'The question before production' pitch slide.
+
+    Two-column card (Today's Challenges vs How AgentShield Helps) wrapped
+    in a collapsible ref-section so it sits flush with the other Reference
+    tab sections. Updated to include behaviour emulator.
+    """
+    _ROWS = [
+        (
+            "No coverage floor",
+            "Reviews rely on reviewer judgment. Manual process — every team checks different things.",
+            "Reproducible coverage floor",
+            "~70 rules across OWASP LLM, OWASP Agentic, MITRE ATLAS, CWE, AST10. Same checks, every scan.",
+            None,
+        ),
+        (
+            "New attack surface",
+            "Prompt injection, tool misuse, missing approval gates, unscrubbed LLM output — SAST wasn't built for these.",
+            "Rule pack built for agents",
+            "Rules designed specifically for AI-agent risks. Catches what generic SAST misses.",
+            None,
+        ),
+        (
+            "Tooling gap",
+            "SAST misses agent risks. Runtime probes require a live target and don't cover code-level weaknesses.",
+            "Static + LLM-as-judge + manifest scanner",
+            "Sees code, sees absent controls, sees skill-file supply chain. No live target required.",
+            None,
+        ),
+        (
+            "Unknown attack outcomes",
+            "Can't know whether an attack lands without running it against a live agent — slow, risky, misses architectural gaps.",
+            "Behaviour emulator",
+            "Copilot walks the agent's runtime pipeline from source and predicts outcomes for 14 attack classes. No live target needed.",
+            "NEW",
+        ),
+        (
+            "Errors caught late",
+            "Issues surface after build + deploy. Fixing them means another dev → review → deploy cycle.",
+            "Caught at commit time",
+            "Bugs flagged in the IDE / PR, before the build.",
+            None,
+        ),
+    ]
+
+    parts.append('<div class="pitch-slide-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">&#9654;</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">The question before production</span>'
+        '<span class="ref-section-teaser">Why AgentShield exists — the gap it fills and how each capability maps to a real-world challenge.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append('<div class="pitch-slide-inner">')
+    parts.append(
+        '<div class="pitch-slide-eyebrow">The question before production</div>'
+        '<div class="pitch-slide-hero">Have we covered all the potential issues in this AI agent?</div>'
+    )
+    parts.append('<div class="pitch-slide-cols">')
+
+    # Column headers
+    parts.append('<div class="pitch-col-head pitch-col-head-challenges">Today\'s challenges</div>')
+    parts.append('<div class="pitch-col-head pitch-col-head-helps">How AgentShield helps</div>')
+
+    # Rows — one row per challenge/solution pair
+    for challenge_title, challenge_desc, help_title, help_desc, badge in _ROWS:
+        badge_html = (
+            f'<span class="pitch-row-badge">{_html_escape(badge)}</span>' if badge else ""
+        )
+        parts.append(
+            f'<div class="pitch-row">'
+            f'<div class="pitch-icon pitch-icon-x">&#10007;</div>'
+            f'<div class="pitch-row-text">'
+            f'<div class="pitch-row-title">{_html_escape(challenge_title)}</div>'
+            f'<div class="pitch-row-desc">{_html_escape(challenge_desc)}</div>'
+            f'</div></div>'
+        )
+        parts.append(
+            f'<div class="pitch-row">'
+            f'<div class="pitch-icon pitch-icon-ok">&#10003;</div>'
+            f'<div class="pitch-row-text">'
+            f'<div class="pitch-row-title">{_html_escape(help_title)}{badge_html}</div>'
+            f'<div class="pitch-row-desc">{_html_escape(help_desc)}</div>'
+            f'</div></div>'
+        )
+
+    parts.append('</div>')  # /pitch-slide-cols
+    parts.append(
+        '<div class="pitch-slide-footer">'
+        '<strong>AgentShield gives the review a reproducible floor</strong>'
+        ' &mdash; <em>reviewer judgment goes on top of it, not in place of it.</em>'
+        '</div>'
+    )
+    parts.append('</div>')  # /pitch-slide-inner
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')
+    parts.append('</div>')  # /pitch-slide-card
 
 
 def _render_how_it_works(parts: list[str]) -> None:
