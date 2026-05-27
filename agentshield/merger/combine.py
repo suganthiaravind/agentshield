@@ -5109,7 +5109,7 @@ footer {
 .coverage-legend {
   display: flex; flex-wrap: wrap; gap: 6px 14px;
   font-size: 11px; color: var(--text-muted);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .coverage-legend .leg-swatch {
   display: inline-block; width: 10px; height: 10px;
@@ -5118,6 +5118,15 @@ footer {
 .coverage-legend .leg-swatch-issues { background: #b8261d; }
 .coverage-legend .leg-swatch-clean  { background: #1f6b3a; }
 .coverage-legend .leg-swatch-gap    { background: #b3aa92; }
+.coverage-totals-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.coverage-totals-bar .cov-totals-label {
+  font-size: 12px; font-weight: 700; color: var(--text); margin-right: 4px;
+}
 .coverage-fw-note {
   font-size: 11px; color: var(--text-muted);
   font-style: italic; margin-top: -2px; margin-bottom: 10px;
@@ -8319,6 +8328,21 @@ footer {
 }
 .design-pillars li { margin-bottom: 8px; }
 .design-pillars li:last-child { margin-bottom: 0; }
+.ts-table {
+  width: 100%; border-collapse: collapse; font-size: 12.5px;
+  margin-top: 4px;
+}
+.ts-table thead th {
+  text-align: left; padding: 7px 12px;
+  background: var(--panel); border-bottom: 2px solid var(--border);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.ts-table tbody tr { border-bottom: 1px solid var(--border); }
+.ts-table tbody tr:last-child { border-bottom: none; }
+.ts-table td { padding: 8px 12px; vertical-align: top; color: var(--text); line-height: 1.5; }
+.ts-fw-name { font-weight: 600; white-space: nowrap; }
+.ts-fw-lang { color: var(--text-muted); white-space: nowrap; }
 .how-title {
   font-size: 18px; font-weight: 700;
   color: var(--text); margin: 0 0 4px;
@@ -11829,6 +11853,33 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     )
     parts.append('</div>')
 
+    # Pre-compute across-framework totals for the "Total" summary bar
+    _t_issues = _t_clean = _t_gap = 0
+    for _tk in ("owasp_llm", "owasp_agentic", "mitre_atlas", "cwe", "ast"):
+        _t_uni = FRAMEWORK_UNIVERSES[_tk]
+        _t_scan = scanner_cov.get(_tk, set())
+        _t_found = set(getattr(r.coverage, _tk))
+        for _ti in _t_uni:
+            if _ti in _t_found:
+                _t_issues += 1
+            elif _ti in _t_scan:
+                _t_clean += 1
+            else:
+                _t_gap += 1
+        for _ti in sorted((_t_scan | _t_found) - set(_t_uni)):
+            if _ti in _t_found:
+                _t_issues += 1
+            else:
+                _t_clean += 1
+    parts.append(
+        f'<div class="coverage-totals-bar">'
+        f'<span class="cov-totals-label">Total</span>'
+        f'<span class="cov-badge cov-badge-issues">{_t_issues} with issues</span>'
+        f'<span class="cov-badge cov-badge-clean">{_t_clean} clean</span>'
+        f'<span class="cov-badge cov-badge-gap">{_t_gap} not scanned</span>'
+        f'</div>'
+    )
+
     _CURATED_NOTE = {
         "owasp_llm": (
             "Curated to the 6 call-site / agent-layer items (LLM01, LLM02, "
@@ -12964,6 +13015,7 @@ def _render_reference_panel(
     parts.append("</div>")  # /reference-card
     _render_design_basis(parts)
     _render_how_it_works(parts)
+    _render_tech_stack(parts)
 
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
@@ -14892,6 +14944,133 @@ def _render_install_slide(parts: list[str]) -> None:
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')
     parts.append('</div>')  # /sf2-card
+
+
+def _render_tech_stack(parts: list[str]) -> None:
+    """Render the "Tech Stack" section in the Reference tab.
+
+    Two sub-sections:
+      1. AgentShield's own stack — what the tool is built with.
+      2. Agent frameworks it scans — what it can detect issues in.
+    """
+    own_stack = [
+        (
+            "Python 3.10+",
+            "Core CLI, rule runner, manifest scanner, and HTML report generator. "
+            "The entire AgentShield surface — from <code>agentshield scan</code> "
+            "to <code>agentshield merge</code> — is pure Python.",
+        ),
+        (
+            "Semgrep &ge;1.50",
+            "Tier 1 rules engine. Runs AST-aware pattern, taint, and join-mode "
+            "rules across Python and Java source files. Produces "
+            "<code>.agentshield/tier1-results.json</code>.",
+        ),
+        (
+            "PyYAML",
+            "Parses YAML rule files and framework manifests "
+            "(<code>agentshield/rules/**/*.yaml</code>, "
+            "<code>agentshield/frameworks/*.yaml</code>).",
+        ),
+        (
+            "Pydantic v2",
+            "Internal data model for findings, coverage maps, and report schema "
+            "validation. All inter-module boundaries pass typed Pydantic models.",
+        ),
+        (
+            "GitHub Copilot (IDE)",
+            "Tier 2 LLM-as-a-judge reviewer and behaviour emulator. Runs offline "
+            "in the user&rsquo;s IDE via a prompted chat session — no live agent "
+            "endpoint or network call from AgentShield itself.",
+        ),
+        (
+            "HTML / CSS / JavaScript",
+            "Self-contained interactive report (<code>agentshield-report.html</code>). "
+            "No external dependencies — the entire UI ships inline in a single file.",
+        ),
+    ]
+
+    scanned_frameworks = [
+        ("Google ADK", "Python",
+         "Prompt injection, unsanitised inputs, tool dispatch risks."),
+        ("SMARTSDK", "Python",
+         "ADK wrapper &mdash; same rule set as ADK applies through the wrapper layer."),
+        ("RADSDK", "Python",
+         "LlamaIndex wrapper &mdash; same rule set as LlamaIndex applies through the wrapper layer."),
+        ("LangChain", "Python",
+         "AgentExecutor, create_react_agent, chain.invoke call sites."),
+        ("LlamaIndex", "Python",
+         "Query engines and retriever call sites."),
+        ("LangChain4j", "Java",
+         "AiServices.create / builder call sites."),
+        ("Spring AI", "Java",
+         "ChatClient and tool-dispatch patterns."),
+        ("OpenAI SDK", "Python &amp; Java",
+         "Hardcoded credentials, unsanitised input to chat/completion calls."),
+        ("Anthropic SDK", "Python",
+         "Hardcoded credentials passed to the Anthropic client constructor."),
+        ("AWS Bedrock (boto3)", "Python &amp; Java",
+         "Direct invocation patterns, hardcoded access-key credentials."),
+        ("Azure OpenAI", "Python &amp; Java",
+         "Hardcoded credentials, unsanitised inputs via the Azure client."),
+        ("Cohere / Mistral / Groq / Together / HuggingFace", "Python",
+         "Hardcoded API-key credentials passed to the respective client constructors."),
+    ]
+
+    parts.append('<div class="design-card">')
+    parts.append('<details class="ref-section">')
+    parts.append(
+        '<summary class="ref-section-summary">'
+        '<span class="ref-section-chevron">▶</span>'
+        '<span class="ref-section-heading">'
+        '<span class="ref-section-title">Tech stack</span>'
+        '<span class="ref-section-teaser">What AgentShield is built with, '
+        'and which agent frameworks it can scan.</span>'
+        '</span>'
+        '<span class="ref-section-hint"></span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-section-body">')
+    parts.append(
+        '<p class="panel-subtitle">The first table lists the libraries and '
+        'tools that make up AgentShield itself. The second lists the agent '
+        'frameworks and LLM SDKs whose code patterns AgentShield knows how '
+        'to analyse &mdash; if a target project uses one of these, '
+        'AgentShield&rsquo;s rule pack has specific checks for it.</p>'
+    )
+
+    parts.append('<h4 class="design-subhead">AgentShield&rsquo;s own stack</h4>')
+    parts.append('<div class="design-grid">')
+    for tech_name, tech_role in own_stack:
+        parts.append('<div class="design-tile">')
+        parts.append(f'<div class="design-tile-name">{tech_name}</div>')
+        parts.append(f'<div class="design-tile-role">{tech_role}</div>')
+        parts.append('</div>')
+    parts.append('</div>')  # /design-grid
+
+    parts.append('<h4 class="design-subhead">Agent frameworks &amp; LLM SDKs scanned</h4>')
+    parts.append(
+        '<table class="ts-table">'
+        '<thead><tr>'
+        '<th>Framework / SDK</th>'
+        '<th>Language</th>'
+        '<th>What AgentShield checks</th>'
+        '</tr></thead>'
+        '<tbody>'
+    )
+    for fw_name, fw_lang, fw_checks in scanned_frameworks:
+        parts.append(
+            f'<tr>'
+            f'<td class="ts-fw-name">{fw_name}</td>'
+            f'<td class="ts-fw-lang">{fw_lang}</td>'
+            f'<td>{fw_checks}</td>'
+            f'</tr>'
+        )
+    parts.append('</tbody></table>')
+
+    parts.append('</div>')  # /ref-section-body
+    parts.append('</details>')  # /ref-section
+    parts.append('</div>')  # /design-card
 
 
 def _render_how_it_works(parts: list[str]) -> None:
