@@ -1418,8 +1418,9 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     # When no per-seed traces are stored, auto-generate minimal ones from
     # catalog_items so the JS can walk through every seed sequentially.
     # Blocked seeds get a compact 1-step trace; the landing layer gets the
-    # full pipeline_trace. Only applied when there are 2+ catalog entries.
-    if not seed_traces and len(catalog_items) > 1:
+    # full pipeline_trace. Single-seed entries still get a tab for the
+    # "seed-1 | landed" visual indicator.
+    if not seed_traces and catalog_items:
         catalog_layers = [item["layer"] for item in catalog_items]
         landing_lyr = emu_layer if emu_layer in catalog_layers else (catalog_layers[-1] if catalog_layers else "")
         # Truncate to layers up to and including the landing layer — mutations
