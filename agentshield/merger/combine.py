@@ -3145,20 +3145,72 @@ _FIX_CODE_EXAMPLES: dict[str, tuple[str, str]] = {
 }
 
 
-def render_findings_fix_md(result: "MergeResult") -> str:  # type: ignore[name-defined]
-    """Generate a per-scan fix guide with file:line, code snippet, and concrete fix
-    for every actionable finding.  Designed to be dragged into Claude Code /
-    Copilot Chat so the AI can fix every issue in one pass.
+def render_findings_fix_md(  # type: ignore[name-defined]
+    result: "MergeResult",
+    source: str = "all",
+) -> str:
+    """Generate a per-scan fix guide with file:line, code snippet, and concrete fix.
+
+    source: "semgrep"  → tier1 findings on non-markdown files
+            "manifest" → tier1 findings on .md manifest files
+            "copilot"  → tier2 LLM-judge findings
+            "all"      → everything (default, kept for back-compat)
     """
+    from os.path import basename as _bn
+
+    _TITLES = {
+        "semgrep": "AgentShield — Semgrep Findings Fix Guide",
+        "manifest": "AgentShield — Manifest Findings Fix Guide",
+        "copilot": "AgentShield — Copilot Findings Fix Guide",
+        "all": "AgentShield — Findings Fix Guide",
+    }
+    _INTROS = {
+        "semgrep": (
+            "_Per-scan fix guide for **Semgrep** (static code analysis) findings — "
+            "exact file:line, flagged code, and a concrete fix for each. "
+            "Paste into Claude Code or Copilot Chat and say:_"
+        ),
+        "manifest": (
+            "_Per-scan fix guide for **Manifest Scanner** findings — "
+            "insecure permissions, dangerous tool combinations, and jailbreak markers "
+            "found in your SKILL.md / AGENT.md / CLAUDE.md files. "
+            "Paste into Claude Code or Copilot Chat and say:_"
+        ),
+        "copilot": (
+            "_Per-scan fix guide for **Copilot** (LLM-as-judge) findings — "
+            "exact file:line, Copilot's reasoning, and a concrete fix for each. "
+            "Paste into Claude Code or Copilot Chat and say:_"
+        ),
+        "all": (
+            "_Per-scan fix guide — every finding with its exact file, line, flagged code, "
+            "and a concrete fix. Paste this file into Claude Code or Copilot Chat and say:_"
+        ),
+    }
+
+    def _matches_source(f: dict) -> bool:
+        if source == "all":
+            return True
+        origin = f.get("_origin", "")
+        file_ = f.get("file") or ""
+        if source == "semgrep":
+            return origin == "tier1" and not _bn(file_).lower().endswith(".md")
+        if source == "manifest":
+            return origin == "tier1" and _bn(file_).lower().endswith(".md")
+        if source == "copilot":
+            return origin == "tier2"
+        return True
+
     r = result.report
     grouped = _findings_grouped_by_ddr(r)
 
-    # Flatten all findings, skip confirmed FPs, sort by severity then file.
+    # Flatten, filter by source, skip confirmed FPs, sort by severity then file.
     sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     all_findings: list[dict] = []
     for cat in _DDR_ORDER:
         for f in grouped[cat]:
             if f.get("_origin") == "tier1" and f.get("_tier2_verdict") == "FP":
+                continue
+            if not _matches_source(f):
                 continue
             all_findings.append(f)
     all_findings.sort(key=lambda x: (
@@ -3173,12 +3225,9 @@ def render_findings_fix_md(result: "MergeResult") -> str:  # type: ignore[name-d
         )
 
     lines: list[str] = []
-    lines.append("# AgentShield — Findings Fix Guide")
+    lines.append(f"# {_TITLES.get(source, _TITLES['all'])}")
     lines.append("")
-    lines.append(
-        "_Per-scan fix guide — every finding with its exact file, line, flagged code, "
-        "and a concrete fix. Paste this file into Claude Code or Copilot Chat and say:_"
-    )
+    lines.append(_INTROS.get(source, _INTROS["all"]))
     lines.append("")
     lines.append(
         '> **"Fix all the findings listed in this guide. '

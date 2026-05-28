@@ -765,9 +765,16 @@ def cmd_merge(args: argparse.Namespace) -> int:
         html_path.parent.mkdir(parents=True, exist_ok=True)
         html_path.write_text(render_combined_html(result), encoding="utf-8")
         written.append(args.output_html)
-        fix_guide_path = html_path.parent / "agentshield-findings-fix.md"
-        fix_guide_path.write_text(render_findings_fix_md(result), encoding="utf-8")
-        written.append(str(fix_guide_path))
+        for _fix_source, _fix_name in (
+            ("semgrep", "agentshield-semgrep-fix.md"),
+            ("copilot", "agentshield-copilot-fix.md"),
+            ("manifest", "agentshield-manifest-fix.md"),
+        ):
+            _fix_path = html_path.parent / _fix_name
+            _fix_path.write_text(
+                render_findings_fix_md(result, source=_fix_source), encoding="utf-8"
+            )
+            written.append(str(_fix_path))
         print_path = html_path.with_name(html_path.stem + "-print" + html_path.suffix)
         print_path.write_text(
             render_combined_html(result, static=True), encoding="utf-8"
