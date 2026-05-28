@@ -13262,12 +13262,36 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         ("output/agentshield-report.html", "Interactive HTML report"),
         ("output/agentshield-report-print.html", "Print variant"),
     ]
+    # Per-scan unified fix guide — all actionable findings, one file
+    _per_scan_files: dict[str, int] = {}
+    for _v in fix_targets.values():
+        for _f in _v[1]:
+            _per_scan_files[_f] = _per_scan_files.get(_f, 0) + 1
+    _per_scan_n = (
+        sum(1 for f in r.tier1_findings if f.tier2_verdict != "FP")
+        + len(r.tier2_findings)
+        + len(r.probe_discovered)
+        + sum(1 for c in r.probe_campaigns if c.get("status") == "succeeded")
+        + sum(
+            1 for t in _all_emu_traces(getattr(r, "agent_emulation", {}))
+            if t.get("verdict") in ("lands", "partial")
+        )
+    )
+    scan_fix_outputs = [
+        (
+            "output/agentshield-findings-fix.md",
+            "All findings with file, snippet — paste into Claude Code to fix",
+            (_per_scan_n,
+             sorted(_per_scan_files.keys(), key=lambda k: (-_per_scan_files[k], k))),
+        ),
+    ]
+    # Reference skill files — static catalogue guides written by `agentshield scan`
     md_outputs = [
-        ("output/agentshield-semgrep-fixes.md", "Semgrep fix recommendations",
+        ("output/agentshield-semgrep-fixes.md", "Semgrep rules reference",
          fix_targets["agentshield-semgrep-fixes.md"]),
-        ("output/agentshield-manifest-fixes.md", "Manifest fix recommendations",
+        ("output/agentshield-manifest-fixes.md", "Manifest rules reference",
          fix_targets["agentshield-manifest-fixes.md"]),
-        ("output/agentshield-copilot-fixes.md", "Copilot fix recommendations",
+        ("output/agentshield-copilot-fixes.md", "Copilot rules reference",
          fix_targets["agentshield-copilot-fixes.md"]),
     ]
     # v4: red-team handoff — one curated walkthrough per finding that has a
@@ -13296,7 +13320,7 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         ("output/agentshield-emulator-payloads.md", "Emulator attack walkthroughs",
          (rt_total, sorted(rt_files.keys(), key=lambda k: (-rt_files[k], k)))),
     ]
-    total_output = len(html_outputs) + len(md_outputs) + len(rt_outputs)
+    total_output = len(html_outputs) + len(scan_fix_outputs) + len(md_outputs) + len(rt_outputs)
 
     def _file_li(path: str) -> str:
         n = file_counts.get(basename(path), 0)
@@ -13553,7 +13577,8 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
             )
         parts.append('</ul>')
 
-    _render_fix_block(f"Fix recommendations ({len(md_outputs)})", md_outputs)
+    _render_fix_block("Per-scan fix guide (1)", scan_fix_outputs)
+    _render_fix_block(f"Reference skill files ({len(md_outputs)})", md_outputs)
     _render_fix_block(f"Emulator attack walkthroughs ({len(rt_outputs)})", rt_outputs)
     parts.append('</div>')  # /io-pipeline-col output
 
