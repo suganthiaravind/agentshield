@@ -1414,6 +1414,38 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     )
 
     seed_traces = emu_data.get("seed_traces") or {}
+
+    # When no per-seed traces are stored, auto-generate minimal ones from
+    # catalog_items so the JS can walk through every seed sequentially.
+    # Blocked seeds get a compact 1-step trace; the landing layer gets the
+    # full pipeline_trace. Only applied when there are 2+ catalog entries.
+    if not seed_traces and len(catalog_items) > 1:
+        catalog_layers = [item["layer"] for item in catalog_items]
+        landing_lyr = emu_layer if emu_layer in catalog_layers else (catalog_layers[-1] if catalog_layers else "")
+        # Truncate to layers up to and including the landing layer — mutations
+        # that follow the landing one were never tried and shouldn't appear.
+        if landing_lyr and landing_lyr in catalog_layers:
+            catalog_layers = catalog_layers[:catalog_layers.index(landing_lyr) + 1]
+        pipeline_map = emu_data.get("pipeline_map") or {}
+        first_key = next(iter(pipeline_map), "input_guard")
+        first_entry = pipeline_map.get(first_key) or {}
+        block_label = (
+            (first_entry.get("label") or first_key.replace("_", " ").title())
+            if isinstance(first_entry, dict)
+            else first_key.replace("_", " ").title()
+        )
+        for lyr in catalog_layers:
+            if lyr == landing_lyr:
+                seed_traces[lyr] = list(emu_trace)
+            else:
+                seed_traces[lyr] = [{
+                    "step": first_key,
+                    "step_label": block_label,
+                    "outcome": "blocked",
+                    "actor": "system",
+                    "detail": "Payload intercepted and blocked before reaching execution.",
+                }]
+
     use_seed_tabs = bool(seed_traces)
 
     if use_seed_tabs:
@@ -9477,6 +9509,19 @@ _HTML_JS = """
                              'emu-lp-landed','emu-lp-blocked-all');
         });
       }
+      // Reset seed trace visibility: show only the landing seed between plays
+      var _rSeeds = trace.querySelectorAll('.emu-seed-trace');
+      if (_rSeeds.length > 1) {
+        var _rLanded = (trace.getAttribute('data-payload-layer') || '').trim();
+        _rSeeds.forEach(function(st) {
+          var isLanded = st.getAttribute('data-layer') === _rLanded;
+          st.style.display = isLanded ? '' : 'none';
+          st.classList.toggle('emu-seed-trace-active', isLanded);
+        });
+        trace.querySelectorAll('.emu-seed-tab').forEach(function(t) {
+          t.classList.toggle('emu-seed-tab-active', t.getAttribute('data-layer') === _rLanded);
+        });
+      }
       // Reset attack-plan card (inside scene 0) so Replay re-typewriters it
       var apCard = trace.querySelector('.emu-attack-plan-card');
       if (apCard) {
@@ -9556,7 +9601,7 @@ _HTML_JS = """
       }, t + DONE_HOLD);
     }
 
-    function playFromScene(trace, startIdx, onComplete) {
+    function playFromScene(trace, startIdx, onComplete, skipIntro) {
       pausedAtScene = -1;
       var activeSeed  = trace.querySelector('.emu-seed-trace.emu-seed-trace-active');
       var stepsRoot   = activeSeed || trace;
@@ -9699,7 +9744,7 @@ _HTML_JS = """
                 scene.classList.add('emu-scene-done');
                 safeTimeout(function () { runScene(idx + 1); }, 380);
               } else {
-                if (finalBanner && !onComplete) {
+                if (finalBanner) {
                   finalBanner.classList.add('emu-trace-final-visible');
                   safeTimeout(function () {
                     finalBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -9710,8 +9755,8 @@ _HTML_JS = """
                   c.classList.remove('emu-pip-active');
                 });
                 if (onComplete) {
-                  // More seeds to play — hand off quickly, skip verdict linger
-                  safeTimeout(onComplete, 150);
+                  // Brief hold so the outcome banner is readable before advancing to next seed
+                  safeTimeout(onComplete, 750);
                 } else {
                   if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
                   if (pauseBtn) pauseBtn.style.display = 'none';
@@ -9726,7 +9771,8 @@ _HTML_JS = """
 
       // Payload catalogue intro first, then pipeline scenes (attack plan
       // is handled inside runScene(0) itself — shows, typewriters, fades out).
-      if (startIdx === 0) {
+      // skipIntro=true when called from the multi-seed loop (intro already ran).
+      if (startIdx === 0 && !skipIntro) {
         playLayerIntro(trace, function () { runScene(0); });
       } else {
         runScene(startIdx);
@@ -9825,40 +9871,41 @@ _HTML_JS = """
         if (activeTrace && activeTrace !== trace) resetTrace(activeTrace);
         activeTrace = trace;
         resetTrace(trace);
-        // If multiple seeds exist, play blocked seeds first then the landed seed
+        // If multiple seeds exist, fire the catalogue intro once then walk
+        // each seed in order — blocked seeds show their BLOCKED banner briefly
+        // before the next seed activates; the final seed gets no callback so
+        // its banner stays and the Replay button appears normally.
         var _allSeeds = Array.from(trace.querySelectorAll('.emu-seed-trace'));
         var _landedLayer = (trace.getAttribute('data-payload-layer') || '').trim();
-        if (_allSeeds.length > 1 && _landedLayer) {
+        if (_allSeeds.length > 1) {
           var _orderedSeeds = _allSeeds.slice().sort(function(a, b) {
             var aL = a.getAttribute('data-layer') === _landedLayer ? 1 : 0;
             var bL = b.getAttribute('data-layer') === _landedLayer ? 1 : 0;
             return aL - bL;
           });
           var _si = 0;
-          function _playNextSeed() {
-            if (_si >= _orderedSeeds.length) {
-              if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Replay'; }
-              var _pb = trace.querySelector('[data-action="emu-pause"]');
-              if (_pb) _pb.style.display = 'none';
-              var _pw = trace.querySelector('.emu-progress-wrap');
-              if (_pw) _pw.style.display = 'none';
-              var _pf = trace.querySelector('[data-progress-fill]');
-              if (_pf) _pf.style.width = '0%';
-              return;
-            }
-            var _st = _orderedSeeds[_si++];
-            var _sl = _st.getAttribute('data-layer');
+          function _activateSeedEl(st) {
+            var _sl = st.getAttribute('data-layer');
             trace.querySelectorAll('.emu-seed-tab').forEach(function(t) {
               t.classList.toggle('emu-seed-tab-active', t.getAttribute('data-layer') === _sl);
             });
             _allSeeds.forEach(function(s) {
-              var _active = s === _st;
+              var _active = s === st;
               s.style.display = _active ? '' : 'none';
               s.classList.toggle('emu-seed-trace-active', _active);
             });
-            playFromScene(trace, 0, _playNextSeed);
           }
-          _playNextSeed();
+          function _playNextSeed() {
+            if (_si >= _orderedSeeds.length) return;
+            var _isLast = (_si === _orderedSeeds.length - 1);
+            var _st = _orderedSeeds[_si++];
+            _activateSeedEl(_st);
+            // Last seed: null callback — banner stays + Replay appears via normal path
+            // Earlier seeds: callback fires after brief banner hold
+            playFromScene(trace, 0, _isLast ? null : _playNextSeed, true);
+          }
+          // Layer intro fires ONCE, then seed sequence begins
+          playLayerIntro(trace, _playNextSeed);
         } else {
           playFromScene(trace, 0);
         }
