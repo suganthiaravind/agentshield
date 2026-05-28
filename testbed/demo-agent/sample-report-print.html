@@ -2101,8 +2101,13 @@ footer {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .framework-group-counts {
-  display: flex; flex-wrap: nowrap; gap: 6px;
+  display: grid;
+  grid-template-columns: 42px 140px 76px 104px;
   align-items: center;
+  gap: 6px;
+}
+.framework-group-counts .cov-badge {
+  justify-content: center;
 }
 .cov-badge {
   display: inline-flex; align-items: center;
