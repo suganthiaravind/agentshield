@@ -1694,6 +1694,70 @@ def _v7_sources_to_attack_class_traces(
                 "_v7_rule_id_short": v7_rule_id_short,
             })
 
+    def _pipeline_check_trace_steps(ck: str, chk_dict: dict) -> list[dict]:
+        """Synthesize 1-2 pipeline trace steps for a pipeline check finding
+        so _render_emu_trace_block has something to animate."""
+        r = str(chk_dict.get("verdict_reasoning") or "")
+        if ck == "system_prompt_confidentiality":
+            loc = str(chk_dict.get("secret_location") or "")
+            secret = str(chk_dict.get("secret_found") or "")
+            return [{
+                "step": "system_prompt",
+                "step_label": "system_prompt — secret in source",
+                "code_basis": [loc] if loc else [],
+                "defensive_control_present": False,
+                "outcome": "advances",
+                "outcome_reasoning": (
+                    f"Secret '{secret}' at {loc} committed to git — "
+                    "present in every clone and CI artifact." if loc else r[:300]
+                ),
+            }]
+        if ck == "hitl_gates":
+            ungated = chk_dict.get("ungated_tools") or []
+            tool = ungated[0] if ungated else "destructive_tool"
+            return [{
+                "step": "tool_choice",
+                "step_label": f"tool_choice — {tool} ungated",
+                "code_basis": [],
+                "defensive_control_present": False,
+                "outcome": "advances",
+                "outcome_reasoning": (
+                    f"{tool} dispatched to external system without "
+                    "human-in-the-loop approval gate."
+                ),
+            }]
+        if ck == "agent_auth":
+            bypass = str(chk_dict.get("bypass_condition") or r[:200])
+            return [{
+                "step": "user_prompt",
+                "step_label": "user_prompt — auth gate bypassable",
+                "code_basis": [],
+                "defensive_control_present": True,
+                "outcome": "modified",
+                "outcome_reasoning": bypass,
+            }]
+        if ck == "audit_trail":
+            unlogged = chk_dict.get("unlogged_steps") or []
+            note = f"Unlogged steps: {', '.join(unlogged[:4])}" if unlogged else r[:200]
+            return [{
+                "step": "planner",
+                "step_label": "planner — audit gap",
+                "code_basis": [],
+                "defensive_control_present": True,
+                "outcome": "modified",
+                "outcome_reasoning": note,
+            }]
+        if ck == "loop_termination":
+            return [{
+                "step": "re_planning",
+                "step_label": "re_planning — no termination cap",
+                "code_basis": [],
+                "defensive_control_present": False,
+                "outcome": "advances",
+                "outcome_reasoning": r[:300],
+            }]
+        return []
+
     # Pipeline-level checks
     _ACTIONABLE_PIPELINE_CHECK_VERDICTS: dict[str, set] = {
         "audit_trail":                   {"partial", "absent"},
@@ -1712,10 +1776,13 @@ def _v7_sources_to_attack_class_traces(
             continue
         # Map pipeline check verdict to emulator verdict scale
         emu_verdict = "partial" if chk_verdict in ("partial", "bypassable") else "lands"
+        synthetic_trace = _normalize_trace_steps(
+            _pipeline_check_trace_steps(check_key, chk), source_dir
+        )
         out.append({
             "attack_class": attack_class,
             "attack_class_label": f"Pipeline check: {check_key.replace('_', ' ')}",
-            "targets_steps": [],
+            "targets_steps": [s["step"] for s in synthetic_trace],
             "payload_used": "",
             "payload_layer": "pipeline-check",
             "seed_payloads": [],
@@ -1724,7 +1791,7 @@ def _v7_sources_to_attack_class_traces(
             "verdict_confidence": 0.9,
             "verdict_reasoning": str(chk.get("verdict_reasoning") or ""),
             "frameworks": {},
-            "pipeline_trace": [],
+            "pipeline_trace": synthetic_trace,
             "seed_traces": {},
             "_v7_source_id": check_key,
             "_v7_source_type": "pipeline_check",
