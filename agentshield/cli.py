@@ -37,6 +37,7 @@ from agentshield.merger import (
     render_combined_html,
     render_combined_sarif,
     render_findings_fix_md,
+    render_emulator_payloads_md,
 )
 from agentshield.manifest_scanner import scan_manifests
 from agentshield.normalize import Finding, Normalizer, NormalizerError
@@ -768,6 +769,9 @@ def cmd_merge(args: argparse.Namespace) -> int:
         fix_guide_path = html_path.parent / "agentshield-findings-fix.md"
         fix_guide_path.write_text(render_findings_fix_md(result), encoding="utf-8")
         written.append(str(fix_guide_path))
+        emu_payloads_path = html_path.parent / "agentshield-emulator-payloads.md"
+        emu_payloads_path.write_text(render_emulator_payloads_md(result), encoding="utf-8")
+        written.append(str(emu_payloads_path))
         print_path = html_path.with_name(html_path.stem + "-print" + html_path.suffix)
         print_path.write_text(
             render_combined_html(result, static=True), encoding="utf-8"

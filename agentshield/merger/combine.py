@@ -3357,6 +3357,124 @@ def _severity_badge(severity: str) -> str:
     return f"{icon} {severity.upper()}"
 
 
+def render_emulator_payloads_md(result: "MergeResult") -> str:
+    """Generate the emulator attack walkthrough markdown.
+
+    One section per finding that has a narrative — attack class, catalogue
+    payload, pipeline trace steps, verdict, and fix. Paste into Claude Code
+    or Copilot Chat to walk through each attack in order.
+    """
+    from os.path import basename as _bn
+
+    r = result.report
+    lines: list[str] = []
+    lines.append("# AgentShield — Emulator Attack Walkthroughs")
+    lines.append("")
+    lines.append(
+        "_Per-scan emulator walkthrough — one section per finding with an attack "
+        "narrative: catalogue payload, pipeline trace, verdict, and fix. "
+        "Paste into Claude Code or Copilot Chat and say:_"
+    )
+    lines.append("")
+    lines.append(
+        '> **"Walk through each attack scenario below. For each one, '
+        'read the Payload, Pipeline trace, and Fix sections, then apply the fix."**'
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    grouped = _findings_grouped_by_ddr(r)
+    all_findings: list[dict] = []
+    for cat in _DDR_ORDER:
+        for f in grouped[cat]:
+            if f.get("_origin") == "tier1" and f.get("_tier2_verdict") == "FP":
+                continue
+            all_findings.append(f)
+
+    # Only keep findings that have a narrative
+    walkthrough_findings = []
+    for f in all_findings:
+        scenario = narrative_for(
+            f.get("agentshield_id") or f.get("rule_id") or ""
+        )
+        if scenario and scenario.steps:
+            walkthrough_findings.append((f, scenario))
+
+    if not walkthrough_findings:
+        lines.append("_No emulator attack walkthroughs available for this scan._")
+        return "\n".join(lines)
+
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    walkthrough_findings.sort(key=lambda x: (
+        sev_order.get(x[0].get("severity", "info").lower(), 5),
+        x[0].get("file", ""),
+    ))
+
+    lines.append(
+        f"**{len(walkthrough_findings)} attack "
+        f"walkthrough{'s' if len(walkthrough_findings) != 1 else ''}**"
+    )
+    lines.append("")
+
+    for idx, (f, scenario) in enumerate(walkthrough_findings, 1):
+        sev = f.get("severity", "info").lower()
+        icon = {"critical": "🟥", "high": "🟧", "medium": "🟨",
+                "low": "🟩", "info": "🟦"}.get(sev, "⬜")
+        rule_id = f.get("rule_id_short") or f.get("rule_id") or "?"
+        origin = f.get("_origin", "")
+        source_label = "Emulator" if origin == "emulator" else (
+            "Semgrep" if origin == "tier1" else "Copilot"
+        )
+        file_ = f.get("file") or ""
+        line_ = f.get("line") or ""
+        ep_route = f.get("_entry_point_route") or ""
+
+        lines.append(f"---\n\n### [{idx}/{len(walkthrough_findings)}] {icon} {sev.upper()} · `{rule_id}` · [{source_label}]")
+        lines.append("")
+
+        loc_parts = []
+        if file_:
+            loc_parts.append(f"`{file_}`")
+            if line_:
+                loc_parts.append(f"line {line_}")
+        if ep_route:
+            loc_parts.append(f"entry point `{ep_route}`")
+        if loc_parts:
+            lines.append(f"**Location:** {' · '.join(loc_parts)}")
+
+        if f.get("message"):
+            lines.append(f"**Finding:** {f['message']}")
+
+        lines.append("")
+        lines.append(f"**Attack class:** {scenario.title}")
+        lines.append("")
+
+        if scenario.attacker_input:
+            lines.append("**Catalogue payload:**")
+            lines.append("```")
+            lines.append(scenario.attacker_input)
+            lines.append("```")
+            lines.append("")
+
+        if scenario.steps:
+            lines.append("**Pipeline trace:**")
+            for step in scenario.steps:
+                lines.append(f"1. {step}")
+            lines.append("")
+
+        if scenario.impact:
+            lines.append(f"**Impact:** {scenario.impact}")
+            lines.append("")
+
+        remediation = f.get("remediation") or ""
+        if remediation:
+            lines.append(f"**Fix:** {remediation}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def render_combined_json(result: MergeResult) -> str:
     """Machine-readable unified report. Mirrors the markdown structure 1:1."""
     r = result.report

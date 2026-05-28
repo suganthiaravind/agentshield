@@ -12,6 +12,7 @@ from agentshield.merger.combine import (
     render_combined_markdown,
     render_combined_sarif,
     render_findings_fix_md,
+    render_emulator_payloads_md,
 )
 from agentshield.merger.schema import (
     SchemaError,
@@ -31,5 +32,6 @@ __all__ = [
     "render_combined_markdown",
     "render_combined_sarif",
     "render_findings_fix_md",
+    "render_emulator_payloads_md",
     "validate_tier2_findings",
 ]
