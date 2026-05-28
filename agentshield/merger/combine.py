@@ -4644,7 +4644,7 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
   78%  { transform: scale(0.92) rotate(-3deg);  opacity: 1;   }
   100% { transform: scale(1)    rotate(0);      opacity: 1;   }
 }
-/* v4: mocked red-team probe — looks like watching a live attack run. */
+/* v4: mocked emulator probe — looks like watching a live attack run. */
 .attack-probe-btn {
   padding: 3px 10px;
   font-size: 11px; font-weight: 600;
@@ -6660,7 +6660,7 @@ footer {
 .how-it-works,
 .design-card,
 .solution-diagram,
-.redteam-campaigns {
+.emulator-campaigns {
   margin-top: 20px;
   background: var(--panel);
   border: 1.5px solid var(--border);
@@ -6680,7 +6680,7 @@ footer {
   display: block;
 }
 
-/* ----- Multi-turn red-team probes (kill-chain section) ----- */
+/* ----- Multi-turn emulator campaigns (kill-chain section) ----- */
 .rt-campaign {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -9302,7 +9302,7 @@ _HTML_JS = """
   //      ring; the previous scene loses the ring when the next appears.
   //   2. Prose <ol> (.attack-steps)        → fallback for narratives
   //      without structured simulation data. Lines just fade in.
-  // v4: mocked red-team probe — when 'Run probe' is pressed, slide the
+  // v4: mocked emulator probe — when 'Run probe' is pressed, slide the
   // panel open and stream the canned trace lines, then reveal the
   // verdict. Looks like watching a live probe; entirely client-side.
   document.querySelectorAll('.attack-probe-btn').forEach(function (btn) {
@@ -10604,7 +10604,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<div class="metric-value">{probe_total}</div>'
             f'<div class="metric-breakdown" '
             f'title="Single-shot explore-mode probes (LLM brainstorms an '
-            f'attack and fires it) plus landed multi-turn red-team '
+            f'attack and fires it) plus landed multi-turn emulator '
             f'campaigns (goal-directed attacks that probe, learn, and '
             f'adapt across turns)">'
             f'<span class="metric-bd-item">{probe_discovered_n} single-shot</span>'
@@ -12831,7 +12831,7 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
                 rt_files[_bn(p)] = rt_files.get(_bn(p), 0) + 1
                 rt_total += 1
     rt_outputs = [
-        ("output/agentshield-redteam-payloads.md", "Red-team attack walkthroughs",
+        ("output/agentshield-redteam-payloads.md", "Emulator attack walkthroughs",
          (rt_total, sorted(rt_files.keys(), key=lambda k: (-rt_files[k], k)))),
     ]
     total_output = len(html_outputs) + len(md_outputs) + len(rt_outputs)
@@ -12995,7 +12995,7 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     if probe_ran:
         parts.append(
             '<div class="io-engine-phase io-engine-phase-probe">'
-            'Phase 2 &middot; Runtime probe (red-team)</div>'
+            'Phase 2 &middot; Runtime probe (emulator)</div>'
         )
         parts.append('<ul class="io-engine-list">')
         parts.append(
@@ -13057,7 +13057,7 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         parts.append('</ul>')
 
     _render_fix_block(f"Fix recommendations ({len(md_outputs)})", md_outputs)
-    _render_fix_block(f"Red-team handoff ({len(rt_outputs)})", rt_outputs)
+    _render_fix_block(f"Emulator attack walkthroughs ({len(rt_outputs)})", rt_outputs)
     parts.append('</div>')  # /io-pipeline-col output
 
     parts.append('</div>')  # /io-pipeline
@@ -14459,14 +14459,14 @@ def _render_redteam_campaigns(
     blocked = sum(1 for c in campaigns if c.get("status") == "blocked")
     exhausted = sum(1 for c in campaigns if c.get("status") == "exhausted")
 
-    parts.append('<div class="redteam-campaigns">')
+    parts.append('<div class="emulator-campaigns">')
     parts.append('<details class="ref-section" open>')
     parts.append(
         '<summary class="ref-section-summary">'
         '<span class="ref-section-chevron">&#9654;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">'
-        'Multi-turn red-team probes</span>'
+        'Multi-turn emulator campaigns</span>'
         '<span class="ref-section-teaser">Goal-directed attacks that '
         'span multiple turns &mdash; the real test of whether the '
         'agent holds up against an adversary that probes, learns, and '
@@ -14492,7 +14492,7 @@ def _render_redteam_campaigns(
 
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
-    parts.append('</div>')  # /redteam-campaigns
+    parts.append('</div>')  # /emulator-campaigns
 
 
 def _campaign_tactic_flow(turns: list[dict]) -> list[tuple[str, str, str, int]]:
@@ -16000,7 +16000,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         '<li><code>output/agentshield-{semgrep,manifest,copilot}-fixes.md</code> '
         '&mdash; per-tier remediation handoffs</li>'
         '<li><code>output/agentshield-redteam-payloads.md</code> &mdash; '
-        'attack walkthroughs for red-team engagement</li>'
+        'emulator attack walkthroughs per finding</li>'
         '</ul>'
         '</div>'
         '</div>'

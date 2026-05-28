@@ -1558,7 +1558,7 @@ ol.attack-steps.attack-steps-playing li.attack-step.attack-step-visible {
   78%  { transform: scale(0.92) rotate(-3deg);  opacity: 1;   }
   100% { transform: scale(1)    rotate(0);      opacity: 1;   }
 }
-/* v4: mocked red-team probe — looks like watching a live attack run. */
+/* v4: mocked emulator probe — looks like watching a live attack run. */
 .attack-probe-btn {
   padding: 3px 10px;
   font-size: 11px; font-weight: 600;
@@ -3574,7 +3574,7 @@ footer {
 .how-it-works,
 .design-card,
 .solution-diagram,
-.redteam-campaigns {
+.emulator-campaigns {
   margin-top: 20px;
   background: var(--panel);
   border: 1.5px solid var(--border);
@@ -3594,7 +3594,7 @@ footer {
   display: block;
 }
 
-/* ----- Multi-turn red-team probes (kill-chain section) ----- */
+/* ----- Multi-turn emulator campaigns (kill-chain section) ----- */
 .rt-campaign {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -11183,9 +11183,9 @@ Override Ignore previous instructions.</div><div class="emu-scene-content-row"><
 <li class="io-fix-item"><div class="io-fix-head"><code>output/agentshield-manifest-fixes.md</code><span class="io-desc">Manifest fix recommendations</span></div><span class="io-fix-target"><span class="io-dot"></span>11 findings &middot; <code class="io-fix-files">SKILL.md</code></span></li>
 <li class="io-fix-item"><div class="io-fix-head"><code>output/agentshield-copilot-fixes.md</code><span class="io-desc">Copilot fix recommendations</span></div><span class="io-fix-target"><span class="io-dot"></span>13 findings &middot; <code class="io-fix-files">orchestrator.py, memory.py, notifications.py, config.py, controller.py, input_filter.py, tools.py</code></span></li>
 </ul>
-<div class="io-col-section">Red-team handoff (1)</div>
+<div class="io-col-section">Emulator attack walkthroughs (1)</div>
 <ul class="io-col-list io-col-list-fix">
-<li class="io-fix-item"><div class="io-fix-head"><code>output/agentshield-redteam-payloads.md</code><span class="io-desc">Red-team attack walkthroughs</span></div><span class="io-fix-target"><span class="io-dot"></span>13 findings &middot; <code class="io-fix-files">orchestrator.py, controller.py, SKILL.md, config.py, tools.py</code></span></li>
+<li class="io-fix-item"><div class="io-fix-head"><code>output/agentshield-redteam-payloads.md</code><span class="io-desc">Emulator attack walkthroughs</span></div><span class="io-fix-target"><span class="io-dot"></span>13 findings &middot; <code class="io-fix-files">orchestrator.py, controller.py, SKILL.md, config.py, tools.py</code></span></li>
 </ul>
 </div>
 </div>
@@ -11311,9 +11311,9 @@ Override Ignore previous instructions.</div><div class="emu-scene-content-row"><
 <span class="ref-cat ref-cat-detect">detect</span>
 </div>
 <div class="ref-title">System Prompt Jailbreak Markers Python</div>
-<div class="ref-desc">A hardcoded prompt string contains jailbreak / mode-switch markers — phrases like &quot;you are now in unrestricted mode&quot;, &quot;developer mode&quot;, &quot;disable safety filters&quot;, &quot;ignore previous instructions&quot;. These strings are typically left-over from prompt-engineering experiments or red-team scaffolding that should never reach production. Any of these baked into a system prompt actively suppresses safety behaviour; baked into a user-facing prompt template, it primes the model to ignore its own guardrails. Mirrors Cisco AI-Defense PROMPT_INJECTION_UNRESTRICTED_MODE / IGNORE_INSTRUCTIONS signatures applied to the agent's own configured prompts. OWASP LLM01.</div>
+<div class="ref-desc">A hardcoded prompt string contains jailbreak / mode-switch markers — phrases like &quot;you are now in unrestricted mode&quot;, &quot;developer mode&quot;, &quot;disable safety filters&quot;, &quot;ignore previous instructions&quot;. These strings are typically left-over from prompt-engineering experiments or emulator test scaffolding that should never reach production. Any of these baked into a system prompt actively suppresses safety behaviour; baked into a user-facing prompt template, it primes the model to ignore its own guardrails. Mirrors Cisco AI-Defense PROMPT_INJECTION_UNRESTRICTED_MODE / IGNORE_INSTRUCTIONS signatures applied to the agent's own configured prompts. OWASP LLM01.</div>
 <div class="ref-sdks ref-sdks-agnostic"><span class="ref-sdks-label">Covers:</span> SDK-agnostic &mdash; matches string-literal content / generic patterns, fires on any code path regardless of which LLM SDK or framework wraps it.</div>
-<div class="ref-remediation"><strong>Fix:</strong> Delete jailbreak strings from production prompts. If a red-team fixture is genuinely needed (e.g. for evaluation), keep it in a test-only file under `tests/` or `evals/` — AgentShield treats those paths as lower-severity by default. For research or adversarial evaluation, move the strings into a dedicated test corpus that does not sit in the same module as the production prompt template. Whitelist-comments (`# nosec - red-team eval string`) on the production line only hide the symptom; remove the string itself.</div>
+<div class="ref-remediation"><strong>Fix:</strong> Delete jailbreak strings from production prompts. If an adversarial test fixture is genuinely needed (e.g. for evaluation), keep it in a test-only file under `tests/` or `evals/` — AgentShield treats those paths as lower-severity by default. For research or adversarial evaluation, move the strings into a dedicated test corpus that does not sit in the same module as the production prompt template. Whitelist-comments (`# nosec - adversarial eval string`) on the production line only hide the symptom; remove the string itself.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -13051,7 +13051,7 @@ Override Ignore previous instructions.</div><div class="emu-scene-content-row"><
 <span class="finding-tag">AST10 AST01</span>
 <span class="finding-tag">OWASP LLM LLM01</span>
 </div>
-<div class="ref-remediation"><strong>Fix:</strong> Remove concealment / jailbreak strings from the skill body. If they're red-team fixtures, move them to a dedicated test corpus outside the published manifest.</div>
+<div class="ref-remediation"><strong>Fix:</strong> Remove concealment / jailbreak strings from the skill body. If they're adversarial test fixtures, move them to a dedicated test corpus outside the published manifest.</div>
 </div>
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -13559,7 +13559,7 @@ Override Ignore previous instructions.</div><div class="emu-scene-content-row"><
 <div class="how-arrow" aria-hidden="true">&#9660;</div>
 <div class="how-stage how-stage-merge"><div class="how-stage-head"><span class="how-stage-num">4</span><span class="how-stage-title">Merge &amp; render</span></div><div class="how-stage-cli"><span class="how-stage-cli-label">Run:</span><code class="how-stage-cli-cmd">agentshield merge &lt;path&gt; --output-html report.html [--open]</code><span class="how-stage-cli-note">&mdash; folds every artifact from Stages 2&ndash;3 (<code>tier1-results.json</code>, <code>tier2-findings.json</code>, <code>probe-results.json</code>, <code>probe-discovered.json</code>) into one HTML report. Re-run any time the underlying files change &mdash; the report rebuilds idempotently.</span></div><div class="how-stage-body"><ul class="how-list"><li>Combines Tier 1 + Tier 2 findings; tags Tier 1 with Tier 2 verdicts (TP / CD / FP)</li><li>Reads <code>probe-results.json</code> if present and attaches the live trace to each finding (LIVE badge)</li><li>Reads <code>probe-discovered.json</code> if present and folds LLM-adversary discoveries in under Copilot with a Probe sub-badge</li><li>D/D/R categorisation &mdash; Detect (surfaces) / Defend (missing controls) / Respond (observability gaps)</li><li>Builds the framework-coverage matrix &mdash; OWASP LLM, OWASP Agentic, MITRE ATLAS, CWE, AST10</li></ul></div></div>
 <div class="how-arrow" aria-hidden="true">&#9660;</div>
-<div class="how-stage how-stage-output"><div class="how-stage-head"><span class="how-stage-num">5</span><span class="how-stage-title">Output artifacts</span></div><div class="how-stage-body"><ul class="how-list"><li><code>output/agentshield-report.html</code> &mdash; interactive dashboard (this page)</li><li><code>output/agentshield-report-print.html</code> &mdash; static / printable variant</li><li><code>output/agentshield-{semgrep,manifest,copilot}-fixes.md</code> &mdash; per-tier remediation handoffs</li><li><code>output/agentshield-redteam-payloads.md</code> &mdash; attack walkthroughs for red-team engagement</li></ul></div></div>
+<div class="how-stage how-stage-output"><div class="how-stage-head"><span class="how-stage-num">5</span><span class="how-stage-title">Output artifacts</span></div><div class="how-stage-body"><ul class="how-list"><li><code>output/agentshield-report.html</code> &mdash; interactive dashboard (this page)</li><li><code>output/agentshield-report-print.html</code> &mdash; static / printable variant</li><li><code>output/agentshield-{semgrep,manifest,copilot}-fixes.md</code> &mdash; per-tier remediation handoffs</li><li><code>output/agentshield-redteam-payloads.md</code> &mdash; emulator attack walkthroughs per finding</li></ul></div></div>
 </div>
 </div>
 </details>
@@ -13823,7 +13823,7 @@ Semgrep fingerprint <code>80a100466ff6dfe3…</code>
   //      ring; the previous scene loses the ring when the next appears.
   //   2. Prose <ol> (.attack-steps)        → fallback for narratives
   //      without structured simulation data. Lines just fade in.
-  // v4: mocked red-team probe — when 'Run probe' is pressed, slide the
+  // v4: mocked emulator probe — when 'Run probe' is pressed, slide the
   // panel open and stream the canned trace lines, then reveal the
   // verdict. Looks like watching a live probe; entirely client-side.
   document.querySelectorAll('.attack-probe-btn').forEach(function (btn) {

@@ -45,7 +45,7 @@ Total rules in this skill: **10**
 
 **What it flags:** SKILL.md body prose contains concealment, jailbreak, or exfil instructions the host LLM may treat as authoritative — the same prose-injection surface documented in the ClawHavoc / ToxicSkills 2026 campaigns.
 
-**Remediation:** Remove concealment / jailbreak strings from the skill body. If they're red-team fixtures, move them to a dedicated test corpus outside the published manifest.
+**Remediation:** Remove concealment / jailbreak strings from the skill body. If they're adversarial test fixtures, move them to a dedicated test corpus outside the published manifest.
 
 ### `AS-M-D-AST03-001` — AST03 — unrestricted network egress
 

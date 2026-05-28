@@ -16,7 +16,7 @@ entries:
     summary: >-
       LLM call paths lack structured logging or tracing instrumentation. Without
       an audit trail you cannot reconstruct what the agent saw, decided, or did,
-      blocking incident response and post-hoc red-team analysis. Closest external
+      blocking incident response and post-hoc emulator analysis. Closest external
       analogue is OWASP LLM10 (unbounded consumption) and NIST AI RMF
       MEASURE-2.7, but neither captures the specific "no logging at all" failure.
     rule_ids:

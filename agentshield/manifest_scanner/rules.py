@@ -795,7 +795,7 @@ RULE_DESCRIPTIONS = [
         "frameworks": {"ast": ["AST01"], "owasp_llm": ["LLM01"]},
         "remediation": (
             "Remove concealment / jailbreak strings from the skill body. "
-            "If they're red-team fixtures, move them to a dedicated test "
+            "If they're adversarial test fixtures, move them to a dedicated test "
             "corpus outside the published manifest."
         ),
     },

@@ -7,7 +7,7 @@ rules:
       phrases like "you are now in unrestricted mode", "developer mode",
       "disable safety filters", "ignore previous instructions". These
       strings are typically left-over from prompt-engineering experiments
-      or red-team scaffolding that should never reach production. Any of
+      or emulator test scaffolding that should never reach production. Any of
       these baked into a system prompt actively suppresses safety
       behaviour; baked into a user-facing prompt template, it primes the
       model to ignore its own guardrails. Mirrors Cisco AI-Defense
@@ -43,14 +43,14 @@ rules:
         agentshield_v1: []
       languages: [python]
       remediation: >-
-        Delete jailbreak strings from production prompts. If a red-team
-        fixture is genuinely needed (e.g. for evaluation), keep it in a
+        Delete jailbreak strings from production prompts. If an adversarial
+        test fixture is genuinely needed (e.g. for evaluation), keep it in a
         test-only file under `tests/` or `evals/` — AgentShield treats
         those paths as lower-severity by default. For research or
         adversarial evaluation, move the strings into a dedicated test
         corpus that does not sit in the same module as the production
         prompt template. Whitelist-comments
-        (`# nosec - red-team eval string`) on the production line only
+        (`# nosec - adversarial eval string`) on the production line only
         hide the symptom; remove the string itself.
       references:
         - "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"

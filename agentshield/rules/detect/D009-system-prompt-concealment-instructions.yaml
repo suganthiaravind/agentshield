@@ -16,7 +16,7 @@ rules:
       # f-string / raw / byte prefixes). These phrases have no legitimate
       # production use — the only paths that produce them are (1) a
       # developer instructing the agent to deceive its user, or (2) a
-      # red-team fixture that should not have shipped.
+      # adversarial test fixture that should not have shipped.
       - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdo\s+not\s+(tell|inform|mention|notify)\s+(the\s+)?user[^"\x27]*["\x27]{1,3}'
       - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bdon[\x27’]t\s+(tell|inform|mention)\s+(the\s+)?user[^"\x27]*["\x27]{1,3}'
       - pattern-regex: '(?i)[fFrRbB]*["\x27]{1,3}[^"\x27]*\bhide\s+(this|that|the)\s+(action|operation|step|tool\s+call|fact)[^"\x27]*["\x27]{1,3}'
