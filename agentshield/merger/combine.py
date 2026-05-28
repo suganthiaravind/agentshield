@@ -1427,24 +1427,24 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         # that follow the landing one were never tried and shouldn't appear.
         if landing_lyr and landing_lyr in catalog_layers:
             catalog_layers = catalog_layers[:catalog_layers.index(landing_lyr) + 1]
-        pipeline_map = emu_data.get("pipeline_map") or {}
-        first_key = next(iter(pipeline_map), "input_guard")
-        first_entry = pipeline_map.get(first_key) or {}
-        block_label = (
-            (first_entry.get("label") or first_key.replace("_", " ").title())
-            if isinstance(first_entry, dict)
-            else first_key.replace("_", " ").title()
-        )
+        # Build a lookup so blocked steps can include the actual payload text.
+        lyr_text_map = {item["layer"]: item.get("text", "") for item in catalog_items}
         for lyr in catalog_layers:
             if lyr == landing_lyr:
                 seed_traces[lyr] = list(emu_trace)
             else:
                 seed_traces[lyr] = [{
-                    "step": first_key,
-                    "step_label": block_label,
+                    # Use user_prompt key so the actor pair, chip highlight, and
+                    # narrative all come from the standard pipeline definitions.
+                    "step": "user_prompt",
+                    "step_label": "Input Guard",
                     "outcome": "blocked",
-                    "actor": "system",
-                    "detail": "Payload intercepted and blocked before reaching execution.",
+                    "input": lyr_text_map.get(lyr, ""),
+                    "outcome_reasoning": (
+                        "The payload is intercepted at the input boundary — "
+                        "a keyword check, deny-list, or intent classifier blocks "
+                        "it before it reaches the LLM. Attack does not advance."
+                    ),
                 }]
 
     use_seed_tabs = bool(seed_traces)
