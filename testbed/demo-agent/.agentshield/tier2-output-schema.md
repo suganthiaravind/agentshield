@@ -55,6 +55,7 @@ Each item in `findings[]`:
   "line": 27,
   "snippet": "return chatClient.prompt().user(req.getQ()).call().content();",
   "message": "Unsanitised user input flows directly into ChatClient prompt.",
+  "reasoning": "ChatController.java:27 calls chatClient.prompt().user(req.getQ()) with no prior sanitisation. No guardrail import is present in this file or its imports. The raw HTTP query parameter is the only input to the LLM.",
   "owasp_llm": ["LLM01"],
   "owasp_agentic": ["T6"],
   "mitre_atlas": ["AML.T0051"],
@@ -74,6 +75,7 @@ Each item in `findings[]`:
 | `line` | integer | 1-indexed line number of the first line of the matched pattern. |
 | `snippet` | string | Verbatim source line(s) — keep short, 1-3 lines max. |
 | `message` | string | One-sentence statement of the issue. |
+| `reasoning` | string | **Why** you flagged this: cite the specific file:line(s) you read, what was absent (no guardrail, no auth check, etc.), and what made you confident it is a real issue rather than a pattern match. 1–3 sentences. |
 | `owasp_llm` | array[string] | OWASP LLM Top 10 v2 IDs (e.g. `["LLM01", "LLM05"]`). Empty array if none apply. |
 | `owasp_agentic` | array[string] | OWASP Agentic AI Top 10 IDs (e.g. `["T6"]`). Empty array if none apply. |
 | `mitre_atlas` | array[string] | ATLAS technique IDs (e.g. `["AML.T0051"]`). Empty array if none apply. |
@@ -86,7 +88,7 @@ Each item in `findings[]`:
 |---|---|---|
 | `confidence` | enum | One of `"high"`, `"medium"`, `"low"`. Default if omitted: `"medium"`. Use `"low"` when you're flagging something but unsure. |
 | `related_files` | array[string] | If the finding spans multiple files, list the others. |
-| `notes` | string | Free-text reasoning if the finding needs explanation beyond `message`. |
+| `notes` | string | Additional free-text context beyond `reasoning` (accepted as alias for `reasoning` by the merger). |
 
 ## Tier1FPCallout object
 
