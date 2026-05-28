@@ -5188,7 +5188,7 @@ footer {
 }
 .framework-group-counts {
   display: grid;
-  grid-template-columns: 42px 140px 76px 104px;
+  grid-template-columns: 42px 168px 108px 104px;
   align-items: center;
   gap: 6px;
 }
@@ -12140,7 +12140,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append('<div class="coverage-legend">')
     parts.append(
         '<span><span class="leg-swatch leg-swatch-issues"></span>'
-        'Scanned &mdash; with findings</span>'
+        'Scanned &mdash; scanned with findings</span>'
         '<span><span class="leg-swatch leg-swatch-clean"></span>'
         'Scanned &mdash; clean this run</span>'
         '<span><span class="leg-swatch leg-swatch-gap"></span>'
@@ -12174,8 +12174,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<span class="cov-total-lbl">risks</span>'
         f'</div>'
         f'<div class="cov-totals-chips">'
-        f'<span class="cov-badge cov-badge-issues">{_t_issues} with findings</span>'
-        f'<span class="cov-badge cov-badge-clean">{_t_clean} clean</span>'
+        f'<span class="cov-badge cov-badge-issues">{_t_issues} scanned with findings</span>'
+        f'<span class="cov-badge cov-badge-clean">{_t_clean} scanned clean</span>'
         f'<span class="cov-badge cov-badge-gap">{_t_gap} not scanned</span>'
         f'</div>'
         f'</div>'
@@ -12248,8 +12248,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
             f'<span class="framework-group-counts">'
             f'<span class="cov-badge cov-badge-total">{total}</span>'
-            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} with findings</span>'
-            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} clean</span>'
+            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} scanned with findings</span>'
+            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} scanned clean</span>'
             f'<span class="cov-badge cov-badge-gap">{len(items_gap)} not scanned</span>'
             f'</span>'
             f'<a href="{_html_escape(k_url)}" class="framework-group-link" '

