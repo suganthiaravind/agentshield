@@ -94,12 +94,13 @@ To run the emulator:
    .agentshield/agent-emulator-instructions.md and the output
    schema at .agentshield/agent-emulator-output-schema.md.
 
-   Walk the agent's runtime pipeline from source code (user prompt
-   → RAG → system prompt → planner → tool choice → tool output →
-   re-planning → final answer). For each catalogued attack class
-   listed in the instructions, identify the pipeline step(s) it
-   targets, predict the pipeline behaviour under that attack, and
-   cite the file:line evidence for every prediction.
+   First classify the agent type (Step 0 in the instructions):
+   interactive, batch, sub-agent, or orchestrator. Then walk the
+   agent's runtime pipeline from source code using the pipeline
+   model for that type. For each applicable catalogued attack class,
+   identify the pipeline step(s) it targets, predict the pipeline
+   behaviour under that attack, and cite the file:line evidence for
+   every prediction.
 
    Use the GENERIC catalogue payloads exactly as shipped — do not
    adapt the attacker-side text from source code. The intelligence
@@ -130,7 +131,18 @@ discrete steps**. Each step is a place where:
    that step.
 4. There is a **specific defensive control** that should be present.
 
-| # | Step | What it does | Attacker control | Defensive control |
+The emulator supports **four agent types** — interactive chat agents,
+batch/pipeline agents, sub-agents, and orchestrators. Each type reuses
+the same 8 pipeline_map keys but with type-appropriate step names and
+attack surfaces. **No live endpoint is required for any type** — the
+emulator walks the code regardless of whether the agent exposes an HTTP
+endpoint, runs as a Spark job, or is invoked by a parent orchestrator.
+
+The table below shows the interactive (chat) step names; see §0 and
+§1b/c/d of the instructions file for the step names used by batch,
+sub-agent, and orchestrator types.
+
+| # | Step (interactive) | What it does | Attacker control | Defensive control |
 | -- | -- | -- | -- | -- |
 | 1 | **User prompt** | Reads chat input from the request body | Direct attacker input | Input sanitiser, guardrail |
 | 2 | **RAG context** | Retrieves documents / vector chunks / memory recall | Poisoned retrieved doc, poisoned vector entry | Provenance check, content classifier on retrieval |
@@ -143,9 +155,11 @@ discrete steps**. Each step is a place where:
 
 Not every agent has every step. A single-shot chain-invoke agent
 collapses steps 4–7 into one LLM call. A RAG agent has a fat step 2.
-A multi-agent orchestrator has multiple round-trips through 4–7.
-The emulator's first job is to map what *this specific agent* has;
-the second is to inject attacks at the steps that exist.
+A batch pipeline maps step 1 to "data source / trigger" and step 8
+to "downstream write". A sub-agent maps step 1 to "orchestrator
+message". The emulator's first job is to classify the agent type and
+map what *this specific agent* has; the second is to inject attacks
+at the steps that exist.
 
 ## When to run this vs the static Tier 2 vs the runtime probe
 

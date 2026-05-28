@@ -1657,6 +1657,8 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         "present": True,
         "honesty_label": str(raw.get("honesty_label") or "Behaviour emulator"),
         "scanned_at": str(raw.get("scanned_at") or ""),
+        "agent_type": str(raw.get("agent_type") or "interactive"),
+        "agent_type_notes": str(raw.get("agent_type_notes") or ""),
         "pipeline_map": pipeline_map,
         "attack_class_traces": traces_out,
     }
@@ -1842,6 +1844,9 @@ _EMULATOR_CLASS_LABELS: dict[str, str] = {
     "tool-argument-injection": "Tool argument injection (Agentic T2 / CWE-78 / CWE-89)",
     "insecure-output-handling": "Insecure output handling (LLM05)",
     "partial-defense-bypass": "Partial-defence bypass \u2014 layered controls evaded (LLM01 / T6)",
+    "batch-data-poisoning": "Batch data poisoning \u2014 indirect injection via pipeline input",
+    "cross-agent-injection": "Cross-agent prompt injection \u2014 sub-agent context abuse",
+    "trust-escalation": "Trust escalation / agent impersonation",
 }
 
 # Per-attack-class framework mappings curated to >=75% coverage.
@@ -1948,6 +1953,27 @@ _EMULATOR_CLASS_FRAMEWORKS: dict[str, dict[str, list[str]]] = {
         "cwe": ["CWE-200"],
         "ast": [],
     },
+    "batch-data-poisoning": {
+        "owasp_llm": ["LLM01"],
+        "owasp_agentic": ["T6"],
+        "mitre_atlas": ["AML.T0020"],
+        "cwe": ["CWE-20"],
+        "ast": [],
+    },
+    "cross-agent-injection": {
+        "owasp_llm": ["LLM01"],
+        "owasp_agentic": ["T6"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": ["CWE-200"],
+        "ast": [],
+    },
+    "trust-escalation": {
+        "owasp_llm": [],
+        "owasp_agentic": ["T9"],
+        "mitre_atlas": ["AML.T0051"],
+        "cwe": ["CWE-285"],
+        "ast": [],
+    },
 }
 
 _EMULATOR_CATEGORY_BY_CLASS: dict[str, str] = {
@@ -1965,6 +1991,9 @@ _EMULATOR_CATEGORY_BY_CLASS: dict[str, str] = {
     "tool-argument-injection": "detect",
     "insecure-output-handling": "detect",
     "partial-defense-bypass": "detect",
+    "batch-data-poisoning": "detect",
+    "cross-agent-injection": "detect",
+    "trust-escalation": "defend",
 }
 
 _EMULATOR_SEVERITY_BY_VERDICT: dict[str, str] = {
@@ -2098,6 +2127,39 @@ _EMULATOR_REMEDIATION: dict[str, str] = {
         "or regex classifier that scans the final-answer content before emission, "
         "so that a payload defeating the input and planner layers still cannot exfiltrate "
         "protected content through the response."
+    ),
+    "batch-data-poisoning": (
+        "Treat every data record as untrusted user content — not as a trusted instruction. "
+        "Add a content-trust boundary between data ingestion and the LLM prompt template: "
+        "(1) wrap record values in explicit delimiters or quotes so the template makes "
+        "the data/instruction boundary structurally unambiguous; (2) apply a content "
+        "classifier or keyword filter to record values before they are interpolated into "
+        "the prompt; (3) validate LLM output against an expected schema before the "
+        "downstream write step so injected instructions that redirect output are caught "
+        "before being persisted."
+    ),
+    "cross-agent-injection": (
+        "Apply the same input-trust rules to orchestrator messages and sub-agent responses "
+        "as you would to direct user input. "
+        "On the sub-agent side: treat the orchestrator message as untrusted input — "
+        "sanitise it the same way you would a user request, and add anti-injection "
+        "instructions to the sub-agent's system prompt. "
+        "On the orchestrator side: treat sub-agent responses as untrusted tool output — "
+        "pass them through a content classifier or output schema validator before feeding "
+        "them to the re-planning LLM call so that injected instructions in the response "
+        "cannot redirect the orchestrator's next action."
+    ),
+    "trust-escalation": (
+        "Never derive trust level from message content. "
+        "Authenticate inter-agent calls at the transport or envelope layer (signed JWT, "
+        "mutual TLS, IAM role) rather than relying on self-declared identity claims "
+        "inside the message body. "
+        "Bind each sub-agent's capabilities to a fixed scope in the orchestrator's "
+        "routing config — sub-agents should not be able to self-upgrade their permissions "
+        "by asserting elevated roles in their response. "
+        "Apply a response-schema validator between the sub-agent response step and the "
+        "re-planning LLM call so that out-of-schema content (including identity claims) "
+        "is stripped before synthesis."
     ),
 }
 
@@ -5232,6 +5294,27 @@ footer {
 .io-agent-surface-none {
   font-size: 11px; color: var(--text-muted); margin: 4px 0 0;
 }
+.io-agent-surface-disclaimer {
+  font-size: 11px; color: var(--text-muted); font-style: italic; margin: 2px 0 6px;
+}
+.io-agent-role-group {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 3px;
+}
+.io-agent-role-group:first-of-type { margin-top: 6px; }
+.io-role-chip {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+  white-space: nowrap; cursor: default;
+}
+.io-role-chip-orch  { background: #ede9fe; color: #5b21b6; }
+.io-role-chip-sub   { background: #dcfce7; color: #15803d; }
+.io-role-chip-batch { background: #fef3c7; color: #92400e; }
+.io-role-chip-int   { background: #dbeafe; color: #1e40af; }
+.io-role-count {
+  font-size: 11px; font-weight: 500; color: var(--text-muted);
+}
+.io-role-file-list { margin-top: 2px; }
 
 /* Seed-tab switcher — shown above the trace steps when seed_traces has multiple entries */
 .emu-seed-tabs {
@@ -8413,6 +8496,19 @@ footer {
   margin-right: 3px;
   white-space: nowrap;
 }
+.emu-ref-type-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 0px 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .emu-ref-anim-list {
   margin: 12px 0 20px;
   border: 1px solid #e2e8f0;
@@ -10370,6 +10466,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'targeted pipeline step is not present in this agent.">'
         f'<span class="metric-bd-item">{emu_landed} lands</span>'
         f'<span class="metric-bd-sep">·</span>'
+        f'<span class="metric-bd-item">{emu_partial} partial</span>'
+        f'<span class="metric-bd-sep">·</span>'
         f'<span class="metric-bd-item">{emu_blocked} blocked</span>'
         f'<span class="metric-bd-sep">·</span>'
         f'<span class="metric-bd-item">{emu_inconclusive} inconcl.</span>'
@@ -10802,6 +10900,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'<div class="finding-remediation rem-reasoning">'
                         f'<span class="fld-label fld-label-reasoning">Reasoning</span>'
                         f'<span>{_html_escape(f["_tier2_reasoning"])}</span>'
+                        f'</div>'
+                    )
+                if origin == "tier2" and f.get("notes"):
+                    parts.append(
+                        f'<div class="finding-remediation rem-reasoning">'
+                        f'<span class="fld-label fld-label-reasoning">Reasoning</span>'
+                        f'<span>{_html_escape(f["notes"])}</span>'
                         f'</div>'
                     )
                 if f.get("remediation"):
@@ -11874,8 +11979,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     parts.append(
         f'<div class="coverage-totals-bar">'
         f'<span class="cov-totals-label">Total</span>'
-        f'<span class="cov-badge cov-badge-issues">{_t_issues} with issues</span>'
-        f'<span class="cov-badge cov-badge-clean">{_t_clean} clean</span>'
+        f'<span class="cov-badge cov-badge-issues">{_t_issues} scanned risks — with findings</span>'
+        f'<span class="cov-badge cov-badge-clean">{_t_clean} scanned risks — clean</span>'
         f'<span class="cov-badge cov-badge-gap">{_t_gap} not scanned</span>'
         f'</div>'
     )
@@ -11946,8 +12051,8 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<summary class="framework-group-summary">'
             f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
             f'<span class="framework-group-counts">'
-            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} with issues</span>'
-            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} clean</span>'
+            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} scanned risks — with findings</span>'
+            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} scanned risks — clean</span>'
             f'<span class="cov-badge cov-badge-gap">{len(items_gap)} not scanned</span>'
             f'</span>'
             f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
@@ -12059,7 +12164,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<section class="static-section" data-panel="reference">')
     else:
         parts.append('<div class="tab-panel" role="tabpanel" data-panel="reference">')
-    _render_reference_panel(parts, report=r)
+    _render_reference_panel(parts, report=r, static=static)
     parts.append("</section>" if static else "</div>")  # /tab-panel
 
     parts.append("</div>")  # /tab-panels (or /static-report)
@@ -12295,39 +12400,100 @@ def _fix_file_targets(r: Any) -> dict[str, tuple[int, list[str]]]:
 def _count_agent_entry_points(repo_root: "Path", code_files: list[str]) -> dict:
     """Scan source files for known agent instantiation / invocation patterns.
 
-    Returns {total, by_file: {basename: [framework, ...]}, frameworks: [str]}.
+    Returns {
+      total, frameworks,
+      by_file:  {basename: [framework, ...]},        # flat (back-compat)
+      by_role:  {role: [{file, framework}, ...]},    # grouped by agent role
+    }
+    Roles: "orchestrator", "sub-agent", "batch", "interactive".
     Only reads files that exist; silently skips unreadable ones.
     """
     import re
     from os.path import basename as _bn
 
-    _PATTERNS: list[tuple[re.Pattern, str]] = [
-        (re.compile(r'\bAgentExecutor\s*\('), "LangChain"),
-        (re.compile(r'\bcreate_react_agent\s*\('), "LangChain"),
-        (re.compile(r'\bcreate_openai_tools_agent\s*\('), "LangChain"),
-        (re.compile(r'\bcreate_tool_calling_agent\s*\('), "LangChain"),
-        (re.compile(r'\binitialize_agent\s*\('), "LangChain"),
-        (re.compile(r'\bchain\.invoke\s*\('), "LangChain"),
-        (re.compile(r'\bStateGraph\s*\('), "LangGraph"),
-        (re.compile(r'\bBedrockAgentRuntime\b'), "AWS Bedrock"),
-        (re.compile(r'\binvoke_agent\s*\('), "AWS Bedrock"),
-        (re.compile(r'\bLlmAgent\s*\('), "Google ADK"),
-        (re.compile(r'\bReActAgent\b'), "LlamaIndex"),
-        (re.compile(r'\bFunctionCallingAgent\b'), "LlamaIndex"),
-        (re.compile(r'\bAiServices\.(builder|create)\s*\('), "LangChain4j"),
-        (re.compile(r'\bAgent\s*\(\s*name\s*='), "OpenAI Agents"),
+    # (pattern, framework, role)
+    # role: orchestrator = coordinates other agents/calls invoke_agent
+    #       sub-agent    = defined as a callable agent without a user endpoint
+    #       batch        = processes data records / stream; no user input path
+    #       interactive  = user-facing chat/API agent
+    #
+    # SMARTSDK = JPMorgan Chase wrapper around Google ADK.
+    #   Invocation sinks: runner.run_stream(agent, input), runner.run_async(agent, input),
+    #   Console(runner.run_stream(agent, input)), Content(parts=[Part(text=X)]) form.
+    #   Python package: smart_sdk.* / import smart_sdk.
+    #   Java package:   com.jpmchase.cdaosmart.* / com.jpmchase.smartsdk.*
+    #
+    # RADSDK = JPMorgan Chase wrapper around LlamaIndex.
+    #   Python package: radsdk.*  (agent class names mirror LlamaIndex conventions)
+    _PATTERNS: list[tuple[re.Pattern, str, str]] = [
+        # ── Orchestrators ───────────────────────────────────────────────────
+        (re.compile(r'\bStateGraph\s*\('), "LangGraph", "orchestrator"),
+        (re.compile(r'\bBedrockAgentRuntime\b'), "AWS Bedrock", "orchestrator"),
+        (re.compile(r'\binvoke_agent\s*\('), "AWS Bedrock", "orchestrator"),
+        (re.compile(r'\bRunner\.run\s*\('), "Google ADK", "orchestrator"),
+        (re.compile(r'\bAgentOrchestrator\b'), "Google ADK", "orchestrator"),
+        (re.compile(r'\bMultiAgentOrchestrator\b'), "Multi-agent", "orchestrator"),
+        (re.compile(r'\bSwarm\s*\('), "OpenAI Swarm", "orchestrator"),
+        (re.compile(r'\bhandoff\s*\('), "OpenAI Agents", "orchestrator"),
+        # ── Sub-agents ──────────────────────────────────────────────────────
+        # Google ADK (direct) — also the underlying type for SMARTSDK agents
+        (re.compile(r'\bLlmAgent\s*\('), "Google ADK", "sub-agent"),
+        # LlamaIndex (direct) — also the underlying type for RADSDK agents
+        (re.compile(r'\bReActAgent\b'), "LlamaIndex", "sub-agent"),
+        (re.compile(r'\bFunctionCallingAgent\b'), "LlamaIndex", "sub-agent"),
+        (re.compile(r'\bAiServices\.(builder|create)\s*\('), "LangChain4j", "sub-agent"),
+        (re.compile(r'\bAgent\s*\(\s*name\s*='), "OpenAI Agents", "sub-agent"),
+        (re.compile(r'\b@mcp\.tool\b'), "MCP", "sub-agent"),
+        (re.compile(r'\bserver\.add_tool\s*\('), "MCP", "sub-agent"),
+        # RADSDK Python (wraps LlamaIndex) — import marker; agent class names
+        # mirror LlamaIndex and are caught by the LlamaIndex patterns above.
+        # Import detection ensures the file is labelled "RADSDK" not "LlamaIndex".
+        (re.compile(r'from\s+radsdk\b'), "RADSDK", "sub-agent"),
+        (re.compile(r'import\s+radsdk\b'), "RADSDK", "sub-agent"),
+        # ── Batch / pipeline ────────────────────────────────────────────────
+        (re.compile(r'\bSparkSession\b'), "Apache Spark", "batch"),
+        (re.compile(r'\bglueContext\b', re.IGNORECASE), "AWS Glue", "batch"),
+        (re.compile(r'\bGlueContext\b'), "AWS Glue", "batch"),
+        (re.compile(r'\bbedrock(?:_client|_runtime)?\.invoke_model\s*\('),
+         "AWS Bedrock", "batch"),
+        (re.compile(r'\bbedrock(?:_client|_runtime)?\.converse\s*\('),
+         "AWS Bedrock", "batch"),
+        (re.compile(r'event\s*\[\s*["\']Records["\']\s*\]'), "AWS Lambda", "batch"),
+        (re.compile(r'\bStepFunctionsClient\b'), "AWS Step Functions", "batch"),
+        # ── Interactive / standalone ─────────────────────────────────────────
+        (re.compile(r'\bAgentExecutor\s*\('), "LangChain", "interactive"),
+        (re.compile(r'\bcreate_react_agent\s*\('), "LangChain", "interactive"),
+        (re.compile(r'\bcreate_openai_tools_agent\s*\('), "LangChain", "interactive"),
+        (re.compile(r'\bcreate_tool_calling_agent\s*\('), "LangChain", "interactive"),
+        (re.compile(r'\binitialize_agent\s*\('), "LangChain", "interactive"),
+        (re.compile(r'\bchain\.invoke\s*\('), "LangChain", "interactive"),
+        # SMARTSDK Python (wraps Google ADK) — invocation sinks.
+        # runner.run_stream / runner.run_async are the primary entry-point
+        # patterns; Console(...) is the REPL wrapper form.
+        # These mark the file that INVOKES the agent → interactive.
+        # (The agent definition itself uses LlmAgent, caught above as sub-agent.)
+        (re.compile(r'from\s+smart_sdk\b'), "SMARTSDK", "interactive"),
+        (re.compile(r'import\s+smart_sdk\b'), "SMARTSDK", "interactive"),
+        (re.compile(r'\brun_stream\s*\('), "SMARTSDK", "interactive"),
+        (re.compile(r'\brun_async\s*\('), "SMARTSDK", "interactive"),
+        (re.compile(r'\bConsole\s*\(\s*\w+\.run_'), "SMARTSDK", "interactive"),
+        # SMARTSDK Java (wraps Google ADK) — package import markers and runner.
+        (re.compile(r'com\.jpmchase\.cdaosmart\b'), "SMARTSDK (Java)", "interactive"),
+        (re.compile(r'com\.jpmchase\.smartsdk\b'), "SMARTSDK (Java)", "interactive"),
+        (re.compile(r'\.runStream\s*\('), "SMARTSDK (Java)", "interactive"),
     ]
+
+    _ROLE_ORDER = ["orchestrator", "sub-agent", "batch", "interactive"]
 
     total = 0
     by_file: dict[str, list[str]] = {}
     seen_frameworks: list[str] = []
+    by_role: dict[str, list[dict]] = {r: [] for r in _ROLE_ORDER}
 
     for path_str in code_files:
         from pathlib import Path as _Path
         p = _Path(path_str)
         if not p.is_absolute():
-            # tier1 paths are CWD-relative; tier2 paths are bare basenames —
-            # try CWD-relative first, fall back to repo_root / basename.
             if not p.exists():
                 p = repo_root / _bn(path_str)
         if not p.exists():
@@ -12337,19 +12503,38 @@ def _count_agent_entry_points(repo_root: "Path", code_files: list[str]) -> dict:
         except Exception:
             continue
         file_fws: list[str] = []
-        for pat, fw in _PATTERNS:
+        # Track (fw, role) pairs seen in this file to dedupe per-file
+        file_role_entries: dict[str, dict] = {}  # key = "fw|role"
+        for pat, fw, role in _PATTERNS:
             hits = pat.findall(text)
             if hits:
                 total += len(hits)
                 file_fws.extend([fw] * len(hits))
                 if fw not in seen_frameworks:
                     seen_frameworks.append(fw)
+                key = f"{fw}|{role}"
+                if key not in file_role_entries:
+                    file_role_entries[key] = {
+                        "file": _bn(path_str),
+                        "framework": fw,
+                        "role": role,
+                    }
         if file_fws:
-            # dedupe frameworks per file while preserving first-seen order
             deduped = list(dict.fromkeys(file_fws))
             by_file[_bn(path_str)] = deduped
+        for entry in file_role_entries.values():
+            role = entry["role"]
+            # avoid duplicate (file, fw, role) in by_role
+            existing = [(e["file"], e["framework"]) for e in by_role[role]]
+            if (entry["file"], entry["framework"]) not in existing:
+                by_role[role].append(entry)
 
-    return {"total": total, "by_file": by_file, "frameworks": seen_frameworks}
+    return {
+        "total": total,
+        "by_file": by_file,
+        "frameworks": seen_frameworks,
+        "by_role": by_role,
+    }
 
 
 def _render_input_output_panel(r: Any, parts: list[str]) -> None:
@@ -12526,8 +12711,13 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
             parts.append(_file_li(path))
         parts.append('</ul>')
 
-    # ---- Attack surface context ----
-    parts.append('<div class="io-col-section io-col-section-surface">Agent surface</div>')
+    # ---- Attack surface context — grouped by agent role ----
+    parts.append('<div class="io-col-section io-col-section-surface">Agent entry points</div>')
+    parts.append(
+        '<p class="io-agent-surface-disclaimer">'
+        'Role labels are pattern-based estimates — verify against your architecture.'
+        '</p>'
+    )
     if agent_surface["total"] > 0:
         fw_str = " &middot; ".join(_html_escape(fw) for fw in agent_surface["frameworks"])
         parts.append(
@@ -12536,15 +12726,47 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
             f'<span class="io-agent-fw">&middot; {fw_str}</span>'
             f'</div>'
         )
-        parts.append('<ul class="io-col-list">')
-        for fname, fws in agent_surface["by_file"].items():
-            fw_label = ", ".join(fws)
-            parts.append(
-                f'<li><code>{_html_escape(fname)}</code>'
-                f'<span class="io-count io-count-surface">'
-                f'<span class="io-dot"></span>{_html_escape(fw_label)}</span></li>'
-            )
-        parts.append('</ul>')
+        # Role groups in priority order
+        _ROLE_META = {
+            "orchestrator": ("Orchestrators",  "io-role-chip-orch",   "Main agent — coordinates sub-agents or tools"),
+            "sub-agent":    ("Sub-agents",      "io-role-chip-sub",    "Worker agent — invoked by an orchestrator"),
+            "batch":        ("Batch pipelines", "io-role-chip-batch",  "Data pipeline — processes records without user interaction"),
+            "interactive":  ("Interactive",     "io-role-chip-int",    "User-facing agent — receives direct user input"),
+        }
+        by_role = agent_surface.get("by_role", {})
+        any_role_entries = any(by_role.get(role) for role in _ROLE_META)
+        if any_role_entries:
+            for role, (label, chip_cls, tooltip) in _ROLE_META.items():
+                entries = by_role.get(role) or []
+                if not entries:
+                    continue
+                parts.append(
+                    f'<div class="io-agent-role-group">'
+                    f'<span class="io-role-chip {chip_cls}" title="{_html_escape(tooltip)}">'
+                    f'{_html_escape(label)}</span>'
+                    f'<span class="io-role-count">{len(entries)}</span>'
+                    f'</div>'
+                )
+                parts.append('<ul class="io-col-list io-role-file-list">')
+                for entry in entries:
+                    parts.append(
+                        f'<li><code>{_html_escape(entry["file"])}</code>'
+                        f'<span class="io-count io-count-surface">'
+                        f'<span class="io-dot"></span>'
+                        f'{_html_escape(entry["framework"])}</span></li>'
+                    )
+                parts.append('</ul>')
+        else:
+            # Fallback: flat list (no role classification matched)
+            parts.append('<ul class="io-col-list">')
+            for fname, fws in agent_surface["by_file"].items():
+                fw_label = ", ".join(fws)
+                parts.append(
+                    f'<li><code>{_html_escape(fname)}</code>'
+                    f'<span class="io-count io-count-surface">'
+                    f'<span class="io-dot"></span>{_html_escape(fw_label)}</span></li>'
+                )
+            parts.append('</ul>')
     else:
         parts.append(
             '<p class="io-agent-surface-none">'
@@ -12826,6 +13048,7 @@ def _render_reference_panel(
     parts: list[str],
     *,
     report: "CombinedReport | None" = None,
+    static: bool = False,
 ) -> None:
     """Emit the inner HTML of the Reference tab panel into `parts`.
 
@@ -12833,6 +13056,8 @@ def _render_reference_panel(
     paths) keep working; when provided, multi-turn red-team campaigns
     from `report.probe_campaigns` get rendered as a kill-chain section
     after the solution blueprint.
+    `static` suppresses the Tech stack section in the print/static report
+    so it only appears inside the interactive Reference tab.
     """
     from agentshield.merger.reference import build_all_references
 
@@ -13013,9 +13238,8 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append("</div>")  # /reference-card
-    _render_design_basis(parts)
+    _render_design_basis(parts, static=static)
     _render_how_it_works(parts)
-    _render_tech_stack(parts)
 
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
@@ -13036,7 +13260,7 @@ def _render_framework_mapping_table(
     # Group by scan type. Inside the Copilot provenance there are
     # three distinct scan kinds:
     #   - static Tier 2 checklist (source = "Copilot")
-    #   - the 14 catalogued behaviour-emulator attack classes
+    #   - the 17 catalogued behaviour-emulator attack classes
     #     (synthesised from _EMULATOR_CLASS_LABELS — they live in
     #     the emulator skill, not the rule catalogue)
     #   - the AS-X-* probe / explore-mode scenarios
@@ -13054,7 +13278,7 @@ def _render_framework_mapping_table(
         bucket = r.source if r.source in groups else None
         if bucket:
             groups[bucket].append(r)
-    # Synthesise pseudo-RuleReference entries for the 14 catalogued
+    # Synthesise pseudo-RuleReference entries for the 17 catalogued
     # behaviour-emulator attack classes. They aren't real rules in
     # the YAML / checklist sense, but they ARE controls AgentShield
     # claims coverage for — so they belong in this mapping table.
@@ -13220,13 +13444,14 @@ def _render_framework_mapping_table(
     parts.append('</details>')  # /ref-naming
 
 
-def _render_design_basis(parts: list[str]) -> None:
+def _render_design_basis(parts: list[str], *, static: bool = False) -> None:
     """Render the "What AgentShield is designed on" section.
 
     Sits between the rule catalogue and the pipeline diagram so a reader
     sees the foundations the controls are anchored to before tracing how
     they're applied. Uses the same collapsible-card shape as the two
-    neighbouring sections.
+    neighbouring sections. Tech stack is nested inside (suppressed in
+    static/print mode via `static`).
     """
     frameworks = [
         (
@@ -13289,7 +13514,7 @@ def _render_design_basis(parts: list[str]) -> None:
         (
             "Two-phase pipeline (static + behaviour emulation)",
             "Phase 1 catalogues every risk the ruleset knows about. "
-            "Phase 2 emulates 14 attack classes offline against a "
+            "Phase 2 emulates 17 attack classes offline against a "
             "simulated version of the agent &mdash; no live endpoint "
             "required. Designed to run together on every agent.",
         ),
@@ -13318,7 +13543,7 @@ def _render_design_basis(parts: list[str]) -> None:
         'The behaviour emulator covers attacks the static rule pack '
         'can&rsquo;t catch on its own &mdash; authority escalation, '
         'memory poisoning, tool chaining, and similar agent-class issues '
-        '&mdash; by emulating 14 attack classes offline against a '
+        '&mdash; by emulating 17 attack classes offline against a '
         'simulated version of the agent, with no live endpoint required. '
         'A small set of internal design pillars keeps the report '
         'consistent across engines.</p>'
@@ -13346,6 +13571,8 @@ def _render_design_basis(parts: list[str]) -> None:
     parts.append('</ul>')
 
     _render_solution_diagram(parts)
+    if not static:
+        _render_tech_stack(parts)
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
     parts.append('</div>')  # /design-card
@@ -13709,7 +13936,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         'HOW IT WORKS</text>'
         '<text x="757" y="521" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
-        'font-weight="600" fill="#0f172a">14 attack classes</text>'
+        'font-weight="600" fill="#0f172a">17 attack classes</text>'
         '<text x="757" y="537" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">OWASP LLM / Agentic + MITRE ATLAS</text>'
@@ -14404,7 +14631,7 @@ def _render_pitch_slide(parts: list[str]) -> None:
             "Unknown attack outcomes",
             "Can't know whether an attack lands without running it against a live agent — slow, risky, misses architectural gaps.",
             "Behaviour emulator",
-            "Copilot walks the agent's runtime pipeline from source and predicts outcomes for 14 attack classes. No live target needed.",
+            "Copilot walks the agent's runtime pipeline from source and predicts outcomes for 17 attack classes. No live target needed.",
             "NEW",
         ),
         (
@@ -14581,10 +14808,10 @@ def _render_emulator_slide(parts: list[str]) -> None:
         ),
         (
             "3", "Build payload catalogue",
-            "For each of 14 catalogued attack classes: 3 seed payloads + up to 5 "
+            "For each of 17 catalogued attack classes: 3 seed payloads + up to 5 "
             "dynamically generated mutations, each crafted to bypass a specific "
             "defence found at the previous step.",
-            "14 attack classes",
+            "17 attack classes",
         ),
         (
             "4", "Walk each step",
@@ -14622,7 +14849,7 @@ def _render_emulator_slide(parts: list[str]) -> None:
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">How the behaviour emulator works</span>'
         '<span class="ref-section-teaser">Copilot walks the agent\'s runtime pipeline from source '
-        'and predicts attack outcomes for 14 classes — no live target, no payloads fired.</span>'
+        'and predicts attack outcomes for 17 classes — no live target, no payloads fired.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
         '</summary>'
@@ -14632,7 +14859,7 @@ def _render_emulator_slide(parts: list[str]) -> None:
     parts.append(
         '<div class="emu-slide-hero">Static pipeline analysis — no live agent needed</div>'
         '<div class="emu-slide-sub">Copilot reads the source, maps the pipeline, and predicts '
-        'whether each of 14 catalogued attacks would land, be blocked, or be inconclusive.</div>'
+        'whether each of 17 catalogued attacks would land, be blocked, or be inconclusive.</div>'
     )
     parts.append('<div class="emu-slide-steps">')
     for num, title, desc, tag in _STEPS:
@@ -14758,7 +14985,7 @@ def _render_scan_flow_slide(parts: list[str]) -> None:
         '<div class="sf2-engine-sub">Adversary class simulation</div>'
         '<ul class="sf2-engine-bullets">'
         '<li>8 pipeline steps mapped</li>'
-        '<li>14 attack classes tested</li>'
+        '<li>17 attack classes tested</li>'
         '<li>Seed + mutation probes</li>'
         '</ul>'
         '<span class="sf2-engine-file">agent-emulation.json</span>'
@@ -15104,7 +15331,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         'into Copilot Chat and it writes the findings. '
         '<strong>Phase 2 &mdash; behaviour emulation</strong> also runs via '
         'Copilot, using the knowledge Phase 1 already collected. '
-        'The emulator fires <strong>14 attack classes</strong> against a '
+        'The emulator fires <strong>17 attack classes</strong> against a '
         'simulated version of your agent &mdash; 3 seed payloads per class '
         'followed by up to 5 dynamically-generated mutations, '
         '<strong>8 attempts per class, 112 total</strong>. '
@@ -15297,7 +15524,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         'knowledge gathered by the Phase 1 static scan '
         '(source code, system prompt, tool catalogue, permission manifest, and '
         'Tier 2 Copilot review). Copilot plays <strong>four distinct roles in '
-        'sequence</strong> for each of the 14 catalogued attack classes:'
+        'sequence</strong> for each of the 17 catalogued attack classes:'
         '</p>'
         '<ol class="how-steps">'
 
@@ -15566,10 +15793,10 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
         '</tbody></table>'
     )
 
-    # ── Section B: The 14 attack classes ────────────────────────────────────
-    parts.append('<h4 class="emu-ref-h">B &mdash; The 14 attack classes</h4>')
+    # ── Section B: The 17 attack classes ────────────────────────────────────
+    parts.append('<h4 class="emu-ref-h">B &mdash; The 17 attack classes</h4>')
     parts.append(
-        '<p class="emu-ref-note">AgentShield tests 14 attack classes against every agent. '
+        '<p class="emu-ref-note">AgentShield tests 17 attack classes against every agent (applicable classes vary by agent type). '
         'Each is independent &mdash; blocking one does not protect against others.</p>'
     )
     parts.append(
@@ -15665,6 +15892,39 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
         '<td><span class="emu-ref-step-pill">user_prompt</span>'
         '<span class="emu-ref-step-pill">planner</span>'
         '<span class="emu-ref-step-pill">final_answer</span></td></tr>'
+
+        '<tr><td>14</td><td><strong>Partial-defence bypass</strong></td>'
+        '<td>When two controls each block the direct attack, can the attacker use '
+        'role-play or creative framing to slip through the gap between them?</td>'
+        '<td><span class="emu-ref-step-pill">user_prompt</span>'
+        '<span class="emu-ref-step-pill">system_prompt</span>'
+        '<span class="emu-ref-step-pill">planner</span>'
+        '<span class="emu-ref-step-pill">final_answer</span></td></tr>'
+
+        '<tr><td>15</td><td><strong>Batch data poisoning</strong> '
+        '<em class="emu-ref-type-badge">batch</em></td>'
+        '<td>Can an attacker embed LLM override instructions inside a data record '
+        'that gets fed into the pipeline\'s prompt template?</td>'
+        '<td><span class="emu-ref-step-pill">rag_context</span>'
+        '<span class="emu-ref-step-pill">system_prompt</span>'
+        '<span class="emu-ref-step-pill">planner</span></td></tr>'
+
+        '<tr><td>16</td><td><strong>Cross-agent injection</strong> '
+        '<em class="emu-ref-type-badge">sub-agent / orchestrator</em></td>'
+        '<td>Can injected instructions in an orchestrator message or a sub-agent '
+        'response redirect the receiving agent\'s behaviour?</td>'
+        '<td><span class="emu-ref-step-pill">user_prompt</span>'
+        '<span class="emu-ref-step-pill">tool_output</span>'
+        '<span class="emu-ref-step-pill">re_planning</span></td></tr>'
+
+        '<tr><td>17</td><td><strong>Trust escalation</strong> '
+        '<em class="emu-ref-type-badge">orchestrator</em></td>'
+        '<td>Can a sub-agent claim elevated identity or permissions in its response '
+        'body and have the orchestrator act on those claims?</td>'
+        '<td><span class="emu-ref-step-pill">tool_choice</span>'
+        '<span class="emu-ref-step-pill">tool_output</span>'
+        '<span class="emu-ref-step-pill">re_planning</span></td></tr>'
+
         '</tbody></table>'
     )
 
@@ -16026,7 +16286,7 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
 def _render_emulator_reference(parts: list[str]) -> None:
     """Render the Behaviour Emulator deep-dive section in the Reference tab.
 
-    Covers: pipeline step reference, the 14 attack classes, verdict guide,
+    Covers: pipeline step reference, the 17 attack classes, verdict guide,
     how to read the animation UI, and the seed->mutation escalation structure.
     Positioned after _render_how_it_works so readers who want a quick overview
     get the flowchart first and can drill into this for the full detail.
@@ -16038,7 +16298,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<span class="ref-section-chevron">&#9658;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">Behaviour Emulator &mdash; reading your results</span>'
-        '<span class="ref-section-teaser">Pipeline steps, 14 attack classes, verdict meanings, '
+        '<span class="ref-section-teaser">Pipeline steps, 17 attack classes, verdict meanings, '
         'animation guide, and seed &rarr; mutation structure.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
