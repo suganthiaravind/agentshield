@@ -589,7 +589,7 @@ def _load_redteam_judge(agentshield_dir: Path) -> dict[str, dict]:
     return out
 
 
-_VALID_EMULATOR_VERDICTS = {"lands", "partial", "blocked", "inconclusive"}
+_VALID_EMULATOR_VERDICTS = {"lands", "partial", "blocked", "inconclusive", "not_applicable"}
 _VALID_EMULATOR_OUTCOMES = {"advances", "blocked", "modified", "absent_step"}
 _PIPELINE_STEP_KEYS = (
     "user_prompt", "rag_context", "system_prompt", "planner",
@@ -1593,6 +1593,144 @@ def _normalize_trace_steps(steps: list, source_dir: "Path") -> list:
     return trace_out
 
 
+# ---------------------------------------------------------------------------
+# v7 source-transition schema helpers
+# ---------------------------------------------------------------------------
+
+_V7_SOURCE_TRANSITION_TO_ATTACK_CLASS: dict[tuple[str, str], str] = {
+    ("user_input",    "to_llm"):       "direct-prompt-injection",
+    ("rag_document",  "to_llm"):       "indirect-prompt-injection",
+    ("tool_return",   "to_llm"):       "tool-output-poisoning",
+    ("agent_message", "to_llm"):       "cross-agent-injection",
+    ("batch_record",  "to_llm"):       "batch-data-poisoning",
+    ("memory_recall", "to_llm"):       "memory-poisoning",
+    ("*",             "to_tool_args"): "tool-argument-injection",
+    ("*",             "to_sink"):      "insecure-output-handling",
+    ("*",             "to_store"):     "memory-poisoning",
+}
+
+_V7_PIPELINE_CHECK_TO_ATTACK_CLASS: dict[str, str] = {
+    "audit_trail":                   "repudiation",
+    "hitl_gates":                    "excessive-agency",
+    "loop_termination":              "recursive-injection",
+    "agent_auth":                    "authority-spoofing",
+    "system_prompt_confidentiality": "system-prompt-extraction",
+}
+
+_V7_TRANSITION_LABELS: dict[str, str] = {
+    "to_llm":       "Source → LLM injection",
+    "to_tool_args": "LLM → tool argument injection",
+    "to_sink":      "Source/LLM → output sink",
+    "to_store":     "Source → persistent store",
+}
+
+
+def _v7_sources_to_attack_class_traces(
+    untrusted_sources: list, pipeline_checks: dict, source_dir: "Path"
+) -> list[dict]:
+    """Convert v7 untrusted_sources + pipeline_checks into the internal
+    attack_class_traces format so the rest of the merger pipeline
+    works without modification."""
+    out: list[dict] = []
+
+    for src in untrusted_sources:
+        if not isinstance(src, dict):
+            continue
+        src_type = str(src.get("type") or "user_input")
+        src_id = str(src.get("id") or "")
+        src_route = str(src.get("route") or "")
+        transitions = src.get("transitions") or {}
+        if not isinstance(transitions, dict):
+            continue
+
+        for t_key in ("to_llm", "to_tool_args", "to_sink", "to_store"):
+            t = transitions.get(t_key)
+            if not isinstance(t, dict):
+                continue
+            if not t.get("path_exists", True):
+                continue
+            verdict = t.get("verdict")
+            if verdict in ("not_applicable", "blocked", None):
+                continue
+
+            attack_class = _V7_SOURCE_TRANSITION_TO_ATTACK_CLASS.get(
+                (src_type, t_key)
+            ) or _V7_SOURCE_TRANSITION_TO_ATTACK_CLASS.get(
+                ("*", t_key), "direct-prompt-injection"
+            )
+            label_prefix = _V7_TRANSITION_LABELS.get(t_key, t_key)
+            attack_class_label = f"{label_prefix} via {src_id}"
+            if src_route:
+                attack_class_label += f" ({src_route})"
+
+            trace_steps = _normalize_trace_steps(
+                t.get("pipeline_trace") or [], source_dir
+            )
+
+            out.append({
+                "attack_class": attack_class,
+                "attack_class_label": attack_class_label,
+                "targets_steps": [],
+                "payload_used": str(t.get("payload_used") or ""),
+                "payload_layer": str(t.get("payload_layer") or ""),
+                "seed_payloads": list(t.get("seed_payloads") or []),
+                "mutation_payloads": list(t.get("mutation_payloads") or []),
+                "verdict": verdict,
+                "verdict_confidence": t.get("verdict_confidence"),
+                "verdict_reasoning": str(t.get("verdict_reasoning") or ""),
+                "frameworks": {},
+                "pipeline_trace": trace_steps,
+                "seed_traces": {},
+                # carry v7-specific metadata for renderers
+                "_v7_source_id": src_id,
+                "_v7_source_type": src_type,
+                "_v7_transition": t_key,
+                "_v7_route": src_route,
+                "_v7_bypass_technique": str(t.get("bypass_technique") or ""),
+            })
+
+    # Pipeline-level checks
+    _ACTIONABLE_PIPELINE_CHECK_VERDICTS: dict[str, set] = {
+        "audit_trail":                   {"partial", "absent"},
+        "hitl_gates":                    {"ungated"},
+        "loop_termination":              {"absent"},
+        "agent_auth":                    {"bypassable"},
+        "system_prompt_confidentiality": {"exposed"},
+    }
+    for check_key, attack_class in _V7_PIPELINE_CHECK_TO_ATTACK_CLASS.items():
+        chk = pipeline_checks.get(check_key)
+        if not isinstance(chk, dict):
+            continue
+        chk_verdict = str(chk.get("verdict") or "")
+        actionable = _ACTIONABLE_PIPELINE_CHECK_VERDICTS.get(check_key, set())
+        if chk_verdict not in actionable:
+            continue
+        # Map pipeline check verdict to emulator verdict scale
+        emu_verdict = "partial" if chk_verdict in ("partial", "bypassable") else "lands"
+        out.append({
+            "attack_class": attack_class,
+            "attack_class_label": f"Pipeline check: {check_key.replace('_', ' ')}",
+            "targets_steps": [],
+            "payload_used": "",
+            "payload_layer": "pipeline-check",
+            "seed_payloads": [],
+            "mutation_payloads": [],
+            "verdict": emu_verdict,
+            "verdict_confidence": 0.9,
+            "verdict_reasoning": str(chk.get("verdict_reasoning") or ""),
+            "frameworks": {},
+            "pipeline_trace": [],
+            "seed_traces": {},
+            "_v7_source_id": check_key,
+            "_v7_source_type": "pipeline_check",
+            "_v7_transition": check_key,
+            "_v7_route": "",
+            "_v7_bypass_technique": str(chk.get("bypass_condition") or ""),
+        })
+
+    return out
+
+
 def _load_agent_emulation(agentshield_dir: Path) -> dict:
     """Load `.agentshield/agent-emulation.json` if present.
 
@@ -1712,8 +1850,18 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
                 "attack_class_traces": _normalize_attack_class_traces(ep.get("attack_class_traces") or []),
             })
 
-    # Legacy flat path: root-level attack_class_traces.
-    traces_out: list[dict] = _normalize_attack_class_traces(raw.get("attack_class_traces") or [])
+    # v7 source-transition schema: untrusted_sources + pipeline_checks.
+    # Takes precedence over both entry_points and legacy flat traces when present.
+    raw_untrusted_sources = raw.get("untrusted_sources")
+    if isinstance(raw_untrusted_sources, list) and raw_untrusted_sources:
+        traces_out = _v7_sources_to_attack_class_traces(
+            raw_untrusted_sources,
+            raw.get("pipeline_checks") or {},
+            source_dir,
+        )
+    else:
+        # Legacy flat path: root-level attack_class_traces.
+        traces_out = _normalize_attack_class_traces(raw.get("attack_class_traces") or [])
 
     return {
         "present": True,
@@ -1724,6 +1872,8 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         "pipeline_map": pipeline_map,
         "attack_class_traces": traces_out,
         "entry_points": entry_points_out,
+        "pipeline_checks": raw.get("pipeline_checks") or {},
+        "untrusted_sources": raw_untrusted_sources or [],
     }
 
 
@@ -2313,7 +2463,7 @@ def _emulator_entry_to_finding(
         return None
     attack_class = entry.get("attack_class") or "unknown"
     verdict = entry.get("verdict")
-    if verdict == "inconclusive":
+    if verdict in ("inconclusive", "not_applicable"):
         return None
     category, severity = _classify_emulator_finding(attack_class, verdict)
     category_letter = {"detect": "D", "defend": "DF", "respond": "R"}.get(
@@ -3392,14 +3542,18 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
                 continue
             all_findings.append(f)
 
-    # Only keep findings that have a narrative
-    walkthrough_findings = []
+    # Collect findings with either a catalog narrative OR embedded emulator data.
+    walkthrough_findings: list[tuple[dict, object]] = []
     for f in all_findings:
-        scenario = narrative_for(
-            f.get("agentshield_id") or f.get("rule_id") or ""
-        )
-        if scenario and scenario.steps:
-            walkthrough_findings.append((f, scenario))
+        if f.get("_emulator_trace"):
+            # Emulator findings carry rich data inline — no catalog lookup needed.
+            walkthrough_findings.append((f, None))
+        else:
+            scenario = narrative_for(
+                f.get("agentshield_id") or f.get("rule_id") or ""
+            )
+            if scenario and scenario.steps:
+                walkthrough_findings.append((f, scenario))
 
     if not walkthrough_findings:
         lines.append("_No emulator attack walkthroughs available for this scan._")
@@ -3423,12 +3577,13 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
                 "low": "🟩", "info": "🟦"}.get(sev, "⬜")
         rule_id = f.get("rule_id_short") or f.get("rule_id") or "?"
         origin = f.get("_origin", "")
-        source_label = "Emulator" if origin == "emulator" else (
+        source_label = "Emulator" if (origin == "emulator" or f.get("_emulator_trace")) else (
             "Semgrep" if origin == "tier1" else "Copilot"
         )
         file_ = f.get("file") or ""
         line_ = f.get("line") or ""
         ep_route = f.get("_entry_point_route") or ""
+        emu_data = f.get("_emulator_data") or {}
 
         lines.append(f"---\n\n### [{idx}/{len(walkthrough_findings)}] {icon} {sev.upper()} · `{rule_id}` · [{source_label}]")
         lines.append("")
@@ -3438,8 +3593,9 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
             loc_parts.append(f"`{file_}`")
             if line_:
                 loc_parts.append(f"line {line_}")
-        if ep_route:
-            loc_parts.append(f"entry point `{ep_route}`")
+        v7_route = emu_data.get("_v7_route") or ep_route
+        if v7_route:
+            loc_parts.append(f"route `{v7_route}`")
         if loc_parts:
             lines.append(f"**Location:** {' · '.join(loc_parts)}")
 
@@ -3447,25 +3603,90 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
             lines.append(f"**Finding:** {f['message']}")
 
         lines.append("")
-        lines.append(f"**Attack class:** {scenario.title}")
-        lines.append("")
 
-        if scenario.attacker_input:
-            lines.append("**Catalogue payload:**")
-            lines.append("```")
-            lines.append(scenario.attacker_input)
-            lines.append("```")
+        if scenario:
+            # Catalog-based narrative (Tier 1/Tier 2 findings)
+            lines.append(f"**Attack class:** {scenario.title}")
             lines.append("")
 
-        if scenario.steps:
-            lines.append("**Pipeline trace:**")
-            for step in scenario.steps:
-                lines.append(f"1. {step}")
+            if scenario.attacker_input:
+                lines.append("**Catalogue payload:**")
+                lines.append("```")
+                lines.append(scenario.attacker_input)
+                lines.append("```")
+                lines.append("")
+
+            if scenario.steps:
+                lines.append("**Pipeline trace:**")
+                for step in scenario.steps:
+                    lines.append(f"1. {step}")
+                lines.append("")
+
+            if scenario.impact:
+                lines.append(f"**Impact:** {scenario.impact}")
+                lines.append("")
+
+        else:
+            # Emulator-embedded narrative (v7 source-transition findings)
+            attack_class = emu_data.get("attack_class") or rule_id
+            attack_label = emu_data.get("attack_class_label") or attack_class
+            lines.append(f"**Attack class:** {attack_label}")
             lines.append("")
 
-        if scenario.impact:
-            lines.append(f"**Impact:** {scenario.impact}")
+            verdict = emu_data.get("verdict") or ""
+            verdict_conf = emu_data.get("verdict_confidence")
+            conf_str = f" (confidence {verdict_conf:.0%})" if isinstance(verdict_conf, (int, float)) else ""
+            lines.append(f"**Verdict:** {verdict.upper()}{conf_str}")
             lines.append("")
+
+            bypass = emu_data.get("_v7_bypass_technique") or emu_data.get("bypass_technique") or ""
+            if bypass:
+                lines.append(f"**Bypass technique:** {bypass}")
+                lines.append("")
+
+            seed_payloads = emu_data.get("seed_payloads") or []
+            mutation_payloads = emu_data.get("mutation_payloads") or []
+            payload_used = emu_data.get("payload_used") or ""
+            payload_layer = emu_data.get("payload_layer") or ""
+
+            if seed_payloads:
+                lines.append("**Seed payloads tried:**")
+                for sp in seed_payloads:
+                    blocked_at = sp.get("blocked_at")
+                    status = f"blocked at `{blocked_at}`" if blocked_at else "**passed**"
+                    lines.append(f"- [{sp.get('layer', '?')}] {status}: `{sp.get('text', '')[:120]}`")
+                lines.append("")
+
+            if mutation_payloads:
+                lines.append("**Mutations generated:**")
+                for mp in mutation_payloads:
+                    blocked_at = mp.get("blocked_at")
+                    status = f"blocked at `{blocked_at}`" if blocked_at else "**advanced**"
+                    lines.append(f"- [{mp.get('layer', '?')}] {status}: `{mp.get('text', '')[:120]}`")
+                lines.append("")
+
+            if payload_used:
+                lines.append(f"**Advancing payload** [{payload_layer}]:")
+                lines.append("```")
+                lines.append(payload_used[:500])
+                lines.append("```")
+                lines.append("")
+
+            reasoning = emu_data.get("verdict_reasoning") or ""
+            if reasoning:
+                lines.append(f"**Reasoning:** {reasoning}")
+                lines.append("")
+
+            trace_steps = emu_data.get("pipeline_trace") or []
+            if trace_steps:
+                lines.append("**Pipeline trace:**")
+                for step in trace_steps:
+                    step_name = step.get("step") or "?"
+                    outcome = step.get("outcome") or "?"
+                    outcome_r = step.get("outcome_reasoning") or ""
+                    basis = ", ".join(f"`{b}`" for b in (step.get("code_basis") or []))
+                    lines.append(f"1. **{step_name}** → {outcome}: {outcome_r}" + (f" [{basis}]" if basis else ""))
+                lines.append("")
 
         remediation = f.get("remediation") or ""
         if remediation:

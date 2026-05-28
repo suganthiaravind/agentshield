@@ -1,6 +1,6 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-28T16:23:07.791736Z",
+  "scanned_at": "2026-05-28T20:30:24.385206Z",
   "agentshield_tier1_fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
   "scanned_files": [
     "config.py",
@@ -14,7 +14,7 @@
   ],
   "findings": [],
   "git_branch": "v5",
-  "git_commit": "84e4e81",
+  "git_commit": "e1b088a",
   "git_repo_name": "demo-agent",
-  "scan_duration_seconds": 13
+  "scan_duration_seconds": 10
 }
