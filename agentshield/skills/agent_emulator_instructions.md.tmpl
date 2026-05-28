@@ -172,9 +172,9 @@ LLM-directed output is persisted without validation.
 | `rag_context` | **2 — Context injection** | Additional state the orchestrator passes: session state, shared memory objects, prior tool outputs handed down as context |
 | `system_prompt` | **3 — System prompt** | The sub-agent's own instruction set |
 | `planner` | **4 — Planner** | The LLM call that decides the sub-agent's next action |
-| `tool_choice` | **5 — Tool choice** | Tools available to the sub-agent (may be a restricted subset vs the orchestrator's full surface) |
-| `tool_output` | **6 — Tool output** | Results from tool calls made by the sub-agent |
-| `re_planning` | **7 — Re-planning** | Further planning loops within the sub-agent |
+| `tool_choice` | **5 — Tool choice** | LLM-directed tool dispatch only: `@tool` decorators wired to an `AgentExecutor`, Bedrock action groups, `function_calling` schemas passed to the LLM. **Mark `absent` if the sub-agent calls AWS SDK / external APIs directly in Python (boto3, requests, etc.) without the LLM selecting the call** — those are internal data fetches, not LLM tool choices. |
+| `tool_output` | **6 — Tool output** | Return values flowing back into the LLM's context after a tool call. **Only present if `tool_choice` is present.** A sub-agent that calls `bedrock_runtime.invoke_model()` or `boto3.client(...).get_*()` directly has no `tool_output` step — the Bedrock call is the `planner` step; the boto3 call is a data fetch that belongs in `rag_context`. |
+| `re_planning` | **7 — Re-planning** | A second LLM call consuming the first call's output or a tool's return value. A single `invoke_model()` is never `re_planning`. |
 | `final_answer` | **8 — Response to orchestrator** | What the sub-agent returns — structured result, action outcome, or text response — and how the orchestrator will trust it |
 
 Key attack surfaces: **orchestrator message** (step 1) is
@@ -183,6 +183,16 @@ input propagated through the orchestrator without sanitisation;
 **response to orchestrator** (step 8) is where a compromised
 sub-agent can inject malicious instructions back into the
 orchestrator's re-planning step.
+
+**Common false-positive trap for Lambda sub-agents:** AWS SDK calls
+(`boto3.get_object`, `cloudwatch.get_metric_data`,
+`cost_explorer.get_cost_and_usage`, etc.) inside the sub-agent are
+**not** `tool_choice` / `tool_output` — they are internal data
+fetches. Only mark those steps present if the LLM itself selects
+and dispatches the call via an AgentExecutor, Bedrock action group,
+or function_calling schema. If the LLM output is parsed and used to
+route Python code, `tool_choice` may be present — but cite the
+parsing + routing code specifically, not the boto3 call.
 
 #### §1d — Orchestrator / multi-agent
 
@@ -214,6 +224,20 @@ For each step, record:
   the line.
 - `"absent"` if the agent doesn't have this step at all (single-
   shot chain-invoke agents have no re-planning loop, for example).
+
+**Pipeline step qualification test — apply before marking any step
+`present`:**
+
+| Step | Mark `present` only if… | Common false-positive |
+|---|---|---|
+| `tool_choice` | The LLM selects which tool to call (AgentExecutor dispatch, Bedrock action group, `function_calling` schema) | A Python `if/elif` block that runs unconditionally after the LLM returns |
+| `tool_output` | A tool's return value flows back into the LLM's context for a subsequent call | A `boto3` API response used only in Python logic, never re-fed to the LLM |
+| `re_planning` | A second LLM call consumes the first call's output or a tool return | A single `invoke_model()` / `chain.invoke()` — always absent in single-shot agents |
+| `rag_context` | External data is retrieved and injected into the LLM prompt | A Python variable read from a constant or environment variable at startup |
+
+If a step fails this test, mark it `"absent"`. Attack classes
+targeting only absent steps must verdict `inconclusive` — no
+exceptions.
 
 ### Step 2 — for each entry point × each attack class, fire the seed → mutation sequence
 
@@ -354,6 +378,15 @@ Full schema is in the output-schema file.
 - **Don't infer beyond code.** If the agent's behaviour at a step
   depends on a deployment-time config that isn't in source, mark
   the verdict `inconclusive` and name what's missing.
+- **Don't speculate about downstream consumers.** If `final_answer`
+  sends a response to a calling service whose code is not in this
+  repo, verdict `insecure-output-handling` as `inconclusive` and
+  cite that the downstream consumer is out of scope — unless the
+  current repo contains code that feeds LLM output directly into
+  `eval()`, `exec()`, SQL, shell commands, or an SNS/SQS publish
+  at a specific file:line. "The caller *might* use this dangerously"
+  is not a finding. "This code feeds LLM output into X at file:line"
+  is.
 - **Record the first payload that advances.** Do not walk all
   eight payloads if one succeeds early — stop and record the
   landing payload. This keeps the trace honest about effort.

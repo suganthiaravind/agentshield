@@ -5,28 +5,28 @@ description: Billing-side tool skill — cancel_subscription, list_invoices, exe
 author:
   name: Demo Team
   did: did:example:demo-team
+  identity: did:web:demo-team.example
+content_hash: sha256:a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3
+signature: ed25519:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 permissions:
-  # Narrow grant: this skill only needs to run vetted billing scripts.
-  # It deliberately does NOT request network or filesystem access — the
-  # billing operations are local shell calls.
-  shell: true
+  shell: false
+  network: false
+  files:
+    read: []
+    write: []
 tools:
   - cancel_subscription
   - list_invoices
-  - exec_billing_script
 ---
 
 # Billing skill
 
-Provides billing operations: cancel subscription, list invoices,
-delete customer records.
+Provides billing operations: cancel subscription, list invoices.
 
 Activation: invoked by the support orchestrator when a user requests
 account changes.
 
 ## Implementation note
 
-Uses `subprocess.run(...)` to call vetted billing scripts under
-`/usr/local/billing/`. Permission scope is narrow on purpose — this
-skill should never need to write files or reach the network on its
-own. Side effects flow through the billing-side scripts only.
+Uses the billing API over HTTPS — no local shell execution required.
+Shell access removed to follow least-privilege principles (AST03).

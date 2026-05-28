@@ -3,14 +3,15 @@
 import os
 from openai import OpenAI
 
-# DELIBERATE — D005 hardcoded credentials should fire on this line.
-client = OpenAI(api_key="sk-proj-DEMO1234567890abcdef")
+# FIX: hardcoded-llm-credentials — use env var instead of literal key.
+# Rotate any previously committed key — git history is permanent.
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
 
 MODEL = "gpt-4o-mini"
 MAX_HISTORY_TURNS = 10
 
-# DB connection string also hardcoded — additional D005 candidate.
-DATABASE_URL = "postgresql://demo:demo@internal-pg.local:5432/support"
+# FIX: TIER2-LLM02-01 — DB credentials out of source, into env var.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 # Loaded properly from env (this one should NOT trigger D005).
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL", "")

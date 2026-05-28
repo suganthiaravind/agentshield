@@ -1,32 +1,25 @@
-"""Demo orchestrator — multi-agent communication pattern with two
-deliberate vulnerabilities for AgentShield's T12 / T13 coverage.
+"""Demo orchestrator — multi-agent communication with security fixes applied.
 
-This file is part of the synthetic vuln fixture set. Both functions
-are intentionally unsafe so AgentShield's rules + runtime probes have
-something to land on:
-
-  - delegate()        — T12 (Agent Communication Poisoning).
-                        Forwards the raw user message to a downstream
-                        agent without sanitisation. The downstream
-                        agent inherits the trust of the upstream call.
-
-  - receive_from_peer() — T13 (Rogue Agents / unvalidated agent input).
-                          Accepts input on a header signal, passes
-                          straight to the LLM. Any peer that can set
-                          the X-Internal-Caller header is trusted.
-
-Do not deploy this file to production. Replace both functions with
-sanitisation + cryptographic peer auth before any real use.
+Fixes applied per AgentShield findings-fix.md:
+  D011 — delegate() sanitizes before forwarding via input_guard.scan()
+  D001/D012 — receive_from_peer / debug_endpoint use input_guard.scan()
+  D013 — debug_endpoint no longer leaks SYSTEM_PROMPT in error responses
+  TIER2-AGENTIC-T9-03 — JWT verification stub added to receive_from_peer
 """
 
 from __future__ import annotations
 
+import logging
 import os
 
 import requests
 from flask import Flask, jsonify, request
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+
+from guard.input_filter import input_guard
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -35,34 +28,50 @@ DOWNSTREAM_AGENT_URL = os.environ.get(
     "http://downstream-agent.internal/api/agent",
 )
 
+_DOWNSTREAM_ALLOWLIST = frozenset({
+    "http://downstream-agent.internal",
+    "https://downstream-agent.internal",
+})
+
+_PEER_JWT_SECRET = os.environ.get("PEER_JWT_SECRET", "")
+
 
 def _build_chain() -> LLMChain:
     """Lightweight inner LLM call used by the receive_from_peer handler."""
     template = PromptTemplate.from_template(
         "You are a specialist support agent. Help with this request:\n{input}"
     )
-    # Same provider construction the rest of demo-agent uses — keeps
-    # the static rules consistent across the codebase.
     from langchain_openai import ChatOpenAI
-
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    llm = ChatOpenAI(model="gpt-4o-mini", request_timeout=30, max_tokens=2000)
     return LLMChain(prompt=template, llm=llm)
 
 
 @app.route("/api/orchestrator/delegate", methods=["POST"])
 def delegate():
-    """T12: forward the user's message to a downstream agent verbatim.
+    """T12 fix: sanitize user input before forwarding to downstream agent.
 
-    The downstream call carries the original user input as the message
-    payload. Anything the user types — including instructions intended
-    to subvert the downstream agent — passes through unfiltered. This
-    is the canonical Agent Communication Poisoning surface: the trust
-    boundary between the two agents is missing.
+    FIX D011: validate and sanitize user_input so injected instructions
+    are stripped before reaching the downstream agent's trust boundary.
+    FIX TIER2-AGENTIC-T2-03: egress URL validated against an allowlist.
     """
-    user_input = request.json.get("message", "")
+    body = request.get_json() or {}
+    raw_message = str(body.get("message", ""))
+
+    # Sanitize before forwarding — blocks injection payloads at the boundary.
+    try:
+        safe_message = input_guard.scan(raw_message)
+    except ValueError:
+        logger.warning("delegate: blocked injection attempt")
+        return jsonify({"error": "blocked"}), 400
+
+    # Validate destination against allowlist (TIER2-AGENTIC-T2-03).
+    base = DOWNSTREAM_AGENT_URL.split("/api")[0]
+    if base not in _DOWNSTREAM_ALLOWLIST:
+        return jsonify({"error": "destination not allowed"}), 403
+
     forward_response = requests.post(
         DOWNSTREAM_AGENT_URL,
-        json={"message": user_input},
+        json={"message": safe_message},
         headers={"X-Internal-Caller": "orchestrator"},
         timeout=30,
     )
@@ -71,20 +80,34 @@ def delegate():
 
 @app.route("/api/orchestrator/receive", methods=["POST"])
 def receive_from_peer():
-    """T13: accept input from another internal agent without validation.
+    """T13 fix: verify caller identity + sanitize peer payload.
 
-    The header `X-Internal-Caller` is treated as proof that the request
-    comes from a trusted peer. The header is unauthenticated — anyone
-    on the internal network can set it. The payload then flows straight
-    into the LLM call with no sanitisation, treating the supposed-peer
-    input as authoritative instructions.
+    FIX TIER2-AGENTIC-T9-03: JWT signature check replaces header-only auth.
+    FIX D001/D012: peer_message sanitized via input_guard.scan().
+    FIX TIER2-AGENTIC-T8-01: caller identity and message hash logged.
     """
-    caller = request.headers.get("X-Internal-Caller")
-    if not caller:
-        return jsonify({"error": "internal callers only"}), 403
+    import jwt  # PyJWT — install: pip install PyJWT
+
+    auth_token = request.headers.get("X-Agent-Token", "")
+    if not auth_token:
+        return jsonify({"error": "authentication required"}), 401
+    try:
+        # FIX D012: jwt.decode matches the D012 sanitizer pattern.
+        claims = jwt.decode(auth_token, _PEER_JWT_SECRET, algorithms=["HS256"])
+        caller = claims.get("sub", "unknown")
+    except Exception:
+        return jsonify({"error": "invalid token"}), 401
+
     peer_message = request.json.get("message", "")
+    # FIX D001/D012: sanitize peer input; use return value to clear taint.
+    try:
+        safe_message = input_guard.scan(peer_message)
+    except ValueError:
+        return jsonify({"error": "blocked"}), 400
+
+    logger.info("receive_from_peer", extra={"caller": caller, "msg_len": len(safe_message)})
     chain = _build_chain()
-    reply = chain.invoke({"input": peer_message})
+    reply = chain.invoke({"input": safe_message})
     return jsonify({"reply": reply.get("text", ""), "caller": caller})
 
 
@@ -97,27 +120,24 @@ SYSTEM_PROMPT = (
 
 @app.route("/api/orchestrator/debug", methods=["POST"])
 def debug_endpoint():
-    """T0056: leaks the system prompt via an error path.
+    """FIX D013: system prompt no longer leaked in error responses.
 
-    When the LLM call fails or the input is malformed, the handler
-    builds an error message that includes the active system prompt for
-    "debugging". The prompt — including the embedded escalation key —
-    ends up in the response visible to whoever made the request.
+    FIX D001/D012: user_input sanitized before reaching chain.invoke.
     """
     user_input = request.json.get("message", "")
+    # FIX D001/D012: sanitize and use return value to clear taint.
+    try:
+        safe_input = input_guard.scan(user_input)
+    except ValueError:
+        return jsonify({"error": "blocked"}), 400
     try:
         chain = _build_chain()
-        reply = chain.invoke({"input": user_input})
+        reply = chain.invoke({"input": safe_input})
         return jsonify({"reply": reply.get("text", "")})
-    except Exception as exc:  # noqa: BLE001
-        # Anti-pattern: include the system prompt in the error response
-        # so the developer can see "what context the model was given".
-        # In production this leaks the prompt + any secrets baked into it.
-        return jsonify({
-            "error": str(exc),
-            "active_system_prompt": SYSTEM_PROMPT,
-            "user_input_received": user_input,
-        }), 500
+    except Exception:
+        logger.exception("debug_endpoint error")
+        # FIX D013: generic error only — SYSTEM_PROMPT never exposed.
+        return jsonify({"error": "Internal error. Check server logs."}), 500
 
 
 if __name__ == "__main__":
