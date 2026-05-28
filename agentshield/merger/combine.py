@@ -13917,16 +13917,217 @@ def _render_emu_coverage_section(
     parts.append('</ul>')
 
 
+def _render_emulator_coverage_block_v7(
+    emu: dict, parts: list[str], *, static: bool = False,
+) -> None:
+    """Render the v7 source-transition coverage block.
+
+    Shows one row per untrusted source with four transition verdict chips
+    (§T1 → LLM, §T2 → tool args, §T3 → sink, §T4 → store) plus a
+    separate section for the five pipeline checks."""
+    raw_sources = emu.get("untrusted_sources") or []
+    pipeline_checks = emu.get("pipeline_checks") or {}
+    open_attr = " open" if static else ""
+
+    _T_KEYS = ("to_llm", "to_tool_args", "to_sink", "to_store")
+    _T_LABELS = {
+        "to_llm":       "§T1 → LLM",
+        "to_tool_args": "§T2 → tool args",
+        "to_sink":      "§T3 → sink",
+        "to_store":     "§T4 → store",
+    }
+    _TYPE_BADGE_COLORS = {
+        "user_input":    "#dbeafe",  # blue
+        "rag_document":  "#d1fae5",  # green
+        "tool_return":   "#fef3c7",  # amber
+        "batch_record":  "#e0e7ff",  # indigo
+        "agent_message": "#fce7f3",  # pink
+        "memory_recall": "#f3e8ff",  # purple
+    }
+
+    # Aggregate counts across all source × transition pairs
+    counts: dict[str, int] = {
+        "lands": 0, "partial": 0, "blocked": 0,
+        "not_applicable": 0, "not_evaluated": 0,
+    }
+    for src in raw_sources:
+        if not isinstance(src, dict):
+            continue
+        for t_key in _T_KEYS:
+            t = (src.get("transitions") or {}).get(t_key) or {}
+            v = str(t.get("verdict") or "not_evaluated")
+            if v not in counts:
+                v = "not_evaluated"
+            counts[v] += 1
+
+    total_pairs = len(raw_sources) * len(_T_KEYS)
+    evaluated = total_pairs - counts["not_evaluated"]
+    summary_meta = (
+        f'<strong>{len(raw_sources)}</strong> sources &times; 4 transitions '
+        f'&middot; <strong>{evaluated}</strong> of {total_pairs} evaluated '
+        f'&middot; <strong>{counts["lands"]}</strong> lands '
+        f'&middot; <strong>{counts["partial"]}</strong> partial '
+        f'&middot; <strong>{counts["blocked"]}</strong> blocked '
+        f'&middot; <strong>{counts["not_applicable"]}</strong> not applicable'
+    )
+
+    parts.append(
+        f'<details class="coverage-card emu-coverage-card emu-coverage-collapse"{open_attr}>'
+    )
+    parts.append(
+        '<summary class="emu-coverage-summary">'
+        '<span class="emu-coverage-summary-title">Behaviour emulator coverage</span>'
+        f'<span class="emu-coverage-summary-meta">{summary_meta}</span>'
+        '</summary>'
+    )
+    parts.append(
+        '<p class="emu-coverage-intro">'
+        '<em>Lands</em> / <em>partial</em> are actionable findings '
+        '(shown in Detect / Defend / Respond). <em>Blocked</em> '
+        '(defence works) and <em>not applicable</em> (pipeline step '
+        'absent in this agent) live here only &mdash; coverage notes, not findings.'
+        '</p>'
+    )
+
+    # --- Untrusted sources table ---
+    parts.append('<p style="font-weight:700;margin:14px 0 6px;font-size:13px;color:#374151;">Untrusted data sources</p>')
+    parts.append('<ul class="emu-coverage-list">')
+    for src_idx, src in enumerate(raw_sources):
+        if not isinstance(src, dict):
+            continue
+        src_id   = str(src.get("id") or "")
+        src_type = str(src.get("type") or "user_input")
+        src_route = str(src.get("route") or "")
+        transitions = src.get("transitions") or {}
+
+        # Worst verdict for row colouring
+        row_worst = "not_evaluated"
+        for t_key in _T_KEYS:
+            v = str((transitions.get(t_key) or {}).get("verdict") or "not_evaluated")
+            if v == "lands":
+                row_worst = "lands"; break
+            if v == "partial" and row_worst not in ("lands",):
+                row_worst = "partial"
+            if v == "blocked" and row_worst not in ("lands", "partial"):
+                row_worst = "blocked"
+
+        badge_bg = _TYPE_BADGE_COLORS.get(src_type, "#f1f5f9")
+        parts.append(
+            f'<li class="emu-coverage-row emu-coverage-row-{_html_escape(row_worst)}" '
+            f'data-row-idx="{src_idx}">'
+        )
+        parts.append(
+            f'<div class="emu-coverage-head">'
+            f'<span class="emu-coverage-label">'
+            f'<code style="font-size:12px">{_html_escape(src_id)}</code>'
+            + (f' <span style="color:#6b7280;font-size:12px">{_html_escape(src_route)}</span>' if src_route else '')
+            + f'</span>'
+            f'<span style="background:{badge_bg};border:1px solid #e2e8f0;border-radius:4px;'
+            f'padding:1px 6px;font-size:11px;font-weight:600;color:#374151;">'
+            f'{_html_escape(src_type)}</span>'
+            f'</div>'
+        )
+        # Transition verdict chips
+        parts.append('<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px;">')
+        for t_key in _T_KEYS:
+            t = transitions.get(t_key) or {}
+            v = str(t.get("verdict") or "not_evaluated")
+            t_lbl = _T_LABELS[t_key]
+            chip_cls = f"emu-coverage-verdict-{_html_escape(v)}"
+            bypass = str(t.get("bypass_technique") or "")
+            title_attr = f' title="{_html_escape(bypass)}"' if bypass else ""
+            parts.append(
+                f'<span class="emu-coverage-verdict {chip_cls}"'
+                f'{title_attr} style="font-size:11px;padding:2px 8px;">'
+                f'{_html_escape(t_lbl)}: {_html_escape(v)}</span>'
+            )
+        parts.append('</div>')
+
+        # Reasoning for evaluated (non-N/A) transitions
+        for t_key in _T_KEYS:
+            t = transitions.get(t_key) or {}
+            v = str(t.get("verdict") or "")
+            if v in ("not_applicable", "blocked", "", "not_evaluated"):
+                continue
+            reasoning = str(t.get("verdict_reasoning") or "")
+            bypass = str(t.get("bypass_technique") or "")
+            if reasoning:
+                parts.append(
+                    f'<div class="emu-coverage-reason">'
+                    f'<span class="emu-coverage-reason-label">{_html_escape(_T_LABELS[t_key])}</span>'
+                    + (f'<em style="color:#b45309;font-style:normal;font-size:11px;display:block;margin-bottom:3px;">bypass: {_html_escape(bypass)}</em>' if bypass else '')
+                    + f'{_html_escape(reasoning[:400])}'
+                    f'</div>'
+                )
+
+        parts.append('</li>')
+    parts.append('</ul>')
+
+    # --- Pipeline checks ---
+    if pipeline_checks:
+        _CHECK_LABELS = {
+            "audit_trail":                   "§P1 Audit trail",
+            "hitl_gates":                    "§P2 HITL gates",
+            "loop_termination":              "§P3 Loop termination",
+            "agent_auth":                    "§P4 Agent authentication",
+            "system_prompt_confidentiality": "§P5 System prompt confidentiality",
+        }
+        _ACTIONABLE_CHECK_VERDICTS = {
+            "partial", "absent", "ungated", "bypassable", "exposed",
+        }
+        parts.append('<p style="font-weight:700;margin:18px 0 6px;font-size:13px;color:#374151;">Pipeline checks</p>')
+        parts.append('<ul class="emu-coverage-list">')
+        for check_key, check_lbl in _CHECK_LABELS.items():
+            chk = pipeline_checks.get(check_key)
+            if not isinstance(chk, dict):
+                v, reasoning, extra = "not_evaluated", "", ""
+            else:
+                v = str(chk.get("verdict") or "not_evaluated")
+                reasoning = str(chk.get("verdict_reasoning") or "")
+                extra = str(
+                    chk.get("bypass_condition") or
+                    chk.get("secret_found") or
+                    chk.get("secret_location") or ""
+                )
+            row_cls = "lands" if v in ("absent", "ungated", "bypassable", "exposed") else (
+                "partial" if v == "partial" else ("blocked" if v in ("present", "gated", "authenticated", "safe") else "not_evaluated")
+            )
+            verdict_cls = f"emu-coverage-verdict-{_html_escape(row_cls)}"
+            parts.append(
+                f'<li class="emu-coverage-row emu-coverage-row-{_html_escape(row_cls)}">'
+                f'<div class="emu-coverage-head">'
+                f'<span class="emu-coverage-label">{_html_escape(check_lbl)}</span>'
+                f'<span class="emu-coverage-verdict {verdict_cls}">{_html_escape(v)}</span>'
+                f'</div>'
+            )
+            if reasoning:
+                parts.append(
+                    f'<div class="emu-coverage-reason">'
+                    + (f'<em style="color:#b45309;font-style:normal;font-size:11px;display:block;margin-bottom:3px;">{_html_escape(extra)}</em>' if extra else '')
+                    + f'{_html_escape(reasoning[:400])}</div>'
+                )
+            parts.append('</li>')
+        parts.append('</ul>')
+
+    parts.append('</details>')
+
+
 def _render_emulator_coverage_block(
     r: Any, parts: list[str], *, static: bool = False,
 ) -> None:
     """Render the Behaviour emulator coverage block.
 
+    v7 schema (untrusted_sources): delegates to _render_emulator_coverage_block_v7.
     Flat (legacy): one list of all attack classes.
     Per-entry-point: one accordion per entry point, each with its own list.
     Wrapped in a <details> collapsed by default (open in static/print mode)."""
     emu = (getattr(r, "agent_emulation", {}) or {})
     if not emu.get("present"):
+        return
+
+    # v7 source-transition schema — use dedicated renderer
+    if emu.get("untrusted_sources"):
+        _render_emulator_coverage_block_v7(emu, parts, static=static)
         return
 
     entry_points = emu.get("entry_points") or []
