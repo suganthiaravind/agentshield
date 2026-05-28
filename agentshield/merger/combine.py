@@ -10580,7 +10580,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<span class="metric-bd-sep">·</span>'
         f'<span class="metric-bd-item">{emu_blocked} blocked</span>'
         f'<span class="metric-bd-sep">·</span>'
-        f'<span class="metric-bd-item">{emu_inconclusive} inconcl.</span>'
+        f'<span class="metric-bd-item">{emu_inconclusive} n/a</span>'
         f'</div>'
         f'<div class="metric-subtitle">pipeline-walked predictions</div>'
         f'</div>'
@@ -13026,7 +13026,7 @@ def _render_emu_coverage_section(
     parts.append('<div class="emu-coverage-totals">')
     for vkey, vlabel in [
         ("lands", "lands"), ("partial", "partial"), ("blocked", "blocked"),
-        ("inconclusive", "inconclusive"), ("not_evaluated", "not evaluated"),
+        ("inconclusive", "not applicable"), ("not_evaluated", "not evaluated"),
     ]:
         n = counts.get(vkey, 0)
         parts.append(
@@ -13049,7 +13049,7 @@ def _render_emu_coverage_section(
             steps: list[str] = []
         else:
             verdict = (entry.get("verdict") or "inconclusive").strip()
-            verdict_lbl = verdict
+            verdict_lbl = "not applicable" if verdict == "inconclusive" else verdict
             reasoning = (entry.get("verdict_reasoning") or "").strip()
             steps = list(entry.get("targets_steps") or [])
             citations = []
@@ -13146,7 +13146,7 @@ def _render_emulator_coverage_block(
             f'<strong>{agg_counts["lands"]}</strong> lands &middot; '
             f'<strong>{agg_counts["partial"]}</strong> partial &middot; '
             f'<strong>{agg_counts["blocked"]}</strong> blocked &middot; '
-            f'<strong>{agg_counts["inconclusive"]}</strong> inconclusive'
+            f'<strong>{agg_counts["inconclusive"]}</strong> not applicable'
         )
     else:
         traces_by_slug: dict[str, dict] = {}
@@ -13168,7 +13168,7 @@ def _render_emulator_coverage_block(
             f'evaluated &middot; <strong>{agg_counts["lands"]}</strong> lands &middot; '
             f'<strong>{agg_counts["partial"]}</strong> partial &middot; '
             f'<strong>{agg_counts["blocked"]}</strong> blocked &middot; '
-            f'<strong>{agg_counts["inconclusive"]}</strong> inconclusive'
+            f'<strong>{agg_counts["inconclusive"]}</strong> not applicable'
         )
 
     open_attr = " open" if static else ""
@@ -13188,7 +13188,7 @@ def _render_emulator_coverage_block(
         '<p class="emu-coverage-intro">'
         '<em>Lands</em> / <em>partial</em> are actionable findings '
         '(shown in Detect / Defend / Respond). <em>Blocked</em> '
-        '(defence works) and <em>inconclusive</em> (pipeline step '
+        '(defence works) and <em>not applicable</em> (pipeline step '
         'absent in this agent) live here only &mdash; they\'re '
         'coverage notes, not findings.'
         '</p>'
@@ -13223,7 +13223,7 @@ def _render_emulator_coverage_block(
                 f'&middot; <strong>{ep_counts["lands"]}</strong> lands '
                 f'&middot; <strong>{ep_counts["partial"]}</strong> partial '
                 f'&middot; <strong>{ep_counts["blocked"]}</strong> blocked '
-                f'&middot; <strong>{ep_counts["inconclusive"]}</strong> inconclusive'
+                f'&middot; <strong>{ep_counts["inconclusive"]}</strong> not applicable'
                 f'</span>'
                 f'</summary>'
             )

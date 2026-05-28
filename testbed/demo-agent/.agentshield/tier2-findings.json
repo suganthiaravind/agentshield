@@ -1,7 +1,7 @@
 {
   "tier": 2,
   "scanned_at": "2026-05-27T15:30:00Z",
-  "agentshield_tier1_fingerprint": "9e9e664f0fe0c7a571fc23613dd03528aa8c11c7b63c4c6f5acaf6f96d3a9383",
+  "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "saige_tier": "3",
   "saige_tier_reasoning": "orchestrator.py:63 delegates raw user_input verbatim to a downstream agent URL with inherited trust (T12 Agent Communication Poisoning). orchestrator.py:83 receive_from_peer() trusts a forgeable X-Internal-Caller header with no mTLS/JWT (T13 Rogue Agents). tools.py:44 exposes cancel_subscription \u2014 a destructive billing mutation \u2014 with no HITL gate reachable by the LLM autonomously. notifications.py:50 publishes LLM output to an SNS topic that delivers to external subscribers. SAIGE Tier 3 requires: (1) multi-agent orchestration with trust propagation \u2014 satisfied by orchestrator.py:63+83; (2) at least one state-mutating action reachable by the LLM without human approval \u2014 satisfied by cancel_subscription and SNS publish; (3) trust boundary crossing between agents \u2014 satisfied by the forged X-Internal-Caller path. Tier 3 threshold met.",
   "scanned_files": [
