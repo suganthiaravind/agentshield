@@ -5196,6 +5196,7 @@ footer {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.cov-badge-total  { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 700; }
 .cov-badge-issues { background: #fbe6e3; color: #8a1d15; border: 1px solid #e9b4ad; }
 .cov-badge-clean  { background: #e3f1e5; color: #1f6b3a; border: 1px solid #b3d6b9; }
 .cov-badge-gap    { background: #f0ede4; color: #6e6655; border: 1px solid #d9d2bf; }
@@ -12146,11 +12147,13 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 _t_issues += 1
             else:
                 _t_clean += 1
+    _t_total = _t_issues + _t_clean + _t_gap
     parts.append(
         f'<div class="coverage-totals-bar">'
         f'<span class="cov-totals-label">Total</span>'
-        f'<span class="cov-badge cov-badge-issues">{_t_issues} scanned risks — with findings</span>'
-        f'<span class="cov-badge cov-badge-clean">{_t_clean} scanned risks — clean</span>'
+        f'<span class="cov-badge cov-badge-total">{_t_total} total</span>'
+        f'<span class="cov-badge cov-badge-issues">{_t_issues} risks scanned — with findings</span>'
+        f'<span class="cov-badge cov-badge-clean">{_t_clean} risks scanned — clean</span>'
         f'<span class="cov-badge cov-badge-gap">{_t_gap} not scanned</span>'
         f'</div>'
     )
@@ -12221,8 +12224,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<summary class="framework-group-summary">'
             f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
             f'<span class="framework-group-counts">'
-            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} scanned risks — with findings</span>'
-            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} scanned risks — clean</span>'
+            f'<span class="cov-badge cov-badge-total">{total} total</span>'
+            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} risks scanned — with findings</span>'
+            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} risks scanned — clean</span>'
             f'<span class="cov-badge cov-badge-gap">{len(items_gap)} not scanned</span>'
             f'</span>'
             f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
