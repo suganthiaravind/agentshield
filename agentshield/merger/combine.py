@@ -11424,11 +11424,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         f'<span>{_html_escape(f["_tier2_reasoning"])}</span>'
                         f'</div>'
                     )
-                if origin == "tier2" and f.get("notes"):
+                if origin == "tier2" and (f.get("reasoning") or f.get("notes")):
                     parts.append(
                         f'<div class="finding-remediation rem-reasoning">'
                         f'<span class="fld-label fld-label-reasoning">Reasoning</span>'
-                        f'<span>{_html_escape(f["notes"])}</span>'
+                        f'<span>{_html_escape(f.get("reasoning") or f["notes"])}</span>'
                         f'</div>'
                     )
                 if f.get("remediation"):
