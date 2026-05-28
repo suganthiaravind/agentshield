@@ -13107,6 +13107,8 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     # Attack-surface context: count agent entry points across scanned code files
     repo_root = r.tier1_path.parent.parent
     agent_surface = _count_agent_entry_points(repo_root, code_files)
+    # Emulator entry_points[] is authoritative when present — explicit routes beat heuristic counts
+    emu_entry_points = (getattr(r, "agent_emulation", {}) or {}).get("entry_points") or []
 
     # ---- Output: fixed by writer naming convention. Fix-files carry the
     # per-file targets they address (count + which input files); HTML
@@ -13216,12 +13218,38 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
 
     # ---- Attack surface context — grouped by agent role ----
     parts.append('<div class="io-col-section io-col-section-surface">Agent entry points</div>')
-    parts.append(
-        '<p class="io-agent-surface-disclaimer">'
-        'Role labels are pattern-based estimates — verify against your architecture.'
-        '</p>'
-    )
-    if agent_surface["total"] > 0:
+    if emu_entry_points:
+        # Emulator entry_points[] is authoritative — use explicit route list over heuristic count
+        n_ep = len(emu_entry_points)
+        fw_items = [_html_escape(fw) for fw in agent_surface["frameworks"]] if agent_surface["frameworks"] else []
+        fw_part = (
+            f'<span class="io-agent-fw">&middot; {" &middot; ".join(fw_items)}</span>'
+            if fw_items else ""
+        )
+        parts.append(
+            f'<div class="io-agent-surface-summary">'
+            f'{n_ep} entry point{"s" if n_ep != 1 else ""}'
+            f'{fw_part}'
+            f'</div>'
+        )
+        parts.append('<ul class="io-col-list io-role-file-list">')
+        for ep in emu_entry_points:
+            route = ep.get("route") or ep.get("id") or "?"
+            desc = ep.get("description") or ""
+            desc_part = (
+                f'<span class="io-desc"> &mdash; {_html_escape(desc)}</span>'
+                if desc else ""
+            )
+            parts.append(
+                f'<li><code>{_html_escape(route)}</code>{desc_part}</li>'
+            )
+        parts.append('</ul>')
+    elif agent_surface["total"] > 0:
+        parts.append(
+            '<p class="io-agent-surface-disclaimer">'
+            'Role labels are pattern-based estimates — verify against your architecture.'
+            '</p>'
+        )
         fw_str = " &middot; ".join(_html_escape(fw) for fw in agent_surface["frameworks"])
         parts.append(
             f'<div class="io-agent-surface-summary">'
