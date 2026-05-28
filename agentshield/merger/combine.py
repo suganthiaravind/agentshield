@@ -13175,7 +13175,7 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
                 rt_files[_bn(p)] = rt_files.get(_bn(p), 0) + 1
                 rt_total += 1
     rt_outputs = [
-        ("output/agentshield-redteam-payloads.md", "Emulator attack walkthroughs",
+        ("output/agentshield-emulator-payloads.md", "Emulator attack walkthroughs",
          (rt_total, sorted(rt_files.keys(), key=lambda k: (-rt_files[k], k)))),
     ]
     total_output = len(html_outputs) + len(md_outputs) + len(rt_outputs)
@@ -16378,7 +16378,7 @@ def _render_how_it_works(parts: list[str]) -> None:
         'static / printable variant</li>'
         '<li><code>output/agentshield-{semgrep,manifest,copilot}-fixes.md</code> '
         '&mdash; per-tier remediation handoffs</li>'
-        '<li><code>output/agentshield-redteam-payloads.md</code> &mdash; '
+        '<li><code>output/agentshield-emulator-payloads.md</code> &mdash; '
         'emulator attack walkthroughs per finding</li>'
         '</ul>'
         '</div>'
