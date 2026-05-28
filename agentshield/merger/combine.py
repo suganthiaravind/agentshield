@@ -5757,6 +5757,23 @@ footer {
   position: relative; top: -1px;
 }
 .io-ep-help:hover, .io-ep-help:focus { background: var(--primary); color: #fff; outline: none; }
+.io-ep-tooltip {
+  display: none; position: absolute;
+  bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  background: #1e2530; color: #e8edf3;
+  font-size: 11px; font-weight: 400; line-height: 1.5;
+  text-transform: none; letter-spacing: 0;
+  padding: 8px 11px; border-radius: 5px;
+  width: 270px; white-space: normal;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+  z-index: 200; pointer-events: none;
+}
+.io-ep-tooltip::after {
+  content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #1e2530;
+}
+.io-ep-help:hover .io-ep-tooltip,
+.io-ep-help:focus .io-ep-tooltip { display: block; }
 .io-agent-role-group {
   display: flex; align-items: center; gap: 6px;
   margin: 10px 0 3px;
@@ -13237,8 +13254,9 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         f'<div class="io-col-section io-col-section-surface">'
         f'Agent entry points'
         f'<span class="io-ep-help" tabindex="0" '
-        f'  title="{_html_escape(_EP_TOOLTIP)}" '
-        f'  aria-label="{_html_escape(_EP_TOOLTIP)}">?</span>'
+        f'  aria-label="{_html_escape(_EP_TOOLTIP)}">'
+        f'?<span class="io-ep-tooltip">{_html_escape(_EP_TOOLTIP)}</span>'
+        f'</span>'
         f'</div>'
     )
     if emu_entry_points:
