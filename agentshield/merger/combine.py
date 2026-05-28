@@ -5155,16 +5155,18 @@ footer {
 .framework-group:last-child { margin-bottom: 0; }
 .framework-group-summary {
   display: grid;
-  grid-template-columns: 16px 260px 1fr auto;
+  grid-template-columns: 16px 240px 1fr auto;
   align-items: center;
-  column-gap: 12px;
-  padding: 9px 14px;
+  column-gap: 14px;
+  padding: 10px 16px;
   cursor: pointer;
   list-style: none;
   user-select: none;
   background: var(--panel);
   border-bottom: 1px solid transparent;
+  transition: background 0.12s ease;
 }
+.framework-group-summary:hover { background: #f5f7ff; }
 .framework-group[open] > .framework-group-summary {
   border-bottom-color: var(--border);
 }
@@ -5189,17 +5191,17 @@ footer {
   align-items: center;
 }
 .cov-badge {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline-flex; align-items: center;
+  padding: 3px 9px;
   border-radius: 999px;
   font-size: 11px; font-weight: 600;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  white-space: nowrap; letter-spacing: 0.01em;
 }
-.cov-badge-total  { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 700; }
-.cov-badge-issues { background: #fbe6e3; color: #8a1d15; border: 1px solid #e9b4ad; }
-.cov-badge-clean  { background: #e3f1e5; color: #1f6b3a; border: 1px solid #b3d6b9; }
-.cov-badge-gap    { background: #f0ede4; color: #6e6655; border: 1px solid #d9d2bf; }
+.cov-badge-total  { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 800; font-size: 12px; }
+.cov-badge-issues { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.cov-badge-clean  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.cov-badge-gap    { background: #f9fafb; color: #6b7280; border: 1px solid #e5e7eb; }
 .framework-group-link {
   font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 600;
   flex-shrink: 0; margin-left: auto;
@@ -5297,13 +5299,25 @@ footer {
 .coverage-legend .leg-swatch-clean  { background: #1f6b3a; }
 .coverage-legend .leg-swatch-gap    { background: #b3aa92; }
 .coverage-totals-bar {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 18px; margin-bottom: 16px;
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
-.coverage-totals-bar .cov-totals-label {
-  font-size: 12px; font-weight: 700; color: var(--text); margin-right: 4px;
+.cov-total-stat {
+  display: flex; align-items: baseline; gap: 5px;
+  padding-right: 16px; border-right: 1px solid var(--border); flex-shrink: 0;
+}
+.cov-total-num {
+  font-size: 24px; font-weight: 800; color: #3730a3; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cov-total-lbl {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.cov-totals-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
 }
 .coverage-fw-note {
   font-size: 11px; color: var(--text-muted);
@@ -12150,11 +12164,15 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     _t_total = _t_issues + _t_clean + _t_gap
     parts.append(
         f'<div class="coverage-totals-bar">'
-        f'<span class="cov-totals-label">Total</span>'
-        f'<span class="cov-badge cov-badge-total">{_t_total} total</span>'
-        f'<span class="cov-badge cov-badge-issues">{_t_issues} risks scanned — with findings</span>'
-        f'<span class="cov-badge cov-badge-clean">{_t_clean} risks scanned — clean</span>'
+        f'<div class="cov-total-stat">'
+        f'<span class="cov-total-num">{_t_total}</span>'
+        f'<span class="cov-total-lbl">risks</span>'
+        f'</div>'
+        f'<div class="cov-totals-chips">'
+        f'<span class="cov-badge cov-badge-issues">{_t_issues} with findings</span>'
+        f'<span class="cov-badge cov-badge-clean">{_t_clean} clean</span>'
         f'<span class="cov-badge cov-badge-gap">{_t_gap} not scanned</span>'
+        f'</div>'
         f'</div>'
     )
 
@@ -12224,9 +12242,9 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             f'<summary class="framework-group-summary">'
             f'<span class="framework-group-name">{_html_escape(k_label)}</span>'
             f'<span class="framework-group-counts">'
-            f'<span class="cov-badge cov-badge-total">{total} total</span>'
-            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} risks scanned — with findings</span>'
-            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} risks scanned — clean</span>'
+            f'<span class="cov-badge cov-badge-total">{total}</span>'
+            f'<span class="cov-badge cov-badge-issues">{len(items_issues)} with findings</span>'
+            f'<span class="cov-badge cov-badge-clean">{len(items_clean)} clean</span>'
             f'<span class="cov-badge cov-badge-gap">{len(items_gap)} not scanned</span>'
             f'</span>'
             f'<a href="{_html_escape(k_url)}" class="framework-group-link" '
