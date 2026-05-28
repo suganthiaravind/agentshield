@@ -5748,6 +5748,15 @@ footer {
 .io-agent-surface-disclaimer {
   font-size: 11px; color: var(--text-muted); font-style: italic; margin: 2px 0 6px;
 }
+.io-ep-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--border); color: var(--text-muted);
+  font-size: 9px; font-weight: 700; font-style: normal;
+  margin-left: 5px; cursor: default; vertical-align: middle;
+  position: relative; top: -1px;
+}
+.io-ep-help:hover, .io-ep-help:focus { background: var(--primary); color: #fff; outline: none; }
 .io-agent-role-group {
   display: flex; align-items: center; gap: 6px;
   margin: 10px 0 3px;
@@ -13217,19 +13226,27 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
         parts.append('</ul>')
 
     # ---- Attack surface context — grouped by agent role ----
-    parts.append('<div class="io-col-section io-col-section-surface">Agent entry points</div>')
+    _EP_TOOLTIP = (
+        "An agent entry point is any surface where attacker-controlled input "
+        "enters the agent pipeline: HTTP routes, WebSocket handlers, Lambda "
+        "triggers, scheduled jobs, or inter-agent receivers. Each entry point "
+        "is evaluated independently because input filters, system prompts, and "
+        "tools can differ per route."
+    )
+    parts.append(
+        f'<div class="io-col-section io-col-section-surface">'
+        f'Agent entry points'
+        f'<span class="io-ep-help" tabindex="0" '
+        f'  title="{_html_escape(_EP_TOOLTIP)}" '
+        f'  aria-label="{_html_escape(_EP_TOOLTIP)}">?</span>'
+        f'</div>'
+    )
     if emu_entry_points:
         # Emulator entry_points[] is authoritative — use explicit route list over heuristic count
         n_ep = len(emu_entry_points)
-        fw_items = [_html_escape(fw) for fw in agent_surface["frameworks"]] if agent_surface["frameworks"] else []
-        fw_part = (
-            f'<span class="io-agent-fw">&middot; {" &middot; ".join(fw_items)}</span>'
-            if fw_items else ""
-        )
         parts.append(
             f'<div class="io-agent-surface-summary">'
             f'{n_ep} entry point{"s" if n_ep != 1 else ""}'
-            f'{fw_part}'
             f'</div>'
         )
         parts.append('<ul class="io-col-list io-role-file-list">')
