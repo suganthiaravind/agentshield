@@ -70,6 +70,26 @@ What comes out is a verdict for every attack class — lands, partial, blocked, 
 
 ## Hackathon / Innovation Week Submission
 
+### Crisp version (short-form / tight word limit)
+
+**Session title:** AgentShield — Your AI Agent's Preflight Safety Check
+
+**Project description (short)**
+
+Shipping an AI agent without a security assessment is like deploying software without testing. AgentShield is an automated preflight check that scans your agent's source code, skill and manifest files (`SKILL.md`, `AGENT.md`, `CLAUDE.md`), and runs 17 adversarial attack classes against every discovered entry point — entirely offline, no live agent needed. It surfaces categorised findings with severity ratings and remediation guidance, mapped to OWASP, MITRE ATLAS, and CWE — so teams can deploy with confidence, not guesswork.
+
+**Key benefits (short)**
+
+- Catches vulnerabilities at dev time, not post-breach
+- Reviews code *and* manifest files — the full declared attack surface
+- Offline behaviour emulation: 136 adversarial payloads per entry point, no live endpoint needed
+- Scales to every deployment — one CLI command, reproducible results every run
+- Every finding is actionable: plain-English explanation, severity, and a ready-to-use fix guide
+
+---
+
+### Full version
+
 ### Session title
 AgentShield — Your AI Agent's Preflight Safety Check
 
