@@ -94,13 +94,31 @@ To run the emulator:
    .agentshield/agent-emulator-instructions.md and the output
    schema at .agentshield/agent-emulator-output-schema.md.
 
-   First classify the agent type (Step 0 in the instructions):
-   interactive, batch, sub-agent, or orchestrator. Then walk the
-   agent's runtime pipeline from source code using the pipeline
-   model for that type. For each applicable catalogued attack class,
-   identify the pipeline step(s) it targets, predict the pipeline
-   behaviour under that attack, and cite the file:line evidence for
-   every prediction.
+   **Step 0 — Enumerate entry points first (mandatory).**
+   Before classifying the agent type, list every distinct entry
+   point in the codebase: all HTTP route handlers (@app.route,
+   FastAPI path ops), WebSocket handlers, Lambda handlers,
+   scheduled-job triggers, and inter-agent receivers. For each
+   entry point, note whether it has an input filter, whether it
+   calls chain.invoke, whether it has a system prompt, whether it
+   has tools, and whether it forwards to a downstream agent.
+   Group entry points that share an identical pipeline
+   configuration — entry points with ANY pipeline difference get
+   their own block.
+
+   If two or more distinct pipeline configurations exist, use the
+   entry_points[] schema (see output schema). Each entry point
+   block must contain all 17 attack-class traces evaluated
+   independently against that entry point's pipeline. An attack
+   blocked by a filter on one route may land on a sibling route
+   without a filter — do not share verdicts across entry points.
+
+   Then classify the agent type: interactive, batch, sub-agent,
+   or orchestrator. Walk each entry point's pipeline from source
+   code. For each applicable catalogued attack class, identify the
+   pipeline step(s) it targets, predict the pipeline behaviour
+   under that attack for each entry point, and cite the file:line
+   evidence for every prediction.
 
    Use the GENERIC catalogue payloads exactly as shipped — do not
    adapt the attacker-side text from source code. The intelligence

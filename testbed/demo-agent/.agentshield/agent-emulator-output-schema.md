@@ -7,6 +7,15 @@ fields are missing — see *Failure modes* at the end.
 
 ## Top-level structure
 
+Two schemas are supported. Choose based on the entry-point
+enumeration from Step 0 of the instructions.
+
+### Flat schema — single pipeline configuration
+
+Use when the agent has one entry point, or all entry points share
+an identical pipeline configuration (same filter, same LLM call,
+same system prompt, same tools).
+
 ```json
 {
   "tier": "agent-emulator",
@@ -19,6 +28,58 @@ fields are missing — see *Failure modes* at the end.
 }
 ```
 
+### Per-entry-point schema — multiple distinct pipeline configurations
+
+**Use this when** the agent exposes two or more routes or input
+handlers with different pipeline configurations (e.g. one route
+has an input filter and another does not; one route calls chain.invoke
+and another only forwards via HTTP; one route has a system prompt
+with an embedded secret and another does not). This is the most
+common shape for Flask/FastAPI orchestrators.
+
+```json
+{
+  "tier": "agent-emulator",
+  "scanned_at": "ISO-8601 UTC timestamp",
+  "agent_type": "orchestrator",
+  "agent_type_notes": "5 entry points with distinct pipeline configurations — per-entry-point schema used.",
+  "pipeline_map": {},
+  "entry_points": [
+    {
+      "id": "chat",
+      "route": "POST /chat",
+      "description": "Customer-facing chat endpoint with keyword deny-list guard.",
+      "pipeline_map": {},
+      "attack_class_traces": []
+    }
+  ]
+}
+```
+
+When `entry_points[]` is present, the root-level `attack_class_traces`
+is ignored by the merger — all traces come from the per-entry-point
+blocks. The root-level `pipeline_map` is kept as a summary reference
+only. **Each `entry_points[]` block must contain all 17 attack-class
+traces evaluated against that entry point's specific pipeline.**
+
+**Why this matters:** An attack blocked by the input filter on
+`POST /chat` may land on `POST /api/orchestrator/receive` where no
+filter exists. If the agent is collapsed into a single analysis,
+that finding is silently missed. The per-entry-point schema makes
+these gaps visible.
+
+### `entry_points[]` entry
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Short identifier, no spaces (e.g. `"chat"`, `"receive"`, `"debug"`). |
+| `route` | string | HTTP method + path (e.g. `"POST /chat"`), or handler description for non-HTTP agents. |
+| `description` | string | One sentence describing this entry point's pipeline characteristics. |
+| `pipeline_map` | object | Same 8-step shape as the root-level pipeline_map, scoped to this entry point. |
+| `attack_class_traces` | array | All 17 attack-class traces evaluated against this entry point's pipeline. |
+
+### Flat schema fields
+
 | Field | Type | Notes |
 |---|---|---|
 | `tier` | string | Always `"agent-emulator"`. |
@@ -27,7 +88,8 @@ fields are missing — see *Failure modes* at the end.
 | `agent_type_notes` | string (optional) | Notes about mixed types or why a non-obvious type was chosen. |
 | `honesty_label` | string | The canonical positioning paragraph. Must include both `"catalogued adversary tactics"` and `"we walk the pipeline, we don't fire payloads"` — the report surfaces this verbatim in the methodology banner so reviewers see the methodology label, not just the conclusions. |
 | `pipeline_map` | object | Per-step description of where the agent's pipeline lives in code. See below. |
-| `attack_class_traces` | array | One entry per catalogued attack class evaluated against this pipeline. |
+| `attack_class_traces` | array | One entry per catalogued attack class evaluated against this pipeline. Omitted when `entry_points[]` is used. |
+| `entry_points` | array (optional) | Per-entry-point blocks — use instead of root `attack_class_traces` when multiple distinct pipeline configurations exist. |
 
 ## `pipeline_map`
 

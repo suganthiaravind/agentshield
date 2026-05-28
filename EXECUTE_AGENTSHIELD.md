@@ -15,8 +15,11 @@ This is the only file you need to install and run AgentShield in a JPMC VDI (or 
 | §4 | Configure VDI proxy (only if `pip install` is blocked) | 2 min |
 | §5 | Install AgentShield (clone, venv, `pip install -e .`) | 3 min |
 | §6 | Verify install (`agentshield --version`, optional unit tests) | 1 min |
-| §7 | Run a scan: Tier 1 + AST10 → Copilot LLM Scan → merge → report | 5–15 min |
-| §7.4 | *(Optional)* Probe: live adversarial test against a running agent | varies |
+| §7.1 | Tier 1 scan: Semgrep + AST10 manifest scanner | 1–3 min |
+| §7.2 | Tier 2: Copilot LLM Scan (paste prompt into Copilot Chat) | 5–15 min |
+| §7.3 | Phase 2: Behaviour emulator (paste prompt into Copilot Chat) | 5–15 min |
+| §7.4 | Merge → unified HTML report | 30 s |
+| §7.5 | *(Optional)* Probe: live adversarial test against a running agent | varies |
 | §8 | Open the report in a browser (localhost or `file://`) | 30 s |
 | §9 | Privacy review before sharing | 2 min |
 
@@ -220,23 +223,86 @@ After this command finishes, your target repo's `.agentshield/` directory contai
 
 For everything else that can go wrong with Copilot (it summarised instead of executing, it stopped halfway, the JSON is malformed, etc.), see §12.3 "Tier 2 (Copilot) issues" below.
 
-### 7.3 Merge → unified report
+### 7.3 Phase 2 — Behaviour emulator (Copilot Chat — IDE step)
+
+This step applies 17 OWASP / ATLAS adversary attack classes against every distinct entry point in the agent's pipeline, predicting step-by-step how each attack would propagate through the code.
+
+1. Keep the same repo open in VS Code with Copilot Chat active.
+2. Paste this prompt verbatim:
+
+   ```
+   @workspace Please run the AgentShield agent behaviour emulator.
+
+   Read the instructions at
+   .agentshield/agent-emulator-instructions.md and the output
+   schema at .agentshield/agent-emulator-output-schema.md.
+
+   Step 0 — Enumerate entry points first (mandatory).
+   Before classifying the agent type, list every distinct entry
+   point in the codebase: all HTTP route handlers (@app.route,
+   FastAPI path ops), WebSocket handlers, Lambda handlers,
+   scheduled-job triggers, and inter-agent receivers. For each
+   entry point, note whether it has an input filter, whether it
+   calls chain.invoke, whether it has a system prompt, whether it
+   has tools, and whether it forwards to a downstream agent.
+   Group entry points that share an identical pipeline
+   configuration — entry points with ANY pipeline difference get
+   their own block.
+
+   If two or more distinct pipeline configurations exist, use the
+   entry_points[] schema (see output schema). Each entry point
+   block must contain all 17 attack-class traces evaluated
+   independently against that entry point's pipeline. An attack
+   blocked by a filter on one route may land on a sibling route
+   without a filter — do not share verdicts across entry points.
+
+   Then classify the agent type: interactive, batch, sub-agent,
+   or orchestrator. Walk each entry point's pipeline from source
+   code. For each applicable catalogued attack class, identify the
+   pipeline step(s) it targets, predict the pipeline behaviour
+   under that attack for each entry point, and cite the file:line
+   evidence for every prediction.
+
+   Use the GENERIC catalogue payloads exactly as shipped — do not
+   adapt the attacker-side text from source code. The intelligence
+   comes from what the agent reveals, not from what you read in
+   the repo.
+
+   Write your pipeline emulations to
+   .agentshield/agent-emulation.json following the schema exactly.
+   Mark inconclusive when the relevant pipeline step isn't present
+   — do not fabricate behaviour.
+   ```
+
+3. Wait for Copilot to finish writing. Time depends on entry-point count:
+   - 1 entry point: ~3–5 min
+   - 3–5 entry points: ~10–20 min
+   - 10+ entry points: may need to chunk; see §12.4 below.
+
+4. Confirm `.agentshield/agent-emulation.json` exists. If it doesn't, follow up:
+
+   > "You said you finished but `.agentshield/agent-emulation.json` doesn't exist. Please write the JSON output to that path."
+
+**What this produces:** For each entry point × each attack class, a pipeline trace with step-by-step verdicts (`lands` / `partial` / `blocked` / `inconclusive`) and file:line citations. The merge step renders these as full pipeline-trace cards in the report.
+
+---
+
+### 7.4 Merge → unified report
 
 ```bash
-agentshield merge /path/to/your-agent-repo \
-  --output-html report.html \
-  --output-markdown report.md
+agentshield merge /path/to/your-agent-repo
 ```
 
-The merger:
-- reads `tier1-results.json` + `tier2-findings.json`
-- validates the Tier 2 output against the schema
-- detects stale Tier 2 (fingerprint mismatch with Tier 1)
-- writes the unified report
+The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, and writes the unified report to `output/` in your working directory:
 
-For one `--output-html` flag, **two** HTML files are emitted:
-- `report.html` — interactive (tabs / filter bar / search / Reference tab)
-- `report-print.html` — stacked / printable (every section visible top-to-bottom)
+```
+output/
+├── agentshield-report.html         ← interactive (tabs / filter / search / Reference)
+├── agentshield-report-print.html   ← stacked / printable (all sections visible)
+└── agentshield-findings-fix.md     ← paste into Claude Code to fix all findings
+```
+
+Do **not** pass `--output-html` — the default already writes to `output/`.
 
 CLI banners you might see:
 
@@ -247,7 +313,7 @@ CLI banners you might see:
 | `❌ Copilot LLM Scan output failed schema validation.` | Copilot's JSON is malformed | The merger prints the field paths; paste them into Copilot Chat to fix |
 | `⚠ STALE Copilot LLM Scan.` | Tier 1 fingerprint changed since Copilot ran | Re-run §7.2 |
 
-### 7.4 *(Optional)* Probe — live adversarial tests
+### 7.5 *(Optional)* Probe — live adversarial tests
 
 `agentshield probe` fires attacks at a running agent endpoint. Skip this section if you only need the static + Copilot report.
 
@@ -278,7 +344,7 @@ agentshield probe /path/to/your-agent-repo \
 
 Probe results are written to `.agentshield/` and picked up automatically by `agentshield merge` — probe-discovered findings appear in the merged report with a "Discovered at probe time" badge; campaign findings show a full turn-by-turn kill-chain.
 
-### 7.5 View the report
+### 7.6 View the report
 
 #### Option A — open the file directly
 

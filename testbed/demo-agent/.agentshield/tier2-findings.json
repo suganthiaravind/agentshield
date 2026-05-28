@@ -1,9 +1,9 @@
 {
   "tier": 2,
-  "scanned_at": "2026-05-27T15:30:00Z",
+  "scanned_at": "2026-05-28T14:45:00Z",
   "agentshield_tier1_fingerprint": "80a100466ff6dfe36ab53c43803fbb15db85cb391c15c28fdec6668d5b787515",
   "saige_tier": "3",
-  "saige_tier_reasoning": "orchestrator.py:63 delegates raw user_input verbatim to a downstream agent URL with inherited trust (T12 Agent Communication Poisoning). orchestrator.py:83 receive_from_peer() trusts a forgeable X-Internal-Caller header with no mTLS/JWT (T13 Rogue Agents). tools.py:44 exposes cancel_subscription \u2014 a destructive billing mutation \u2014 with no HITL gate reachable by the LLM autonomously. notifications.py:50 publishes LLM output to an SNS topic that delivers to external subscribers. SAIGE Tier 3 requires: (1) multi-agent orchestration with trust propagation \u2014 satisfied by orchestrator.py:63+83; (2) at least one state-mutating action reachable by the LLM without human approval \u2014 satisfied by cancel_subscription and SNS publish; (3) trust boundary crossing between agents \u2014 satisfied by the forged X-Internal-Caller path. Tier 3 threshold met.",
+  "saige_tier_reasoning": "Autonomy confirmed: controller.py:26 chain.invoke(user_message) and orchestrator.py:87 chain.invoke({\"input\": peer_message}) are non-deterministic LLM-driven decision points. State-changing operations confirmed: tools.py:43 requests.post to billing-api.internal (customer subscription cancellation), notifications.py:41 sns.publish to support-replies SNS topic. Both reach customer-facing systems (cancel_subscription mutates billing state visible to the customer; SNS support-replies delivers email to customer_email). Tier 3 because autonomous LLM decision-making + state-changing operations that are customer-facing.",
   "scanned_files": [
     "config.py",
     "controller.py",
@@ -12,10 +12,7 @@
     "memory.py",
     "notifications.py",
     "orchestrator.py",
-    "tools.py",
-    "SKILL.md",
-    "config.yaml",
-    "skills/billing/SKILL.md"
+    "tools.py"
   ],
   "skipped_files": [],
   "findings": [
@@ -23,376 +20,394 @@
       "rule_id": "TIER2-LLM01-02",
       "category": "detect",
       "severity": "high",
-      "file": "controller.py",
+      "file": "testbed/demo-agent/controller.py",
       "line": 35,
       "snippet": "docs = WebBaseLoader(article_url).load()",
-      "message": "User-supplied article_url is fetched without a hostname allowlist; retrieved page content flows into the LLM \u2014 indirect prompt-injection via attacker-controlled webpage.",
-      "owasp_llm": [
-        "LLM01"
-      ],
-      "owasp_agentic": [
-        "T1",
-        "T6"
-      ],
-      "mitre_atlas": [
-        "AML.T0051"
-      ],
-      "cwe": [
-        "CWE-918",
-        "CWE-94"
-      ],
-      "remediation": "Validate article_url against an explicit hostname allowlist before fetching. Treat retrieved document content as untrusted: pass through a guardrail layer (Lakera Guard, Bedrock Guardrails, or a ScrubbingCallAdvisor) before the LLM call.",
-      "confidence": "high"
+      "message": "Untrusted URL from HTTP request body fed directly into WebBaseLoader without hostname allowlist — attacker-controlled documents become attacker-controlled prompts (indirect prompt injection, OWASP LLM01).",
+      "owasp_llm": ["LLM01"],
+      "owasp_agentic": ["T1", "T6"],
+      "mitre_atlas": [],
+      "cwe": ["CWE-94"],
+      "remediation": "Validate article_url against an allowlist of permitted hostnames before passing to WebBaseLoader. Reject any URL not on the allowlist with a 400. For corporate use, restrict to internal document stores (SharePoint, Confluence) with auth."
     },
     {
-      "rule_id": "TIER2-LLM06-03",
+      "rule_id": "TIER2-LLM01-04",
       "category": "defend",
-      "severity": "medium",
-      "file": "guard/input_filter.py",
-      "line": 14,
-      "snippet": "DENY_PATTERNS = [re.compile(p, re.IGNORECASE) for p in DENY_LIST]",
-      "message": "Keyword deny-list guardrail is bypassable via indirect framing, base64 encoding, or role-play prompts \u2014 provides a false sense of security as the primary injection control.",
-      "owasp_llm": [
-        "LLM01",
-        "LLM06"
-      ],
-      "owasp_agentic": [
-        "T1"
-      ],
+      "severity": "high",
+      "file": "testbed/demo-agent/guard/input_filter.py",
+      "line": 10,
+      "snippet": "_DENY_PATTERNS = [\n    r\"ignore\\s+previous\\s+instructions\",\n    r\"system\\s+(prompt|override|role)\",\n    ...\n]",
+      "message": "Sole input guardrail is a keyword deny-list with no semantic/LLM-classifier backing — bypassable by indirect framing, role-play, base64 encoding, or simple rephrasing. This is the specific defect the partial-defence-bypass emulator campaign exploits.",
+      "owasp_llm": ["LLM01", "LLM07"],
+      "owasp_agentic": ["T6", "T8"],
+      "mitre_atlas": ["AML.T0051", "AML.T0054", "AML.T0056"],
+      "cwe": ["CWE-200"],
+      "remediation": "Back the keyword filter with a semantic intent classifier — a second LLM scoring the input for injection intent, or a sentence-transformer similarity check against known attack intents. Rate-limit repeated rephrasings of the same blocked intent within the same session. The keyword list remains useful as a fast first pass; the semantic classifier is the backstop."
+    },
+    {
+      "rule_id": "TIER2-LLM02-01",
+      "category": "detect",
+      "severity": "critical",
+      "file": "testbed/demo-agent/config.py",
+      "line": 13,
+      "snippet": "DATABASE_URL = \"postgresql://demo:demo@internal-pg.local:5432/support\"",
+      "message": "Hardcoded database connection string with plaintext credentials in source — username 'demo' and password 'demo' will appear in git history, container images, and CI logs. CWE-798.",
+      "owasp_llm": ["LLM02"],
+      "owasp_agentic": [],
       "mitre_atlas": [],
-      "cwe": [
-        "CWE-693"
-      ],
-      "remediation": "Supplement or replace the regex deny-list with a classifier-based guardrail (Lakera Guard, Bedrock Guardrails, or an LLM-judge prompt-injection detector). Deny-lists should be a last-resort layer, not the primary control.",
-      "confidence": "high",
-      "notes": "Think of this like a list of banned words at a school gate \u2014 it stops anyone who uses the exact banned phrase, but a clever person who says the same thing differently walks straight through. The check at guard/input_filter.py:14 scans every user message against 7 fixed patterns (for example, \"ignore previous instructions\"). An attacker can bypass this entirely by rephrasing the request as a creative writing exercise, encoding it in base64, or using indirect framing \u2014 as the emulator confirmed with the authority-spoofing bypass at mutation-2. The bigger problem: this deny-list is the only input check. There is no backup guardrail sitting behind it, so one bypass technique is enough to reach the AI completely unfiltered."
+      "cwe": ["CWE-798"],
+      "remediation": "Move DATABASE_URL to an environment variable (os.environ['DATABASE_URL']) or a secrets manager (AWS Secrets Manager / HashiCorp Vault). Rotate the credentials — they are already compromised if this file has been committed to any git repository."
     },
     {
       "rule_id": "TIER2-LLM06-01",
       "category": "defend",
       "severity": "high",
-      "file": "tools.py",
-      "line": 44,
-      "snippet": "resp = requests.post(f\"{BILLING_API}/cancel\", json={\"customer_id\": customer_id})",
-      "message": "cancel_subscription executes a destructive billing mutation with no human-in-the-loop gate \u2014 the LLM agent can cancel subscriptions autonomously without any approval step.",
-      "owasp_llm": [
-        "LLM06"
-      ],
-      "owasp_agentic": [
-        "T2",
-        "T10"
-      ],
+      "file": "testbed/demo-agent/tools.py",
+      "line": 26,
+      "snippet": "@tool\ndef cancel_subscription(customer_id: str) -> str:\n    \"\"\"Cancel a customer subscription. Destructive — no approval gate.\"\"\"",
+      "message": "cancel_subscription is a destructive tool (billing mutation, customer-visible state change) with no HITL confirmation gate — the agent can invoke it autonomously. The numeric-ID validation is not an approval gate; it is an injection guard only.",
+      "owasp_llm": ["LLM06"],
+      "owasp_agentic": ["T2", "T10"],
       "mitre_atlas": [],
       "cwe": [],
-      "remediation": "Wire a HumanApprovalCallbackHandler (LangChain) or a LangGraph interrupt_before node on the cancel_subscription tool node. Require explicit operator confirmation before any subscription mutation reaches the billing API.",
-      "confidence": "high",
-      "notes": "Imagine giving a new employee the power to cancel customer accounts the moment a customer asks \u2014 no manager approval, no confirmation step. That is exactly what this code does. The cancel_subscription tool at tools.py:44 fires a real cancellation request to the billing system the instant the AI decides to call it. There is no \"are you sure?\" prompt, no second human in the loop. An attacker who tricks the AI \u2014 for example, by hiding an instruction inside an article the agent is asked to summarise (the indirect injection surface at controller.py:35) \u2014 can get the agent to cancel any customer's subscription without that customer ever asking for it."
+      "remediation": "Wire a HumanApprovalCallbackHandler (LangChain) or an interrupt_before= node (LangGraph) before cancel_subscription executes. Any tool whose name contains delete_*, cancel_*, charge_*, or similar destructive verbs must require out-of-band human confirmation before the side-effecting call runs.",
+      "notes": "tools.py:36 validates customer_id is numeric — this prevents trivial SQL injection but is not a human approval gate. Tier 1 rule DF004 fired correctly; this is the Tier 2 confirmation with additional context about the false sense of security from the partial guard."
     },
     {
-      "rule_id": "TIER2-LLM01-01",
-      "category": "detect",
-      "severity": "high",
-      "file": "config.py",
-      "line": 13,
-      "snippet": "DATABASE_URL = \"postgresql://demo:demo@internal-pg.local:5432/support\"",
-      "message": "Database connection string with embedded username and password hardcoded in source \u2014 not caught by Tier 1 API-key rules because it uses the postgresql:// URI scheme.",
-      "owasp_llm": [
-        "LLM01"
-      ],
-      "owasp_agentic": [],
-      "mitre_atlas": [],
-      "cwe": [
-        "CWE-312",
-        "CWE-798"
-      ],
-      "remediation": "Move DATABASE_URL to AWS Secrets Manager. Reference at startup via boto3 secretsmanager.get_secret_value and rotate the credential. Remove the hardcoded string from source.",
-      "confidence": "high"
-    },
-    {
-      "rule_id": "TIER2-LLM07-01",
-      "category": "detect",
-      "severity": "high",
-      "file": "orchestrator.py",
-      "line": 76,
-      "snippet": "SYSTEM_PROMPT = \"\"\"You are a support orchestrator ... SK-OPS-7741-PRIVATE ...\"\"\"",
-      "message": "Operational secret key SK-OPS-7741-PRIVATE is embedded verbatim in the system prompt \u2014 any system-prompt leak path exposes it directly to the LLM output stream.",
-      "owasp_llm": [
-        "LLM07"
-      ],
-      "owasp_agentic": [],
-      "mitre_atlas": [
-        "AML.T0056"
-      ],
-      "cwe": [
-        "CWE-312"
-      ],
-      "remediation": "Remove credentials from system prompts entirely. Inject secrets at runtime via a tool call to AWS Secrets Manager only when the specific operation requires them, not pre-loaded into every LLM context.",
-      "confidence": "high"
-    },
-    {
-      "rule_id": "TIER2-LLM07-02",
-      "category": "detect",
-      "severity": "critical",
-      "file": "orchestrator.py",
-      "line": 118,
-      "snippet": "return jsonify({\"error\": str(e), \"active_system_prompt\": SYSTEM_PROMPT}), 500",
-      "message": "Exception handler returns SYSTEM_PROMPT verbatim in the HTTP 500 response \u2014 any unhandled exception exposes the full system prompt including the embedded secret SK-OPS-7741-PRIVATE to the caller.",
-      "owasp_llm": [
-        "LLM07"
-      ],
-      "owasp_agentic": [],
-      "mitre_atlas": [
-        "AML.T0056"
-      ],
-      "cwe": [
-        "CWE-209",
-        "CWE-312"
-      ],
-      "remediation": "Remove SYSTEM_PROMPT and any internal state from all error responses. Log it server-side only (redacted). Return a generic opaque error body to callers (e.g. {\"error\": \"internal error\", \"request_id\": \"...\"}).",
-      "confidence": "high"
-    },
-    {
-      "rule_id": "TIER2-AGENTIC-T1-01",
-      "category": "detect",
-      "severity": "medium",
-      "file": "memory.py",
-      "line": 39,
-      "snippet": "memory.setdefault(session_id, []).append({\"user\": user_message, \"assistant\": llm_response})",
-      "message": "Raw user input and unfiltered LLM response are persisted verbatim to session memory \u2014 an attacker can plant instructions in turn N that influence the agent's behaviour in turn N+1.",
-      "owasp_llm": [
-        "LLM01"
-      ],
-      "owasp_agentic": [
-        "T1"
-      ],
-      "mitre_atlas": [],
-      "cwe": [],
-      "remediation": "Validate memory writes with the same rigor as database writes: schema-check or run content through a moderation classifier before persisting. Separate user-supplied content from agent-generated summaries in the memory schema.",
-      "confidence": "medium"
-    },
-    {
-      "rule_id": "TIER2-AGENTIC-T1-02",
-      "category": "detect",
+      "rule_id": "TIER2-LLM06-03",
+      "category": "defend",
       "severity": "low",
-      "file": "memory.py",
-      "line": 21,
-      "snippet": "MEMORY_FILE = Path(\"/tmp/demo-agent-memory.json\")",
-      "message": "Session memory is persisted to /tmp with no filesystem access controls \u2014 any process on the same host can read or overwrite all user session histories.",
-      "owasp_llm": [],
-      "owasp_agentic": [
-        "T1"
-      ],
+      "file": "testbed/demo-agent/tools.py",
+      "line": 12,
+      "snippet": "@tool\ndef calculate(expression: str) -> str:",
+      "message": "calculate tool has no args_schema= Pydantic model — the LLM guesses the argument shape, making the tool surface wider than intended.",
+      "owasp_llm": ["LLM06"],
+      "owasp_agentic": ["T2"],
       "mitre_atlas": [],
-      "cwe": [
-        "CWE-732"
-      ],
-      "remediation": "Store session memory in a process-owned directory with restricted permissions (chmod 0700), or use a dedicated access-controlled datastore (DynamoDB with IAM, Redis with AUTH). Avoid /tmp for any persistent sensitive state.",
-      "confidence": "high"
+      "cwe": [],
+      "remediation": "Add args_schema=CalculateInput where CalculateInput is a Pydantic BaseModel with expression: str = Field(description='A safe arithmetic expression'). This constrains what the planner can pass."
     },
     {
-      "rule_id": "TIER2-LLM02-04",
-      "category": "detect",
-      "severity": "high",
-      "file": "notifications.py",
-      "line": 50,
-      "snippet": "sns.publish(TopicArn=TOPIC_ARN, Message=scrubbed, Subject=\"Support Reply\")",
-      "message": "LLM output published to SNS after only partial PII scrubbing \u2014 _scrub_pii redacts SSN and passport patterns but not email addresses or account numbers, risking data leakage to all SNS subscribers.",
-      "owasp_llm": [
-        "LLM02"
-      ],
-      "owasp_agentic": [
-        "T8"
-      ],
-      "mitre_atlas": [
-        "AML.T0057"
-      ],
-      "cwe": [
-        "CWE-200"
-      ],
-      "remediation": "Expand _scrub_pii to cover emails, account numbers, credit-card patterns, and phone numbers. Alternatively adopt Presidio AnonymizerEngine which covers the full NLP PII entity catalogue out of the box.",
-      "confidence": "high"
+      "rule_id": "TIER2-LLM06-03",
+      "category": "defend",
+      "severity": "low",
+      "file": "testbed/demo-agent/tools.py",
+      "line": 25,
+      "snippet": "@tool\ndef cancel_subscription(customer_id: str) -> str:",
+      "message": "cancel_subscription tool has no args_schema= Pydantic model — no type-level constraint stops the planner from passing non-numeric or compound values before the runtime isdigit() check.",
+      "owasp_llm": ["LLM06"],
+      "owasp_agentic": ["T2"],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Add args_schema=CancelInput where CancelInput validates customer_id: str = Field(pattern=r'^\\d+$'). Pydantic validation at schema level is a stronger guarantee than runtime isdigit()."
     },
     {
       "rule_id": "TIER2-LLM10-02",
       "category": "respond",
       "severity": "medium",
-      "file": "notifications.py",
-      "line": 38,
-      "snippet": "response = bedrock.invoke_model(modelId=MODEL_ID, body=json.dumps(body))",
-      "message": "LLM call has no surrounding audit logging \u2014 no input hash, no output hash, no latency metric, no trace ID. Incident response cannot reconstruct what the model saw or returned.",
-      "owasp_llm": [
-        "LLM10"
-      ],
-      "owasp_agentic": [
-        "T8"
-      ],
-      "mitre_atlas": [
-        "AML.T0024"
-      ],
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 29,
+      "snippet": "def send_reply(customer_email: str, ticket_summary: str) -> None:\n    response = client.chat.completions.create(...)",
+      "message": "LLM call in send_reply has no surrounding audit logging — no logger setup, no structured trace, no callbacks. There is no record of what prompt was sent, what reply was generated, or that the SNS publish occurred.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": ["AML.T0024"],
       "cwe": [],
-      "remediation": "Add structured logging around every LLM invocation capturing: input hash, model ID, latency, token counts, output hash, and correlation ID. Use AWS CloudWatch structured logs, LangSmith, or OpenTelemetry traces.",
-      "confidence": "high"
+      "remediation": "Add structured logging before and after the LLM call: log the hashed prompt, model ID, token counts, and reply hash. Log the SNS publish with the message hash and recipient. Use OpenTelemetry or LangSmith for distributed tracing if this runs inside an agent loop."
     },
     {
-      "rule_id": "TIER2-LLM10-01",
+      "rule_id": "TIER2-LLM10-02",
       "category": "respond",
       "severity": "medium",
-      "file": "orchestrator.py",
-      "line": 63,
-      "snippet": "resp = requests.post(DOWNSTREAM_AGENT_URL, json={\"message\": user_input}, headers=headers)",
-      "message": "Agent-to-agent delegation has no audit trail \u2014 the delegated payload, downstream agent URL, and response are not logged, making it impossible to reconstruct a multi-hop attack chain.",
-      "owasp_llm": [
-        "LLM10"
-      ],
-      "owasp_agentic": [
-        "T12"
-      ],
-      "mitre_atlas": [
-        "AML.T0024"
-      ],
+      "file": "testbed/demo-agent/controller.py",
+      "line": 18,
+      "snippet": "@app.route(\"/chat\", methods=[\"POST\"])\ndef chat():",
+      "message": "The /chat handler invokes the LLM at line 26 with no audit logging — no logger in the file, no callbacks kwarg, no trace instrumentation. Incident response requires knowing what each request sent and received.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": ["AML.T0024"],
       "cwe": [],
-      "remediation": "Log every agent delegation with: caller identity, target URL, payload hash, correlation ID, latency, and response status. Propagate a W3C Trace-Context traceparent header to chain spans across agents.",
-      "confidence": "high"
+      "remediation": "Add a structured logger (e.g. structlog or stdlib logging) and log the hashed user_message and hashed response.content on every call. At minimum: request ID, timestamp, input hash, output hash, model, latency."
     },
     {
-      "rule_id": "TIER2-LLM09-01",
-      "category": "defend",
-      "severity": "high",
-      "file": "orchestrator.py",
-      "line": 83,
-      "snippet": "caller = request.headers.get(\"X-Internal-Caller\", \"unknown\")",
-      "message": "Peer-agent identity relies solely on a forgeable HTTP header \u2014 any client on the internal network can set X-Internal-Caller to impersonate a trusted peer agent without any signature or token validation.",
-      "owasp_llm": [
-        "LLM09"
-      ],
-      "owasp_agentic": [
-        "T13"
-      ],
-      "mitre_atlas": [],
-      "cwe": [
-        "CWE-345"
-      ],
-      "remediation": "Replace header-based identity with mTLS client certificates or short-lived JWT tokens signed by an internal CA. Validate the token cryptographically before trusting any peer identity claim.",
-      "confidence": "high",
-      "notes": "Think of the X-Internal-Caller header like a name badge that anyone can print at home. The agent at orchestrator.py:83 reads the badge and trusts it without checking whether it is genuine. Any system \u2014 or attacker \u2014 that can send HTTP requests to this endpoint can write whatever name they like on the badge. Once the agent believes the caller is a trusted colleague, it passes the message straight to the AI at line 87 with no further checks. Real verification would need a signed certificate or a tamper-proof token (mTLS or a signed JWT) \u2014 not just a header value that any HTTP client can set freely."
-    },
-    {
-      "rule_id": "TIER2-LLM09-02",
+      "rule_id": "TIER2-GAP-04",
       "category": "defend",
       "severity": "medium",
-      "file": "orchestrator.py",
-      "line": 100,
-      "snippet": "@app.route(\"/debug\", methods=[\"POST\"])",
-      "message": "Debug endpoint is unauthenticated \u2014 any caller can reach it and trigger the system-prompt and secret leak via the exception handler at line 118.",
-      "owasp_llm": [
-        "LLM09"
-      ],
-      "owasp_agentic": [],
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 30,
+      "snippet": "response = client.chat.completions.create(\n    model=MODEL,\n    messages=[...],\n)",
+      "message": "LLM call in send_reply has no explicit timeout — relies on OpenAI SDK default, which can hang indefinitely on slow completions and block the notification pipeline.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T4"],
       "mitre_atlas": [],
-      "cwe": [
-        "CWE-306"
-      ],
-      "remediation": "Require authentication on /debug (API key header validated against a secret, or AWS IAM SigV4 for internal services). Remove the route entirely in production; gate it behind an environment flag (e.g. DEBUG_ENABLED=false).",
-      "confidence": "high",
-      "notes": "This is a developer back door that was never locked before the agent went live. The /debug route at orchestrator.py:100 has no login or access check \u2014 anyone who sends a request to it is let in. To make it worse, whenever the AI throws an error, the exception handler at line 118 sends back the agent's full set of secret instructions (SYSTEM_PROMPT), including a private key (SK-OPS-7741-PRIVATE). An attacker only needs to find the URL \u2014 a common technique called fuzzing tries obvious route names like /debug, /test, and /dev automatically \u2014 and then send a bad request to make it crash. The crash response hands them the secrets for free."
+      "cwe": ["CWE-400"],
+      "remediation": "Pass timeout= to the create() call (e.g. timeout=30) and set max_tokens= to cap reply length. For the OpenAI SDK: client.chat.completions.create(..., timeout=30, max_tokens=1000)."
+    },
+    {
+      "rule_id": "TIER2-GAP-04",
+      "category": "defend",
+      "severity": "medium",
+      "file": "testbed/demo-agent/controller.py",
+      "line": 15,
+      "snippet": "chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key)",
+      "message": "ChatOpenAI instantiated at module level with no timeout or max_tokens — every LLM call in the /chat and /summarise handlers inherits an uncapped timeout.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T4"],
+      "mitre_atlas": [],
+      "cwe": ["CWE-400"],
+      "remediation": "Pass request_timeout= and max_tokens= to the ChatOpenAI constructor: ChatOpenAI(model=MODEL, openai_api_key=..., request_timeout=30, max_tokens=2000)."
+    },
+    {
+      "rule_id": "TIER2-GAP-05",
+      "category": "respond",
+      "severity": "high",
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 41,
+      "snippet": "sns.publish(\n    TopicArn=\"arn:aws:sns:...:support-replies\",\n    Message=reply_body,\n    Subject=f\"Support reply for {customer_email}\",\n)",
+      "message": "LLM output published to SNS with only partial PII scrubbing — _scrub_pii() at line 37 redacts SSN/passport patterns but leaves email addresses, account numbers, injected tool-call syntax, and arbitrary LLM content intact in reply_body before it reaches the customer-facing SNS topic.",
+      "owasp_llm": ["LLM02"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": [],
+      "cwe": ["CWE-200"],
+      "remediation": "Apply a comprehensive output scrubber (Presidio AnonymizerEngine or equivalent) covering email, phone, account number, and credit-card patterns — not just SSN/passport. Apply the scrubber at the SNS publish boundary, not at the LLM call site, so any downstream path that calls sns.publish is also covered."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T1-01",
+      "category": "detect",
+      "severity": "high",
+      "file": "testbed/demo-agent/memory.py",
+      "line": 28,
+      "snippet": "memory.setdefault(session_id, []).append({\n    \"user\": user_message,\n    \"assistant\": llm_response,\n})",
+      "message": "User message and raw LLM response persisted verbatim to the memory store with no content validation, schema check, or moderation classifier — an attacker can poison the memory for their session via crafted user text that will be recalled in future turns.",
+      "owasp_llm": [],
+      "owasp_agentic": ["T1"],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Validate memory writes the same way you would validate database writes. Apply content classification (Llama Guard, Lakera, or a lightweight classifier) before persisting. Strip system-prompt-shaped directives ('remember this always', 'from now on...') from user messages before storing. Consider storing only a hash or a schema-validated summary rather than raw LLM output."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T1-02",
+      "category": "detect",
+      "severity": "high",
+      "file": "testbed/demo-agent/memory.py",
+      "line": 16,
+      "snippet": "MEMORY_FILE = Path(\"/tmp/demo-agent-memory.json\")",
+      "message": "All sessions share a single flat JSON file on disk — memory is keyed by session_id but the file itself has no access controls and is readable/writable by any process on the host. A low-privilege attacker with file-system access can read or poison any session's memory by knowing (or guessing) session IDs.",
+      "owasp_llm": ["LLM01", "LLM07"],
+      "owasp_agentic": ["T1"],
+      "mitre_atlas": ["AML.T0018", "AML.T0019"],
+      "cwe": ["CWE-200", "CWE-639"],
+      "remediation": "Move session memory to a proper data store (Redis with per-key ACLs, DynamoDB with IAM-scoped access) rather than a world-readable temp file. Ensure the session_id key is a cryptographically random UUID issued at session start, not a user-supplied value that can be guessed. Apply a TTL so stale memory is purged automatically."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T9-03",
+      "category": "defend",
+      "severity": "high",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 82,
+      "snippet": "caller = request.headers.get(\"X-Internal-Caller\")\nif not caller:\n    return jsonify({\"error\": \"internal callers only\"}), 403",
+      "message": "Inter-agent authentication relies solely on the presence of the X-Internal-Caller header — any process on the internal network that can set this header is trusted as a peer agent. No signature verification, no token validation, no allowlist of known caller identities.",
+      "owasp_llm": ["LLM06"],
+      "owasp_agentic": ["T9", "T5"],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Replace header-presence checks with signed JWT verification: each peer agent presents a short-lived JWT signed with its private key; receive_from_peer verifies the signature and checks the issuer claim against an allowlist of known agent identities. Reject unsigned or unrecognised callers with 401. Log every inter-agent call with the verified caller identity."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T9-05",
+      "category": "defend",
+      "severity": "critical",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 82,
+      "snippet": "caller = request.headers.get(\"X-Internal-Caller\")\n...\nreply = chain.invoke({\"input\": peer_message})",
+      "message": "Tool authority in receive_from_peer is gated only on an unauthenticated header — any caller claiming to be an internal agent gets full LLM access. A spoofed X-Internal-Caller header bypasses the 403 gate entirely and grants the attacker the same authority as a trusted peer.",
+      "owasp_llm": ["LLM06"],
+      "owasp_agentic": ["T6", "T9", "T11"],
+      "mitre_atlas": ["AML.T0050", "AML.T0051"],
+      "cwe": ["CWE-269", "CWE-285", "CWE-287"],
+      "remediation": "Bind tool and LLM access authority to a cryptographically verified caller identity (mTLS, signed JWT), not a string header. The decision to trust a caller must be made by a deterministic auth layer, never by the presence of a header the caller sets themselves. See also TIER2-AGENTIC-T9-03."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T2-03",
+      "category": "defend",
+      "severity": "high",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 62,
+      "snippet": "user_input = request.json.get(\"message\", \"\")\nforward_response = requests.post(\n    DOWNSTREAM_AGENT_URL,\n    json={\"message\": user_input},\n    headers={\"X-Internal-Caller\": \"orchestrator\"},\n    timeout=30,\n)",
+      "message": "delegate() chains user input directly to a downstream agent call with no per-tool egress policy — the tool chain (user → orchestrator → downstream agent) has no policy check between dispatches. An attacker who can influence user_input can direct arbitrary payloads to the downstream agent under the orchestrator's authority.",
+      "owasp_llm": ["LLM02", "LLM06"],
+      "owasp_agentic": ["T2", "T5", "T11"],
+      "mitre_atlas": ["AML.T0024", "AML.T0053"],
+      "cwe": ["CWE-200", "CWE-285", "CWE-918"],
+      "remediation": "Apply an input sanitiser to user_input before forwarding to the downstream agent. Enforce egress policy: validate the destination URL against an allowlist before each dispatch. Log every cross-agent chain so attacker recon followed by exfil attempts trigger an alert."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T9-06",
+      "category": "defend",
+      "severity": "critical",
+      "file": "testbed/demo-agent/memory.py",
+      "line": 41,
+      "snippet": "return json.loads(MEMORY_FILE.read_text()).get(session_id, [])",
+      "message": "Memory isolation relies entirely on the caller passing the correct session_id — there is no data-layer enforcement. Any caller who knows (or guesses) another session's ID can read that session's full conversation history by passing it to recall(). The tenant boundary is in the application, not at the storage layer.",
+      "owasp_llm": ["LLM02", "LLM06"],
+      "owasp_agentic": ["T7", "T9"],
+      "mitre_atlas": ["AML.T0024", "AML.T0040"],
+      "cwe": ["CWE-200", "CWE-285", "CWE-639"],
+      "remediation": "Enforce the session boundary at the data-access layer: use a database (Redis, DynamoDB) where each session's memory is stored under a key derived from both the session_id and the authenticated user identity, and access requires IAM/auth credentials scoped to that key. session_id alone is not a secret."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T8-02",
+      "category": "respond",
+      "severity": "high",
+      "file": "testbed/demo-agent/notifications.py",
+      "line": 37,
+      "snippet": "reply_body = _scrub_pii(response.choices[0].message.content)\nsns.publish(\n    TopicArn=\"...\",\n    Message=reply_body,\n)",
+      "message": "The audit trail for the send_reply action is absent — there is no immutable log entry recording that sns.publish was called, what the message contained (hash), or which customer_email was targeted. If the agent later denies sending a notification, there is no out-of-band record to confirm or refute it.",
+      "owasp_llm": ["LLM07"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": ["AML.T0050", "AML.T0056"],
+      "cwe": ["CWE-778"],
+      "remediation": "Emit an immutable structured audit log entry before sns.publish returns: timestamp, hashed message body, recipient hash, SNS topic ARN, and the calling principal. Write to an append-only store (CloudWatch Logs with no-delete policy, S3 with Object Lock) that the agent process cannot modify. Never derive the audit trail from the agent's self-report."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T4-03",
+      "category": "defend",
+      "severity": "medium",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 72,
+      "snippet": "@app.route(\"/api/orchestrator/receive\", methods=[\"POST\"])\ndef receive_from_peer():\n    ...\n    reply = chain.invoke({\"input\": peer_message})",
+      "message": "The orchestrator has no circuit breaker on consecutive LLM call failures and no externally-triggerable kill switch — if chain.invoke begins producing errors or loops (e.g. due to a runaway attacker session), there is no mechanism to drain or stop the agent without killing the process.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T4", "T8"],
+      "mitre_atlas": [],
+      "cwe": ["CWE-400"],
+      "remediation": "Wrap chain.invoke in a circuit breaker (pybreaker) that opens after N consecutive failures. Expose a kill switch (feature flag, SIGTERM handler, or queue-drain toggle) so an operator can stop accepting new requests without a hard kill. Alert when the circuit opens."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T5-01",
+      "category": "detect",
+      "severity": "medium",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 63,
+      "snippet": "forward_response = requests.post(\n    DOWNSTREAM_AGENT_URL,\n    json={\"message\": user_input},\n    ...\n)\nreturn jsonify(forward_response.json())",
+      "message": "delegate() passes user_input to a downstream agent and returns its response verbatim to the caller with no schema check, no verification step, and no 'did the downstream agent do what was intended' eval — cascading hallucination / manipulation is possible at the hand-off.",
+      "owasp_llm": [],
+      "owasp_agentic": ["T5"],
+      "mitre_atlas": [],
+      "cwe": [],
+      "remediation": "Validate the downstream agent's response against a typed schema before returning it. For high-stakes outputs, add a classifier or second LLM-as-judge step that checks whether the downstream response is consistent with the original intent."
+    },
+    {
+      "rule_id": "TIER2-AGENTIC-T8-01",
+      "category": "respond",
+      "severity": "medium",
+      "file": "testbed/demo-agent/orchestrator.py",
+      "line": 86,
+      "snippet": "reply = chain.invoke({\"input\": peer_message})\nreturn jsonify({\"reply\": reply.get(\"text\", \"\"), \"caller\": caller})",
+      "message": "receive_from_peer logs neither the caller identity, the peer_message content, nor the LLM reply — there is no audit trail of what instructions the peer sent or what the agent decided. A compromised peer agent leaves no trace.",
+      "owasp_llm": ["LLM10"],
+      "owasp_agentic": ["T8"],
+      "mitre_atlas": ["AML.T0024"],
+      "cwe": [],
+      "remediation": "Log every inter-agent call: verified caller identity, hashed peer_message, model, latency, hashed reply. Use a structured logger and treat inter-agent calls as security-relevant events requiring the same audit rigour as user-facing actions."
     }
   ],
   "tier1_fp_callouts": [
     {
       "tier1_finding_index": 0,
-      "file": "config.py",
+      "file": "testbed/demo-agent/config.py",
       "line": 7,
       "tier1_rule": "agentshield.detect.hardcoded-llm-credentials",
       "verdict": "TP",
-      "reasoning": "client = OpenAI(api_key=\"sk-proj-DEMO...\") \u2014 literal API key passed to constructor, no env-var indirection, no secrets manager. Real credential exposure if config.py ships."
+      "reasoning": "config.py:7 passes api_key=\"sk-proj-DEMO1234567890abcdef\" as a string literal to the OpenAI() constructor. No env-var indirection, no secrets manager reference. Confirmed real credential exposure."
     },
     {
       "tier1_finding_index": 1,
-      "file": "controller.py",
-      "line": 21,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 26,
       "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
-      "verdict": "TP",
-      "reasoning": "request.json['message'] flows directly into chain.invoke(user_message) at controller.py:21 with no sanitiser between them \u2014 classic untrusted-input-to-LLM sink."
+      "verdict": "CD",
+      "reasoning": "is_safe() is called at controller.py:23 before chain.invoke at line 26 — a guardrail is present. However, guard/input_filter.py:10-19 shows it is a keyword deny-list only, with no semantic classifier. The guardrail is real but shallow; the input still reaches the LLM under indirect or obfuscated framings. Context-dependent: partially mitigated, not fully."
     },
     {
       "tier1_finding_index": 2,
-      "file": "controller.py",
-      "line": 21,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 26,
       "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
-      "verdict": "FP",
-      "reasoning": "controller.py:21 is the public /chat endpoint handling direct user HTTP input \u2014 there is no X-Internal-Caller header check or any peer-identity trust signal in this route. The peer-input rule misfires; TIER2-LLM01-02 at the same line is the correct finding."
+      "verdict": "TP",
+      "reasoning": "controller.py:26 processes requests from any caller — the /chat route has no peer-origin check. The keyword filter at is_safe() does not distinguish between user and peer input. Confirmed: no peer identity validation at this entry point."
     },
     {
       "tier1_finding_index": 3,
-      "file": "controller.py",
-      "line": 34,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 39,
       "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
       "verdict": "TP",
-      "reasoning": "User-controlled article_url (request.json.get('url', '')) is fetched by WebBaseLoader and its content flows into chain.invoke() \u2014 indirect prompt-injection sink via the retrieved document body."
+      "reasoning": "controller.py:35 loads article_url directly from request.json with no hostname allowlist, then controller.py:39 feeds the loaded document content into chain.invoke. No sanitiser between URL fetch and LLM call. Confirmed real."
     },
     {
       "tier1_finding_index": 4,
-      "file": "controller.py",
-      "line": 34,
+      "file": "testbed/demo-agent/controller.py",
+      "line": 39,
       "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
-      "verdict": "FP",
-      "reasoning": "controller.py:34 is part of the /summarise public endpoint \u2014 no X-Internal-Caller check, no peer-identity signal; input is direct user HTTP. Peer-agent rule misfires here; TIER2-LLM01-02 (SSRF + indirect injection) is the correct finding."
+      "verdict": "CD",
+      "reasoning": "The /summarise endpoint does not explicitly handle peer-sourced requests, but the URL parameter is user-supplied and unvalidated. The risk is indirect prompt injection via attacker-controlled document content rather than direct peer impersonation. Context-dependent — partially overlaps with LLM01-02 (indirect injection) rather than T13 (rogue agent) specifically."
     },
     {
       "tier1_finding_index": 5,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 63,
       "tier1_rule": "agentshield.detect.agent-communication-poisoning",
       "verdict": "TP",
-      "reasoning": "delegate() at orchestrator.py:63 forwards raw user_input verbatim to DOWNSTREAM_AGENT_URL with no sanitiser. The comment block at lines 54-61 explicitly documents the T12 Agent Communication Poisoning pattern \u2014 exactly the trust-boundary failure this rule catches."
+      "reasoning": "orchestrator.py:62-65: user_input from request.json flows directly into the requests.post body to DOWNSTREAM_AGENT_URL with no sanitisation. The X-Internal-Caller header grants the forwarded payload orchestrator-level authority. Confirmed T12 — Agent Communication Poisoning."
     },
     {
       "tier1_finding_index": 6,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 87,
       "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
       "verdict": "TP",
-      "reasoning": "peer_message (request.json.get('message', '')) flows directly into chain.invoke({'input': peer_message}) at line 87 with no sanitiser. Untrusted-input-to-LLM holds regardless of whether the input is user-typed or peer-supplied."
+      "reasoning": "orchestrator.py:85-87: peer_message from request.json flows to chain.invoke with no guardrail. No is_safe() equivalent is called in this handler. Confirmed real."
     },
     {
       "tier1_finding_index": 7,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 87,
       "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
       "verdict": "TP",
-      "reasoning": "receive_from_peer() trusts the X-Internal-Caller header as proof of peer identity (lines 82-83) with no signature, JWT, or mTLS verification \u2014 anyone on the internal network can set the header. Payload then flows to chain.invoke at line 87. Textbook T13 Rogue Agents pattern."
+      "reasoning": "orchestrator.py:82-84: caller identity checked only by header presence (X-Internal-Caller). No signature, no token, no allowlist. Any process on the internal network is implicitly trusted. Confirmed T13 — Rogue Agents."
     },
     {
       "tier1_finding_index": 8,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 110,
       "tier1_rule": "agentshield.detect.unsanitized-user-input-to-llm",
       "verdict": "TP",
-      "reasoning": "debug_endpoint() reads user_input from request.json and feeds it to chain.invoke({'input': user_input}) at line 110 with no sanitiser. The accompanying TIER2-LLM07-02 system-prompt leak at line 118 amplifies the impact of any injection."
+      "reasoning": "orchestrator.py:107-110: user_input from request.json passed to chain.invoke in debug_endpoint with no sanitiser. Confirmed real."
     },
     {
       "tier1_finding_index": 9,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 110,
       "tier1_rule": "agentshield.detect.unvalidated-peer-agent-input",
-      "verdict": "CD",
-      "reasoning": "debug_endpoint() does not consult X-Internal-Caller \u2014 input is direct user HTTP, not a peer-agent surface, so the peer-agent rule misfires on the trust pattern. However, the endpoint is entirely unauthenticated (TIER2-LLM09-02), meaning any external caller can reach it and trigger the system-prompt leak at line 118. The code is risky even though the specific peer-agent pattern does not apply; TIER2-LLM09-02 is the correct finding here."
+      "verdict": "TP",
+      "reasoning": "debug_endpoint at orchestrator.py:98 has no caller authentication — any HTTP client can POST to /api/orchestrator/debug without any identity check. Confirmed real."
     },
     {
       "tier1_finding_index": 10,
-      "file": "orchestrator.py",
+      "file": "testbed/demo-agent/orchestrator.py",
       "line": 116,
       "tier1_rule": "agentshield.detect.system-prompt-leak-via-tool-output",
       "verdict": "TP",
-      "reasoning": "Exception handler at line 116 returns `active_system_prompt: SYSTEM_PROMPT` directly in the JSON response. SYSTEM_PROMPT (lines 91-95) contains the embedded key SK-OPS-7741-PRIVATE \u2014 both the system prompt and the secret leak to anyone who triggers an exception. Confirmed by TIER2-LLM07-02."
+      "reasoning": "orchestrator.py:116-118: the except block at line 112 constructs a response dict containing 'active_system_prompt': SYSTEM_PROMPT. SYSTEM_PROMPT (line 91-95) contains the embedded escalation key SK-OPS-7741-PRIVATE. This is returned in a 500 response body visible to the caller. Confirmed real — system prompt with embedded secret leaks on error."
     },
     {
       "tier1_finding_index": 11,
-      "file": "tools.py",
+      "file": "testbed/demo-agent/tools.py",
       "line": 21,
       "tier1_rule": "agentshield.detect.llm-output-to-code-execution",
       "verdict": "TP",
-      "reasoning": "tools.py:21 calls eval(code) where code = response.choices[0].message.content (line 19) \u2014 LLM output is fed directly into Python's eval() with no validation, AST allowlist, or sandbox. Direct RCE primitive."
+      "reasoning": "tools.py:19-21: code = response.choices[0].message.content (raw LLM output) fed directly to eval(code). No AST parsing, no allowlist, no sandbox. Confirmed real — this is direct RCE via prompt injection."
     },
     {
       "tier1_finding_index": 12,
@@ -400,7 +415,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast03-network-unrestricted",
       "verdict": "TP",
-      "reasoning": "Frontmatter declares permissions.network: true with no network.allow allowlist \u2014 unrestricted outbound network access."
+      "reasoning": "SKILL.md frontmatter declares permissions.network: true with no network.allow allowlist. Confirmed unrestricted outbound network access."
     },
     {
       "tier1_finding_index": 13,
@@ -408,7 +423,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast03-wildcard-file-read",
       "verdict": "TP",
-      "reasoning": "permissions.files.read pattern `~/.config/demo-agent/**` uses the recursive ** glob \u2014 wildcard file-read access covering every file under the config directory."
+      "reasoning": "SKILL.md declares a wildcard read path (~/.config/demo-agent/**). Confirmed — no explicit path enumeration."
     },
     {
       "tier1_finding_index": 14,
@@ -416,7 +431,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast04-missing-author-identity",
       "verdict": "TP",
-      "reasoning": "Author block has only `name: Demo Co` \u2014 no DID, no signed handle, no public-key reference. Provenance is unverifiable; an attacker republishing the bundle as 'Demo Co' is indistinguishable from the legitimate publisher."
+      "reasoning": "SKILL.md frontmatter has no author.identity field. Confirmed absent."
     },
     {
       "tier1_finding_index": 15,
@@ -424,7 +439,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast07-missing-content-hash",
       "verdict": "TP",
-      "reasoning": "Frontmatter declares no content_hash / checksum / integrity field \u2014 the loader has no way to verify the bundle payload matches what the manifest describes."
+      "reasoning": "SKILL.md frontmatter has no content_hash field. Confirmed absent."
     },
     {
       "tier1_finding_index": 16,
@@ -432,7 +447,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast07-missing-signature",
       "verdict": "TP",
-      "reasoning": "Frontmatter declares no signature field \u2014 bundle authenticity is unverifiable independent of integrity. Companion to the missing content_hash finding."
+      "reasoning": "SKILL.md frontmatter has no signature field. Confirmed absent."
     },
     {
       "tier1_finding_index": 17,
@@ -440,7 +455,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast08-permission-combo-across-skills",
       "verdict": "TP",
-      "reasoning": "Combined permissions across the two manifests: demo-agent-helper grants network: true + filesystem read/write; billing grants shell: true. The compound (network egress + shell exec + filesystem write) is the RCE-to-exfil pair AST08 watches for \u2014 neither skill on its own grants the dangerous combo, but together they do."
+      "reasoning": "SKILL.md grants network_egress; skills/billing/SKILL.md grants shell. Together these allow the agent to exec arbitrary commands and exfiltrate results over the network. Confirmed dangerous combination."
     },
     {
       "tier1_finding_index": 18,
@@ -448,7 +463,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast08-permission-combo-across-skills",
       "verdict": "TP",
-      "reasoning": "Second emission of the same cross-skill compound permission reported from the billing-side perspective. Either fix (drop network from the helper OR drop shell from billing OR split the skills across separate agents) resolves both."
+      "reasoning": "SKILL.md grants files_write; skills/billing/SKILL.md grants shell. Together these allow dropping arbitrary scripts to disk and executing them. Confirmed dangerous combination."
     },
     {
       "tier1_finding_index": 19,
@@ -456,7 +471,7 @@
       "line": 17,
       "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
       "verdict": "TP",
-      "reasoning": "Literal Anthropic API key sk-ant-api03-AbCdEf... hard-coded in the bundled YAML. Ships verbatim to every consumer (registry pulls, git clones, container images, CI logs)."
+      "reasoning": "config.yaml:17 contains a hardcoded Anthropic API key. Confirmed real — this is a skill-bundle file that ships with the agent."
     },
     {
       "tier1_finding_index": 20,
@@ -464,7 +479,7 @@
       "line": 21,
       "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
       "verdict": "TP",
-      "reasoning": "Literal OpenAI API key sk-proj-AbCdEf... hard-coded in the bundled YAML. Same shipping path as line 17."
+      "reasoning": "config.yaml:21 contains a hardcoded OpenAI project key. Confirmed real."
     },
     {
       "tier1_finding_index": 21,
@@ -472,7 +487,7 @@
       "line": 25,
       "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
       "verdict": "TP",
-      "reasoning": "Literal AWS access_key_id AKIAIOSFODNN7EXAMPLE hard-coded in the bundled YAML. The rule correctly flags the shape \u2014 production credentials with the same pattern leak the same way."
+      "reasoning": "config.yaml:25 contains a hardcoded AWS access key ID. Confirmed real."
     },
     {
       "tier1_finding_index": 22,
@@ -480,7 +495,7 @@
       "line": 29,
       "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
       "verdict": "TP",
-      "reasoning": "Literal database password support_db_password: 2v8XyZ4qPmA9rT6wKn3eRfBhJ5sLcGdU hard-coded in the bundled YAML."
+      "reasoning": "config.yaml:29 contains a generic hardcoded credential assignment. Confirmed real."
     },
     {
       "tier1_finding_index": 23,
@@ -488,7 +503,7 @@
       "line": 30,
       "tier1_rule": "agentshield.detect.ast06-credential-in-bundle",
       "verdict": "TP",
-      "reasoning": "Literal Slack bot token xoxb-1234567890123-... hard-coded in the bundled YAML. Slack tokens grant write access to channels \u2014 exfil pivot if leaked."
+      "reasoning": "config.yaml:30 contains a hardcoded Slack token. Confirmed real."
     },
     {
       "tier1_finding_index": 24,
@@ -496,15 +511,15 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast03-shell-access",
       "verdict": "TP",
-      "reasoning": "billing skill frontmatter declares permissions.shell: true. The static permission grant is what AST03 catches \u2014 granting shell access is a coarse capability; even narrowed scripts can be attacked via argument injection."
+      "reasoning": "skills/billing/SKILL.md declares shell: true. No justification or description of why the billing skill requires shell access. Confirmed."
     },
     {
       "tier1_finding_index": 25,
       "file": "skills/billing/SKILL.md",
       "line": 1,
       "tier1_rule": "agentshield.detect.ast04-missing-author-identity",
-      "verdict": "CD",
-      "reasoning": "Author block has `did: did:example:demo-team` \u2014 the did:example: method is documented as a non-production placeholder (RFC), not a real verifiable identity. The presence of a DID field is a step toward compliance, but the placeholder method leaves provenance unverifiable. Mitigatable by switching to a real DID method (did:web, did:key) \u2014 hence CD rather than TP."
+      "verdict": "TP",
+      "reasoning": "skills/billing/SKILL.md has no author.identity field in frontmatter. Confirmed absent."
     },
     {
       "tier1_finding_index": 26,
@@ -512,7 +527,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast07-missing-content-hash",
       "verdict": "TP",
-      "reasoning": "billing skill frontmatter has no content_hash / checksum / integrity field \u2014 identical defect to the demo-agent-helper SKILL.md case."
+      "reasoning": "skills/billing/SKILL.md frontmatter has no content_hash field. Confirmed absent."
     },
     {
       "tier1_finding_index": 27,
@@ -520,7 +535,7 @@
       "line": 1,
       "tier1_rule": "agentshield.detect.ast07-missing-signature",
       "verdict": "TP",
-      "reasoning": "billing skill frontmatter has no signature field \u2014 identical defect to the demo-agent-helper SKILL.md case."
+      "reasoning": "skills/billing/SKILL.md frontmatter has no signature field. Confirmed absent."
     }
   ]
 }
