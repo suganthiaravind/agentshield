@@ -9182,16 +9182,6 @@ _HTML_JS = """
       });
     });
 
-    // Update D/D/R hero cards.
-    Object.keys(visiblePerCat).forEach(function (cat) {
-      var el = document.querySelector('[data-ddr-count="' + cat + '"]');
-      if (!el) return;
-      var total = parseInt(el.getAttribute('data-ddr-total'), 10);
-      el.textContent = visiblePerCat[cat] === total
-        ? total
-        : visiblePerCat[cat] + '/' + total;
-    });
-
     // F.22: update tab-count pills next to each D/D/R tab button.
     Object.keys(visiblePerCat).forEach(function (cat) {
       var tabCount = document.querySelector('[data-tab-count="' + cat + '"]');
