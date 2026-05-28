@@ -1667,6 +1667,10 @@ def _v7_sources_to_attack_class_traces(
                 t.get("pipeline_trace") or [], source_dir
             )
 
+            # v7 rule ID: source-transition pair (unique per finding, no duplicates)
+            t_key_short = t_key.replace("to_", "")
+            v7_rule_id_short = f"{src_id}-{t_key_short}"
+
             out.append({
                 "attack_class": attack_class,
                 "attack_class_label": attack_class_label,
@@ -1687,6 +1691,7 @@ def _v7_sources_to_attack_class_traces(
                 "_v7_transition": t_key,
                 "_v7_route": src_route,
                 "_v7_bypass_technique": str(t.get("bypass_technique") or ""),
+                "_v7_rule_id_short": v7_rule_id_short,
             })
 
     # Pipeline-level checks
@@ -1726,6 +1731,7 @@ def _v7_sources_to_attack_class_traces(
             "_v7_transition": check_key,
             "_v7_route": "",
             "_v7_bypass_technique": str(chk.get("bypass_condition") or ""),
+            "_v7_rule_id_short": f"pipeline-{check_key.replace('_', '-')}",
         })
 
     return out
@@ -2481,9 +2487,13 @@ def _emulator_entry_to_finding(
             else:
                 _emu_file = _raw
             break
+    # v7 findings carry a unique source-transition rule ID; legacy findings use attack class slug
+    v7_id_short = entry.get("_v7_rule_id_short") or ""
+    rule_id_short = f"emulator-{v7_id_short}" if v7_id_short else f"emulator-{attack_class}"
+    rule_id = f"agent-emulator-{v7_id_short}" if v7_id_short else f"agent-emulator-{attack_class}"
     return {
-        "rule_id": f"agent-emulator-{attack_class}",
-        "rule_id_short": f"emulator-{attack_class}",
+        "rule_id": rule_id,
+        "rule_id_short": rule_id_short,
         "agentshield_id": f"AS-E-{category_letter}-{entry_idx:03d}",
         "category": category,
         "severity": severity,
@@ -11650,14 +11660,26 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 # actually fired at the agent). Different methodology,
                 # different badge.
                 if is_emu_pill:
+                    v7_src = f.get("_emulator_data", {}).get("_v7_source_id") or ""
+                    v7_t   = f.get("_emulator_data", {}).get("_v7_transition") or ""
+                    if v7_src and v7_t:
+                        emu_tip = (
+                            f"Behaviour emulator: walked the runtime pipeline "
+                            f"statically from source — traced {v7_src} through "
+                            f"the {v7_t} transition. No payloads were fired; "
+                            f"prediction is code-grounded forecast."
+                        )
+                    else:
+                        emu_tip = (
+                            "Behaviour emulator: Copilot walked the agent's "
+                            "runtime pipeline from source and predicted the "
+                            "outcome for this attack pattern. No payloads were fired."
+                        )
                     parts.append(
-                        '<span class="pill probe-sub" '
-                        'data-tip="Behaviour emulator: Copilot walked '
-                        'the agent\'s runtime pipeline from source and '
-                        'predicted the outcome for this catalogued '
-                        'attack class. No payloads were fired." '
-                        'aria-label="Behaviour Emulator">'
-                        'Behaviour Emulator</span>'
+                        f'<span class="pill probe-sub" '
+                        f'data-tip="{_html_escape(emu_tip)}" '
+                        f'aria-label="Behaviour Emulator">'
+                        f'Behaviour Emulator</span>'
                     )
                     ep_route = f.get("_entry_point_route") or ""
                     if ep_route:
