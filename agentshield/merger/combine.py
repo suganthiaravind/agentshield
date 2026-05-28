@@ -182,9 +182,8 @@ class MergeResult:
             if c.get("status") == "succeeded"
         )
         emu_actionable = sum(
-            1 for t in (
+            1 for t in _all_emu_traces(
                 getattr(self.report, "agent_emulation", {})
-                .get("attack_class_traces") or []
             )
             if t.get("verdict") in ("lands", "partial")
         )
@@ -1608,50 +1607,80 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
                 "defensive_controls": [],
             }
 
-    # Attack-class traces — clamp confidence, drop unknown enums.
-    traces_out: list[dict] = []
-    for entry in raw.get("attack_class_traces") or []:
-        if not isinstance(entry, dict):
-            continue
-        verdict = entry.get("verdict")
-        if verdict not in _VALID_EMULATOR_VERDICTS:
-            verdict = None
-        conf = entry.get("verdict_confidence")
-        try:
-            conf = max(0.0, min(1.0, float(conf))) if conf is not None else None
-        except (TypeError, ValueError):
-            conf = None
-        # Per-step pipeline_trace: validate outcomes + carry through.
-        source_dir = agentshield_dir.parent
-        trace_out = _normalize_trace_steps(
-            entry.get("pipeline_trace") or [], source_dir
-        )
-        # Per-seed traces: normalize each seed's step list independently.
-        seed_traces_raw = entry.get("seed_traces") or {}
-        seed_traces_out: dict[str, list[dict]] = {}
-        if isinstance(seed_traces_raw, dict):
-            for lyr, lyr_steps in seed_traces_raw.items():
-                if isinstance(lyr_steps, list):
-                    seed_traces_out[str(lyr)] = _normalize_trace_steps(
-                        lyr_steps, source_dir
-                    )
-        traces_out.append({
-            "attack_class": str(entry.get("attack_class") or ""),
-            "attack_class_label": str(entry.get("attack_class_label") or ""),
-            "targets_steps": [
-                str(s) for s in (entry.get("targets_steps") or [])
-            ],
-            "payload_used": str(entry.get("payload_used") or entry.get("catalogue_payload") or ""),
-            "payload_layer": str(entry.get("payload_layer") or ""),
-            "seed_payloads": list(entry.get("seed_payloads") or []),
-            "mutation_payloads": list(entry.get("mutation_payloads") or []),
-            "verdict": verdict,
-            "verdict_confidence": conf,
-            "verdict_reasoning": str(entry.get("verdict_reasoning") or ""),
-            "frameworks": entry.get("frameworks") or {},
-            "pipeline_trace": trace_out,
-            "seed_traces": seed_traces_out,
-        })
+    source_dir = agentshield_dir.parent
+
+    def _normalize_attack_class_traces(raw_traces: list) -> list[dict]:
+        """Normalize a list of attack_class_traces entries (shared by flat and per-EP paths)."""
+        out: list[dict] = []
+        for entry in raw_traces:
+            if not isinstance(entry, dict):
+                continue
+            verdict = entry.get("verdict")
+            if verdict not in _VALID_EMULATOR_VERDICTS:
+                verdict = None
+            conf = entry.get("verdict_confidence")
+            try:
+                conf = max(0.0, min(1.0, float(conf))) if conf is not None else None
+            except (TypeError, ValueError):
+                conf = None
+            trace_out = _normalize_trace_steps(entry.get("pipeline_trace") or [], source_dir)
+            seed_traces_raw = entry.get("seed_traces") or {}
+            seed_traces_out: dict[str, list[dict]] = {}
+            if isinstance(seed_traces_raw, dict):
+                for lyr, lyr_steps in seed_traces_raw.items():
+                    if isinstance(lyr_steps, list):
+                        seed_traces_out[str(lyr)] = _normalize_trace_steps(lyr_steps, source_dir)
+            out.append({
+                "attack_class": str(entry.get("attack_class") or ""),
+                "attack_class_label": str(entry.get("attack_class_label") or ""),
+                "targets_steps": [str(s) for s in (entry.get("targets_steps") or [])],
+                "payload_used": str(entry.get("payload_used") or entry.get("catalogue_payload") or ""),
+                "payload_layer": str(entry.get("payload_layer") or ""),
+                "seed_payloads": list(entry.get("seed_payloads") or []),
+                "mutation_payloads": list(entry.get("mutation_payloads") or []),
+                "verdict": verdict,
+                "verdict_confidence": conf,
+                "verdict_reasoning": str(entry.get("verdict_reasoning") or ""),
+                "frameworks": entry.get("frameworks") or {},
+                "pipeline_trace": trace_out,
+                "seed_traces": seed_traces_out,
+            })
+        return out
+
+    # Per-entry-point path (new schema): entry_points[] each has its own
+    # pipeline_map and attack_class_traces. When present, takes precedence
+    # over the flat root-level attack_class_traces.
+    entry_points_out: list[dict] = []
+    raw_entry_points = raw.get("entry_points") or []
+    if isinstance(raw_entry_points, list) and raw_entry_points:
+        for ep in raw_entry_points:
+            if not isinstance(ep, dict):
+                continue
+            ep_pmap_in = ep.get("pipeline_map") or {}
+            ep_pipeline_map: dict[str, dict] = {}
+            for key in _PIPELINE_STEP_KEYS:
+                ep_entry = ep_pmap_in.get(key) if isinstance(ep_pmap_in, dict) else None
+                if isinstance(ep_entry, dict):
+                    ep_pipeline_map[key] = {
+                        "code_location": str(ep_entry.get("code_location") or "absent"),
+                        "description": str(ep_entry.get("description") or ""),
+                        "defensive_controls": [
+                            c for c in (ep_entry.get("defensive_controls") or [])
+                            if isinstance(c, dict)
+                        ],
+                    }
+                else:
+                    ep_pipeline_map[key] = {"code_location": "absent", "description": "", "defensive_controls": []}
+            entry_points_out.append({
+                "id": str(ep.get("id") or ""),
+                "route": str(ep.get("route") or ep.get("id") or ""),
+                "description": str(ep.get("description") or ""),
+                "pipeline_map": ep_pipeline_map,
+                "attack_class_traces": _normalize_attack_class_traces(ep.get("attack_class_traces") or []),
+            })
+
+    # Legacy flat path: root-level attack_class_traces.
+    traces_out: list[dict] = _normalize_attack_class_traces(raw.get("attack_class_traces") or [])
 
     return {
         "present": True,
@@ -1661,6 +1690,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         "agent_type_notes": str(raw.get("agent_type_notes") or ""),
         "pipeline_map": pipeline_map,
         "attack_class_traces": traces_out,
+        "entry_points": entry_points_out,
     }
 
 
@@ -2178,16 +2208,53 @@ def _classify_emulator_finding(
     return category, severity
 
 
+def _all_emu_traces(emu: dict) -> list[dict]:
+    """Flatten attack_class_traces across entry_points (new schema)
+    or return the root-level list (legacy flat schema)."""
+    entry_points = emu.get("entry_points") or []
+    if entry_points:
+        return [t for ep in entry_points for t in (ep.get("attack_class_traces") or [])]
+    return emu.get("attack_class_traces") or []
+
+
 def _emulation_to_findings(emulation: dict) -> list[dict]:
     """Convert the agent-emulator output into D/D/R finding dicts
     so each attack-class trace appears alongside other findings.
     Each entry carries `_emulator_trace: True` plus the full per-
     step trace under `_emulator_data` so the renderer can emit the
-    pipeline visualisation inside the finding card."""
+    pipeline visualisation inside the finding card.
+
+    Supports two schemas:
+    - Legacy: flat `pipeline_map` + `attack_class_traces` at root.
+    - New: `entry_points[]` each with their own `pipeline_map` and
+      `attack_class_traces`; findings are tagged with
+      `_entry_point_route` and `_entry_point_id`.
+    """
     if not emulation.get("present"):
         return []
-    pipeline_map = emulation.get("pipeline_map") or {}
     out: list[dict] = []
+
+    entry_points = emulation.get("entry_points") or []
+    if entry_points:
+        # Per-entry-point mode: emit one finding per (entry_point, attack_class)
+        for ep in entry_points:
+            ep_id = ep.get("id") or ""
+            ep_route = ep.get("route") or ep_id
+            ep_pipeline_map = ep.get("pipeline_map") or {}
+            for entry_idx, entry in enumerate(
+                ep.get("attack_class_traces") or [], start=1
+            ):
+                f = _emulator_entry_to_finding(
+                    entry, entry_idx, ep_pipeline_map, emulation
+                )
+                if f:
+                    f["_entry_point_id"] = ep_id
+                    f["_entry_point_route"] = ep_route
+                    out.append(f)
+        return out
+
+    # Legacy flat schema
+    pipeline_map = emulation.get("pipeline_map") or {}
     for entry_idx, entry in enumerate(
         emulation.get("attack_class_traces") or [], start=1
     ):
@@ -2196,58 +2263,72 @@ def _emulation_to_findings(emulation: dict) -> list[dict]:
         attack_class = entry.get("attack_class") or "unknown"
         verdict = entry.get("verdict")
         category, severity = _classify_emulator_finding(attack_class, verdict)
-        category_letter = {"detect": "D", "defend": "DF", "respond": "R"}.get(
-            category, "D"
-        )
-        # Extract the first code citation from the pipeline trace so the
-        # finding header shows a real file:line instead of the placeholder.
-        _emu_file = "(behaviour emulator — pipeline trace)"
-        _emu_line = 0
-        for _step in (entry.get("pipeline_trace") or []):
-            _basis = _step.get("code_basis") or []
-            if _basis and _basis[0] and _basis[0] != "absent":
-                _raw = _basis[0]          # e.g. "controller.py:19-21"
-                if ":" in _raw:
-                    _emu_file, _line_part = _raw.rsplit(":", 1)
-                    _emu_line = int(_line_part.split("-")[0]) if _line_part.split("-")[0].isdigit() else 0
-                else:
-                    _emu_file = _raw
-                break
-        out.append({
-            "rule_id": f"agent-emulator-{attack_class}",
-            "rule_id_short": f"emulator-{attack_class}",
-            "agentshield_id": f"AS-E-{category_letter}-{entry_idx:03d}",
-            "category": category,
-            "severity": severity,
-            "file": _emu_file,
-            "line": _emu_line,
-            "message": entry.get("attack_class_label") or attack_class,
-            "language": "n/a",
-            "remediation": _EMULATOR_REMEDIATION.get(attack_class, ""),
-            "framework_mappings": {
-                "owasp_llm": list((entry.get("frameworks") or {}).get("owasp_llm", [])),
-                "owasp_agentic": list((entry.get("frameworks") or {}).get("owasp_agentic", [])),
-                "mitre_atlas": list((entry.get("frameworks") or {}).get("mitre_atlas", [])),
-                "cwe": list((entry.get("frameworks") or {}).get("cwe", [])),
-                "nist_ai_rmf": [],
-                "ast": [],
-            },
-            # Provenance flags the renderer keys off.
-            "_emulator_trace": True,
-            "_emulator_data": entry,
-            "_emulator_pipeline_map": pipeline_map,
-            # Reuse the discovered shell for layout but switch the
-            # body content to the pipeline-trace visualisation.
-            "_discovered": True,
-            "_discovered_title": entry.get("attack_class_label") or attack_class,
-            "_discovered_payload": entry.get("payload_used") or entry.get("catalogue_payload") or "",
-            "_discovered_response": "",
-            "_discovered_indicators": [],
-            "_discovered_llm_reasoning": entry.get("verdict_reasoning") or "",
-            "_discovered_confidence": entry.get("verdict_confidence"),
-            "_discovered_at": emulation.get("scanned_at") or "",
-        })
+        f = _emulator_entry_to_finding(entry, entry_idx, pipeline_map, emulation)
+        if f:
+            out.append(f)
     return out
+
+
+def _emulator_entry_to_finding(
+    entry: dict, entry_idx: int, pipeline_map: dict, emulation: dict
+) -> dict | None:
+    """Convert one attack_class_traces entry into a finding dict.
+    Shared by both the legacy flat path and the per-entry-point path.
+    Returns None for inconclusive verdicts — they live only in the
+    coverage block, not in the D/D/R finding list."""
+    if not isinstance(entry, dict):
+        return None
+    attack_class = entry.get("attack_class") or "unknown"
+    verdict = entry.get("verdict")
+    if verdict == "inconclusive":
+        return None
+    category, severity = _classify_emulator_finding(attack_class, verdict)
+    category_letter = {"detect": "D", "defend": "DF", "respond": "R"}.get(
+        category, "D"
+    )
+    _emu_file = "(behaviour emulator — pipeline trace)"
+    _emu_line = 0
+    for _step in (entry.get("pipeline_trace") or []):
+        _basis = _step.get("code_basis") or []
+        if _basis and _basis[0] and _basis[0] != "absent":
+            _raw = _basis[0]
+            if ":" in _raw:
+                _emu_file, _line_part = _raw.rsplit(":", 1)
+                _emu_line = int(_line_part.split("-")[0]) if _line_part.split("-")[0].isdigit() else 0
+            else:
+                _emu_file = _raw
+            break
+    return {
+        "rule_id": f"agent-emulator-{attack_class}",
+        "rule_id_short": f"emulator-{attack_class}",
+        "agentshield_id": f"AS-E-{category_letter}-{entry_idx:03d}",
+        "category": category,
+        "severity": severity,
+        "file": _emu_file,
+        "line": _emu_line,
+        "message": entry.get("attack_class_label") or attack_class,
+        "language": "n/a",
+        "remediation": _EMULATOR_REMEDIATION.get(attack_class, ""),
+        "framework_mappings": {
+            "owasp_llm": list((entry.get("frameworks") or {}).get("owasp_llm", [])),
+            "owasp_agentic": list((entry.get("frameworks") or {}).get("owasp_agentic", [])),
+            "mitre_atlas": list((entry.get("frameworks") or {}).get("mitre_atlas", [])),
+            "cwe": list((entry.get("frameworks") or {}).get("cwe", [])),
+            "nist_ai_rmf": [],
+            "ast": [],
+        },
+        "_emulator_trace": True,
+        "_emulator_data": entry,
+        "_emulator_pipeline_map": pipeline_map,
+        "_discovered": True,
+        "_discovered_title": entry.get("attack_class_label") or attack_class,
+        "_discovered_payload": entry.get("payload_used") or entry.get("catalogue_payload") or "",
+        "_discovered_response": "",
+        "_discovered_indicators": [],
+        "_discovered_llm_reasoning": entry.get("verdict_reasoning") or "",
+        "_discovered_confidence": entry.get("verdict_confidence"),
+        "_discovered_at": emulation.get("scanned_at") or "",
+    }
 
 
 def _catalogue_remediation_for(campaign_name: str) -> str:
@@ -3133,6 +3214,7 @@ h3 { font-size: 15px; }
    LLM-adversary explore mode surfaced. Red-on-cream signals "active
    probe landed" without breaking the tier2 grouping. */
 .pill.probe-sub { background: #fde2e2; color: #8b1f1f; }
+.pill.ep-route  { background: #e8eaf6; color: #3949ab; font-size: 0.72rem; }
 .pill.tp       { background: #d6e7d6; color: #2f5a2f; }
 .pill.cd       { background: #fbf3dc; color: var(--defend); }
 .pill.fp       { background: var(--high-bg); color: var(--high); }
@@ -5523,6 +5605,36 @@ footer {
   background: #f1f5f9; color: #1e293b;
   border-radius: 4px; border: 1px solid #cbd5e1;
 }
+/* Per-entry-point accordion inside the emulator coverage block */
+.emu-ep-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin: 0 14px 10px;
+  background: #fafafa;
+}
+.emu-ep-section > .emu-ep-summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px;
+  font-weight: 600; font-size: 12.5px; color: #1e293b;
+  border-radius: 6px;
+  transition: background 120ms ease;
+}
+.emu-ep-section > .emu-ep-summary::-webkit-details-marker { display: none; }
+.emu-ep-section > .emu-ep-summary:hover { background: #f1f5f9; }
+.emu-ep-section[open] > .emu-ep-summary { border-radius: 6px 6px 0 0; background: #f1f5f9; }
+.emu-ep-route {
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px; font-weight: 700; color: #3730a3;
+  background: #eef2ff; padding: 2px 8px;
+  border-radius: 4px; border: 1px solid #c7d2fe;
+}
+.emu-ep-meta {
+  font-size: 11px; font-weight: 400; color: #64748b;
+}
+.emu-ep-meta strong { color: #0f172a; font-weight: 700; }
+.emu-ep-section .emu-coverage-totals { padding: 0 14px; }
+.emu-ep-section .emu-coverage-list   { padding: 0 14px 14px; }
 
 /* v4: pipeline view — 3 columns (Input → Engines → Output) with arrows. */
 .io-pipeline {
@@ -10447,9 +10559,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # Behaviour Emulator: lands + partial = actionable. Blocked
     # and inconclusive are shown in the breakdown but excluded
     # from the headline value.
-    emu_traces = (
-        (r.agent_emulation or {}).get("attack_class_traces") or []
-    )
+    emu_traces = _all_emu_traces(r.agent_emulation or {})
     emu_landed = sum(1 for t in emu_traces if t.get("verdict") == "lands")
     emu_partial = sum(1 for t in emu_traces if t.get("verdict") == "partial")
     emu_blocked = sum(1 for t in emu_traces if t.get("verdict") == "blocked")
@@ -10810,6 +10920,14 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                         'aria-label="Behaviour Emulator">'
                         'Behaviour Emulator</span>'
                     )
+                    ep_route = f.get("_entry_point_route") or ""
+                    if ep_route:
+                        parts.append(
+                            f'<span class="pill ep-route" '
+                            f'data-tip="Entry point evaluated: {_html_escape(ep_route)}" '
+                            f'aria-label="Entry point: {_html_escape(ep_route)}">'
+                            f'{_html_escape(ep_route)}</span>'
+                        )
                 elif is_discovered:
                     parts.append(
                         '<span class="pill probe-sub" '
@@ -10837,7 +10955,11 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
                 parts.append("</div>")
                 _loc_label = '<span class="finding-meta-loc">Location</span>'
                 if is_discovered:
-                    if line_ and int(line_) > 0:
+                    try:
+                        _line_int = int(line_)
+                    except (ValueError, TypeError):
+                        _line_int = 0
+                    if _line_int > 0:
                         _loc_val = f'{_html_escape(file_)}:{_html_escape(str(line_))}'
                     else:
                         _loc_val = _html_escape(file_)
@@ -12883,26 +13005,13 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     _render_ruled_out_block(r, parts)
 
 
-def _render_emulator_coverage_block(
-    r: Any, parts: list[str], *, static: bool = False,
+def _render_emu_coverage_section(
+    parts: list[str],
+    traces_by_slug: dict,
+    row_idx_offset: int = 0,
 ) -> None:
-    """Render the Behaviour emulator coverage block — all 13
-    catalogued attack classes with verdict chips, reasoning, and
-    code citations. Pulls trace data from r.agent_emulation.
-
-    Wrapped in a <details> so the block is collapsed by default
-    (open by default in the static / print variant so reviewers
-    see it without interaction). Inside: a Play button drives a
-    staggered row-reveal animation analogous to the Detect-tab
-    role-play (verdict chips pulse in one by one)."""
-    emu = (getattr(r, "agent_emulation", {}) or {})
-    if not emu.get("present"):
-        return
-    traces_by_slug: dict[str, dict] = {}
-    for entry in emu.get("attack_class_traces") or []:
-        slug = entry.get("attack_class") or ""
-        if slug:
-            traces_by_slug[slug] = entry
+    """Render the totals strip + per-class list for one group of emulator traces.
+    Shared by both the flat (legacy) path and the per-entry-point path."""
     catalogue_order = list(_EMULATOR_CLASS_LABELS.keys())
     counts: dict[str, int] = {
         "lands": 0, "partial": 0, "blocked": 0,
@@ -12914,48 +13023,10 @@ def _render_emulator_coverage_block(
         if v not in counts:
             v = "not_evaluated"
         counts[v] += 1
-    total = len(catalogue_order)
-    evaluated = total - counts["not_evaluated"]
-
-    open_attr = " open" if static else ""
-    parts.append(
-        f'<details class="coverage-card emu-coverage-card '
-        f'emu-coverage-collapse"{open_attr}>'
-    )
-    parts.append(
-        '<summary class="emu-coverage-summary">'
-        '<span class="emu-coverage-summary-title">'
-        'Behaviour emulator coverage'
-        '</span>'
-        f'<span class="emu-coverage-summary-meta">'
-        f'<strong>{evaluated}</strong> of {total} attack classes '
-        f'evaluated &middot; <strong>{counts["lands"]}</strong> lands &middot; '
-        f'<strong>{counts["partial"]}</strong> partial &middot; '
-        f'<strong>{counts["blocked"]}</strong> blocked &middot; '
-        f'<strong>{counts["inconclusive"]}</strong> inconclusive'
-        f'</span>'
-        '</summary>'
-    )
-    parts.append(
-        '<p class="emu-coverage-intro">'
-        '<em>Lands</em> / <em>partial</em> are actionable findings '
-        '(shown in Detect / Defend / Respond). <em>Blocked</em> '
-        '(defence works) and <em>inconclusive</em> (pipeline step '
-        'absent in this agent) live here only &mdash; they\'re '
-        'coverage notes, not findings.'
-        '</p>'
-    )
-    # Totals strip. Per-row Play behaviour emulation buttons live
-    # inside each row's nested emu-trace block (rendered by the
-    # shared helper), so the row gets a Play button only when a
-    # pipeline_trace is available.
     parts.append('<div class="emu-coverage-totals">')
     for vkey, vlabel in [
-        ("lands", "lands"),
-        ("partial", "partial"),
-        ("blocked", "blocked"),
-        ("inconclusive", "inconclusive"),
-        ("not_evaluated", "not evaluated"),
+        ("lands", "lands"), ("partial", "partial"), ("blocked", "blocked"),
+        ("inconclusive", "inconclusive"), ("not_evaluated", "not evaluated"),
     ]:
         n = counts.get(vkey, 0)
         parts.append(
@@ -12963,7 +13034,6 @@ def _render_emulator_coverage_block(
             f'<strong>{n}</strong> {vlabel}</span>'
         )
     parts.append('</div>')
-    # Per-class table. data-row-idx drives the staggered reveal.
     parts.append('<ul class="emu-coverage-list">')
     for row_idx, slug in enumerate(catalogue_order):
         label = _EMULATOR_CLASS_LABELS.get(slug, slug)
@@ -12998,7 +13068,7 @@ def _render_emulator_coverage_block(
         parts.append(
             f'<li class="emu-coverage-row '
             f'emu-coverage-row-{_html_escape(verdict)}" '
-            f'data-row-idx="{row_idx}">'
+            f'data-row-idx="{row_idx_offset + row_idx}">'
             f'<div class="emu-coverage-head">'
             f'<span class="emu-coverage-label">{_html_escape(label)}</span>'
             f'<span class="emu-coverage-verdict '
@@ -13025,10 +13095,6 @@ def _render_emulator_coverage_block(
                     + citation_chips
                 )
             parts.append('</div>')
-        # Per-row drilldown: full role-play (scenes + terminal +
-        # final banner) inside a collapsed <details>. The same
-        # markup as the Detect-tab Attack-scenario card so the
-        # Play button works identically.
         if entry and entry.get("pipeline_trace"):
             parts.append('<details class="emu-coverage-rowtrace">')
             parts.append(
@@ -13041,6 +13107,133 @@ def _render_emulator_coverage_block(
             parts.append('</details>')
         parts.append('</li>')
     parts.append('</ul>')
+
+
+def _render_emulator_coverage_block(
+    r: Any, parts: list[str], *, static: bool = False,
+) -> None:
+    """Render the Behaviour emulator coverage block.
+
+    Flat (legacy): one list of all attack classes.
+    Per-entry-point: one accordion per entry point, each with its own list.
+    Wrapped in a <details> collapsed by default (open in static/print mode)."""
+    emu = (getattr(r, "agent_emulation", {}) or {})
+    if not emu.get("present"):
+        return
+
+    entry_points = emu.get("entry_points") or []
+    catalogue_order = list(_EMULATOR_CLASS_LABELS.keys())
+    total_classes = len(catalogue_order)
+    all_traces = _all_emu_traces(emu)
+
+    if entry_points:
+        # Aggregate counts across ALL (entry_point × attack_class) pairs
+        agg_counts: dict[str, int] = {
+            "lands": 0, "partial": 0, "blocked": 0,
+            "inconclusive": 0, "not_evaluated": 0,
+        }
+        for t in all_traces:
+            v = (t.get("verdict") or "not_evaluated").strip()
+            if v not in agg_counts:
+                v = "not_evaluated"
+            agg_counts[v] += 1
+        agg_total = len(entry_points) * total_classes
+        agg_evaluated = agg_total - agg_counts["not_evaluated"]
+        summary_meta = (
+            f'<strong>{len(entry_points)}</strong> entry points &middot; '
+            f'<strong>{agg_evaluated}</strong> of {agg_total} '
+            f'(entry point &times; attack class) pairs evaluated &middot; '
+            f'<strong>{agg_counts["lands"]}</strong> lands &middot; '
+            f'<strong>{agg_counts["partial"]}</strong> partial &middot; '
+            f'<strong>{agg_counts["blocked"]}</strong> blocked &middot; '
+            f'<strong>{agg_counts["inconclusive"]}</strong> inconclusive'
+        )
+    else:
+        traces_by_slug: dict[str, dict] = {}
+        for entry in all_traces:
+            slug = entry.get("attack_class") or ""
+            if slug:
+                traces_by_slug[slug] = entry
+        agg_counts = {"lands": 0, "partial": 0, "blocked": 0, "inconclusive": 0, "not_evaluated": 0}
+        for slug in catalogue_order:
+            entry = traces_by_slug.get(slug)
+            v = (entry.get("verdict") if entry else "not_evaluated") or "not_evaluated"
+            if v not in agg_counts:
+                v = "not_evaluated"
+            agg_counts[v] += 1
+        agg_total = total_classes
+        agg_evaluated = agg_total - agg_counts["not_evaluated"]
+        summary_meta = (
+            f'<strong>{agg_evaluated}</strong> of {agg_total} attack classes '
+            f'evaluated &middot; <strong>{agg_counts["lands"]}</strong> lands &middot; '
+            f'<strong>{agg_counts["partial"]}</strong> partial &middot; '
+            f'<strong>{agg_counts["blocked"]}</strong> blocked &middot; '
+            f'<strong>{agg_counts["inconclusive"]}</strong> inconclusive'
+        )
+
+    open_attr = " open" if static else ""
+    parts.append(
+        f'<details class="coverage-card emu-coverage-card '
+        f'emu-coverage-collapse"{open_attr}>'
+    )
+    parts.append(
+        '<summary class="emu-coverage-summary">'
+        '<span class="emu-coverage-summary-title">'
+        'Behaviour emulator coverage'
+        '</span>'
+        f'<span class="emu-coverage-summary-meta">{summary_meta}</span>'
+        '</summary>'
+    )
+    parts.append(
+        '<p class="emu-coverage-intro">'
+        '<em>Lands</em> / <em>partial</em> are actionable findings '
+        '(shown in Detect / Defend / Respond). <em>Blocked</em> '
+        '(defence works) and <em>inconclusive</em> (pipeline step '
+        'absent in this agent) live here only &mdash; they\'re '
+        'coverage notes, not findings.'
+        '</p>'
+    )
+
+    if entry_points:
+        for ep_idx, ep in enumerate(entry_points):
+            ep_id = ep.get("id") or f"ep{ep_idx}"
+            ep_route = ep.get("route") or ep_id
+            ep_traces_by_slug: dict[str, dict] = {}
+            for t in (ep.get("attack_class_traces") or []):
+                slug = t.get("attack_class") or ""
+                if slug:
+                    ep_traces_by_slug[slug] = t
+            ep_counts: dict[str, int] = {
+                "lands": 0, "partial": 0, "blocked": 0,
+                "inconclusive": 0, "not_evaluated": 0,
+            }
+            for slug in catalogue_order:
+                t2 = ep_traces_by_slug.get(slug)
+                v = (t2.get("verdict") if t2 else "not_evaluated") or "not_evaluated"
+                if v not in ep_counts:
+                    v = "not_evaluated"
+                ep_counts[v] += 1
+            ep_evaluated = total_classes - ep_counts["not_evaluated"]
+            parts.append(
+                f'<details class="emu-ep-section"{open_attr}>'
+                f'<summary class="emu-ep-summary">'
+                f'<span class="emu-ep-route">{_html_escape(ep_route)}</span>'
+                f'<span class="emu-ep-meta">'
+                f'<strong>{ep_evaluated}</strong> of {total_classes} evaluated '
+                f'&middot; <strong>{ep_counts["lands"]}</strong> lands '
+                f'&middot; <strong>{ep_counts["partial"]}</strong> partial '
+                f'&middot; <strong>{ep_counts["blocked"]}</strong> blocked '
+                f'&middot; <strong>{ep_counts["inconclusive"]}</strong> inconclusive'
+                f'</span>'
+                f'</summary>'
+            )
+            _render_emu_coverage_section(
+                parts, ep_traces_by_slug, row_idx_offset=ep_idx * total_classes
+            )
+            parts.append('</details>')
+    else:
+        _render_emu_coverage_section(parts, traces_by_slug)
+
     parts.append('</details>')  # /coverage-card
 
 
