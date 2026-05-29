@@ -15061,7 +15061,7 @@ def _render_framework_mapping_table(
     parts.append('<details class="ref-naming">')
     parts.append(
         '<summary class="ref-naming-summary">'
-        'AgentShield &harr; Security Framework Mapping'
+        'AgentShield Control to Security Framework Risks Mapping'
         '<span class="ref-naming-hint">click to expand</span>'
         '</summary>'
     )
