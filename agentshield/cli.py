@@ -165,6 +165,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # ---------- check ----------
+    chk = subparsers.add_parser(
+        "check",
+        help=(
+            "Run post-merge sanity checks against a target's scan artifacts. "
+            "Validates schema, banner state, narrative coverage, output files, "
+            "callout fields, and emulator payload counts. Exit 0 = all pass."
+        ),
+    )
+    chk.add_argument("path", help="Path to target repository (containing .agentshield/)")
+
     # ---------- probe (Path B — runtime red-team) ----------
     prb = subparsers.add_parser(
         "probe",
@@ -701,6 +712,219 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------- check command ----------
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Post-merge sanity checklist for a target's scan artifacts."""
+    import json
+    import re as _re
+
+    from agentshield.merger.attack_narratives import narrative_for
+    from agentshield.merger.combine import _findings_grouped_by_ddr
+    from agentshield.merger.schema import TIER1_CALLOUT_REQUIRED
+
+    target_root = Path(args.path)
+    print(f"[agentshield] check target: {target_root}")
+
+    try:
+        result = merge(target_root)
+    except MergeError as exc:
+        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    out_dir = default_output_dir()
+    checks: list[tuple[str, bool, str]] = []  # (label, passed, detail)
+
+    # ── 1. Schema validation ───────────────────────────────────────────────
+    if result.schema_errors:
+        checks.append((
+            "Schema validation",
+            False,
+            f"{len(result.schema_errors)} error(s) — tier2-findings.json "
+            f"failed validation; tier2 findings suppressed. "
+            f"First: {result.schema_errors[0]}",
+        ))
+    else:
+        checks.append(("Schema validation", True, "tier2-findings.json passes schema"))
+
+    # ── 2. Tier 2 present ─────────────────────────────────────────────────
+    checks.append((
+        "Tier 2 present",
+        result.tier2_present,
+        "tier2-findings.json found" if result.tier2_present
+        else "tier2-findings.json missing — run Copilot Tier 2 then re-merge",
+    ))
+
+    # ── 3. Not stale ──────────────────────────────────────────────────────
+    checks.append((
+        "Fingerprint match (not stale)",
+        not result.stale,
+        "tier1/tier2 fingerprints match" if not result.stale
+        else "fingerprint mismatch — Tier 1 changed since Tier 2 ran; re-run Copilot Tier 2",
+    ))
+
+    # ── 4. Not partial ────────────────────────────────────────────────────
+    t1_count = len(result.report.tier1_findings)
+    classified = result.tier2_classified_count
+    checks.append((
+        "Tier 2 classification complete (not partial)",
+        not result.tier2_partial,
+        f"all {classified} Tier 1 findings classified" if not result.tier2_partial
+        else (
+            f"only {classified}/{t1_count} Tier 1 findings have a verdict — "
+            f"check tier1_fp_callouts in tier2-findings.json for missing fields"
+        ),
+    ))
+
+    # ── 5. Tier 1 callout fields complete ─────────────────────────────────
+    t2_path = target_root / ".agentshield" / "tier2-findings.json"
+    if t2_path.exists():
+        t2_raw = json.loads(t2_path.read_text(encoding="utf-8"))
+        callouts = t2_raw.get("tier1_fp_callouts") or []
+        required = set(TIER1_CALLOUT_REQUIRED.keys())
+        broken: list[str] = []
+        for i, c in enumerate(callouts):
+            missing_fields = required - set(c.keys())
+            if missing_fields:
+                broken.append(
+                    f"callout[{i}] missing: {', '.join(sorted(missing_fields))}"
+                )
+        if broken:
+            checks.append((
+                "Tier 1 callout fields complete",
+                False,
+                "; ".join(broken[:5]) + ("…" if len(broken) > 5 else ""),
+            ))
+        else:
+            checks.append((
+                "Tier 1 callout fields complete",
+                True,
+                f"all {len(callouts)} callout(s) have the 6 required fields",
+            ))
+
+    # ── 6. Attack narrative coverage ──────────────────────────────────────
+    grouped = _findings_grouped_by_ddr(result.report)
+    all_findings = [f for cat in ("detect", "defend", "respond") for f in grouped[cat]]
+    non_emu = [f for f in all_findings if not f.get("_emulator_trace")]
+    missing_narr = [
+        f for f in non_emu
+        if not narrative_for(f.get("agentshield_id") or f.get("rule_id") or "")
+    ]
+    if missing_narr:
+        ids = [f.get("rule_id_short") or f.get("rule_id") or "?" for f in missing_narr]
+        checks.append((
+            "Attack narrative coverage",
+            False,
+            f"{len(missing_narr)}/{len(non_emu)} non-emulator findings have no "
+            f"narrative (static code panel only): "
+            + ", ".join(ids[:6]) + ("…" if len(ids) > 6 else ""),
+        ))
+    else:
+        checks.append((
+            "Attack narrative coverage",
+            True,
+            f"all {len(non_emu)} non-emulator findings have a curated narrative",
+        ))
+
+    # ── 7. Emulator payloads .md — count matches actual sections ──────────
+    emu_md = out_dir / "agentshield-emulator-payloads.md"
+    if emu_md.exists():
+        emu_text = emu_md.read_text(encoding="utf-8")
+        actual_sections = emu_text.count("\n### [")
+        m = _re.search(r"\*\*(\d+) attack walkthrough", emu_text)
+        claimed = int(m.group(1)) if m else None
+        if claimed is not None and claimed != actual_sections:
+            checks.append((
+                "Emulator payloads count accurate",
+                False,
+                f"header says {claimed} but file has {actual_sections} sections",
+            ))
+        else:
+            checks.append((
+                "Emulator payloads count accurate",
+                True,
+                f"{actual_sections} walkthroughs, count header matches",
+            ))
+        # ── 8. No Semgrep/Copilot findings leaked into emulator payloads ──
+        semgrep_leaked = emu_text.count("[Semgrep]")
+        copilot_leaked = emu_text.count("[Copilot]")
+        leaked = semgrep_leaked + copilot_leaked
+        checks.append((
+            "Emulator payloads contain only emulator findings",
+            leaked == 0,
+            "emulator-only" if leaked == 0
+            else f"{leaked} non-emulator finding(s) leaked in "
+                 f"(Semgrep={semgrep_leaked}, Copilot={copilot_leaked})",
+        ))
+    else:
+        checks.append((
+            "Emulator payloads file exists",
+            False,
+            f"{emu_md} not found — run agentshield merge",
+        ))
+
+    # ── 9. Output files exist and are non-empty ───────────────────────────
+    for fname in (
+        "agentshield-report.html",
+        "agentshield-report-print.html",
+        "agentshield-findings-fix.md",
+        "agentshield-emulator-payloads.md",
+    ):
+        fpath = out_dir / fname
+        exists = fpath.exists() and fpath.stat().st_size > 0
+        checks.append((
+            f"Output exists: {fname}",
+            exists,
+            f"{fpath.stat().st_size // 1024} KB" if exists
+            else "missing or empty — run agentshield merge",
+        ))
+
+    # ── 10. Finding count sanity ───────────────────────────────────────────
+    net = result.actionable_finding_count
+    checks.append((
+        "Net actionable finding count > 0",
+        net > 0,
+        f"{net} actionable findings" if net > 0
+        else "0 findings — verify scan ran against the correct target",
+    ))
+
+    # ── 11. No unknown _origin values ─────────────────────────────────────
+    known_origins = {"tier1", "tier2", "emulator"}
+    unknown_origins = {
+        f.get("_origin") for f in all_findings
+        if f.get("_origin") not in known_origins
+    }
+    checks.append((
+        "All finding origins are recognised filter values",
+        not unknown_origins,
+        "tier1 / tier2 / emulator" if not unknown_origins
+        else f"unknown origin(s): {', '.join(str(o) for o in unknown_origins)}",
+    ))
+
+    # ── Print report ───────────────────────────────────────────────────────
+    passed = sum(1 for _, ok, _ in checks if ok)
+    total = len(checks)
+    all_ok = passed == total
+    print()
+    status = "ALL CHECKS PASSED" if all_ok else f"{total - passed} CHECK(S) FAILED"
+    print(f"  {'✓' if all_ok else '✗'}  Report health: {passed}/{total}  —  {status}")
+    print()
+    for label, ok, detail in checks:
+        icon = "✓" if ok else "✗"
+        colour_on  = "" if ok else ""   # no colour codes — works in any terminal
+        print(f"  {icon}  {label}")
+        if detail:
+            print(f"        {detail}")
+    print()
+    if not all_ok:
+        print(
+            "  Fix the ✗ items above, then re-run:  "
+            f"agentshield merge {args.path}  &&  agentshield check {args.path}"
+        )
+        print()
+    return 0 if all_ok else 1
+
+
 # ---------- merge command ----------
 
 def cmd_merge(args: argparse.Namespace) -> int:
@@ -1140,6 +1364,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_scan(args)
     if args.command == "merge":
         return cmd_merge(args)
+    if args.command == "check":
+        return cmd_check(args)
     if args.command == "probe":
         return cmd_probe(args)
     return 0

@@ -9,9 +9,8 @@ skill:
   version: 3.2.0
 
 providers:
-  # FIX: AST06 — API keys injected from environment at runtime.
   anthropic:
-    api_key: ${ANTHROPIC_API_KEY}
+    api_key: sk-ant-api03-demoKeyABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef
     model: claude-opus-4-7
 
   openai:

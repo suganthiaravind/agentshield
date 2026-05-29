@@ -26,6 +26,7 @@ block; the finding card still renders.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -148,6 +149,38 @@ def _normalize_rule_id(rule_id: str) -> str:
     if rule_id.startswith(("AS-S-", "AS-C-", "AS-M-")):
         return rule_id[5:]
     return rule_id
+
+
+def _tier2_legacy_candidates(rule_id: str) -> list[str]:
+    """Map legacy TIER2-XXX-NN ids to catalog key candidates.
+
+    TIER2-LLM06-01       → ['D-LLM06-001', 'DF-LLM06-001', 'R-LLM06-001']
+    TIER2-CWE-798-01     → ['D-CWE_798-001', 'DF-CWE_798-001', 'R-CWE_798-001']
+    TIER2-AGENTIC-T1-01  → ['D-AGENTIC_T1-001', 'DF-AGENTIC_T1-001', 'R-AGENTIC_T1-001']
+
+    The catalog uses underscores within compound identifiers (CWE_798, AGENTIC_T1)
+    while the TIER2 format uses hyphens throughout.  We split off the 2-digit
+    trailing sequence, then join all remaining body parts with underscores so
+    the generated keys match the catalog format.
+
+    The prefix (D / DF / R) is not encoded in the legacy ID, so we try all
+    three; the caller stops at the first hit.
+    """
+    if not rule_id.startswith("TIER2-"):
+        return []
+    parts = rule_id[6:].split("-")  # strip 'TIER2-', split remainder
+    if len(parts) < 2:
+        return []
+    num_str = parts[-1]
+    try:
+        num = int(num_str)
+    except ValueError:
+        return []
+    # Join all body parts (everything before the trailing number) with "_"
+    # so CWE-798 → CWE_798 and AGENTIC-T1 → AGENTIC_T1
+    body = "_".join(parts[:-1])
+    padded = f"{num:03d}"
+    return [f"D-{body}-{padded}", f"DF-{body}-{padded}", f"R-{body}-{padded}"]
 
 
 # ---------- narrative library ----------
@@ -2314,13 +2347,77 @@ NARRATIVES: dict[str, AttackScenario] = {
 }
 
 
+def _category_family_candidates(body: str) -> list[str]:
+    """Return all catalog keys whose body matches `body`, sorted.
+
+    Used as a last-resort fallback when an exact index lookup misses but the
+    category family (e.g. LLM01, AST03) has at least one catalog entry.
+    """
+    hits = []
+    for prefix in ("D-", "DF-", "R-"):
+        needle = f"{prefix}{body}-"
+        for key in NARRATIVES:
+            if key.startswith(needle):
+                hits.append(key)
+    return sorted(hits)
+
+
+def _semgrep_family_candidates(rule_id: str) -> list[str]:
+    """For semgrep-style rule IDs like 'ast03-network-wildcard-allow',
+    extract the category (AST03) and return catalog keys for that category.
+
+    ast03-network-wildcard-allow → ['D-AST03-001', 'D-AST03-003', ...]
+    """
+    m = re.match(r"^([a-zA-Z]+)(\d+)-", rule_id)
+    if not m:
+        return []
+    category = (m.group(1) + m.group(2)).upper()
+    return _category_family_candidates(category)
+
+
 def narrative_for(rule_id: str) -> AttackScenario | None:
     """Return the curated narrative for `rule_id`, or None if none exists.
 
-    Tries the full rule_id first (in case a future entry wants to
-    pin a specific source variant), then the normalised key.
+    Resolution order:
+    1. Direct lookup (rule_id as-is)
+    2. Normalised form — strips AS-S-/AS-C-/AS-M- prefix
+    3. Normalised form family fallback — catalog index gap (D-AST03-002 → D-AST03-001)
+    4. TIER2 legacy exact candidates — TIER2-LLM06-01 → D-LLM06-001 etc.
+    5. TIER2 category family fallback — any catalog entry for the same category
+    6. Semgrep category family fallback — ast03-* → any D-AST03-* entry
     """
     direct = NARRATIVES.get(rule_id)
     if direct is not None:
         return direct
-    return NARRATIVES.get(_normalize_rule_id(rule_id))
+    normalized = _normalize_rule_id(rule_id)
+    hit = NARRATIVES.get(normalized)
+    if hit is not None:
+        return hit
+    # If normalized form looks like a catalog key but the index is missing,
+    # fall back to any other entry in the same category family.
+    m = re.match(r"^(D|DF|R)-(.+)-(\d{3})$", normalized)
+    if m:
+        body = m.group(2)
+        for candidate in _category_family_candidates(body):
+            hit = NARRATIVES.get(candidate)
+            if hit is not None:
+                return hit
+    for candidate in _tier2_legacy_candidates(rule_id):
+        hit = NARRATIVES.get(candidate)
+        if hit is not None:
+            return hit
+    # TIER2 category family fallback (index gap in catalog)
+    if rule_id.startswith("TIER2-"):
+        parts = rule_id[6:].split("-")
+        if len(parts) >= 2:
+            body = "_".join(parts[:-1])
+            for candidate in _category_family_candidates(body):
+                hit = NARRATIVES.get(candidate)
+                if hit is not None:
+                    return hit
+    # Semgrep rule family fallback (e.g. ast03-network-wildcard-allow)
+    for candidate in _semgrep_family_candidates(rule_id):
+        hit = NARRATIVES.get(candidate)
+        if hit is not None:
+            return hit
+    return None

@@ -1,20 +1,270 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-28T20:30:24.385206Z",
-  "agentshield_tier1_fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "scanned_at": "2026-05-29T02:25:33.262494Z",
+  "agentshield_tier1_fingerprint": "b71035021bdd851b6e732e1b361e1256010bbbcd2c16160047d5aad0d3705c04",
   "scanned_files": [
+    "admin.py",
     "config.py",
     "controller.py",
     "guard/__init__.py",
     "guard/input_filter.py",
+    "guard/semantic_filter.py",
     "memory.py",
     "notifications.py",
     "orchestrator.py",
     "tools.py"
   ],
-  "findings": [],
+  "findings": [
+    {
+      "rule_id": "agentshield.detect.hardcoded-llm-credentials",
+      "rule_id_short": "hardcoded-llm-credentials",
+      "agentshield_id": "AS-S-D-CWE_798-001",
+      "legacy_ids": [
+        "AS-D-005"
+      ],
+      "category": "detect",
+      "severity": "critical",
+      "file": "testbed/demo-agent/admin.py",
+      "line": 16,
+      "message": "Hardcoded credential string passed to an LLM client constructor (OpenAI, Anthropic, Cohere, Mistral, Together, Groq, HuggingFace, Google generative AI, AWS Bedrock). Secrets in source code are CWE-798 (Use of Hard-coded Credentials) \u2014 they end up in git history, container images, and CI logs. Use environment variables, a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), or the SDK's default credential resolver instead.",
+      "language": "python",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM02"
+        ],
+        "owasp_agentic": [],
+        "mitre_atlas": [
+          "AML.T0055"
+        ],
+        "cwe": [
+          "CWE-798"
+        ],
+        "nist_ai_rmf": [
+          "MANAGE-2.4"
+        ],
+        "ast": []
+      },
+      "remediation": "Move the credential out of source. Options, ranked by safety: (1) the SDK's default credential resolver \u2014 for OpenAI / Anthropic / Cohere / Mistral, omit `api_key=` and the SDK reads the standard env var (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.); for boto3, omit aws_access_key_id and let the default chain (IAM role, instance profile, env, ~/.aws/credentials) resolve. (2) A secrets manager looked up at startup (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) \u2014 `api_key=secrets.get_secret_value(...)[\"SecretString\"]`. (3) Environment variable read explicitly \u2014 `api_key=os.environ[\"OPENAI_API_KEY\"]`. Rotate any credential that has been committed to git (it must be treated as compromised \u2014 git history exposes it forever even if you delete it from HEAD)."
+    },
+    {
+      "rule_id": "agentshield.defend.no-timeout-or-token-cap-on-llm",
+      "rule_id_short": "no-timeout-or-token-cap-on-llm",
+      "agentshield_id": "AS-S-DF-LLM10-001",
+      "legacy_ids": [
+        "AS-DF-003"
+      ],
+      "category": "defend",
+      "severity": "medium",
+      "file": "testbed/demo-agent/admin.py",
+      "line": 19,
+      "message": "LLM client / call constructed with an explicitly disabled timeout (`timeout=None`) or output cap (`max_tokens=None` / `max_output_tokens=None`). Without bounds, a single request can hang a worker indefinitely or generate runaway output \u2014 a DoS / cost-blowup vector. OWASP LLM10 Unbounded Consumption, OWASP Agentic T4 Resource Overload.",
+      "language": "python",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM10"
+        ],
+        "owasp_agentic": [
+          "T4"
+        ],
+        "mitre_atlas": [],
+        "cwe": [
+          "CWE-400"
+        ],
+        "nist_ai_rmf": [
+          "MEASURE-2.6",
+          "MANAGE-2.4"
+        ],
+        "ast": []
+      },
+      "remediation": "Set explicit upper bounds on every LLM call. (1) `timeout=` should be a finite number of seconds matched to your worker SLA \u2014 typically 30-60s for interactive paths, longer for batch. (2) `max_tokens=` (or `max_output_tokens=` for Google / OpenAI Responses API) should be set to the smallest value that satisfies your prompt \u2014 never None or unbounded. (3) Combine with retry budgets (`max_retries=2-3`) and per-tenant rate limiting upstream of the call. For Bedrock direct boto3, set `Config(read_timeout=N, retries={\"max_attempts\": 3})`."
+    },
+    {
+      "rule_id": "agentshield.detect.hardcoded-llm-credentials",
+      "rule_id_short": "hardcoded-llm-credentials",
+      "agentshield_id": "AS-S-D-CWE_798-001",
+      "legacy_ids": [
+        "AS-D-005"
+      ],
+      "category": "detect",
+      "severity": "critical",
+      "file": "testbed/demo-agent/admin.py",
+      "line": 19,
+      "message": "Hardcoded credential string passed to an LLM client constructor (OpenAI, Anthropic, Cohere, Mistral, Together, Groq, HuggingFace, Google generative AI, AWS Bedrock). Secrets in source code are CWE-798 (Use of Hard-coded Credentials) \u2014 they end up in git history, container images, and CI logs. Use environment variables, a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault), or the SDK's default credential resolver instead.",
+      "language": "python",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM02"
+        ],
+        "owasp_agentic": [],
+        "mitre_atlas": [
+          "AML.T0055"
+        ],
+        "cwe": [
+          "CWE-798"
+        ],
+        "nist_ai_rmf": [
+          "MANAGE-2.4"
+        ],
+        "ast": []
+      },
+      "remediation": "Move the credential out of source. Options, ranked by safety: (1) the SDK's default credential resolver \u2014 for OpenAI / Anthropic / Cohere / Mistral, omit `api_key=` and the SDK reads the standard env var (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.); for boto3, omit aws_access_key_id and let the default chain (IAM role, instance profile, env, ~/.aws/credentials) resolve. (2) A secrets manager looked up at startup (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) \u2014 `api_key=secrets.get_secret_value(...)[\"SecretString\"]`. (3) Environment variable read explicitly \u2014 `api_key=os.environ[\"OPENAI_API_KEY\"]`. Rotate any credential that has been committed to git (it must be treated as compromised \u2014 git history exposes it forever even if you delete it from HEAD)."
+    },
+    {
+      "rule_id": "agentshield.detect.unsanitized-user-input-to-llm",
+      "rule_id_short": "unsanitized-user-input-to-llm",
+      "agentshield_id": "AS-S-D-LLM01-001",
+      "legacy_ids": [
+        "AS-D-001"
+      ],
+      "category": "detect",
+      "severity": "high",
+      "file": "testbed/demo-agent/admin.py",
+      "line": 30,
+      "message": "User input from an HTTP request flows directly into an LLM/agent/chain/retriever invocation without passing through a known guardrail or sanitization layer. This is the canonical prompt-injection surface (OWASP LLM01).",
+      "language": "python",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM01"
+        ],
+        "owasp_agentic": [],
+        "mitre_atlas": [
+          "AML.T0051"
+        ],
+        "cwe": [],
+        "nist_ai_rmf": [
+          "MAP-2.3",
+          "MEASURE-2.7"
+        ],
+        "ast": []
+      },
+      "remediation": "Wrap LLM calls with an input guardrail (NeMo Guardrails, Lakera Guard, Rebuff, Llama Guard, or an equivalent). Validate and sanitize user input before it reaches the prompt template. Use structured prompting that strictly delimits user content from instructions."
+    },
+    {
+      "rule_id": "agentshield.detect.unvalidated-peer-agent-input",
+      "rule_id_short": "unvalidated-peer-agent-input",
+      "agentshield_id": "AS-S-D-LLM01-006",
+      "legacy_ids": [],
+      "category": "detect",
+      "severity": "high",
+      "file": "testbed/demo-agent/admin.py",
+      "line": 30,
+      "message": "Handler accepts a request claiming to come from a trusted internal agent (via a header signal like X-Internal-Caller / X-Agent-Source) and forwards the payload to an LLM without per-call authentication or input validation. Any peer on the internal network that can set the header is implicitly trusted \u2014 there is no cryptographic proof the caller is the agent it claims to be (OWASP Agentic T13 \u2014 Rogue Agents in Multi-Agent Systems). Pair with the behaviour emulator (Phase 2) to confirm the LLM acts on attacker-controlled \"peer\" input.",
+      "language": "python",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM01"
+        ],
+        "owasp_agentic": [
+          "T13"
+        ],
+        "mitre_atlas": [
+          "AML.T0051"
+        ],
+        "cwe": [
+          "CWE-345"
+        ],
+        "nist_ai_rmf": [
+          "GOVERN-1.5",
+          "MAP-3.1"
+        ],
+        "ast": []
+      },
+      "remediation": "Require cryptographic proof that the caller is the agent it claims to be \u2014 a short-lived signed token (JWT with mTLS-anchored claims or a peer-key HMAC) carried per request, not a static header. Treat peer input the same way you treat user input: route through a guardrail and a structural validator before it reaches the LLM prompt. Log the verified caller identity on every invocation so a rogue agent's traffic is attributable later."
+    },
+    {
+      "rule_id": "agentshield.detect.ast03-network-wildcard-allow",
+      "rule_id_short": "ast03-network-wildcard-allow",
+      "agentshield_id": "AS-M-D-AST03-002",
+      "legacy_ids": [
+        "AS-AST-003"
+      ],
+      "category": "detect",
+      "severity": "high",
+      "file": "SKILL.md",
+      "line": 1,
+      "message": "Skill's network allowlist contains `*` \u2014 equivalent to unrestricted egress. AST03 \u2014 list explicit hosts.",
+      "language": "markdown",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM06"
+        ],
+        "owasp_agentic": [
+          "T2",
+          "T3"
+        ],
+        "mitre_atlas": [],
+        "cwe": [
+          "CWE-732",
+          "CWE-918"
+        ],
+        "nist_ai_rmf": [],
+        "ast": [
+          "AST03"
+        ]
+      },
+      "remediation": null
+    },
+    {
+      "rule_id": "agentshield.detect.ast03-wildcard-file-read",
+      "rule_id_short": "ast03-wildcard-file-read",
+      "agentshield_id": "AS-M-D-AST03-004",
+      "legacy_ids": [
+        "AS-AST-003"
+      ],
+      "category": "detect",
+      "severity": "medium",
+      "file": "SKILL.md",
+      "line": 1,
+      "message": "Wildcard read permission on `/**`. AST03 \u2014 skill manifests must declare explicit paths; wildcards defeat least-privilege review.",
+      "language": "markdown",
+      "framework_mappings": {
+        "owasp_llm": [],
+        "owasp_agentic": [],
+        "mitre_atlas": [],
+        "cwe": [
+          "CWE-732"
+        ],
+        "nist_ai_rmf": [],
+        "ast": [
+          "AST03"
+        ]
+      },
+      "remediation": "Declare explicit paths; no wildcards."
+    },
+    {
+      "rule_id": "agentshield.detect.ast06-credential-in-bundle",
+      "rule_id_short": "ast06-credential-in-bundle",
+      "agentshield_id": "AS-M-D-AST06-001",
+      "legacy_ids": [
+        "AS-AST-006"
+      ],
+      "category": "detect",
+      "severity": "high",
+      "file": "config.yaml",
+      "line": 13,
+      "message": "Anthropic API key hard-coded in skill-bundle file `config.yaml`. Skill bundles ship verbatim to every consumer \u2014 anyone who can read the bundle (registry, cache, developer clone) reads the secret. AST06 \u2014 Secrets in Skill Bundles. Move to a secrets manager or runtime-injected env var; never ship secrets inside the bundle itself.",
+      "language": "markdown",
+      "framework_mappings": {
+        "owasp_llm": [
+          "LLM06"
+        ],
+        "owasp_agentic": [
+          "T2"
+        ],
+        "mitre_atlas": [],
+        "cwe": [
+          "CWE-798"
+        ],
+        "nist_ai_rmf": [],
+        "ast": [
+          "AST06"
+        ]
+      },
+      "remediation": "Move secrets to a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) and reference them by name from the manifest. If runtime injection isn't an option, at minimum keep credentials in a separate file outside the bundle and load them via environment variable."
+    }
+  ],
   "git_branch": "v5",
-  "git_commit": "e1b088a",
+  "git_commit": "5740510",
   "git_repo_name": "demo-agent",
-  "scan_duration_seconds": 10
+  "scan_duration_seconds": 17
 }

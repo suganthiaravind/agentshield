@@ -147,9 +147,10 @@ Output lands in `output/` inside your current working directory:
 
 ```
 output/
-├── agentshield-report.html         ← interactive (tabs, filter, search, Reference)
-├── agentshield-report-print.html   ← printable / stacked view
-└── agentshield-findings-fix.md     ← paste into Claude Code to fix all findings
+├── agentshield-report.html            ← interactive (tabs, filter, search, Reference)
+├── agentshield-report-print.html      ← printable / stacked view
+├── agentshield-findings-fix.md        ← paste into Claude Code to fix all findings
+└── agentshield-emulator-payloads.md   ← emulator attack walkthroughs per source × transition
 ```
 
 Open the report:
@@ -163,6 +164,43 @@ open output/agentshield-report.html          # macOS
 
 ---
 
+## 6 — Check report health
+
+```bash
+agentshield check $REPO
+```
+
+Runs 14 automated checks against the merged artifacts and prints a ✓/✗ checklist:
+
+| # | Check | What it catches |
+|---|---|---|
+| 1 | Schema validation | Broken tier2-findings.json suppressing all Tier 2 results |
+| 2 | Tier 2 present | Merge run before Copilot finished |
+| 3 | Fingerprint match | Stale Tier 2 after a re-scan (STALE banner) |
+| 4 | Classification complete | `tier1_fp_callouts` covering 0 of N findings (PARTIAL banner) |
+| 5 | Callout fields complete | Missing `file` / `line` / `tier1_rule` in any callout |
+| 6 | Attack narrative coverage | Findings with no "How it lands" / "What the attacker gets" |
+| 7 | Emulator payload count | Header count mismatches actual `###` sections in the `.md` |
+| 8 | Emulator payloads purity | Semgrep/Copilot findings leaked into the emulator walkthrough |
+| 9–12 | Output files exist | Any of the four output files missing or empty |
+| 13 | Actionable count > 0 | Merge ran against the wrong target |
+| 14 | Origins recognised | Unknown filter-chip origin values |
+
+**Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
+
+If any check fails the command exits 1 and prints the fix hint:
+```
+Fix the ✗ items above, then re-run:
+  agentshield merge $REPO  &&  agentshield check $REPO
+```
+
+> **For the demo agent** the path is `testbed/demo-agent`:
+> ```bash
+> agentshield check testbed/demo-agent
+> ```
+
+---
+
 ## Summary
 
 | Step | What | Where |
@@ -173,5 +211,6 @@ open output/agentshield-report.html          # macOS
 | 3 | Paste **Tier 2 prompt** into Copilot Chat | VS Code |
 | 4 | Paste **behaviour emulator prompt** into Copilot Chat | VS Code |
 | 5 | `agentshield merge $REPO` → open `output/agentshield-report.html` | Terminal |
+| 6 | `agentshield check $REPO` → all 14 checks green | Terminal |
 
 For flags, troubleshooting, CI integration, and full Tier 2 guidance see [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).

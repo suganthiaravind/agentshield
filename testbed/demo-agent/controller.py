@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 
 from config import client, MODEL
 from guard.input_filter import input_guard
+from guard.semantic_filter import SemanticGuard
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,11 @@ app = Flask(__name__)
 # FIX: TIER2-GAP-04 — add request_timeout and max_tokens to cap latency/cost.
 chain = ChatOpenAI(model=MODEL, openai_api_key=client.api_key,
                    request_timeout=30, max_tokens=2000)
+# Semantic guard uses a fast judge model (gpt-4o-mini) — injected so the
+# guard itself isn't subject to the injection it's meant to catch.
+_judge_llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=client.api_key,
+                        request_timeout=10, max_tokens=64)
+semantic_guard = SemanticGuard(llm=_judge_llm)
 
 _ALLOWED_SUMMARY_HOSTS = frozenset({"docs.internal", "wiki.internal", "example.com"})
 
@@ -47,9 +53,11 @@ def summarise():
         return jsonify({"error": "URL not in allowlist"}), 400
     from langchain_community.document_loaders import WebBaseLoader
     docs = WebBaseLoader(article_url).load()
-    # Treat loaded document content as untrusted — scan before passing to the LLM.
+    # Layer 1: keyword deny-list blocks literal injection phrases.
+    # Layer 2: semantic classifier catches narrative/role-play/obfuscated framings.
     try:
-        safe_content = input_guard.scan(docs[0].page_content)
+        kw_safe = input_guard.scan(docs[0].page_content)
+        safe_content = semantic_guard.scan(kw_safe)
     except ValueError:
         return jsonify({"error": "document blocked by input filter"}), 400
     summary_prompt = ChatPromptTemplate.from_template(
