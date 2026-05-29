@@ -11683,7 +11683,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<span class="metric-bd-sep">·</span>'
         f'<span class="metric-bd-item">{emu_inconclusive} n/a</span>'
         f'</div>'
-        f'<div class="metric-subtitle">pipeline-walked predictions</div>'
+        f'<div class="metric-subtitle">what LLM pipeline-walk predicted</div>'
         f'</div>'
     )
     parts.append('<div class="metrics-row">')
