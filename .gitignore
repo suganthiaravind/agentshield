@@ -48,4 +48,5 @@ ENV/
 trivy-db/
 
 # AgentShield CLI output (reports + fix-skill .md files; regenerable)
-output/
+output/*
+!output/agentshield-report.html
