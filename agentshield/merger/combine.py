@@ -4244,9 +4244,38 @@ h3 { font-size: 15px; }
 }
 .saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                            color: var(--text-muted); font-weight: 600; }
-.saige-card .saige-tier { font-size: 22px; font-weight: 700; margin: 4px 0 12px; color: var(--accent); }
+.saige-card-header { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.saige-card .saige-tier { font-size: 20px; font-weight: 700; margin: 3px 0 0; color: var(--accent); white-space: nowrap; }
+.saige-summary-text { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; flex: 1; min-width: 0; }
+.saige-details { margin-top: 12px; }
+.saige-details-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 3px 0;
+}
+.saige-details-toggle::-webkit-details-marker { display: none; }
+.saige-details-toggle::before { content: "▶"; font-size: 8px; transition: transform 0.15s ease; }
+.saige-details[open] .saige-details-toggle::before { transform: rotate(90deg); }
 .saige-card .saige-rationale { color: var(--text); font-size: 13px; line-height: 1.6; }
-.saige-card .saige-footer { font-size: 11px; color: var(--text-muted); margin-top: 12px; font-style: italic; }
+.saige-rationale-qs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.saige-q-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 7px; padding: 9px 13px;
+}
+.saige-q-badge {
+  flex-shrink: 0;
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  border-radius: 4px; padding: 2px 6px;
+  margin-top: 1px;
+}
+.saige-q-content { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.saige-q-title { font-size: 12px; font-weight: 700; color: #1e293b; }
+.saige-q-body { font-size: 12px; color: #475569; line-height: 1.5; }
+.saige-q-plain { font-size: 12px; color: var(--text); line-height: 1.6; }
+.saige-card .saige-footer { font-size: 11px; color: var(--text-muted); margin-top: 10px; font-style: italic; }
 
 .section { margin-bottom: 28px; }
 
@@ -11222,10 +11251,44 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     if not r.saige_tier:
         return
     tier_label = "Non Agent" if r.saige_tier == "non-agent" else f"Agentic Tier {r.saige_tier}"
+
+    # Parse reasoning into Q-blocks for the collapsible detail section
+    raw_reasoning = r.saige_tier_reasoning or "(no reasoning provided)"
+    q_blocks = [b.strip() for b in raw_reasoning.split("||") if b.strip()]
+    import re as _re
+    _q_pat = _re.compile(r"^(Q\d+)\s*[—\-]\s*([^:]+):\s*(.+)$", _re.DOTALL)
+
     parts.append('<div class="saige-card">')
-    parts.append('<div class="saige-label">JPMC SAIGE Agent Tier classification</div>')
-    parts.append(f'<div class="saige-tier">{_html_escape(tier_label)}</div>')
-    parts.append(f'<div class="saige-rationale">{_html_escape(r.saige_tier_reasoning or "(no reasoning provided)")}</div>')
+    parts.append(
+        '<div class="saige-card-header">'
+        f'<div><span class="saige-label">JPMC SAIGE Agent Tier classification</span>'
+        f'<div class="saige-tier">{_html_escape(tier_label)}</div></div>'
+        '</div>'
+    )
+
+    # Collapsible Q-by-Q reasoning
+    if len(q_blocks) > 1:
+        parts.append('<details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1 – Q3)</summary>')
+        parts.append('<div class="saige-rationale saige-rationale-qs">')
+        for block in q_blocks:
+            m = _q_pat.match(block)
+            if m:
+                q_num, q_title, q_body = m.group(1), m.group(2).strip(), m.group(3).strip()
+                parts.append(
+                    f'<div class="saige-q-row">'
+                    f'<span class="saige-q-badge">{_html_escape(q_num)}</span>'
+                    f'<span class="saige-q-content">'
+                    f'<strong class="saige-q-title">{_html_escape(q_title)}</strong>'
+                    f'<span class="saige-q-body">{_html_escape(q_body)}</span>'
+                    f'</span>'
+                    f'</div>'
+                )
+            else:
+                parts.append(f'<div class="saige-q-row saige-q-plain">{_html_escape(block)}</div>')
+        parts.append('</div></details>')
+    else:
+        parts.append(f'<div class="saige-rationale">{_html_escape(raw_reasoning)}</div>')
+
     parts.append(
         '<div class="saige-footer">Informational only — AgentShield does not '
         "filter or prioritise findings based on this classification.</div>"
@@ -11386,19 +11449,14 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     if r.tier2_scanned_at:
         subtitle = (
             f"Scanned: {_html_escape(repo_target)} "
-            f"branch {_html_escape(branch)} "
-            f"&middot; commit {_html_escape(commit)} "
             f"&middot; {_html_escape(scanned_display)} "
-            + (f"&middot; scan took {_html_escape(scan_duration)} " if scan_duration else "")
-            + f"<strong>Findings in this scan: {total_findings}</strong>"
+            f"&middot; <strong>Findings in this scan: {total_findings}</strong>"
         )
     else:
         subtitle = (
             f"Scanned: {_html_escape(repo_target)} "
-            f"branch {_html_escape(branch)} "
-            f"&middot; commit {_html_escape(commit)} "
             f"&middot; Copilot LLM-as-a-Judge Scan not run. "
-            f"<strong>Findings in this scan: {total_findings}</strong>"
+            f"&middot; <strong>Findings in this scan: {total_findings}</strong>"
         )
     parts.append(f'<div class="subtitle">{subtitle}</div>')
     parts.append("</div>")
@@ -11547,7 +11605,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     input_cards: list[str] = []
     input_cards.append(
         f'<div class="metric">'
-        f'<div class="metric-label">Rules-engine Static Scan</div>'
+        f'<div class="metric-label">Semgrep Rules-Engine Static Scan</div>'
         f'<div class="metric-value">{tier1_net}</div>'
         f'<div class="metric-breakdown" '
         f'title="Net findings (Copilot-judged FPs already excluded). '
@@ -11610,7 +11668,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     emu_actionable_n = emu_landed + emu_partial
     input_cards.append(
         f'<div class="metric">'
-        f'<div class="metric-label">Copilot Behaviour Emulator</div>'
+        f'<div class="metric-label">Behaviour Emulator</div>'
         f'<div class="metric-value">{emu_actionable_n}</div>'
         f'<div class="metric-breakdown" '
         f'title="Copilot walked the agent\'s pipeline from source '
@@ -11699,7 +11757,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         parts.append('<div class="filter-group">')
         parts.append('<span class="filter-label">Origin</span>')
         for origin_key, origin_label in (
-            ("tier1", "Semgrep"), ("tier2", "Copilot Scan"), ("emulator", "Copilot Emulator")
+            ("tier1", "Semgrep"), ("tier2", "Copilot Scan"), ("emulator", "Emulator")
         ):
             parts.append(
                 f'<label class="filter-chip {origin_key}"><input type="checkbox" '
