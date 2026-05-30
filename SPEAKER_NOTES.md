@@ -126,7 +126,7 @@ Good morning. I'm Suganthi, and today I want to share something we built out of 
 
 About a year ago, we were taking two AI agents into production. And like most teams doing this for the first time, we went through the full review cycle — legal, risk, compliance, controls. And what we noticed pretty quickly was that there was no standard way to do this. Every reviewer was asking different questions. Every team was solving the same problems independently. And the simple truth was, we had no structured coverage flow to show that we'd actually addressed what needed to be addressed.
 
-The other thing that became clear very quickly is that agents are different. With traditional software, if something goes wrong, the blast radius is contained. With agents — especially ones that can call tools, reach external systems, or operate on customer data — the blast radius is a lot wider and a lot faster to reach. So the stakes of getting the security review right are higher.
+The other difference: when an agent makes a mistake, the blast radius isn't contained the way a service failure is. It can chain through tool calls, reach external systems, touch customer records — fast. That changes what getting the security right actually means.
 
 That's what we built AgentShield to solve.
 
