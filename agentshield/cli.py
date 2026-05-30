@@ -714,8 +714,17 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 # ---------- check command ----------
 
-def cmd_check(args: argparse.Namespace) -> int:
-    """Post-merge sanity checklist for a target's scan artifacts."""
+def _run_checks(
+    result: "MergeResult",
+    out_dir: Path,
+    target_root: Path,
+    target_path_str: str,
+) -> int:
+    """Run the 14-point post-merge health check against an already-merged result.
+
+    Shared by cmd_merge (auto-runs after writing files) and cmd_check (standalone).
+    Returns 0 if all checks pass, 1 if any fail.
+    """
     import json
     import re as _re
 
@@ -723,16 +732,6 @@ def cmd_check(args: argparse.Namespace) -> int:
     from agentshield.merger.combine import _findings_grouped_by_ddr
     from agentshield.merger.schema import TIER1_CALLOUT_REQUIRED
 
-    target_root = Path(args.path)
-    print(f"[agentshield] check target: {target_root}")
-
-    try:
-        result = merge(target_root)
-    except MergeError as exc:
-        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
-        return 2
-
-    out_dir = _latest_scan_output_dir()
     checks: list[tuple[str, bool, str]] = []  # (label, passed, detail)
 
     # ── 1. Schema validation ───────────────────────────────────────────────
@@ -911,7 +910,6 @@ def cmd_check(args: argparse.Namespace) -> int:
     print()
     for label, ok, detail in checks:
         icon = "✓" if ok else "✗"
-        colour_on  = "" if ok else ""   # no colour codes — works in any terminal
         print(f"  {icon}  {label}")
         if detail:
             print(f"        {detail}")
@@ -919,10 +917,22 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not all_ok:
         print(
             "  Fix the ✗ items above, then re-run:  "
-            f"agentshield merge {args.path}  &&  agentshield check {args.path}"
+            f"agentshield merge {target_path_str}  &&  agentshield check {target_path_str}"
         )
         print()
     return 0 if all_ok else 1
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Post-merge sanity checklist for a target's scan artifacts."""
+    target_root = Path(args.path)
+    print(f"[agentshield] check target: {target_root}")
+    try:
+        result = merge(target_root)
+    except MergeError as exc:
+        print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
+        return 2
+    return _run_checks(result, _latest_scan_output_dir(), target_root, args.path)
 
 
 # ---------- output folder helpers ----------
@@ -1063,8 +1073,11 @@ def cmd_merge(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
 
-    # Soft failures (stale, schema errors, tier 2 missing) don't change exit
-    # code — the report banner surfaces them. Hard failures already returned 2.
+    # Run health checks automatically so the operator sees 14/14 (or failures)
+    # without needing a separate `agentshield check` invocation. Exit code of
+    # merge stays 0 regardless — the report was written; check failures are
+    # surfaced as ✗ lines, not as a non-zero exit.
+    _run_checks(result, _latest_scan_output_dir(), target_root, str(target_root))
     return 0
 
 
