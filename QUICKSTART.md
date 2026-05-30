@@ -7,8 +7,9 @@ Complete end-to-end scan in four steps. Copy-paste each block in order.
 ## Before you begin — clone AgentShield
 
 ```bash
-git clone https://github.com/your-org/agentshield.git
+git clone git@github.com:suganthiaravind/agentshield.git
 cd agentshield
+git checkout v6
 ```
 
 > You are now inside the AgentShield repo. This file (`QUICKSTART.md`) is here.
@@ -42,7 +43,7 @@ agentshield --version 2>/dev/null || pip install -e ".[semgrep,dev]"
 agentshield scan $REPO --scan-all-files
 ```
 
-Semgrep runs 70+ security rules. Skill files are written to `$REPO/.agentshield/`.
+Runs 19 Semgrep rules (Python & Java AST) + 12 Manifest scanner rules (SKILL.md / AGENT.md). Skill files are written to `$REPO/.agentshield/`.
 
 **Done when you see:** `[agentshield] ✓ Skill files → .agentshield/`
 
@@ -142,15 +143,16 @@ If the file doesn't appear:
 agentshield merge $REPO
 ```
 
-Combines Tier 1 + Tier 2 + behaviour emulator into a single report.  
-Output lands in `output/` inside your current working directory:
+Combines Tier 1 + Tier 2 + behaviour emulator into a single report, then automatically runs all 14 health checks. Output lands in a timestamped subfolder inside `output/`:
 
 ```
 output/
-├── agentshield-report.html            ← interactive (tabs, filter, search, Reference)
-├── agentshield-report-print.html      ← printable / stacked view
-├── agentshield-findings-fix.md        ← paste into Claude Code to fix all findings
-└── agentshield-emulator-payloads.md   ← emulator attack walkthroughs per source × transition
+└── 20260530-123456/
+    ├── agentshield-report.html            ← interactive (tabs, filter, search, Reference)
+    ├── agentshield-report-print.html      ← printable / stacked view
+    ├── agentshield-findings-fix.md        ← paste into Claude Code to fix all findings
+    └── agentshield-emulator-payloads.md   ← emulator attack walkthroughs per source × transition
+output/agentshield-report.html             ← "latest" copy, always reflects the most recent run
 ```
 
 Open the report:
@@ -160,44 +162,7 @@ open output/agentshield-report.html          # macOS
 # xdg-open output/agentshield-report.html    # Linux
 ```
 
-**Done when you see:** `[agentshield] Wrote unified report(s): output/agentshield-report.html`
-
----
-
-## 6 — Check report health
-
-```bash
-agentshield check $REPO
-```
-
-Runs 14 automated checks against the merged artifacts and prints a ✓/✗ checklist:
-
-| # | Check | What it catches |
-|---|---|---|
-| 1 | Schema validation | Broken tier2-findings.json suppressing all Tier 2 results |
-| 2 | Tier 2 present | Merge run before Copilot finished |
-| 3 | Fingerprint match | Stale Tier 2 after a re-scan (STALE banner) |
-| 4 | Classification complete | `tier1_fp_callouts` covering 0 of N findings (PARTIAL banner) |
-| 5 | Callout fields complete | Missing `file` / `line` / `tier1_rule` in any callout |
-| 6 | Attack narrative coverage | Findings with no "How it lands" / "What the attacker gets" |
-| 7 | Emulator payload count | Header count mismatches actual `###` sections in the `.md` |
-| 8 | Emulator payloads purity | Semgrep/Copilot findings leaked into the emulator walkthrough |
-| 9–12 | Output files exist | Any of the four output files missing or empty |
-| 13 | Actionable count > 0 | Merge ran against the wrong target |
-| 14 | Origins recognised | Unknown filter-chip origin values |
-
 **Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
-
-If any check fails the command exits 1 and prints the fix hint:
-```
-Fix the ✗ items above, then re-run:
-  agentshield merge $REPO  &&  agentshield check $REPO
-```
-
-> **For the demo agent** the path is `testbed/demo-agent`:
-> ```bash
-> agentshield check testbed/demo-agent
-> ```
 
 ---
 
@@ -210,7 +175,6 @@ Fix the ✗ items above, then re-run:
 | 2 | `agentshield scan $REPO --scan-all-files` | Terminal |
 | 3 | Paste **Tier 2 prompt** into Copilot Chat | VS Code |
 | 4 | Paste **behaviour emulator prompt** into Copilot Chat | VS Code |
-| 5 | `agentshield merge $REPO` → open `output/agentshield-report.html` | Terminal |
-| 6 | `agentshield check $REPO` → all 14 checks green | Terminal |
+| 5 | `agentshield merge $REPO` → `✓ 14/14` → open `output/agentshield-report.html` | Terminal |
 
-For flags, troubleshooting, CI integration, and full Tier 2 guidance see [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).
+For flags, troubleshooting, CI integration (`--require-fresh`), and full Tier 2 guidance see [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md).

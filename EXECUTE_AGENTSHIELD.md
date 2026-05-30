@@ -1,6 +1,6 @@
 # Executing AgentShield — install + run guide (VDI-friendly)
 
-Status: 2026-05-29 — current.
+Status: 2026-05-30 — current.
 Companion to: [README.md](./README.md) (product overview), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) (how the pieces fit; Tier 2 / Copilot LLM Scan detail in §2.2).
 
 This is the only file you need to install and run AgentShield in a JPMC VDI (or any locked-down environment). Top-to-bottom; copy-paste-able.
@@ -18,11 +18,9 @@ This is the only file you need to install and run AgentShield in a JPMC VDI (or 
 | §7.1 | Tier 1 scan: Semgrep + AST10 manifest scanner | 1–3 min |
 | §7.2 | Tier 2: Copilot LLM Scan (paste prompt into Copilot Chat) | 5–15 min |
 | §7.3 | Phase 2: Behaviour emulator (paste prompt into Copilot Chat) | 5–15 min |
-| §7.4 | Merge → unified HTML report | 30 s |
-| §7.5 | Check report health (`agentshield check`) | 10 s |
-| §7.6 | *(Optional)* Probe: live adversarial test against a running agent | varies |
-| §8 | Open the report in a browser (localhost or `file://`) | 30 s |
-| §9 | Privacy review before sharing | 2 min |
+| §7.4 | Merge → unified HTML report + auto health check (14/14) | 30 s |
+| §7.5 | Open the report in a browser (localhost or `file://`) | 30 s |
+| §8 | Privacy review before sharing | 2 min |
 
 Subsequent runs skip §3–§6. The scan-and-merge loop is just §7 + §8.
 
@@ -30,7 +28,7 @@ Subsequent runs skip §3–§6. The scan-and-merge loop is just §7 + §8.
 
 ## 2. The architecture in one sentence
 
-AgentShield runs three scanners — **Semgrep** (Python/Java static rules), **AST10 manifest scanner** (`SKILL.md` package checks), and **Copilot LLM Scan** (semantic file-by-file walk via Copilot Chat in your IDE) — and a **merger** that combines all three into a single HTML / Markdown / JSON / SARIF report. The first two run automatically; the third is an IDE step that takes a developer pasting one prompt. An optional **probe** command runs live adversarial tests: verify mode (replays payloads for static findings), explore mode (LLM brainstorms 13 attack classes and fires them at the agent), and campaign mode (multi-turn attacks with mutation-on-block).
+AgentShield runs three scanners — **Semgrep** (Python/Java static rules), **AST10 manifest scanner** (`SKILL.md` package checks), and **Copilot LLM Scan** (semantic file-by-file walk via Copilot Chat in your IDE) — and a **merger** that combines all three into a single HTML / Markdown / JSON / SARIF report. The first two run automatically; the third is an IDE step that takes a developer pasting one prompt.
 
 ---
 
@@ -84,9 +82,7 @@ If your VDI uses an internal Artifactory mirror (typical at JPMC), `index-url` a
 cd ~/work
 git clone git@github.com:suganthiaravind/agentshield.git
 cd agentshield
-
-# until v2 merges to main:
-git checkout architecture-v2
+git checkout v6
 ```
 
 ### 5.2 Create a virtual environment
@@ -148,7 +144,7 @@ agentshield scan testbed/demo-agent --no-emit
 
 ## 7. Run a scan against your real codebase
 
-The full flow has three commands plus one IDE step.
+The full flow has three commands plus two IDE steps.
 
 ### 7.1 Tier 1 (Semgrep) + AST10 (manifest scanner) + emit Tier 2 skill files
 
@@ -179,7 +175,7 @@ After this command finishes, your target repo's `.agentshield/` directory contai
 .agentshield/
 ├── tier1-results.json              ← Tier 1 + AST10 findings + fingerprint
 ├── tier2-bootstrap.md              ← Plain-language entry point for Copilot
-├── tier2-checklist.md              ← The 62-check Tier 2 rule pack
+├── tier2-checklist.md              ← The 68-check Tier 2 rule pack
 ├── tier2-output-schema.md          ← The strict JSON shape Copilot must emit
 ├── agentshield-semgrep-fixes.md    ← Drop into Claude Code → fix any AS-S-* finding
 ├── agentshield-copilot-fixes.md    ← Drop into Claude Code → fix any AS-C-* finding
@@ -294,11 +290,11 @@ This step applies 17 OWASP / ATLAS adversary attack classes against every distin
 agentshield merge /path/to/your-agent-repo
 ```
 
-The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, and writes the unified report to a timestamped subfolder inside `output/`:
+The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, writes the unified report to a timestamped subfolder inside `output/`, and then **automatically runs all 14 health checks** so you see pass/fail in one command:
 
 ```
 output/
-└── 20260529-123456/                         ← timestamped subfolder for this run
+└── 20260530-123456/                         ← timestamped subfolder for this run
     ├── agentshield-report.html              ← interactive (tabs / filter / search / Reference)
     ├── agentshield-report-print.html        ← stacked / printable (all sections visible)
     ├── agentshield-findings-fix.md          ← paste into Claude Code to fix all findings
@@ -314,81 +310,25 @@ CLI banners you might see:
 
 | Banner | Meaning | Action |
 |---|---|---|
-| `✓ Tier 1 + Tier 2 fresh; merging.` | Both present, fingerprint matches | Open the report |
+| `✓ Tier 1 + Tier 2 fresh; merging.` | Both present, fingerprint matches | Proceed — health checks run next |
+| `⚠ Stale artifacts detected:` | One or more input files older than 7 days | Guidance for a full rescan is printed automatically; merge proceeds with existing data |
 | `⚠ Copilot LLM Scan not run.` | `tier2-findings.json` missing | Re-do §7.2 |
 | `❌ Copilot LLM Scan output failed schema validation.` | Copilot's JSON is malformed | The merger prints the field paths; paste them into Copilot Chat to fix |
 | `⚠ STALE Copilot LLM Scan.` | Tier 1 fingerprint changed since Copilot ran | Re-run §7.2 |
-
-### 7.5 Check report health
-
-```bash
-agentshield check /path/to/your-agent-repo
-```
-
-Runs 14 automated checks against the merged output — schema validity, Tier 2 freshness, narrative coverage, emulator payload integrity, and output file presence — and prints a ✓/✗ checklist.
-
-| # | Check | What it catches |
-|---|---|---|
-| 1 | Schema validation | Broken `tier2-findings.json` suppressing all Tier 2 results |
-| 2 | Tier 2 present | Merge run before Copilot finished |
-| 3 | Fingerprint match | Stale Tier 2 after a re-scan (STALE banner in report) |
-| 4 | Classification complete | `tier1_fp_callouts` covering 0 of N findings (PARTIAL banner) |
-| 5 | Callout fields complete | Missing `file` / `line` / `tier1_rule` in any callout |
-| 6 | Attack narrative coverage | Findings with no "How it lands" / "What the attacker gets" |
-| 7 | Emulator payload count | Header count mismatches actual `###` sections in the `.md` |
-| 8 | Emulator payloads purity | Semgrep/Copilot findings leaked into the emulator walkthrough |
-| 9–12 | Output files exist | Any of the four output files missing or empty |
-| 13 | Actionable count > 0 | Merge ran against the wrong target |
-| 14 | Origins recognised | Unknown filter-chip origin values |
+| `✓  Report health: 14/14  —  ALL CHECKS PASSED` | All automated checks passed | Open the report |
 
 **Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
 
-If any check fails the command exits 1 and prints the fix hint:
-```
-Fix the ✗ items above, then re-run:
-  agentshield merge /path/to/your-agent-repo  &&  agentshield check /path/to/your-agent-repo
-```
-
-`agentshield check` automatically finds the most recent timestamped subfolder in `output/`, so no path argument is needed for the output files.
-
----
-
-### 7.6 *(Optional)* Probe — live adversarial tests
-
-`agentshield probe` fires attacks at a running agent endpoint. Skip this section if you only need the static + Copilot report.
-
-**Three modes:**
-
-| Mode | What it does |
-|---|---|
-| `verify` | Replays canned payloads for every static finding — confirms whether the vulnerability is exploitable at runtime. |
-| `explore` | Asks the adversarial backend to brainstorm attacks against this specific agent (tool catalogue, role, data), fires each one, classifies responses. Produces `probe-discovered.json` with any findings that landed. 13 attack classes are bundled: authority escalation, memory poisoning, tool chaining, tool-description injection, path traversal, cross-tenant data fishing, runaway tool loop, goal misalignment, repudiation, open redirect, overreliance / confident hallucination, dynamic plugin installation, and insecure output handling. |
-| `campaign` | Multi-turn goal-directed attacks. When a turn is blocked, a mutate step rewrites the payload and retries. An LLM judge classifies each response (landed / blocked / inconclusive). When no live target is configured, the agent behaviour emulator stands in so campaigns still run. Produces `probe-campaigns.json`. |
-
+To enforce freshness in CI (abort if any artifact is older than 7 days):
 ```bash
-# Verify mode (requires a running agent endpoint)
-agentshield probe /path/to/your-agent-repo \
-  --mode verify \
-  --target http://localhost:8080/api/agent
-
-# Explore mode — brainstorm + fire (mock backend if no LLM configured)
-agentshield probe /path/to/your-agent-repo \
-  --mode explore \
-  --target http://localhost:8080/api/agent
-
-# Campaign mode — multi-turn with mutation-on-block
-agentshield probe /path/to/your-agent-repo \
-  --mode campaign \
-  --target http://localhost:8080/api/agent
+agentshield merge /path/to/your-agent-repo --require-fresh
 ```
 
-Probe results are written to `.agentshield/` and picked up automatically by `agentshield merge` — probe-discovered findings appear in the merged report with a "Discovered at probe time" badge; campaign findings show a full turn-by-turn kill-chain.
-
-### 7.7 View the report
+### 7.5 View the report
 
 #### Option A — open the file directly
 
-Double-click `report.html` (or `report-print.html`) in your file manager. Any modern browser opens it.
+Double-click `output/agentshield-report.html` in your file manager. Any modern browser opens it.
 
 #### Option B — serve over localhost (preferred for VDI)
 
@@ -398,8 +338,8 @@ python3.11 -m http.server 8765 --bind 127.0.0.1
 ```
 
 Then open in a browser:
-- `http://127.0.0.1:8765/report.html` — interactive view
-- `http://127.0.0.1:8765/report-print.html` — printable / scrollable view
+- `http://127.0.0.1:8765/output/agentshield-report.html` — interactive view
+- `http://127.0.0.1:8765/output/agentshield-report-print.html` — printable / scrollable view
 
 Loopback HTTP is allowed by virtually every VDI policy. Stop the server with `Ctrl+C` when done.
 
@@ -440,8 +380,8 @@ cd ~/work/agentshield
 source .venv/bin/activate
 
 git fetch origin
-git checkout architecture-v2
-git pull origin architecture-v2
+git checkout v6
+git pull origin v6
 
 # Re-install in case dependencies changed
 pip install --upgrade pip
@@ -473,7 +413,7 @@ Run Tier 1 (Semgrep) + AST10 (manifest scanner). Optionally emit Tier 2 skill fi
 
 ### `agentshield merge <path>`
 
-Combine `tier1-results.json` + `tier2-findings.json` (and any probe results) into a unified report.
+Combine `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json` into a unified report. Automatically runs all 14 health checks after writing output files.
 
 | Flag | Purpose |
 |---|---|
@@ -483,30 +423,23 @@ Combine `tier1-results.json` + `tier2-findings.json` (and any probe results) int
 | `--output-sarif PATH` | Write SARIF v2.1.0 (two `runs`: Tier 1 + Tier 2). |
 | `--print` | Echo the Markdown report to stdout. |
 | `--open` | After writing the HTML, launch it in the default browser. |
+| `--require-fresh` | Abort with exit code 1 if any artifact is older than 7 days or fingerprints mismatch. Use in CI. |
 
 ### `agentshield check <path>`
 
-Validate the merged output against 14 automated checks. Reads from the most recent timestamped subfolder in `output/` automatically.
+Re-run the 14-point health check against existing merged output without re-merging. Reads from the most recent timestamped subfolder in `output/` automatically. Useful for verifying a report without triggering a full merge.
 
 Exits `0` if all 14 checks pass, `1` if any fail. No flags.
 
-### `agentshield probe <path>`
-
-Run live adversarial tests against a running agent endpoint. Results are written to `.agentshield/` and consumed automatically by `agentshield merge`.
-
-| Flag | Purpose |
-|---|---|
-| `--mode {verify,explore,campaign}` | Select probe mode. Default: `verify`. |
-| `--target URL` | Agent endpoint to attack. Required for `verify` and `explore`. |
-| `--debug` | Verbose probe output (payloads sent, responses received, verdict). |
+> **Note:** `agentshield merge` already runs these checks automatically at the end of every merge. Use `agentshield check` only when you need to re-verify an existing report.
 
 ### Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success |
+| `1` | Health check failure (`agentshield check` found ✗ items) or `--require-fresh` aborted on stale artifacts |
 | `2` | Hard failure (Semgrep missing, target path invalid, malformed input) |
-| Other | Reserved for future use |
 
 The merger does **not** return non-zero on findings — exit code reflects whether the *tooling* worked, not whether the scanned code was clean. CI gates that want to fail on findings should parse the SARIF / JSON output explicitly.
 
@@ -531,6 +464,7 @@ The merger does **not** return non-zero on findings — exit code reflects wheth
 | Scan exits with `semgrep binary not found` | Semgrep not installed | `pip install -e ".[semgrep,dev]"` |
 | HTML report shows a STALE banner | Re-ran Tier 1 after Tier 2 finished | Re-do §7.2 (Copilot scan) |
 | HTML report says `Copilot LLM Scan output failed schema validation` | Copilot's JSON is malformed | Paste the field-path errors into Copilot Chat and ask it to fix |
+| `⚠ Stale artifacts detected` on merge | Input files older than 7 days | Follow the printed rescan guidance — run `agentshield scan`, re-do §7.2 and §7.3, then merge again |
 
 ### Tier 2 (Copilot) issues
 
