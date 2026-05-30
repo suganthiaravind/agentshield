@@ -4552,7 +4552,7 @@ footer {
   border: 1px solid #334155;
   opacity: 0;
   transform: translateX(-6px);
-  transition: opacity 200ms, transform 200ms;
+  transition: opacity 280ms ease-out, transform 280ms ease-out;
 }
 .emu-layer-pill.emu-lp-visible {
   opacity: 1; transform: translateX(0);
@@ -11387,10 +11387,10 @@ Semgrep fingerprint <code>b71035021bdd851b…</code>
       var pills = intro.querySelectorAll('.emu-layer-pill');
       intro.style.display = '';
 
-      var PILL_APPEAR   = 130;  // ms between pills appearing
-      var TRY_PAUSE     = 190;  // ms "trying…" shown before outcome
-      var OUTCOME_PAUSE = 110;  // ms outcome shown before next pill
-      var DONE_HOLD     = 300;  // ms after landed pill before hiding intro
+      var PILL_APPEAR   = 220;  // ms between pills appearing
+      var TRY_PAUSE     = 520;  // ms "trying…" shown before outcome
+      var OUTCOME_PAUSE = 380;  // ms outcome shown before next pill
+      var DONE_HOLD     = 800;  // ms after landed pill before hiding intro
 
       var landedIdx = -1;
       var blockedAll = (landedLayer === 'blocked-all');
