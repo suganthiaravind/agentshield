@@ -164,6 +164,16 @@ def build_parser() -> argparse.ArgumentParser:
             "interactive dashboard workflow."
         ),
     )
+    mrg.add_argument(
+        "--require-fresh",
+        dest="require_fresh",
+        action="store_true",
+        help=(
+            "Abort if any scan artifact (tier1-results.json, tier2-findings.json, "
+            "agent-emulation.json) is older than 7 days or if tier1/tier2 "
+            "fingerprints are mismatched. Use this in CI to enforce a full rescan."
+        ),
+    )
 
     # ---------- check ----------
     chk = subparsers.add_parser(
@@ -935,6 +945,52 @@ def cmd_check(args: argparse.Namespace) -> int:
     return _run_checks(result, _latest_scan_output_dir(), target_root, args.path)
 
 
+# ---------- artifact freshness helpers ----------
+
+_STALE_DAYS = 7  # artifacts older than this trigger the rescan warning
+
+def _stale_artifacts(target_root: Path, stale_days: int = _STALE_DAYS) -> list[tuple[str, float]]:
+    """Return (filename, age_days) for each scan artifact that is older than stale_days.
+
+    Checks the three input files that must all be current for a fresh report:
+    tier1-results.json, tier2-findings.json, agent-emulation.json.
+    Missing files are not reported here — the merger already handles that.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).timestamp()
+    artifacts = [
+        "tier1-results.json",
+        "tier2-findings.json",
+        "agent-emulation.json",
+    ]
+    stale = []
+    for name in artifacts:
+        path = target_root / ".agentshield" / name
+        if path.exists():
+            age_days = (now - path.stat().st_mtime) / 86400
+            if age_days > stale_days:
+                stale.append((name, age_days))
+    return stale
+
+
+def _print_rescan_guidance(target_path_str: str) -> None:
+    """Print the full 4-step pipeline for a fresh end-to-end scan."""
+    print()
+    print("  ── To run a full fresh scan ──────────────────────────────────────────")
+    print(f"  1.  agentshield scan {target_path_str}")
+    print("        → runs Tier 1 (Semgrep + Manifest), emits Copilot prompt files")
+    print()
+    print("  2.  Paste the Tier 2 prompt into Copilot Chat")
+    print("        → save JSON output to .agentshield/tier2-findings.json")
+    print()
+    print("  3.  Paste the Behaviour Emulator prompt into Copilot Chat")
+    print("        → save JSON output to .agentshield/agent-emulation.json")
+    print()
+    print(f"  4.  agentshield merge {target_path_str}")
+    print("  ──────────────────────────────────────────────────────────────────────")
+    print()
+
+
 # ---------- output folder helpers ----------
 
 def _scan_output_dir() -> Path:
@@ -969,6 +1025,24 @@ def cmd_merge(args: argparse.Namespace) -> int:
     target_root = Path(args.path)
     print(f"[agentshield] merge target: {target_root}")
 
+    # Stale-artifact check — runs before merge so --require-fresh can abort
+    # before any output is written.
+    stale = _stale_artifacts(target_root)
+    if stale:
+        print()
+        print("[agentshield] ⚠  Stale artifacts detected:")
+        for name, age in stale:
+            print(f"  {name}  —  {age:.0f} day{'s' if age >= 2 else ''} old")
+        if getattr(args, "require_fresh", False):
+            print()
+            print(
+                "[agentshield] ERROR: --require-fresh is set; refusing to merge "
+                "with stale artifacts. Run a full fresh scan first:"
+            )
+            _print_rescan_guidance(args.path)
+            return 1
+        _print_rescan_guidance(args.path)
+
     try:
         result = merge(target_root)
     except MergeError as exc:
@@ -976,6 +1050,12 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return 2
 
     _print_merge_summary(result)
+    # Also surface fingerprint mismatch as a rescan prompt when not already
+    # caught by the mtime check above (e.g. recently written but mismatched).
+    if result.stale and not stale:
+        print()
+        print("[agentshield] ⚠  Fingerprint mismatch — Tier 1 changed since Tier 2 ran.")
+        _print_rescan_guidance(args.path)
 
     # If the user didn't pass any --output-* flag (and isn't just printing
     # to stdout), default to dropping the HTML report into <cwd>/output/.
