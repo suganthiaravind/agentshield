@@ -1446,6 +1446,32 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         f'{layer_intro_html}'
     )
 
+    # Pre-play summary — shows attack sequence outcome at a glance before animation
+    _n_seeds = sum(1 for sp in seed_payloads if isinstance(sp, dict))
+    _n_muts  = sum(1 for mp in mutation_payloads if isinstance(mp, dict))
+    if _n_seeds or _n_muts:
+        _count_parts = []
+        if _n_seeds:
+            _count_parts.append(f"{_n_seeds} seed{'s' if _n_seeds > 1 else ''}")
+        if _n_muts:
+            _count_parts.append(f"{_n_muts} mutation{'s' if _n_muts > 1 else ''}")
+        _count_str = " + ".join(_count_parts) + " tried"
+        _res_map = {
+            "lands":   ("attack lands",        "emu-preplay-result-lands"),
+            "partial": ("partial bypass",       "emu-preplay-result-partial"),
+            "blocked": ("all blocked",          "emu-preplay-result-blocked"),
+        }
+        _res_txt, _res_cls = _res_map.get(emu_verdict, (emu_verdict, "emu-preplay-result-other"))
+        parts.append(
+            f'<div class="emu-preplay-summary">'
+            f'<span class="emu-preplay-count">{_html_escape(_count_str)}</span>'
+            f'<span class="emu-preplay-sep">→</span>'
+            f'<span class="emu-preplay-result {_html_escape(_res_cls)}">'
+            f'{_html_escape(_res_txt)}</span>'
+            f'<span class="emu-preplay-hint">Press ▶ to walk through each attempt</span>'
+            f'</div>'
+        )
+
     seed_traces = emu_data.get("seed_traces") or {}
 
     # When no per-seed traces are stored, auto-generate minimal ones from
@@ -1529,25 +1555,25 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
         _blocked_all = (emu_layer == "blocked-all")
         _default_active_lyr = ordered_layers[-1] if _blocked_all else emu_layer
 
-        # Seed tab bar
+        # Seed tab bar — segmented-control style with outcome indicators
         parts.append('<div class="emu-seed-tabs">')
-        for lyr in ordered_layers:
+        for _ti, lyr in enumerate(ordered_layers):
             lyr_steps = seed_traces[lyr]
             lyr_last_outcome = (
                 (lyr_steps[-1].get("outcome") or "blocked") if lyr_steps else "blocked"
             )
             is_lyr_active = (lyr == _default_active_lyr)
             tab_active_cls = " emu-seed-tab-active" if is_lyr_active else ""
-            badge_cls = (
-                "emu-seed-tab-badge-landed"
-                if lyr_last_outcome == "advances"
-                else "emu-seed-tab-badge-blocked"
-            )
-            badge_text = "landed" if lyr_last_outcome == "advances" else "blocked"
+            _is_landed = lyr_last_outcome == "advances"
+            _is_mutation_tab = "mutation" in lyr
+            outcome_cls = "emu-seed-tab-landed" if _is_landed else "emu-seed-tab-blocked"
+            outcome_icon = "✓" if _is_landed else "✗"
+            if _ti > 0:
+                parts.append('<span class="emu-seed-tab-connector" aria-hidden="true">→</span>')
             parts.append(
-                f'<button class="emu-seed-tab{tab_active_cls}" data-layer="{_html_escape(lyr)}">'
-                f'{_html_escape(lyr)}'
-                f'<span class="emu-seed-tab-badge {badge_cls}">{_html_escape(badge_text)}</span>'
+                f'<button class="emu-seed-tab {outcome_cls}{tab_active_cls}" data-layer="{_html_escape(lyr)}">'
+                f'<span class="emu-seed-tab-icon">{outcome_icon}</span>'
+                f'<span class="emu-seed-tab-label">{_html_escape(lyr)}</span>'
                 f'</button>'
             )
         parts.append('</div>')  # /emu-seed-tabs
@@ -6380,27 +6406,57 @@ footer {
 .io-role-file-list { margin-top: 2px; }
 
 /* Seed-tab switcher — shown above the trace steps when seed_traces has multiple entries */
+/* Pre-play attack summary — compact one-liner above the seed tabs */
+.emu-preplay-summary {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; margin-bottom: 10px;
+  background: #f8fafc; border: 1px solid #e8edf2;
+  border-radius: 6px;
+  font-size: 11px; color: #64748b;
+}
+.emu-preplay-count { font-weight: 600; color: #334155; }
+.emu-preplay-sep { color: #94a3b8; font-size: 10px; }
+.emu-preplay-result {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; padding: 1px 7px; border-radius: 4px;
+}
+.emu-preplay-result-lands   { background: #fee2e2; color: #991b1b; }
+.emu-preplay-result-partial { background: #ffedd5; color: #9a3412; }
+.emu-preplay-result-blocked { background: #dcfce7; color: #166534; }
+.emu-preplay-result-other   { background: #f1f5f9; color: #475569; }
+.emu-preplay-hint { color: #94a3b8; font-size: 10.5px; margin-left: auto; }
+
+/* Seed tab bar — segmented-control style with outcome indicators */
 .emu-seed-tabs {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  margin: 10px 0 12px;
+  display: flex; align-items: center; gap: 0;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.emu-seed-tab-connector {
+  font-size: 10px; color: #cbd5e1; padding: 0 5px;
+  flex-shrink: 0; user-select: none; line-height: 1;
 }
 .emu-seed-tab {
-  font-size: 11px; font-weight: 600; padding: 4px 10px;
-  border: 1.5px solid var(--border); border-radius: 20px;
-  background: var(--bg); color: var(--text-muted);
-  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  transition: border-color 160ms, color 160ms, background 160ms;
+  font-size: 10.5px; font-weight: 600; padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  background: #f8fafc; color: #64748b;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
-.emu-seed-tab:hover { background: #f1f5f9; }
+.emu-seed-tab:hover { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+.emu-seed-tab-icon { font-size: 10px; font-weight: 700; }
+.emu-seed-tab-label { font-family: ui-monospace, SFMono-Regular, monospace; }
+/* Blocked tab */
+.emu-seed-tab.emu-seed-tab-blocked .emu-seed-tab-icon { color: #16a34a; }
+/* Landed tab */
+.emu-seed-tab.emu-seed-tab-landed .emu-seed-tab-icon { color: #dc2626; }
+/* Active (currently viewing) tab */
 .emu-seed-tab.emu-seed-tab-active {
-  border-color: #3b82f6; color: #1d4ed8;
-  background: #eff6ff;
+  border-color: #94a3b8; color: #1e293b;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.08);
 }
-.emu-seed-tab-badge {
-  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
-}
-.emu-seed-tab-badge-landed  { background: #fde8e8; color: #c81e1e; }
-.emu-seed-tab-badge-blocked { background: #f0fdf4; color: #16a34a; }
 .emu-seed-trace { display: block; }
 
 /* Emulator coverage block — bottom of the Input & Output tab.
@@ -8055,16 +8111,7 @@ footer {
 }
 
 /* Verdict banner keyframes — defined early, rules applied after base */
-@keyframes emu-final-pulse-red {
-  0%   { box-shadow: 0 0 0 0   rgba(239,68,68,0.45); }
-  60%  { box-shadow: 0 0 0 8px rgba(239,68,68,0);    }
-  100% { box-shadow: 0 0 0 0   rgba(239,68,68,0);    }
-}
-@keyframes emu-final-pulse-green {
-  0%   { box-shadow: 0 0 0 0   rgba(22,163,74,0.4); }
-  70%  { box-shadow: 0 0 0 8px rgba(22,163,74,0);   }
-  100% { box-shadow: 0 0 0 0   rgba(22,163,74,0);   }
-}
+/* Verdict banner pulse animations removed — pop-in is sufficient */
 
 /* ── Emulator modal overlay ────────────────────────────────────── */
 #emu-modal-overlay {
@@ -8141,21 +8188,11 @@ footer {
 
 /* Narrative fades in with a short delay so the scene header
    registers first, then the explanation slides up beneath it. */
-/* Source actor "charges up" — triggered by JS class emu-scene-charge-ready
-   added after the narrative typewriter completes, just before packet fires. */
-@keyframes emu-actor-charge {
-  0%   { box-shadow: none; }
-  45%  { box-shadow: 0 0 0 4px rgba(127,29,29,0.15),
-                     0 0 14px rgba(127,29,29,0.20);
-         background: #fef2f2; border-color: #fca5a5; }
-  100% { box-shadow: none; background: inherit; border-color: inherit; }
-}
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-charge-ready .emu-actor-src {
-  animation: emu-actor-charge 900ms 0ms ease-in-out both;
-}
-/* Blocked scenes: no red charge on the source (attacker doesn't win) */
-.emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-charge-ready .emu-actor-src {
-  animation: none;
+/* Actor charge — subtle border tint only, no glow */
+.emu-trace.emu-trace-playing .emu-scene-advances.emu-scene-charge-ready .emu-actor-src {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  transition: border-color 220ms ease, background 220ms ease;
 }
 
 /* Payload callout — dark code-block style, only on user_prompt scenes */
@@ -8653,18 +8690,10 @@ footer {
 }
 /* Outcome-specific overrides — must come AFTER the base rule above
    so cascade order lets them win at equal specificity */
-.emu-trace-final-lands.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out,
-             emu-final-pulse-red 900ms ease-in-out 300ms 3;
-}
-.emu-trace-final-blocked.emu-trace-final-visible {
-  animation: emu-final-pop 350ms ease-out,
-             emu-final-pulse-green 900ms ease-in-out 300ms 2;
-}
+/* All verdict types use the same clean pop-in — no extra pulse */
 @keyframes emu-final-pop {
-  0%   { opacity: 0; transform: scale(0.95); }
-  60%  { opacity: 1; transform: scale(1.02); }
-  100% { opacity: 1; transform: scale(1.00); }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-step {
@@ -8748,13 +8777,11 @@ footer {
   transition: background 220ms ease;
 }
 @keyframes emu-badge-pop {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.3); }
-  70%  { transform: scale(0.93); }
-  100% { transform: scale(1); }
+  from { transform: scale(0.85); opacity: 0.6; }
+  to   { transform: scale(1);    opacity: 1; }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-active .emu-scene-step-num {
-  animation: emu-badge-pop 400ms cubic-bezier(.34,1.56,.64,1);
+  animation: emu-badge-pop 240ms ease-out both;
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-active.emu-scene-advances .emu-scene-step-num { background: #dc2626; }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-active.emu-scene-blocked  .emu-scene-step-num { background: #16a34a; }
@@ -8876,20 +8903,12 @@ footer {
 .emu-gate-1 { left: 33%; }
 .emu-gate-2 { left: 67%; }
 
-/* Gate flashes as packet passes through — advances: bright red burst */
+/* Gate changes color as packet passes — advances: brief red then reset */
 @keyframes emu-gate-through {
-  0%   { background: #cbd5e1; box-shadow: none;
-         top: -14px; bottom: -14px; width: 5px; }
-  12%  { background: #ef4444;
-         box-shadow: 0 0 0 7px rgba(239,68,68,0.65),
-                     0 0 22px rgba(239,68,68,0.55),
-                     0 0 40px rgba(239,68,68,0.25);
-         top: -20px; bottom: -20px; width: 7px; }
-  50%  { background: #fca5a5;
-         box-shadow: 0 0 0 4px rgba(239,68,68,0.18);
-         top: -16px; bottom: -16px; width: 6px; }
-  100% { background: #e2e8f0; box-shadow: none;
-         top: -14px; bottom: -14px; width: 5px; }
+  0%   { background: #cbd5e1; top: -14px; bottom: -14px; width: 5px; }
+  15%  { background: #ef4444; top: -16px; bottom: -16px; width: 6px; }
+  60%  { background: #fca5a5; top: -15px; bottom: -15px; width: 5px; }
+  100% { background: #e2e8f0; top: -14px; bottom: -14px; width: 5px; }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-packet-flying .emu-gate-1 {
   animation: emu-gate-through 600ms 560ms ease-out both;
@@ -8898,20 +8917,12 @@ footer {
   animation: emu-gate-through 600ms 1120ms ease-out both;
 }
 
-/* Blocked: gate-2 slams into a bright green wall — packet can't pass */
+/* Blocked: gate-2 becomes green barrier — packet stops */
 @keyframes emu-gate-barrier {
-  0%   { background: #cbd5e1; box-shadow: none;
-         top: -14px; bottom: -14px; width: 5px; }
-  15%  { background: #16a34a;
-         box-shadow: 0 0 0 9px rgba(22,163,74,0.70),
-                     0 0 28px rgba(22,163,74,0.60),
-                     0 0 50px rgba(22,163,74,0.30);
-         top: -24px; bottom: -24px; width: 8px; }
-  45%  { background: #22c55e;
-         box-shadow: 0 0 0 5px rgba(22,163,74,0.25);
-         top: -18px; bottom: -18px; width: 6px; }
-  100% { background: #4ade80; box-shadow: 0 0 0 2px rgba(22,163,74,0.15);
-         top: -14px; bottom: -14px; width: 5px; }
+  0%   { background: #cbd5e1; top: -14px; bottom: -14px; width: 5px; }
+  15%  { background: #16a34a; top: -18px; bottom: -18px; width: 7px; }
+  55%  { background: #22c55e; top: -16px; bottom: -16px; width: 6px; }
+  100% { background: #4ade80; top: -14px; bottom: -14px; width: 5px; }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-blocked.emu-scene-packet-flying .emu-gate-1 {
   animation: emu-gate-through 600ms 560ms ease-out both;
@@ -8920,16 +8931,11 @@ footer {
   animation: emu-gate-barrier 900ms 1200ms ease-out both;
 }
 
-/* Inconclusive: muted grey pulse — step not applicable, no threat */
+/* Inconclusive: muted grey shift — step not applicable */
 @keyframes emu-gate-muted {
-  0%   { background: #cbd5e1; box-shadow: none;
-         top: -14px; bottom: -14px; width: 5px; }
-  12%  { background: #94a3b8;
-         box-shadow: 0 0 0 4px rgba(148,163,184,0.35),
-                     0 0 12px rgba(148,163,184,0.20);
-         top: -17px; bottom: -17px; width: 5px; }
-  100% { background: #e2e8f0; box-shadow: none;
-         top: -14px; bottom: -14px; width: 5px; }
+  0%   { background: #cbd5e1; top: -14px; bottom: -14px; width: 5px; }
+  15%  { background: #94a3b8; top: -15px; bottom: -15px; width: 5px; }
+  100% { background: #e2e8f0; top: -14px; bottom: -14px; width: 5px; }
 }
 .emu-trace.emu-trace-playing .emu-scene.emu-scene-inconclusive.emu-scene-packet-flying .emu-gate-1 {
   animation: emu-gate-muted 600ms 560ms ease-out both;
@@ -8942,30 +8948,15 @@ footer {
   position: absolute;
   left: 0; top: 50%;
   transform: translateY(-50%) scale(0);
-  display: inline-flex; align-items: center; gap: 3px;
-  width: 14px; height: 14px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   background: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220,38,38,0.35),
-              0 0 12px rgba(220,38,38,0.55);
   opacity: 0; pointer-events: none;
   z-index: 3;
 }
-.emu-scene-blocked  .emu-packet {
-  background: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22,163,74,0.35),
-              0 0 12px rgba(22,163,74,0.55);
-}
-.emu-scene-modified .emu-packet {
-  background: #d97706;
-  box-shadow: 0 0 0 3px rgba(217,119,6,0.35),
-              0 0 12px rgba(217,119,6,0.55);
-}
-.emu-scene-inconclusive .emu-packet {
-  background: #94a3b8;
-  box-shadow: 0 0 0 3px rgba(148,163,184,0.25),
-              0 0 8px rgba(148,163,184,0.30);
-}
+.emu-scene-blocked      .emu-packet { background: #16a34a; }
+.emu-scene-modified     .emu-packet { background: #d97706; }
+.emu-scene-inconclusive .emu-packet { background: #94a3b8; }
 
 /* Collapsible payload — closed by default, single-line preview */
 .emu-scene-payload-details {
@@ -9013,29 +9004,25 @@ footer {
 }
 .emu-thinking-dots i {
   display: inline-block;
-  width: 5px; height: 5px; border-radius: 50%;
-  background: #3b82f6; font-style: normal;
-  animation: emu-think-bounce 1.1s ease-in-out infinite;
-  opacity: 0.5;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #60a5fa; font-style: normal;
+  animation: emu-think-fade 1.2s ease-in-out infinite;
+  opacity: 0.3;
 }
-.emu-thinking-dots i:nth-child(2) { animation-delay: 0.18s; }
-.emu-thinking-dots i:nth-child(3) { animation-delay: 0.36s; }
-@keyframes emu-think-bounce {
-  0%, 55%, 100% { transform: translateY(0);    opacity: 0.45; }
-  28%           { transform: translateY(-5px); opacity: 1; }
+.emu-thinking-dots i:nth-child(2) { animation-delay: 0.22s; }
+.emu-thinking-dots i:nth-child(3) { animation-delay: 0.44s; }
+@keyframes emu-think-fade {
+  0%, 60%, 100% { opacity: 0.3; }
+  30%           { opacity: 1; }
 }
 /* Reveal dots and add blue shimmer to actor when scene is thinking */
 .emu-scene.emu-scene-thinking .emu-thinking-dots {
   display: inline-flex;
 }
-@keyframes emu-actor-think-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(59,130,246,0.20); }
-  50%       { box-shadow: 0 0 0 6px rgba(59,130,246,0.50),
-                          0 0 14px rgba(59,130,246,0.25); }
-}
 .emu-scene.emu-scene-thinking .emu-actor-src {
   border-color: #93c5fd;
-  animation: emu-actor-think-pulse 1.1s ease-in-out infinite;
+  background: #eff6ff;
+  transition: border-color 200ms ease, background 200ms ease;
 }
 
 /* Technical detail — collapsed by default, de-emphasised */
