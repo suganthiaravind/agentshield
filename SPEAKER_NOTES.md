@@ -115,3 +115,27 @@ This session demonstrates the end-to-end workflow: from a single CLI command to 
 - **Framework agnostic.** Works across LangChain, LlamaIndex, Google ADK, Spring AI, Bedrock Agents, and custom agent architectures without configuration changes.
 - **Consistent, reproducible results.** The same fixed seed payloads fire on every run, making re-assessments after a fix directly comparable — no noise between runs.
 - **Built for agentic-specific threats.** Goes beyond standard AppSec by testing multi-agent trust boundaries, memory poisoning, tool-argument injection, and sub-agent privilege escalation — attack classes that generic scanners were never designed to find.
+
+---
+
+## 2-Minute Competition Pitch
+
+> *Tone reference: calm, practitioner-to-practitioner. Grounded in real experience. No drama, no marketing language. Same register as the Uber MCP at Scale talk (Google Next '25).*
+
+Good morning. I'm Suganthi, and today I want to share something we built out of a real experience.
+
+About a year ago, we were taking two AI agents into production. And like most teams doing this for the first time, we went through the full review cycle — legal, risk, compliance, controls. And what we noticed pretty quickly was that there was no standard way to do this. Every reviewer was asking different questions. Every team was solving the same problems independently. And the simple truth was, we had no structured coverage flow to show that we'd actually addressed what needed to be addressed.
+
+The other thing that became clear very quickly is that agents are different. With traditional software, if something goes wrong, the blast radius is contained. With agents — especially ones that can call tools, reach external systems, or operate on customer data — the blast radius is a lot wider and a lot faster to reach. So the stakes of getting the security review right are higher.
+
+That's what we built AgentShield to solve.
+
+It's a pre-deployment security scanner built specifically for AI agents. You point it at the source code — no running agent needed — and it runs three layers of analysis. A Semgrep rules engine for deterministic patterns, a manifest scanner for skill and config files, and Copilot LLM-as-judge for the contextual checks that static rules can't reach.
+
+And then it does something we found missing everywhere: it emulates attacker behaviour. It walks every entry point, every untrusted input source, every pipeline step — and predicts whether a payload lands or gets stopped, with file and line evidence.
+
+Every control maps back to OWASP, MITRE ATLAS, and CWE — so the output speaks directly to the governance conversation.
+
+The result is one report, one coverage flow, and a consistent answer to the question every reviewer was asking — did we cover everything that matters.
+
+*~300 words · approx. 2:00*
