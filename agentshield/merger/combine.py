@@ -1028,6 +1028,12 @@ def _render_trace_scenes_block(
     _INDIRECT_CLASSES = {"indirect-prompt-injection", "memory-poisoning"}
     n_scenes = len(trace_steps)
 
+    # Per-seed story card content — from first step's enriched fields
+    _first_step = trace_steps[0] if trace_steps else {}
+    _card_technique = _first_step.get("technique_label") or ""
+    _card_goal = _first_step.get("context_note") or ""
+    _is_mutation_layer = "mutation" in layer
+
     if is_seed_wrapper:
         active_cls = " emu-seed-trace-active" if is_active else ""
         display_style = "" if is_active else ' style="display:none"'
@@ -1037,13 +1043,29 @@ def _render_trace_scenes_block(
 
     parts.append('<div class="emu-trace-steps">')
 
-    # Attack-plan card sits ABOVE all scene rows
-    if show_attack_plan and attack_question:
+    # Per-seed story card — rich, dark briefing card shown before scenes play.
+    # Typewriters the attacker goal then fades out. Shows for every seed/mutation
+    # when per-payload data is available; falls back to generic attack_question.
+    _card_narrative = _card_goal or (attack_question if show_attack_plan else "")
+    if _card_narrative:
+        _goal_lbl = "Why this variant?" if (_is_mutation_layer and _card_goal) else "What the attacker wants"
+        if _card_technique:
+            _tech_html = f'<span class="emu-ap-technique">{_html_escape(_card_technique)}</span>'
+        elif not _card_goal:
+            _tech_html = '<span class="emu-ap-label">Attack Plan</span>'
+        else:
+            _tech_html = ""
         parts.append(
-            '<div class="emu-attack-plan-card" style="display:none">'
-            '<span class="emu-ap-label">Attack Plan</span>'
-            f'<span class="emu-ap-text" data-narrative="{_html_escape(attack_question)}"></span>'
-            '</div>'
+            f'<div class="emu-attack-plan-card" style="display:none">'
+            f'<div class="emu-ap-header">'
+            f'<span class="emu-ap-layer-badge">{_html_escape(layer)}</span>'
+            f'{_tech_html}'
+            f'</div>'
+            f'<div class="emu-ap-goal-area">'
+            f'<span class="emu-ap-goal-label">{_html_escape(_goal_lbl)}</span>'
+            f'<span class="emu-ap-text" data-narrative="{_html_escape(_card_narrative)}"></span>'
+            f'</div>'
+            f'</div>'
         )
 
     for scene_idx, step in enumerate(trace_steps):
@@ -1208,18 +1230,6 @@ def _render_trace_scenes_block(
         else:
             payload_first_html = ""
 
-        tech_chip_html = (
-            f'<span class="emu-technique-chip">{_html_escape(technique_label)}</span>'
-            if technique_label else ""
-        )
-        context_note_html = (
-            f'<div class="emu-context-note">'
-            f'<span class="emu-context-note-label">'
-            f'{"Why tried:" if "mutation" in layer else "Goal:"}'
-            f'</span> {_html_escape(context_note)}'
-            f'</div>'
-            if context_note else ""
-        )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
             f'<div class="emu-scene-header">'
@@ -1227,11 +1237,9 @@ def _render_trace_scenes_block(
             f'<span class="emu-scene-step-label">{_html_escape(step_label_clean)}</span>'
             f'{outcome_chip_html}'
             f'{defence_chip}'
-            f'{tech_chip_html}'
             f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
             f'</div>'
             f'<div class="emu-scene-body">'
-            f'{context_note_html}'
             f'{payload_callout_html}{payload_first_html}'
             f'<div class="emu-scene-content-row">'
             f'<div class="emu-scene-main">'
@@ -1255,7 +1263,6 @@ def _render_trace_scenes_block(
             f'<span class="emu-actor-label">{_html_escape(dst_lbl)}</span>'
             f'</div>'
             f'</div>'
-            f'<span class="emu-narrative-tag">REASONING</span>'
             f'<p class="emu-scene-narrative" data-narrative="{_html_escape(narrative)}">'
             f'{_html_escape(narrative)}</p>'
             f'</div>'
@@ -1291,17 +1298,27 @@ def _render_trace_scenes_block(
 
     parts.append('</div>')  # /emu-trace-steps
 
-    # Verdict banner
+    # Verdict banner with one-liner from reasoning
     banner_label = {
-        "lands": "ATTACK LANDS — predicted",
-        "partial": "PARTIAL — defence missing at some step",
-        "blocked": "ATTACK BLOCKED — defence working",
-        "inconclusive": "INCONCLUSIVE — see reasoning",
+        "lands":        "Attack lands — no defence stopped it",
+        "partial":      "Partially blocked — some paths got through",
+        "blocked":      "Attack blocked — all defences held",
+        "inconclusive": "Inconclusive — needs re-run",
     }.get(verdict, "(unknown verdict)")
+    _vr_full = emu_data.get("verdict_reasoning") or ""
+    _vr_first = _vr_full.split(". ")[0].strip() if _vr_full else ""
+    if len(_vr_first) > 180:
+        _vr_first = _vr_first[:177] + "…"
+    if _vr_first and not _vr_first.endswith("."):
+        _vr_first += "."
+    _vr_sub = (
+        f'<div class="emu-trace-final-sub">{_html_escape(_vr_first)}</div>'
+        if _vr_first else ""
+    )
     parts.append(
-        f'<div class="emu-trace-final '
-        f'emu-trace-final-{_html_escape(verdict)}">'
-        f'{_html_escape(banner_label)}'
+        f'<div class="emu-trace-final emu-trace-final-{_html_escape(verdict)}">'
+        f'<div class="emu-trace-final-title">{_html_escape(banner_label)}</div>'
+        f'{_vr_sub}'
         f'</div>'
     )
 
@@ -1548,7 +1565,7 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
                 verdict=lyr_verdict,
                 conf=lyr_conf,
                 attack_question=attack_question,
-                show_attack_plan=(lyr == ordered_layers[0]),
+                show_attack_plan=True,
                 is_seed_wrapper=True,
                 is_active=is_lyr_active,
             )
@@ -6539,8 +6556,32 @@ footer {
 }
 .emu-coverage-verdict-inconclusive { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
 .emu-coverage-verdict-not_evaluated { background: #f4f4f5; color: #71717a; border-color: #e4e4e7; }
+.emu-coverage-reason-details {
+  margin-top: 6px;
+}
+.emu-coverage-reason-details > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: 11px; color: #64748b;
+  padding: 3px 0;
+  user-select: none;
+}
+.emu-coverage-reason-details > summary::-webkit-details-marker { display: none; }
+.emu-coverage-reason-chevron {
+  font-size: 9px; color: #94a3b8; flex-shrink: 0; margin-top: 1px;
+  transition: transform 180ms ease;
+}
+.emu-coverage-reason-details[open] .emu-coverage-reason-chevron {
+  transform: rotate(90deg);
+}
+.emu-coverage-reason-preview {
+  color: #94a3b8; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 60ch;
+}
+.emu-coverage-reason-summary { display: flex; align-items: flex-start; gap: 6px; }
 .emu-coverage-reason {
-  margin-top: 8px;
+  margin-top: 6px;
   padding: 8px 10px;
   background: #f8fafc;
   border-left: 3px solid #94a3b8;
@@ -8139,11 +8180,11 @@ footer {
 }
 /* Narrative paragraph — clean, no background; left accent matches outcome */
 .emu-scene-narrative {
-  margin: 8px 0 14px;
-  padding: 0 0 0 10px;
+  margin: 10px 0 14px;
+  padding: 6px 0 6px 12px;
   background: transparent;
   border-left: 2px solid #e2e8f0;
-  font-size: 12.5px; line-height: 1.65; color: #374151;
+  font-size: 13px; line-height: 1.7; color: #1e293b;
 }
 .emu-scene-advances    .emu-scene-narrative { border-color: #fca5a5; }
 .emu-scene-blocked     .emu-scene-narrative { border-color: #86efac; }
@@ -8291,70 +8332,97 @@ footer {
   border: 1px solid #334155;
 }
 /* Attack-plan card — typewritten in the scene area before step 1 */
+/* Per-seed story briefing card — dark, premium, shown before scenes animate */
 .emu-attack-plan-card {
-  margin: 0 0 10px;
-  padding: 12px 18px 14px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-left: 4px solid #3b82f6;
-  border-radius: 8px;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  box-shadow: 0 2px 14px rgba(59,130,246,0.10);
-  animation: emu-ap-fadein 0.45s cubic-bezier(0.22,1,0.36,1) forwards;
+  margin: 0 0 12px;
+  padding: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1a2744 100%);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 8px 8px 0;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(15,23,42,0.35), 0 1px 4px rgba(59,130,246,0.12);
+  animation: emu-ap-fadein 0.4s cubic-bezier(0.22,1,0.36,1) forwards;
 }
 @keyframes emu-ap-fadein {
-  from { opacity: 0; transform: translateY(-12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-/* Border glow pulse — 3 slow mild pulses so readers have time */
 @keyframes emu-ap-hold-pulse {
-  0%   { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
-         border-left-color: #3b82f6; }
-  40%  { box-shadow: 0 0 0 5px rgba(59,130,246,0.18),
-                     0 2px 28px rgba(59,130,246,0.16);
-         border-left-color: #60a5fa; }
-  100% { box-shadow: 0 2px 14px rgba(59,130,246,0.10);
-         border-left-color: #3b82f6; }
+  0%   { border-left-color: #3b82f6;
+         box-shadow: 0 4px 24px rgba(15,23,42,0.35), 0 1px 4px rgba(59,130,246,0.12); }
+  40%  { border-left-color: #60a5fa;
+         box-shadow: 0 4px 24px rgba(15,23,42,0.35), 0 0 0 3px rgba(59,130,246,0.22),
+                     0 0 32px rgba(59,130,246,0.18); }
+  100% { border-left-color: #3b82f6;
+         box-shadow: 0 4px 24px rgba(15,23,42,0.35), 0 1px 4px rgba(59,130,246,0.12); }
 }
 .emu-attack-plan-card.emu-ap-hold {
-  animation: emu-ap-hold-pulse 1.8s ease-in-out 1 forwards;
+  animation: emu-ap-hold-pulse 2s ease-in-out 1 forwards;
 }
 .emu-attack-plan-card.emu-ap-fadeout {
-  animation: emu-ap-fadeout 0.48s cubic-bezier(0.4,0,1,1) forwards;
+  animation: emu-ap-fadeout 0.42s cubic-bezier(0.4,0,1,1) forwards;
 }
 @keyframes emu-ap-fadeout {
-  from { opacity: 1; transform: translateY(0)   scale(1); }
-  to   { opacity: 0; transform: translateY(-14px) scale(0.97); }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.97); }
 }
+/* Card header row: layer badge + technique name */
+.emu-ap-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px 9px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.emu-ap-layer-badge {
+  display: inline-flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px;
+  background: rgba(59,130,246,0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59,130,246,0.35);
+  white-space: nowrap; flex-shrink: 0;
+}
+.emu-ap-technique {
+  font-size: 12.5px; font-weight: 600; font-style: italic;
+  color: #e2e8f0; line-height: 1.35;
+}
+/* Generic fallback label (when no per-payload technique) */
 .emu-ap-label {
   flex-shrink: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #1d4ed8;
-  padding: 3px 7px;
-  background: #dbeafe;
-  border-radius: 4px;
-  border: 1px solid #bfdbfe;
+  text-transform: uppercase; color: #93c5fd;
+  padding: 2px 7px; border-radius: 4px;
+  background: rgba(59,130,246,0.18); border: 1px solid rgba(59,130,246,0.3);
+}
+/* Goal area */
+.emu-ap-goal-area {
+  padding: 9px 14px 12px;
+}
+.emu-ap-goal-label {
+  display: block;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #64748b;
+  margin-bottom: 5px;
 }
 .emu-ap-text {
-  font-size: 13.5px; line-height: 1.55; font-weight: 500;
-  color: #1e3a5f;
+  font-size: 12.5px; line-height: 1.6; font-weight: 400;
+  color: #cbd5e1; display: block;
+  min-height: 1.4em;
 }
-/* Blinking cursor shown during typewriting */
+/* Blinking cursor during typewriting */
 .emu-ap-text::after {
-  content: '|';
-  margin-left: 1px;
-  color: #3b82f6; font-weight: 700;
-  animation: emu-ap-cursor-blink 0.65s step-end infinite;
+  content: '▋';
+  display: inline-block; margin-left: 2px;
+  color: #3b82f6; font-size: 11px;
+  animation: emu-ap-cursor-blink 0.7s step-end infinite;
 }
 @keyframes emu-ap-cursor-blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
-/* Remove cursor once typewriting is done */
 .emu-ap-text.emu-ap-typed::after { display: none; }
 /* Payload-firing catalogue intro — shown before pipeline scenes animate */
 .emu-layer-intro {
@@ -8496,24 +8564,7 @@ footer {
 .emu-defence-flag-no  { background: #fee2e2; color: #991b1b; }
 .emu-defence-flag-na  { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
 
-/* Technique label chip — shown in scene header next to defence chip */
-.emu-technique-chip {
-  display: inline-flex; align-items: center;
-  font-size: 10px; font-weight: 500; font-style: italic;
-  padding: 2px 8px; border-radius: 10px; margin-left: 4px;
-  background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
-  white-space: nowrap;
-}
-
-/* Context note — "Goal:" / "Why tried:" box shown at top of scene body */
-.emu-context-note {
-  font-size: 11px; line-height: 1.5; color: #374151;
-  background: #fafafa; border-left: 3px solid #6366f1;
-  padding: 5px 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;
-}
-.emu-context-note-label {
-  font-weight: 700; color: #4338ca; margin-right: 4px;
-}
+/* Technique and context are now in the per-seed story card (emu-ap-*), not scene rows */
 
 /* Behaviour-emulator header — Play button on the left, sits above
    the scene strip with breathing room. */
@@ -8576,14 +8627,21 @@ footer {
    in as the JS adds `.emu-step-visible` to it. The current step
    gets a brief pulse via `.emu-step-current`. The final banner
    appears at the very end via `.emu-trace-final-visible`. */
-.emu-trace-steps { display: flex; flex-direction: column; gap: 8px; }
+.emu-trace-steps { display: flex; flex-direction: column; gap: 6px; }
 .emu-trace-final {
-  margin-top: 10px; padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
-  text-transform: uppercase;
+  margin-top: 12px; padding: 11px 16px 12px;
+  border-radius: 8px;
   text-align: center;
-  display: none;     /* shown only when revealed */
+  display: none;
+}
+.emu-trace-final-title {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.emu-trace-final-sub {
+  font-size: 11px; font-weight: 400; letter-spacing: 0;
+  text-transform: none; margin-top: 4px;
+  opacity: 0.78; line-height: 1.5;
 }
 .emu-trace-final-lands       { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 .emu-trace-final-partial     { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
@@ -8646,12 +8704,14 @@ footer {
 
 .emu-scene {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8edf2;
   border-left: 3px solid #94a3b8;
-  border-radius: 0 6px 6px 0;
-  padding: 8px 10px;
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
   font-size: 11.5px; line-height: 1.5;
   margin-bottom: 0;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+  transition: box-shadow 220ms ease, border-left-color 220ms ease;
 }
 .emu-scene-advances  { border-left-color: #ef4444; }
 .emu-scene-blocked   { border-left-color: #22c55e; }
@@ -9040,15 +9100,25 @@ footer {
 .emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-done {
   opacity: 1;
 }
+/* Active scene during animation gets a subtle highlight glow */
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-active {
+  box-shadow: 0 2px 12px rgba(37,99,235,0.10), 0 0 0 2px rgba(37,99,235,0.08);
+}
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-active.emu-scene-advances {
+  box-shadow: 0 2px 12px rgba(220,38,38,0.12), 0 0 0 2px rgba(220,38,38,0.09);
+}
+.emu-trace.emu-trace-playing .emu-trace-steps .emu-scene.emu-scene-active.emu-scene-blocked {
+  box-shadow: 0 2px 12px rgba(22,163,74,0.12), 0 0 0 2px rgba(22,163,74,0.09);
+}
 .emu-scene-body {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 480ms cubic-bezier(0.4, 0, 0.2, 1),
+  transition: max-height 500ms cubic-bezier(0.4, 0, 0.2, 1),
               opacity 300ms ease;
   opacity: 0;
 }
 .emu-scene.emu-scene-active .emu-scene-body {
-  max-height: 900px;
+  max-height: 960px;
   opacity: 1;
 }
 
@@ -9399,10 +9469,11 @@ footer {
 }
 .emu-scene-narrative {
   opacity: 0;
+  transform: translateY(4px);
 }
 .emu-scene-narrative.emu-narrative-visible {
-  opacity: 1;
-  transition: opacity 300ms ease-out;
+  opacity: 1; transform: translateY(0);
+  transition: opacity 320ms ease-out, transform 320ms ease-out;
 }
 .emu-tw-cursor {
   display: inline-block;
@@ -10632,14 +10703,13 @@ _HTML_JS = """
           t.classList.toggle('emu-seed-tab-active', t.getAttribute('data-layer') === _rLanded);
         });
       }
-      // Reset attack-plan card (inside scene 0) so Replay re-typewriters it
-      var apCard = trace.querySelector('.emu-attack-plan-card');
-      if (apCard) {
+      // Reset all per-seed story cards so Replay re-typewriters each one
+      trace.querySelectorAll('.emu-attack-plan-card').forEach(function(apCard) {
         apCard.style.display = 'none';
         apCard.classList.remove('emu-ap-fadeout', 'emu-ap-hold');
         var apText = apCard.querySelector('.emu-ap-text');
         if (apText) { apText.textContent = ''; apText.classList.remove('emu-ap-typed'); }
-      }
+      });
     }
 
     // Animate the payload-firing catalogue intro before the pipeline scenes.
@@ -10758,7 +10828,7 @@ _HTML_JS = """
         // Breadcrumb chip is NOT lit until the card fades — the attack plan
         // phase isn't a pipeline step, so no chip should highlight yet.
         if (idx === 0) {
-          var apCard = trace.querySelector('.emu-attack-plan-card');
+          var apCard = stepsRoot.querySelector('.emu-attack-plan-card');
           var apText = apCard ? apCard.querySelector('.emu-ap-text') : null;
           if (apCard && apText) {
             apCard.style.display = '';
@@ -14376,10 +14446,15 @@ def _render_emu_coverage_section(
             f'</div>'
         )
         if reasoning:
+            _reason_short = reasoning[:160] + ("…" if len(reasoning) > 160 else "")
             parts.append(
-                f'<div class="emu-coverage-reason">'
-                f'<span class="emu-coverage-reason-label">Reasoning</span>'
-                f'{_html_escape(reasoning)}</div>'
+                f'<details class="emu-coverage-reason-details">'
+                f'<summary class="emu-coverage-reason-summary">'
+                f'<span class="emu-coverage-reason-chevron">&#9656;</span>'
+                f'<span class="emu-coverage-reason-preview">{_html_escape(_reason_short)}</span>'
+                f'</summary>'
+                f'<div class="emu-coverage-reason">{_html_escape(reasoning)}</div>'
+                f'</details>'
             )
         if step_chips or citation_chips:
             parts.append('<div class="emu-coverage-meta">')
