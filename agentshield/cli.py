@@ -732,7 +732,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
         return 2
 
-    out_dir = default_output_dir()
+    out_dir = _latest_scan_output_dir()
     checks: list[tuple[str, bool, str]] = []  # (label, passed, detail)
 
     # ── 1. Schema validation ───────────────────────────────────────────────
@@ -925,6 +925,31 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if all_ok else 1
 
 
+# ---------- output folder helpers ----------
+
+def _scan_output_dir() -> Path:
+    """Return output/<YYYYMMDD-HHMMSS>/ for the current merge run."""
+    from datetime import datetime, timezone
+    label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return default_output_dir() / label
+
+
+def _latest_scan_output_dir() -> Path:
+    """Return the most recent timestamped output subfolder; fall back to output/."""
+    import re as _re2
+    ts_pat = _re2.compile(r"^\d{8}-\d{6}$")
+    base = default_output_dir()
+    if base.is_dir():
+        candidates = sorted(
+            (d for d in base.iterdir() if d.is_dir() and ts_pat.match(d.name)),
+            key=lambda d: d.name,
+            reverse=True,
+        )
+        if candidates:
+            return candidates[0]
+    return base
+
+
 # ---------- merge command ----------
 
 def cmd_merge(args: argparse.Namespace) -> int:
@@ -954,7 +979,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         and not args.output_sarif
         and not args.print_md
     ):
-        out_dir = default_output_dir()
+        out_dir = _scan_output_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
         args.output_html = str(out_dir / "agentshield-report.html")
         print(f"[agentshield] No --output-* specified; defaulting to {args.output_html}")
@@ -1001,6 +1026,13 @@ def cmd_merge(args: argparse.Namespace) -> int:
             render_combined_html(result, static=True), encoding="utf-8"
         )
         written.append(str(print_path))
+        # Keep output/agentshield-report.html up-to-date as the "latest" copy
+        # so git tracking via .gitignore negation (!output/agentshield-report.html)
+        # always reflects the most recent scan.
+        if html_path.parent != default_output_dir():
+            latest = default_output_dir() / "agentshield-report.html"
+            latest.parent.mkdir(parents=True, exist_ok=True)
+            latest.write_bytes(html_path.read_bytes())
     if written:
         print(f"[agentshield] Wrote unified report(s): {', '.join(written)}")
 

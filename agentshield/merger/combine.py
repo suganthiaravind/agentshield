@@ -11630,7 +11630,7 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
         f'<span class="metric-bd-sep">·</span>'
         f'<span class="metric-bd-item">{tier2_markdown} markdown</span>'
         f'</div>'
-        f'<div class="metric-subtitle">what LLM found</div>'
+        f'<div class="metric-subtitle">what LLM found in static scan</div>'
         f'</div>'
     )
     # Probe runtime scan — only emitted when there's actual probe
