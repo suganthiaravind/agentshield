@@ -1,6 +1,6 @@
 # Executing AgentShield — install + run guide (VDI-friendly)
 
-Status: 2026-05-22 — current.
+Status: 2026-05-29 — current.
 Companion to: [README.md](./README.md) (product overview), [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) (how the pieces fit; Tier 2 / Copilot LLM Scan detail in §2.2).
 
 This is the only file you need to install and run AgentShield in a JPMC VDI (or any locked-down environment). Top-to-bottom; copy-paste-able.
@@ -19,7 +19,8 @@ This is the only file you need to install and run AgentShield in a JPMC VDI (or 
 | §7.2 | Tier 2: Copilot LLM Scan (paste prompt into Copilot Chat) | 5–15 min |
 | §7.3 | Phase 2: Behaviour emulator (paste prompt into Copilot Chat) | 5–15 min |
 | §7.4 | Merge → unified HTML report | 30 s |
-| §7.5 | *(Optional)* Probe: live adversarial test against a running agent | varies |
+| §7.5 | Check report health (`agentshield check`) | 10 s |
+| §7.6 | *(Optional)* Probe: live adversarial test against a running agent | varies |
 | §8 | Open the report in a browser (localhost or `file://`) | 30 s |
 | §9 | Privacy review before sharing | 2 min |
 
@@ -293,16 +294,21 @@ This step applies 17 OWASP / ATLAS adversary attack classes against every distin
 agentshield merge /path/to/your-agent-repo
 ```
 
-The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, and writes the unified report to `output/` in your working directory:
+The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, and writes the unified report to a timestamped subfolder inside `output/`:
 
 ```
 output/
-├── agentshield-report.html         ← interactive (tabs / filter / search / Reference)
-├── agentshield-report-print.html   ← stacked / printable (all sections visible)
-└── agentshield-findings-fix.md     ← paste into Claude Code to fix all findings
+└── 20260529-123456/                         ← timestamped subfolder for this run
+    ├── agentshield-report.html              ← interactive (tabs / filter / search / Reference)
+    ├── agentshield-report-print.html        ← stacked / printable (all sections visible)
+    ├── agentshield-findings-fix.md          ← paste into Claude Code to fix all findings
+    └── agentshield-emulator-payloads.md     ← emulator attack walkthroughs per source × transition
+output/agentshield-report.html               ← "latest" copy, updated after every merge run
 ```
 
-Do **not** pass `--output-html` — the default already writes to `output/`.
+Each run writes to a new folder so successive scans don't overwrite previous results. The `output/agentshield-report.html` file at the root always reflects the most recent run.
+
+Do **not** pass `--output-html` — the default already writes to `output/<timestamp>/`.
 
 CLI banners you might see:
 
@@ -313,7 +319,41 @@ CLI banners you might see:
 | `❌ Copilot LLM Scan output failed schema validation.` | Copilot's JSON is malformed | The merger prints the field paths; paste them into Copilot Chat to fix |
 | `⚠ STALE Copilot LLM Scan.` | Tier 1 fingerprint changed since Copilot ran | Re-run §7.2 |
 
-### 7.5 *(Optional)* Probe — live adversarial tests
+### 7.5 Check report health
+
+```bash
+agentshield check /path/to/your-agent-repo
+```
+
+Runs 14 automated checks against the merged output — schema validity, Tier 2 freshness, narrative coverage, emulator payload integrity, and output file presence — and prints a ✓/✗ checklist.
+
+| # | Check | What it catches |
+|---|---|---|
+| 1 | Schema validation | Broken `tier2-findings.json` suppressing all Tier 2 results |
+| 2 | Tier 2 present | Merge run before Copilot finished |
+| 3 | Fingerprint match | Stale Tier 2 after a re-scan (STALE banner in report) |
+| 4 | Classification complete | `tier1_fp_callouts` covering 0 of N findings (PARTIAL banner) |
+| 5 | Callout fields complete | Missing `file` / `line` / `tier1_rule` in any callout |
+| 6 | Attack narrative coverage | Findings with no "How it lands" / "What the attacker gets" |
+| 7 | Emulator payload count | Header count mismatches actual `###` sections in the `.md` |
+| 8 | Emulator payloads purity | Semgrep/Copilot findings leaked into the emulator walkthrough |
+| 9–12 | Output files exist | Any of the four output files missing or empty |
+| 13 | Actionable count > 0 | Merge ran against the wrong target |
+| 14 | Origins recognised | Unknown filter-chip origin values |
+
+**Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
+
+If any check fails the command exits 1 and prints the fix hint:
+```
+Fix the ✗ items above, then re-run:
+  agentshield merge /path/to/your-agent-repo  &&  agentshield check /path/to/your-agent-repo
+```
+
+`agentshield check` automatically finds the most recent timestamped subfolder in `output/`, so no path argument is needed for the output files.
+
+---
+
+### 7.6 *(Optional)* Probe — live adversarial tests
 
 `agentshield probe` fires attacks at a running agent endpoint. Skip this section if you only need the static + Copilot report.
 
@@ -344,7 +384,7 @@ agentshield probe /path/to/your-agent-repo \
 
 Probe results are written to `.agentshield/` and picked up automatically by `agentshield merge` — probe-discovered findings appear in the merged report with a "Discovered at probe time" badge; campaign findings show a full turn-by-turn kill-chain.
 
-### 7.6 View the report
+### 7.7 View the report
 
 #### Option A — open the file directly
 
@@ -443,6 +483,12 @@ Combine `tier1-results.json` + `tier2-findings.json` (and any probe results) int
 | `--output-sarif PATH` | Write SARIF v2.1.0 (two `runs`: Tier 1 + Tier 2). |
 | `--print` | Echo the Markdown report to stdout. |
 | `--open` | After writing the HTML, launch it in the default browser. |
+
+### `agentshield check <path>`
+
+Validate the merged output against 14 automated checks. Reads from the most recent timestamped subfolder in `output/` automatically.
+
+Exits `0` if all 14 checks pass, `1` if any fail. No flags.
 
 ### `agentshield probe <path>`
 
