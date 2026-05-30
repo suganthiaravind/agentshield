@@ -1138,6 +1138,8 @@ def _render_trace_scenes_block(
             or _STEP_NARRATIVE.get(step_key, {}).get(outcome)
             or ""
         )
+        technique_label = step.get("technique_label") or ""
+        context_note    = step.get("context_note") or ""
         payload_callout_html = ''
         _show_payload_at = {"user_prompt"} | (
             {"rag_context"} if emu_attack_class in _INDIRECT_CLASSES else set()
@@ -1206,6 +1208,18 @@ def _render_trace_scenes_block(
         else:
             payload_first_html = ""
 
+        tech_chip_html = (
+            f'<span class="emu-technique-chip">{_html_escape(technique_label)}</span>'
+            if technique_label else ""
+        )
+        context_note_html = (
+            f'<div class="emu-context-note">'
+            f'<span class="emu-context-note-label">'
+            f'{"Why tried:" if "mutation" in layer else "Goal:"}'
+            f'</span> {_html_escape(context_note)}'
+            f'</div>'
+            if context_note else ""
+        )
         parts.append(
             f'<div class="{step_cls}" data-step="{scene_idx}" data-step-key="{_html_escape(step_key)}"{llm_attr}>'
             f'<div class="emu-scene-header">'
@@ -1213,9 +1227,11 @@ def _render_trace_scenes_block(
             f'<span class="emu-scene-step-label">{_html_escape(step_label_clean)}</span>'
             f'{outcome_chip_html}'
             f'{defence_chip}'
+            f'{tech_chip_html}'
             f'<button class="emu-scene-toggle-btn" aria-label="Toggle step details" title="Expand / collapse">›</button>'
             f'</div>'
             f'<div class="emu-scene-body">'
+            f'{context_note_html}'
             f'{payload_callout_html}{payload_first_html}'
             f'<div class="emu-scene-content-row">'
             f'<div class="emu-scene-main">'
@@ -1429,23 +1445,52 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             catalog_layers = catalog_layers[:catalog_layers.index(landing_lyr) + 1]
         # Build a lookup so blocked steps can include the actual payload text.
         lyr_text_map = {item["layer"]: item.get("text", "") for item in catalog_items}
+        # Build a lookup: layer → full payload dict (seed or mutation)
+        lyr_payload_map: dict[str, dict] = {}
+        for sp in seed_payloads:
+            if isinstance(sp, dict) and sp.get("layer"):
+                lyr_payload_map[sp["layer"]] = sp
+        for mp in mutation_payloads:
+            if isinstance(mp, dict) and mp.get("layer"):
+                lyr_payload_map[mp["layer"]] = mp
+
         for lyr in catalog_layers:
+            pd = lyr_payload_map.get(lyr) or {}
             if lyr == landing_lyr:
-                seed_traces[lyr] = list(emu_trace)
+                # Enrich the first trace step with context from the advancing payload
+                lyr_trace = list(emu_trace)
+                context = pd.get("why_generated") or pd.get("attacker_goal") or ""
+                tech    = pd.get("technique") or ""
+                if (context or tech) and lyr_trace:
+                    first = dict(lyr_trace[0])
+                    if context:
+                        first["context_note"] = context
+                    if tech:
+                        first["technique_label"] = tech
+                    lyr_trace = [first] + lyr_trace[1:]
+                seed_traces[lyr] = lyr_trace
             else:
-                seed_traces[lyr] = [{
-                    # Use user_prompt key so the actor pair, chip highlight, and
-                    # narrative all come from the standard pipeline definitions.
+                # Use enriched fields from the blocked payload where available
+                block_reason   = pd.get("block_reason") or ""
+                attacker_goal  = pd.get("attacker_goal") or pd.get("why_generated") or ""
+                technique      = pd.get("technique") or ""
+                outcome_text   = block_reason or (
+                    "The payload is intercepted at the input boundary — "
+                    "a keyword check, deny-list, or intent classifier blocks "
+                    "it before it reaches the LLM. Attack does not advance."
+                )
+                step: dict = {
                     "step": "user_prompt",
                     "step_label": "Input Guard",
                     "outcome": "blocked",
                     "input": lyr_text_map.get(lyr, ""),
-                    "outcome_reasoning": (
-                        "The payload is intercepted at the input boundary — "
-                        "a keyword check, deny-list, or intent classifier blocks "
-                        "it before it reaches the LLM. Attack does not advance."
-                    ),
-                }]
+                    "outcome_reasoning": outcome_text,
+                }
+                if technique:
+                    step["technique_label"] = technique
+                if attacker_goal:
+                    step["context_note"] = attacker_goal
+                seed_traces[lyr] = [step]
 
     use_seed_tabs = bool(seed_traces)
 
@@ -8450,6 +8495,25 @@ footer {
 .emu-defence-flag-yes { background: #d1fae5; color: #065f46; }
 .emu-defence-flag-no  { background: #fee2e2; color: #991b1b; }
 .emu-defence-flag-na  { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
+
+/* Technique label chip — shown in scene header next to defence chip */
+.emu-technique-chip {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 500; font-style: italic;
+  padding: 2px 8px; border-radius: 10px; margin-left: 4px;
+  background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+/* Context note — "Goal:" / "Why tried:" box shown at top of scene body */
+.emu-context-note {
+  font-size: 11px; line-height: 1.5; color: #374151;
+  background: #fafafa; border-left: 3px solid #6366f1;
+  padding: 5px 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;
+}
+.emu-context-note-label {
+  font-weight: 700; color: #4338ca; margin-right: 4px;
+}
 
 /* Behaviour-emulator header — Play button on the left, sits above
    the scene strip with breathing room. */

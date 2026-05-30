@@ -1,6 +1,6 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-29T02:25:33.262494Z",
+  "scanned_at": "2026-05-30T02:51:09.886520Z",
   "agentshield_tier1_fingerprint": "b71035021bdd851b6e732e1b361e1256010bbbcd2c16160047d5aad0d3705c04",
   "scanned_files": [
     "admin.py",
@@ -263,8 +263,8 @@
       "remediation": "Move secrets to a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) and reference them by name from the manifest. If runtime injection isn't an option, at minimum keep credentials in a separate file outside the bundle and load them via environment variable."
     }
   ],
-  "git_branch": "v5",
-  "git_commit": "5740510",
+  "git_branch": "v6",
+  "git_commit": "f2675f0",
   "git_repo_name": "demo-agent",
-  "scan_duration_seconds": 17
+  "scan_duration_seconds": 8
 }
