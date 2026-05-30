@@ -3733,7 +3733,20 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
                 for sp in seed_payloads:
                     blocked_at = sp.get("blocked_at")
                     status = f"blocked at `{blocked_at}`" if blocked_at else "**passed**"
+                    technique = sp.get("technique") or ""
                     lines.append(f"- [{sp.get('layer', '?')}] {status}: `{sp.get('text', '')[:120]}`")
+                    if technique:
+                        lines.append(f"  - *Technique:* {technique}")
+                    goal = sp.get("attacker_goal") or ""
+                    if goal:
+                        lines.append(f"  - *Goal:* {goal}")
+                    detail = sp.get("block_reason") or sp.get("outcome_detail") or ""
+                    if detail:
+                        lines.append(f"  - *What happened:* {detail}")
+                    for ps_i, ps in enumerate(sp.get("per_step_trace") or []):
+                        ps_step = str(ps.get("step") or "")
+                        ps_out  = str(ps.get("outcome") or "")
+                        lines.append(f"  - Step {ps_i+1}: **{ps_step}** → {ps_out}")
                 lines.append("")
 
             if mutation_payloads:
@@ -3742,6 +3755,19 @@ def render_emulator_payloads_md(result: "MergeResult") -> str:
                     blocked_at = mp.get("blocked_at")
                     status = f"blocked at `{blocked_at}`" if blocked_at else "**advanced**"
                     lines.append(f"- [{mp.get('layer', '?')}] {status}: `{mp.get('text', '')[:120]}`")
+                    technique = mp.get("technique") or ""
+                    if technique:
+                        lines.append(f"  - *Technique:* {technique}")
+                    why = mp.get("why_generated") or ""
+                    if why:
+                        lines.append(f"  - *Why tried:* {why}")
+                    detail = mp.get("block_reason") or mp.get("outcome_detail") or ""
+                    if detail:
+                        lines.append(f"  - *What happened:* {detail}")
+                    for ps_i, ps in enumerate(mp.get("per_step_trace") or []):
+                        ps_step = str(ps.get("step") or "")
+                        ps_out  = str(ps.get("outcome") or "")
+                        lines.append(f"  - Step {ps_i+1}: **{ps_step}** → {ps_out}")
                 lines.append("")
 
             if payload_used:
@@ -14614,6 +14640,14 @@ def _render_emulator_coverage_block_v7(
                         blocked_at = str(attempt.get("blocked_at") or "")
                         block_mech = str(attempt.get("block_mechanism") or "")
 
+                        # Beginner-friendly enrichment fields
+                        technique      = str(attempt.get("technique") or "")
+                        attacker_goal  = str(attempt.get("attacker_goal") or "")
+                        why_generated  = str(attempt.get("why_generated") or "")
+                        block_reason   = str(attempt.get("block_reason") or "")
+                        outcome_detail = str(attempt.get("outcome_detail") or "")
+                        per_step_trace = attempt.get("per_step_trace") or []
+
                         if advances and is_used:
                             border = "border-left:3px solid #ef4444;"
                             bg     = "background:#fff8f8;"
@@ -14645,17 +14679,76 @@ def _render_emulator_coverage_block_v7(
                         else:
                             note_html = ""
 
+                        # Technique chip
+                        if technique:
+                            technique_html = (
+                                f'<span style="margin-left:4px;font-size:9px;padding:1px 5px;'
+                                f'border-radius:3px;background:#f3f4f6;border:1px solid #d1d5db;'
+                                f'color:#6b7280;vertical-align:middle;">'
+                                f'{_html_escape(technique)}</span>'
+                            )
+                        else:
+                            technique_html = ""
+
+                        # Context line: why_generated (mutations) or attacker_goal (seeds)
+                        context_text = why_generated or attacker_goal
+                        if context_text:
+                            context_color = "#6b6b9a" if why_generated else "#4b5563"
+                            context_html = (
+                                f'<div style="font-size:10px;color:{context_color};'
+                                f'margin-top:3px;line-height:1.4;">'
+                                f'{_html_escape(context_text[:220])}</div>'
+                            )
+                        else:
+                            context_html = ""
+
+                        # Extended detail (block_reason or outcome_detail)
+                        detail_text = block_reason or outcome_detail
+                        if detail_text:
+                            detail_html = (
+                                f'<div style="font-size:10px;color:#6b7280;margin-top:2px;'
+                                f'line-height:1.4;">{_html_escape(detail_text[:260])}</div>'
+                            )
+                        else:
+                            detail_html = ""
+
+                        # Per-payload pipeline steps
+                        if per_step_trace:
+                            trace_rows = []
+                            for ps_i, ps in enumerate(per_step_trace):
+                                ps_step    = str(ps.get("step") or "")
+                                ps_outcome = str(ps.get("outcome") or "")
+                                trace_rows.append(
+                                    f'<div style="font-size:9px;color:#374151;padding:1px 0;">'
+                                    f'<span style="color:#9ca3af;margin-right:3px;">{ps_i+1}.</span>'
+                                    f'<strong>{_html_escape(ps_step)}</strong>'
+                                    + (f'<span style="color:#6b7280;"> → {_html_escape(ps_outcome)}</span>' if ps_outcome else "")
+                                    + f'</div>'
+                                )
+                            step_trace_html = (
+                                f'<div style="margin-top:4px;border-top:1px solid #e5e7eb;'
+                                f'padding-top:3px;">' +
+                                "".join(trace_rows) +
+                                f'</div>'
+                            )
+                        else:
+                            step_trace_html = ""
+
                         parts.append(
-                            f'<div style="{bg}{border}padding:4px 8px;border-radius:0 4px 4px 0;">'
+                            f'<div style="{bg}{border}padding:4px 8px;border-radius:0 4px 4px 0;margin-bottom:3px;">'
                             f'<div style="margin-bottom:2px;">'
                             f'<span style="font-size:10px;padding:1px 6px;border-radius:3px;{badge}">'
                             f'{_html_escape(badge_lbl)}</span>'
+                            f'{technique_html}'
                             f'</div>'
+                            f'{context_html}'
                             f'<div style="font-size:11px;color:#374151;font-family:monospace;'
-                            f'word-break:break-word;line-height:1.4;">'
+                            f'word-break:break-word;line-height:1.4;margin-top:3px;">'
                             f'{_html_escape(truncated)}'
                             f'</div>'
                             f'{note_html}'
+                            f'{detail_html}'
+                            f'{step_trace_html}'
                             f'</div>'
                         )
                     parts.append('</div>')  # /emu-cov-attempts
