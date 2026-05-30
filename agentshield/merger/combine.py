@@ -10806,10 +10806,10 @@ _HTML_JS = """
       var pills = intro.querySelectorAll('.emu-layer-pill');
       intro.style.display = '';
 
-      var PILL_APPEAR   = 220;  // ms between pills appearing
-      var TRY_PAUSE     = 520;  // ms "trying…" shown before outcome
-      var OUTCOME_PAUSE = 380;  // ms outcome shown before next pill
-      var DONE_HOLD     = 800;  // ms after landed pill before hiding intro
+      var PILL_APPEAR   = 300;  // ms between pills appearing
+      var TRY_PAUSE     = 750;  // ms "trying…" shown before outcome
+      var OUTCOME_PAUSE = 550;  // ms outcome shown before next pill
+      var DONE_HOLD     = 1400; // ms after landed pill before hiding intro
 
       var landedIdx = -1;
       var blockedAll = (landedLayer === 'blocked-all');
