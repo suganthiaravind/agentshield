@@ -6848,9 +6848,101 @@ footer {
   display: flex; flex-direction: column; gap: 8px;
   border-top: 1px dashed #e2e8f0;
 }
+/* ── Attempt cards inside a coverage accordion ── */
 .emu-cov-attempts {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 5px;
 }
+.emu-attempt {
+  padding: 8px 10px 7px;
+  border-left: 2px solid #e2e8f0;
+  border-radius: 0 6px 6px 0;
+  background: #fafbfd;
+}
+.emu-attempt-advances      { border-left-color: #ef4444; background: #fffafa; }
+.emu-attempt-advances-used { border-left-color: #dc2626; background: #fff5f5; }
+.emu-attempt-blocked       { border-left-color: #86efac; background: #f9fdf9; }
+
+.emu-attempt-header {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.emu-attempt-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  white-space: nowrap; flex-shrink: 0;
+}
+.emu-attempt-badge-blocked  {
+  background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;
+}
+.emu-attempt-badge-advances {
+  background: #fef2f2; color: #991b1b; border: 1px solid #fecaca;
+}
+.emu-attempt-technique {
+  font-size: 11px; font-style: italic; color: #475569;
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Context paragraph — why tried / what attacker wants */
+.emu-attempt-context {
+  font-size: 11.5px; color: #334155; line-height: 1.55;
+  margin-bottom: 5px;
+}
+
+/* Payload — collapsed in <details> to de-emphasise bulk text */
+.emu-attempt-payload-details { margin: 3px 0 4px; }
+.emu-attempt-payload-summary {
+  font-size: 10px; font-weight: 600; color: #94a3b8;
+  cursor: pointer; user-select: none;
+  list-style: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 0;
+}
+.emu-attempt-payload-summary::-webkit-details-marker { display: none; }
+.emu-attempt-payload-summary::before {
+  content: "▶"; font-size: 7px; transition: transform 150ms ease;
+}
+.emu-attempt-payload-details[open] .emu-attempt-payload-summary::before {
+  transform: rotate(90deg);
+}
+.emu-attempt-payload {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10.5px; color: #334155; line-height: 1.55;
+  background: #f8fafc; border: 1px solid #e8edf2;
+  border-radius: 4px; padding: 6px 9px;
+  margin-top: 3px; word-break: break-all;
+}
+
+/* Status line: "● stopped at X" / "→ bypassed via X" */
+.emu-attempt-status-line {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; margin: 2px 0;
+}
+.emu-attempt-status-dot { font-size: 7px; }
+.emu-attempt-sl-blocked  { color: #15803d; }
+.emu-attempt-sl-advances { color: #b45309; }
+
+/* Per-step trace */
+.emu-attempt-steps {
+  display: flex; flex-direction: column; gap: 1px;
+  margin-top: 5px; padding-top: 5px;
+  border-top: 1px solid #f0f3f7;
+}
+.emu-attempt-step {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 5px; align-items: baseline;
+  font-size: 10.5px; line-height: 1.45; color: #374151;
+}
+.emu-attempt-step-num { color: #94a3b8; font-size: 9px; text-align: right; }
+.emu-attempt-step-desc { min-width: 0; word-break: break-word; }
+.emu-attempt-step-verdict {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+}
+.emu-step-verdict-blocked  { color: #16a34a; }
+.emu-step-verdict-passed   { color: #64748b; }
+.emu-step-verdict-advances { color: #dc2626; }
 .emu-coverage-reason {
   padding: 8px 10px;
   background: #f8fafc;
@@ -14766,7 +14858,6 @@ def _render_emulator_coverage_block_v7(
                         blocked_at = str(attempt.get("blocked_at") or "")
                         block_mech = str(attempt.get("block_mechanism") or "")
 
-                        # Beginner-friendly enrichment fields
                         technique      = str(attempt.get("technique") or "")
                         attacker_goal  = str(attempt.get("attacker_goal") or "")
                         why_generated  = str(attempt.get("why_generated") or "")
@@ -14774,107 +14865,99 @@ def _render_emulator_coverage_block_v7(
                         outcome_detail = str(attempt.get("outcome_detail") or "")
                         per_step_trace = attempt.get("per_step_trace") or []
 
+                        # Outer card class
                         if advances and is_used:
-                            border = "border-left:3px solid #ef4444;"
-                            bg     = "background:#fff8f8;"
-                            badge  = "background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;font-weight:700;"
-                            badge_lbl = f"{lbl} advances ←"
+                            card_cls = "emu-attempt emu-attempt-advances-used"
+                            badge_cls = "emu-attempt-badge emu-attempt-badge-advances"
+                            badge_lbl = f"{lbl} ← lands"
                         elif advances:
-                            border = "border-left:3px solid #f97316;"
-                            bg     = "background:#fffbf5;"
-                            badge  = "background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-weight:600;"
+                            card_cls = "emu-attempt emu-attempt-advances"
+                            badge_cls = "emu-attempt-badge emu-attempt-badge-advances"
                             badge_lbl = f"{lbl} advances"
                         else:
-                            border = "border-left:3px solid #86efac;"
-                            bg     = "background:#f8fdf8;"
-                            badge  = "background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;"
+                            card_cls = "emu-attempt emu-attempt-blocked"
+                            badge_cls = "emu-attempt-badge emu-attempt-badge-blocked"
                             badge_lbl = f"{lbl} blocked"
 
-                        truncated = text[:150] + ("…" if len(text) > 150 else "")
+                        # Technique label (italic, right of badge)
+                        tech_html = (
+                            f'<span class="emu-attempt-technique">{_html_escape(technique)}</span>'
+                            if technique else ""
+                        )
 
-                        if advances and block_mech:
-                            note_html = (
-                                f'<div style="font-size:10px;color:#92400e;margin-top:2px;">'
-                                f'bypass: {_html_escape(block_mech[:120])}</div>'
-                            )
-                        elif not advances and blocked_at:
-                            note_html = (
-                                f'<div style="font-size:10px;color:#15803d;margin-top:2px;">'
-                                f'blocked at: {_html_escape(blocked_at)}</div>'
-                            )
-                        else:
-                            note_html = ""
-
-                        # Technique chip
-                        if technique:
-                            technique_html = (
-                                f'<span style="margin-left:4px;font-size:9px;padding:1px 5px;'
-                                f'border-radius:3px;background:#f3f4f6;border:1px solid #d1d5db;'
-                                f'color:#6b7280;vertical-align:middle;">'
-                                f'{_html_escape(technique)}</span>'
-                            )
-                        else:
-                            technique_html = ""
-
-                        # Context line: why_generated (mutations) or attacker_goal (seeds)
+                        # Context paragraph — beginner-friendly goal/why
                         context_text = why_generated or attacker_goal
-                        if context_text:
-                            context_color = "#6b6b9a" if why_generated else "#4b5563"
-                            context_html = (
-                                f'<div style="font-size:10px;color:{context_color};'
-                                f'margin-top:3px;line-height:1.4;">'
-                                f'{_html_escape(context_text[:220])}</div>'
+                        ctx_html = (
+                            f'<p class="emu-attempt-context">{_html_escape(context_text)}</p>'
+                            if context_text else ""
+                        )
+
+                        # Payload — collapsed by default
+                        payload_preview = text[:120] + ("…" if len(text) > 120 else "")
+                        payload_html = (
+                            f'<details class="emu-attempt-payload-details">'
+                            f'<summary class="emu-attempt-payload-summary">Payload</summary>'
+                            f'<div class="emu-attempt-payload">{_html_escape(text)}</div>'
+                            f'</details>'
+                        ) if text else ""
+
+                        # Status line
+                        if not advances and blocked_at:
+                            sl_html = (
+                                f'<div class="emu-attempt-status-line emu-attempt-sl-blocked">'
+                                f'<span class="emu-attempt-status-dot">●</span>'
+                                f'Stopped at: {_html_escape(blocked_at)}</div>'
+                            )
+                        elif advances and block_mech:
+                            sl_html = (
+                                f'<div class="emu-attempt-status-line emu-attempt-sl-advances">'
+                                f'<span class="emu-attempt-status-dot">→</span>'
+                                f'Bypassed: {_html_escape(block_mech[:120])}</div>'
                             )
                         else:
-                            context_html = ""
+                            sl_html = ""
 
-                        # Extended detail (block_reason or outcome_detail)
-                        detail_text = block_reason or outcome_detail
-                        if detail_text:
-                            detail_html = (
-                                f'<div style="font-size:10px;color:#6b7280;margin-top:2px;'
-                                f'line-height:1.4;">{_html_escape(detail_text[:260])}</div>'
-                            )
-                        else:
-                            detail_html = ""
-
-                        # Per-payload pipeline steps
+                        # Per-step trace
                         if per_step_trace:
-                            trace_rows = []
+                            step_rows = []
                             for ps_i, ps in enumerate(per_step_trace):
-                                ps_step    = str(ps.get("step") or "")
+                                ps_desc    = str(ps.get("step") or "")
                                 ps_outcome = str(ps.get("outcome") or "")
-                                trace_rows.append(
-                                    f'<div style="font-size:9px;color:#374151;padding:1px 0;">'
-                                    f'<span style="color:#9ca3af;margin-right:3px;">{ps_i+1}.</span>'
-                                    f'<strong>{_html_escape(ps_step)}</strong>'
-                                    + (f'<span style="color:#6b7280;"> → {_html_escape(ps_outcome)}</span>' if ps_outcome else "")
-                                    + f'</div>'
+                                _oc = ps_outcome.split("—")[0].strip().lower()
+                                if "block" in _oc:
+                                    vc = "emu-step-verdict-blocked"
+                                    vs = "BLOCKED"
+                                elif "pass" in _oc or "advance" in _oc:
+                                    vc = "emu-step-verdict-advances"
+                                    vs = "ADVANCES"
+                                else:
+                                    vc = "emu-step-verdict-passed"
+                                    vs = _oc.upper()[:12] if _oc else ""
+                                step_rows.append(
+                                    f'<div class="emu-attempt-step">'
+                                    f'<span class="emu-attempt-step-num">{ps_i+1}</span>'
+                                    f'<span class="emu-attempt-step-desc">{_html_escape(ps_desc)}</span>'
+                                    f'<span class="emu-attempt-step-verdict {_html_escape(vc)}">{_html_escape(vs)}</span>'
+                                    f'</div>'
                                 )
-                            step_trace_html = (
-                                f'<div style="margin-top:4px;border-top:1px solid #e5e7eb;'
-                                f'padding-top:3px;">' +
-                                "".join(trace_rows) +
-                                f'</div>'
+                            steps_html = (
+                                f'<div class="emu-attempt-steps">'
+                                + "".join(step_rows)
+                                + f'</div>'
                             )
                         else:
-                            step_trace_html = ""
+                            steps_html = ""
 
                         parts.append(
-                            f'<div style="{bg}{border}padding:4px 8px;border-radius:0 4px 4px 0;margin-bottom:3px;">'
-                            f'<div style="margin-bottom:2px;">'
-                            f'<span style="font-size:10px;padding:1px 6px;border-radius:3px;{badge}">'
-                            f'{_html_escape(badge_lbl)}</span>'
-                            f'{technique_html}'
+                            f'<div class="{_html_escape(card_cls)}">'
+                            f'<div class="emu-attempt-header">'
+                            f'<span class="{_html_escape(badge_cls)}">{_html_escape(badge_lbl)}</span>'
+                            f'{tech_html}'
                             f'</div>'
-                            f'{context_html}'
-                            f'<div style="font-size:11px;color:#374151;font-family:monospace;'
-                            f'word-break:break-word;line-height:1.4;margin-top:3px;">'
-                            f'{_html_escape(truncated)}'
-                            f'</div>'
-                            f'{note_html}'
-                            f'{detail_html}'
-                            f'{step_trace_html}'
+                            f'{ctx_html}'
+                            f'{payload_html}'
+                            f'{sl_html}'
+                            f'{steps_html}'
                             f'</div>'
                         )
                     parts.append('</div>')  # /emu-cov-attempts
