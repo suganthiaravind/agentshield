@@ -15423,7 +15423,7 @@ def _render_framework_mapping_table(
     source_command = {
         "Semgrep": "agentshield scan",
         "Copilot": "agentshield scan + Copilot Chat",
-        "Probe": "agentshield probe --target …",
+        "Probe": "agentshield probe --mode explore --target …",
         "Markdown": "agentshield scan",
     }
 
@@ -15943,7 +15943,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="456" y="572" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">'
-        '14 rules &middot; SKILL.md / AGENT.md / configs</text>'
+        '12 rules &middot; SKILL.md / AGENT.md / configs</text>'
         '<text x="456" y="595" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="12" '
         'font-weight="600" fill="#0f172a">'
@@ -15951,7 +15951,7 @@ def _render_solution_diagram(parts: list[str]) -> None:
         '<text x="456" y="610" text-anchor="middle" '
         'font-family="system-ui, sans-serif" font-size="9" '
         'fill="#64748b">'
-        '74 rules &middot; interpretive review in your IDE</text>'
+        '68 rules &middot; interpretive review in your IDE</text>'
 
         # chevron 02 → 03
         '<path d="M 601 420 L 614 420" stroke="#cbd5e1" '
