@@ -4380,11 +4380,16 @@ h3 { font-size: 15px; }
 .saige-card .saige-tier { font-size: 20px; font-weight: 700; margin: 3px 0 0; color: var(--accent); white-space: nowrap; }
 .saige-tier-subtitle { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
 .saige-summary-text { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; flex: 1; min-width: 0; }
-.saige-walkthrough-label {
-  margin-top: 12px; margin-bottom: 6px;
+.saige-details { margin-top: 12px; }
+.saige-details-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: var(--accent);
-  letter-spacing: 0.04em; text-transform: uppercase;
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 3px 0;
 }
+.saige-details-toggle::-webkit-details-marker { display: none; }
+.saige-details-toggle::before { content: "▶"; font-size: 8px; transition: transform 0.15s ease; }
+.saige-details[open] .saige-details-toggle::before { transform: rotate(90deg); }
 .saige-card .saige-rationale { color: var(--text); font-size: 13px; line-height: 1.6; }
 .saige-rationale-qs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .saige-q-row {
@@ -11571,16 +11576,15 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     # Per-tier display data
     _TIER_META: dict[str, tuple[str, str]] = {
         "non-agent": ("Non Agent",    "Not classified as an AI agent"),
-        "0":         ("Tier 0",       "Deterministic workflow — no autonomous decision-making"),
-        "1":         ("Tier 1",       "Reactive agent — tool-using, single-task, no persistent memory"),
-        "2":         ("Tier 2",       "Stateful agent — memory, planning, multi-turn autonomy"),
-        "3":         ("Tier 3",       "Autonomous agent — self-directed, initiates actions independently"),
+        "0":         ("Agent Tier 0",  "Deterministic workflow — no autonomous decision-making"),
+        "1":         ("Agent Tier 1",  "Reactive agent — tool-using, single-task, no persistent memory"),
+        "2":         ("Agent Tier 2",  "Stateful agent — memory, planning, multi-turn autonomy"),
+        "3":         ("Agent Tier 3",  "Autonomous agent — self-directed, initiates actions independently"),
     }
     tier_label, tier_subtitle = _TIER_META.get(
         _tier_key,
-        (f"Agentic Tier {r.saige_tier}", "")
+        (f"Agent Tier {r.saige_tier}", "")
     )
-    css_tier_key = _tier_key if _tier_key in _TIER_META else str(r.saige_tier)
 
     # Parse reasoning into Q-blocks for the collapsible detail section
     raw_reasoning = r.saige_tier_reasoning or "(no reasoning provided)"
@@ -11589,21 +11593,17 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     _q_pat = _re.compile(r"^(Q\d+)\s*[—\-]\s*([^:]+):\s*(.+)$", _re.DOTALL)
 
     parts.append('<div class="saige-card">')
-    badge_cls = "saige-tier-badge"
     parts.append(
-        '<div class="saige-card-header">'
-        f'<span class="{badge_cls}">{_html_escape(tier_label)}</span>'
-        f'<div class="saige-tier-info">'
+        '<div class="saige-tier-info">'
         f'<span class="saige-label">JPMC SAIGE Agent Tier classification</span>'
         f'<div class="saige-tier">{_html_escape(tier_label)}</div>'
         + (f'<div class="saige-tier-subtitle">{_html_escape(tier_subtitle)}</div>' if tier_subtitle else "")
         + '</div>'
-        '</div>'
     )
 
-    # Q-by-Q decision walkthrough — always visible
+    # Q-by-Q decision walkthrough — collapsible
     if len(q_blocks) > 1:
-        parts.append('<div class="saige-walkthrough-label">Decision walkthrough</div>')
+        parts.append('<details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1–Q3)</summary>')
         parts.append('<div class="saige-rationale saige-rationale-qs">')
         for block in q_blocks:
             m = _q_pat.match(block)
@@ -11620,7 +11620,7 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
                 )
             else:
                 parts.append(f'<div class="saige-q-row saige-q-plain">{_html_escape(block)}</div>')
-        parts.append('</div>')
+        parts.append('</div></details>')
     else:
         parts.append(f'<div class="saige-rationale">{_html_escape(raw_reasoning)}</div>')
 
