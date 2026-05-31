@@ -85,12 +85,14 @@ Runs 19 Semgrep rules (Python & Java AST) + 12 Manifest scanner rules (SKILL.md 
 
 **Done when you see:** `[agentshield] ✓ Skill files → .agentshield/`
 
+> **Tip:** The scan also writes `$REPO/.agentshield/copilot-prompts.md` — a ready-to-paste file containing the exact Tier 2 and emulator prompts. Open it in VS Code and copy from there instead of typing the prompts manually.
+
 ---
 
 ## 3 — Tier 2: Copilot LLM scan *(VS Code + Copilot Chat)*
 
 1. Open `$REPO` in **VS Code** with **GitHub Copilot Chat** active.
-2. Paste this prompt verbatim into Copilot Chat:
+2. Open `$REPO/.agentshield/copilot-prompts.md` and copy the **Step 1 — Tier 2** block, or paste the prompt below verbatim:
 
 ```
 @workspace Please run AgentShield Tier 2.
@@ -120,7 +122,7 @@ If the file doesn't appear after Copilot says it's done, follow up:
 
 ## 4 — Phase 2: behaviour emulator *(VS Code + Copilot Chat)*
 
-Still in the same VS Code window. Paste this prompt into Copilot Chat:
+Still in the same VS Code window. Open `$REPO/.agentshield/copilot-prompts.md` and copy the **Step 2 — Behaviour emulator** block, or paste the prompt below verbatim:
 
 ```
 @workspace Please run the AgentShield agent behaviour emulator.

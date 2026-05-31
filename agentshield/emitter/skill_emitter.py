@@ -327,6 +327,9 @@ def emit_skills(
     tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n")
     emitted.append(tier1_path)
 
+    prompts_path = emit_copilot_prompts_md(target_root)
+    emitted.append(prompts_path)
+
     gitignore_updated = ensure_gitignored(target_root)
 
     return EmitResult(
@@ -430,6 +433,42 @@ def agent_emulator_prompt() -> str:
         "exactly. Mark inconclusive when the relevant pipeline step\n"
         "isn't present — do not fabricate behaviour."
     )
+
+
+def emit_copilot_prompts_md(target_root: Path) -> Path:
+    """Write .agentshield/copilot-prompts.md with the ready-to-paste
+    Tier 2 and behaviour-emulator prompts.
+
+    Overwrites on every scan so the prompts are always current.
+    Returns the path written.
+    """
+    target_root = Path(target_root)
+    contract_dir = target_root / ".agentshield"
+    contract_dir.mkdir(exist_ok=True)
+
+    sep = "\n" + "-" * 72 + "\n"
+    content = (
+        "# AgentShield — Copilot Chat Prompts\n\n"
+        "Open this file, copy the block for the step you need,\n"
+        "and paste it verbatim into Copilot Chat (`@workspace` must be first).\n"
+        + sep
+        + "## Step 1 — Tier 2: LLM scan\n\n"
+        "Paste **after** `agentshield scan` completes "
+        "(`tier1-results.json` must exist).\n\n"
+        "```\n"
+        + copilot_prompt()
+        + "\n```\n"
+        + sep
+        + "## Step 2 — Behaviour emulator\n\n"
+        "Paste **after** `tier2-findings.json` exists.\n\n"
+        "```\n"
+        + agent_emulator_prompt()
+        + "\n```\n"
+    )
+
+    out = contract_dir / "copilot-prompts.md"
+    out.write_text(content)
+    return out
 
 
 def emit_redteam_mutate_skill(target_root: Path) -> list[Path]:
