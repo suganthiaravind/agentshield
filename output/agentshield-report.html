@@ -420,12 +420,31 @@ h3 { font-size: 15px; }
   border-radius: 10px;
   padding: 18px 22px;
   margin-bottom: 28px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);  /* F.32 */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
+/* Per-tier left-border colour + tier badge */
+.saige-card.saige-tier-non-agent { border-left-color: #94a3b8; }
+.saige-card.saige-tier-0         { border-left-color: #64748b; }
+.saige-card.saige-tier-1         { border-left-color: #0ea5e9; }
+.saige-card.saige-tier-2         { border-left-color: #f59e0b; }
+.saige-card.saige-tier-3         { border-left-color: #ef4444; }
+.saige-tier-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
+  border: 1.5px solid; white-space: nowrap;
+}
+.saige-tier-badge-non-agent { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.saige-tier-badge-0         { background: #f1f5f9; color: #334155; border-color: #94a3b8; }
+.saige-tier-badge-1         { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+.saige-tier-badge-2         { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.saige-tier-badge-3         { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
 .saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                            color: var(--text-muted); font-weight: 600; }
-.saige-card-header { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.saige-card-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.saige-tier-info { display: flex; flex-direction: column; gap: 4px; }
 .saige-card .saige-tier { font-size: 20px; font-weight: 700; margin: 3px 0 0; color: var(--accent); white-space: nowrap; }
+.saige-tier-subtitle { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
 .saige-summary-text { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; flex: 1; min-width: 0; }
 .saige-details { margin-top: 12px; }
 .saige-details-toggle {
@@ -6430,8 +6449,8 @@ footer {
 <h1>AgentShield Pre-Production Review Report</h1>
 <div class="subtitle">Scanned: demo-agent &middot; 28 May 2026, 16:45 UTC &middot; <strong>Findings in this scan: 32</strong></div>
 </div>
-<div class="saige-card">
-<div class="saige-card-header"><div><span class="saige-label">JPMC SAIGE Agent Tier classification</span><div class="saige-tier">Agentic Tier 0</div></div></div>
+<div class="saige-card saige-tier-0">
+<div class="saige-card-header"><span class="saige-tier-badge saige-tier-badge-0">Tier 0</span><div class="saige-tier-info"><span class="saige-label">JPMC SAIGE Agent Tier classification</span><div class="saige-tier">Tier 0</div><div class="saige-tier-subtitle">Deterministic workflow — no autonomous decision-making</div></div></div>
 <details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1 – Q3)</summary>
 <div class="saige-rationale saige-rationale-qs">
 <div class="saige-q-row"><span class="saige-q-badge">Q1</span><span class="saige-q-content"><strong class="saige-q-title">Autonomy</strong><span class="saige-q-body">Fixed-sequence workflow — Tier 0 confirmed. All three LLM call sites run in predetermined one-step sequences: controller.py:34 (chain.invoke), orchestrator.py:104 (LLMChain.invoke), notifications.py:45 (client.chat.completions.create). No AgentExecutor, ReAct loop, planner, or LLM-driven control-flow branching is present. tools.py defines @tool-decorated functions (calculate, cancel_subscription) and orchestrator.py:114 references tool access in SYSTEM_PROMPT, but no AgentExecutor is wired to consume them — tool definitions alone do not make a workflow non-deterministic.</span></span></div>
