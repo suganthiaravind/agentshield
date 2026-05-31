@@ -87,9 +87,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Enumerate Python/Java files explicitly and pass them to semgrep, "
-            "bypassing semgrep's default directory ignores (tests/, examples/, "
-            "vendor/, fixtures/, etc.). Use when scanning a sample/demo repo "
-            "where the target code lives under such a directory."
+            "bypassing semgrep's default directory ignores (examples/, "
+            "vendor/, fixtures/, etc.). test/ and tests/ are always excluded "
+            "regardless of this flag."
         ),
     )
     scan.add_argument(
@@ -98,9 +98,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="PATTERN",
         help=(
-            "Exclude files matching this glob pattern (repeatable). Most "
-            "useful with --scan-all-files. Patterns: '**/src/test/**' "
-            "(Maven/Gradle), '**/tests/**' (Python)."
+            "Exclude files matching this glob pattern (repeatable). "
+            "test/ and tests/ directories are excluded by default. "
+            "Use this to exclude additional paths, e.g. '**/fixtures/**', "
+            "'**/examples/**'."
         ),
     )
     scan.add_argument(
@@ -429,6 +430,8 @@ def _enumerate_candidate_files(path: Path, exclude: list[str] | None = None) -> 
         and ".venv" not in p.parts
         and ".git" not in p.parts
         and "node_modules" not in p.parts
+        and "test" not in p.parts
+        and "tests" not in p.parts
     )
     if exclude:
         files = (p for p in files if not _matches_any_pattern(p, path, exclude))
