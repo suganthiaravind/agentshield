@@ -14204,8 +14204,23 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
     # Attack-surface context: count agent entry points across scanned code files
     repo_root = r.tier1_path.parent.parent
     agent_surface = _count_agent_entry_points(repo_root, code_files)
-    # Emulator entry_points[] is authoritative when present — explicit routes beat heuristic counts
-    emu_entry_points = (getattr(r, "agent_emulation", {}) or {}).get("entry_points") or []
+    # Emulator entry_points[] is authoritative when present — explicit routes beat heuristic counts.
+    # v7 schema fallback: when entry_points[] absent, derive from untrusted_sources[].route so
+    # the I/O panel doesn't show "No recognised agent entry points" after a successful v7 emulation.
+    _emu_raw = getattr(r, "agent_emulation", {}) or {}
+    emu_entry_points = _emu_raw.get("entry_points") or []
+    if not emu_entry_points:
+        _us = _emu_raw.get("untrusted_sources") or []
+        if _us:
+            _seen_routes: dict[str, str] = {}
+            for _src in _us:
+                _route = (_src.get("route") or _src.get("id") or "").strip()
+                _type  = _src.get("type") or ""
+                if _route and _route not in _seen_routes:
+                    _seen_routes[_route] = _type
+            emu_entry_points = [
+                {"route": _r, "description": _t} for _r, _t in _seen_routes.items()
+            ]
 
     # ---- Output: fixed by writer naming convention. Fix-files carry the
     # per-file targets they address (count + which input files); HTML
@@ -14267,12 +14282,9 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
                 if _v in ("lands", "partial"):
                     rt_total += 1
                     rt_files[_label] = rt_files.get(_label, 0) + 1
-        # Pipeline-level checks (hitl_gates, agent_auth, audit_trail, etc.)
-        for _ck, _cv in (_emu.get("pipeline_checks") or {}).items():
-            _v = str((_cv.get("verdict") if isinstance(_cv, dict) else "") or "").strip()
-            if _v and _v not in ("not_applicable", "n/a", ""):
-                rt_total += 1
-                rt_files["pipeline"] = rt_files.get("pipeline", 0) + 1
+        # Pipeline-level checks are structural findings reported in D/D/R sections —
+        # exclude them from rt_total so the walkthrough count reflects only transition
+        # attack traces (lands|partial), matching the emulator coverage count.
         # Legacy flat schema (entry_points with attack_class_traces)
         if not _emu.get("untrusted_sources"):
             for _ep in (_emu.get("entry_points") or []):
