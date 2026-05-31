@@ -96,7 +96,7 @@ class CombinedReport:
     tier2_scanned_at: str | None
     tier2_skipped_files: list[dict]
     tier2_scanned_files: list[str]
-    saige_tier: str | None = None  # F.16: optional JPMC SAIGE classification
+    saige_tier: str | int | None = None  # F.16: optional JPMC SAIGE classification (0–3 or "non-agent")
     saige_tier_reasoning: str | None = None
     # LLM-driven adversarial discovery results — populated when
     # `.agentshield/probe-discovered.json` exists (emitted by
@@ -3259,9 +3259,9 @@ def render_combined_markdown(result: MergeResult) -> str:
     lines.append("")
 
     # 5. SAIGE classification (if present)
-    if r.saige_tier:
+    if r.saige_tier is not None and r.saige_tier != "":
         tier_label = (
-            "Non Agent" if r.saige_tier == "non-agent"
+            "Non Agent" if str(r.saige_tier) == "non-agent"
             else f"Agentic Tier {r.saige_tier}"
         )
         lines.append("## JPMC SAIGE Agent Tier classification")
@@ -11558,9 +11558,9 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     Extracted so both the standard (after metrics) and saige-first (top of
     report) layouts use the same markup.
     """
-    if not r.saige_tier:
+    if r.saige_tier is None or r.saige_tier == "":
         return
-    tier_label = "Non Agent" if r.saige_tier == "non-agent" else f"Agentic Tier {r.saige_tier}"
+    tier_label = "Non Agent" if str(r.saige_tier) == "non-agent" else f"Agentic Tier {r.saige_tier}"
 
     # Parse reasoning into Q-blocks for the collapsible detail section
     raw_reasoning = r.saige_tier_reasoning or "(no reasoning provided)"
