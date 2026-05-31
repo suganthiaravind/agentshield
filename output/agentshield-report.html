@@ -8983,10 +8983,10 @@ from config import client, MODEL</div>
 </div>
 <div class="ref-source-group">
 <div class="ref-source-header">
-<span class="ref-source-name">Copilot LLM-as-a-Judge (Static &amp; Emulator) Scan <span class="ref-source-count">81 checks</span></span>
-<span class="ref-source-blurb">LLM-driven coverage in two modes. Static checklist mode walks every file in the user's IDE via Copilot Chat and catches cross-function and absence-of-control patterns the static rules can't see. Probe mode (`agentshield probe --mode explore`) flips the direction — Copilot acts as an LLM adversary, brainstorms attacks tuned to the target's manifest + tool catalogue, and fires them at the running agent. Anything that lands becomes a Discovered finding with a live payload/response capture.</span>
+<span class="ref-source-name">Copilot LLM-as-a-Judge (Static &amp; Emulator) Scan <span class="ref-source-count">68 checks</span></span>
+<span class="ref-source-blurb">LLM-driven coverage in two modes. Static checklist mode walks every file in the user's IDE via Copilot Chat and catches cross-function and absence-of-control patterns the static rules can't see. Behaviour emulator mode walks every untrusted data source through four security transitions (→LLM, →tool args, →sink, →store) using seed → mutation escalation — no live endpoint required.</span>
 </div>
-<details class="ref-group ref-group-detect"><summary class="ref-group-summary"><span class="ref-group-name">🔴 Detect</span><span class="ref-group-sub">vulnerability surfaces</span><span class="ref-group-count">38 checks</span></summary>
+<details class="ref-group ref-group-detect"><summary class="ref-group-summary"><span class="ref-group-name">🔴 Detect</span><span class="ref-group-sub">vulnerability surfaces</span><span class="ref-group-count">29 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -9492,168 +9492,9 @@ from config import client, MODEL</div>
 <details class="ref-skip"><summary>Skip if</summary><p>Every memory write includes a `session_id` / `conversation_id` / `(tenant_id, session_id)` namespacing AND every memory read filters on the same key for the current request's authenticated session. A single shared key for a single user *across sessions* still counts as a finding — the cross-session campaign demonstrates this is exploitable.</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Make `session_id` (or `(tenant_id, session_id)` for multi-tenant agents) a required, non-overridable part of every memory key. Treat any user-supplied *&quot;remember this forever&quot;* directive as data, not policy. Strip system-prompt / config content from every model output regardless of memory state.</div>
 </div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-001</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Authority Escalation Via Roleplay</div>
-<div class="ref-desc">Convince the agent it has been promoted to an administrative role; subsequent actions inherit the assumed authority. Behavioural vulnerability the static rule pack doesn't cover.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">OWASP Agentic T9</span>
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">ATLAS AML.T0051</span>
-<span class="finding-tag">CWE CWE-269</span>
-<span class="finding-tag">CWE CWE-287</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-002</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Memory Poisoning Persistent Directive</div>
-<div class="ref-desc">Embed a persistent instruction in the agent's long-term memory; it activates on every future session even after the attacker disconnects. OWASP Agentic T1 — Memory Poisoning.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T1</span>
-<span class="finding-tag">ATLAS AML.T0018</span>
-<span class="finding-tag">ATLAS AML.T0019</span>
-<span class="finding-tag">CWE CWE-94</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-004</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill medium" data-tip="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it." aria-label="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it.">medium</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Tool Description Injection</div>
-<div class="ref-desc">Probe whether the agent will accept attacker-supplied tool descriptions and use them as authoritative. Subtle; rarely caught statically because the description is data, not code.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">ATLAS AML.T0051</span>
-<span class="finding-tag">CWE CWE-94</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-005</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Path Traversal Via File Tool</div>
-<div class="ref-desc">Pass an attacker-controlled path with parent-directory traversal segments through any registered file tool. Tests whether file-tool path inputs are resolved + allowlisted before disk access. CWE-22 Path Traversal.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
-<span class="finding-tag">CWE CWE-22</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-006</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Cross Tenant Data Fishing</div>
-<div class="ref-desc">Ask the agent to surface data from other users' sessions, retrieval indices, or memory stores. Tests whether per-tenant scoping is enforced on vector queries and memory reads. OWASP LLM08 Vector &amp; Embedding Weaknesses + LLM02 Sensitive Information Disclosure.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T5</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP LLM LLM08</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
-<span class="finding-tag">CWE CWE-200</span>
-<span class="finding-tag">CWE CWE-285</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-008</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Goal Misalignment Redirect</div>
-<div class="ref-desc">Reframe the user request so the agent pursues a goal that contradicts its system-prompt scope (e.g. a support agent asked to perform marketing outreach). Tests whether the agent enforces its stated mission boundary. OWASP Agentic T7 Misaligned Behaviors.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T6</span>
-<span class="finding-tag">OWASP Agentic T7</span>
-<span class="finding-tag">OWASP LLM LLM01</span>
-<span class="finding-tag">ATLAS AML.T0051</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-010</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill medium" data-tip="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it." aria-label="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it.">medium</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Open Redirect Via Url Fetch</div>
-<div class="ref-desc">Pass a URL that redirects (HTTP 30x) to an attacker-controlled host through any URL-fetch tool; tests whether the tool follows redirects without re-validating the final destination against the allowlist. CWE-601 Open Redirect.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">ATLAS AML.T0010</span>
-<span class="finding-tag">CWE CWE-601</span>
-<span class="finding-tag">CWE CWE-918</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-011</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill medium" data-tip="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it." aria-label="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it.">medium</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Overreliance Confident Hallucination</div>
-<div class="ref-desc">Ask the agent a high-stakes question whose answer isn't in its tools or context; a vulnerable agent will fabricate a confident, source-less answer instead of refusing or hedging. OWASP LLM09 Misinformation / Overreliance.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T7</span>
-<span class="finding-tag">OWASP LLM LLM09</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-D-013</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-detect">detect</span>
-</div>
-<div class="ref-title">Insecure Output Handling</div>
-<div class="ref-desc">The agent's response is passed downstream (browser, shell, database) without sanitisation. Attacker-controlled content in the output becomes XSS, code injection, or SQL injection in the consuming layer. OWASP LLM02 Insecure Output Handling.</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
 </div>
 </details>
-<details class="ref-group ref-group-defend"><summary class="ref-group-summary"><span class="ref-group-name">🟡 Defend</span><span class="ref-group-sub">missing controls</span><span class="ref-group-count">28 checks</span></summary>
+<details class="ref-group ref-group-defend"><summary class="ref-group-summary"><span class="ref-group-name">🟡 Defend</span><span class="ref-group-sub">missing controls</span><span class="ref-group-count">25 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -10123,70 +9964,9 @@ from config import client, MODEL</div>
 <details class="ref-skip"><summary>Skip if</summary><p>Every read query includes the authenticated principal's tenant ID as a non-overridable filter — set at the edge from a signed claim, threaded through the call stack as a required argument, and applied at the SQL / vector-search / filesystem layer where the model can't reach it.</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Enforce the tenant boundary at the data-access layer. Every read must include the authenticated principal's tenant ID as a non-overridable filter, not a hint the model can choose to ignore. Reject any tool call whose resulting query would cross tenants, regardless of declared role in chat. Log cross-tenant lookups separately and require explicit out-of-band approval for legitimate audit reads.</div>
 </div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-DF-003</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-defend">defend</span>
-</div>
-<div class="ref-title">Tool Chaining Unauthorized Exfil</div>
-<div class="ref-desc">Chain a read tool to a write tool in a single request; the agent emits both without a per-tool policy check. The static rules find single-tool issues but don't model chains.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP Agentic T5</span>
-<span class="finding-tag">OWASP LLM LLM02</span>
-<span class="finding-tag">OWASP LLM LLM06</span>
-<span class="finding-tag">ATLAS AML.T0024</span>
-<span class="finding-tag">ATLAS AML.T0053</span>
-<span class="finding-tag">CWE CWE-200</span>
-<span class="finding-tag">CWE CWE-918</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-DF-007</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill medium" data-tip="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it." aria-label="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it.">medium</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-defend">defend</span>
-</div>
-<div class="ref-title">Runaway Tool Loop</div>
-<div class="ref-desc">Push the agent into an unbounded tool-call loop by asking it to retry until a guaranteed-failing condition is met. Tests whether the runtime caps tool-call depth/count per request. OWASP LLM10 Unbounded Consumption + ATLAS T0034 Cost Harvesting.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T4</span>
-<span class="finding-tag">OWASP LLM LLM10</span>
-<span class="finding-tag">ATLAS AML.T0029</span>
-<span class="finding-tag">ATLAS AML.T0034</span>
-<span class="finding-tag">CWE CWE-400</span>
-<span class="finding-tag">CWE CWE-770</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-DF-012</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill high" data-tip="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls)." aria-label="High — Exploitable with bounded impact (data leak, role takeover, attacker-driven tool calls).">high</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-defend">defend</span>
-</div>
-<div class="ref-title">Dynamic Plugin Installation</div>
-<div class="ref-desc">Ask the agent to install or load an additional tool/plugin at runtime from a URL the user supplies. Tests whether the tool catalogue is fixed at deployment or can be extended mid-session. OWASP LLM03 Supply Chain + Agentic T2 Tool Misuse.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T2</span>
-<span class="finding-tag">OWASP LLM LLM03</span>
-<span class="finding-tag">ATLAS AML.T0010</span>
-<span class="finding-tag">CWE CWE-494</span>
-<span class="finding-tag">CWE CWE-829</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
-</div>
 </div>
 </details>
-<details class="ref-group ref-group-respond"><summary class="ref-group-summary"><span class="ref-group-name">🔵 Respond</span><span class="ref-group-sub">observability gaps</span><span class="ref-group-count">15 checks</span></summary>
+<details class="ref-group ref-group-respond"><summary class="ref-group-summary"><span class="ref-group-name">🔵 Respond</span><span class="ref-group-sub">observability gaps</span><span class="ref-group-count">14 checks</span></summary>
 <div class="ref-cards">
 <div class="ref-card-item">
 <div class="ref-card-head">
@@ -10434,24 +10214,6 @@ from config import client, MODEL</div>
 </div>
 <details class="ref-skip"><summary>Skip if</summary><p>Every tool wrapper emits an immutable audit entry (timestamp, authenticated principal, tool name, args, result- hash) *before the tool returns*, the audit log is append-only from a service the LLM has no write access to, and the application consults the audit log as the source of truth about what happened — not the agent's self-report.</p></details>
 <div class="ref-remediation"><strong>Fix:</strong> Tie the audit trail to the tool layer, not to the model's self-report. Every tool call must write an immutable log entry before the call returns, and the agent must never be asked to attest to whether an action happened — only the audit log answers that question. Treat any model output that claims an action *&quot;was simulated&quot;* or *&quot;wasn't really executed&quot;* as a critical signal that the tool boundary has been compromised. --- # §6. Retired Tier 1 anti-patterns Coverage equivalent to the 8 rule families retired in Phase F.2, kept here so Tier 2 doesn't lose ground when Tier 1 narrows. Most are already covered in §1–§4 above (cross-referenced). This section just lists the rule-family-level checks for the retired rules so coverage parity is auditable. | Retired rule | Covered by | |---|---| | D001-fb (fallback verb shape) | TIER2-LLM01-01 | | D002 (untrusted document loader) | TIER2-LLM01-02 | | D006 (broad tool permissions) | TIER2-LLM06-02 | | D007 (unpinned model) | TIER2-LLM03-01 | | DF001 (no guardrails import) | TIER2-LLM10-03 | | DF002 (no @Tool args schema) | TIER2-LLM06-03 | | DF004 (destructive verb naming) | TIER2-LLM06-01 | | R001 (no audit logging) | TIER2-LLM10-02 | If you find an instance of a retired-rule anti-pattern that doesn't match the cross-referenced check above, emit it under the retired-rule ID with a `notes` field explaining why none of the cross-refs applied. --- # §7. Tier 1 cross-check After scanning every file, read `.agentshield/tier1-results.json`. For **every** finding in Tier 1, emit an entry in `tier1_fp_callouts[]` with one of the verdicts below. **Hard rule: emit a callout for every Tier 1 finding, with no exceptions.** Absence used to mean *&quot;TP, no comment needed&quot;* — that silently merged with *&quot;Copilot didn't reach this finding because the context budget ran out&quot;*, which is the opposite signal. The merger now treats any unclassified Tier 1 finding as evidence of an incomplete Tier 2 pass and shows a **PARTIAL Tier 2** banner on the report. To avoid that banner, classify every finding. Verdicts: - **TP** (true positive) — Tier 1 is right; the issue is real. Emit a callout with `verdict: &quot;TP&quot;` and a one-sentence `reasoning` confirming the finding (cite the file:line you read to confirm). This is the new behaviour as of v4 — previously TPs were silent; that ambiguity is the bug we just fixed.</div>
-</div>
-<div class="ref-card-item">
-<div class="ref-card-head">
-<span class="ref-id">AS-X-R-009</span>
-<span class="ref-source-tag ref-source-tag-probe" title="LLM-adversary probe attack class — runs in explore mode">Probe</span>
-<span class="pill medium" data-tip="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it." aria-label="Medium — Missing safety net (timeout / input validation / permission check). Fix it now; future bugs will hit this guard instead of going past it.">medium</span>
-<span class="ref-langs">runtime</span>
-<span class="ref-cat ref-cat-respond">respond</span>
-</div>
-<div class="ref-title">Repudiation Deny Prior Action</div>
-<div class="ref-desc">After triggering a tool action, ask the agent in a follow-up turn whether it performed that action; a vulnerable agent may deny it, indicating the audit trail isn't tied to the model's self-knowledge. OWASP Agentic T8 Repudiation &amp; Untraceability.</div>
-<div class="ref-fw">
-<span class="finding-tag">OWASP Agentic T8</span>
-<span class="finding-tag">OWASP LLM LLM07</span>
-<span class="finding-tag">ATLAS AML.T0056</span>
-<span class="finding-tag">CWE CWE-778</span>
-</div>
-<div class="ref-remediation"><strong>Fix:</strong> Detected only at runtime — no static rule covers this attack class. Patch the agent's prompt / policy to reject the surfaced behaviour, then add a regression test that replays the captured payload.</div>
 </div>
 </div>
 </details>

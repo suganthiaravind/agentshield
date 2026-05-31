@@ -15148,15 +15148,9 @@ def _render_reference_panel(
         tier2_checklist_path=_DEFAULT_CHECKLIST_PATH,
     )
 
-    # Probe entries fold into the Copilot bucket so the Reference tab
-    # mirrors how the report itself frames them — both static checklist
-    # and runtime probe are Copilot-LLM outputs. The individual ref's
-    # `source` field stays "Probe" so the card renderer can still tag
-    # probe-only entries inside the merged section.
     grouped: dict[str, list] = {"Semgrep": [], "Copilot": [], "Markdown": []}
     for ref in refs:
-        bucket_key = "Copilot" if ref.source == "Probe" else ref.source
-        grouped.setdefault(bucket_key, []).append(ref)
+        grouped.setdefault(ref.source, []).append(ref)
 
     # Long-form display labels mirror the metric-card naming: each
     # source group header reads as a complete scanner description so
@@ -15201,12 +15195,10 @@ def _render_reference_panel(
             "LLM-driven coverage in two modes. Static checklist mode "
             "walks every file in the user's IDE via Copilot Chat and "
             "catches cross-function and absence-of-control patterns "
-            "the static rules can't see. Probe mode "
-            "(`agentshield probe --mode explore`) flips the direction "
-            "— Copilot acts as an LLM adversary, brainstorms attacks "
-            "tuned to the target's manifest + tool catalogue, and fires "
-            "them at the running agent. Anything that lands becomes a "
-            "Discovered finding with a live payload/response capture."
+            "the static rules can't see. Behaviour emulator mode "
+            "walks every untrusted data source through four security "
+            "transitions (→LLM, →tool args, →sink, →store) "
+            "using seed → mutation escalation — no live endpoint required."
         ),
         "Markdown": (
             "Agent-loaded markdown scan (preview). Checks SKILL.md, "
