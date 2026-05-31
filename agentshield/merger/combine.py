@@ -1388,6 +1388,16 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
             if mp.get("source") == "dynamic" and mp.get("block_mechanism"):
                 item["block_mechanism"] = mp["block_mechanism"]
             catalog_items.append(item)
+    # Truncate catalog_items to only layers that were actually tried
+    # (seeds/mutations up to and including the landing layer).  This keeps the
+    # pill list, pre-play count, and trace animation all consistent — without
+    # this, 3 seed payloads are listed and counted even when only 1 was fired
+    # because the attack landed on the first attempt.
+    if emu_layer and emu_layer != "blocked-all" and catalog_items:
+        _ci_layers = [ci["layer"] for ci in catalog_items]
+        if emu_layer in _ci_layers:
+            catalog_items = catalog_items[:_ci_layers.index(emu_layer) + 1]
+
     catalog_attr = (
         f' data-payload-layer="{_html_escape(emu_layer)}"'
         f' data-payload-catalog="{_html_escape(_json.dumps(catalog_items))}"'
