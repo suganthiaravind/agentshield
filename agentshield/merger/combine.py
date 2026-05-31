@@ -4366,23 +4366,13 @@ h3 { font-size: 15px; }
   margin-bottom: 28px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
-/* Per-tier left-border colour + tier badge */
-.saige-card.saige-tier-non-agent { border-left-color: #94a3b8; }
-.saige-card.saige-tier-0         { border-left-color: #64748b; }
-.saige-card.saige-tier-1         { border-left-color: #0ea5e9; }
-.saige-card.saige-tier-2         { border-left-color: #f59e0b; }
-.saige-card.saige-tier-3         { border-left-color: #ef4444; }
 .saige-tier-badge {
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
-  border: 1.5px solid; white-space: nowrap;
+  border: 1.5px solid #94a3b8; background: #f1f5f9; color: #334155;
+  white-space: nowrap;
 }
-.saige-tier-badge-non-agent { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
-.saige-tier-badge-0         { background: #f1f5f9; color: #334155; border-color: #94a3b8; }
-.saige-tier-badge-1         { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
-.saige-tier-badge-2         { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-.saige-tier-badge-3         { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
 .saige-card .saige-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
                            color: var(--text-muted); font-weight: 600; }
 .saige-card-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -4390,16 +4380,11 @@ h3 { font-size: 15px; }
 .saige-card .saige-tier { font-size: 20px; font-weight: 700; margin: 3px 0 0; color: var(--accent); white-space: nowrap; }
 .saige-tier-subtitle { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
 .saige-summary-text { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; flex: 1; min-width: 0; }
-.saige-details { margin-top: 12px; }
-.saige-details-toggle {
-  display: inline-flex; align-items: center; gap: 5px;
+.saige-walkthrough-label {
+  margin-top: 12px; margin-bottom: 6px;
   font-size: 11px; font-weight: 600; color: var(--accent);
-  cursor: pointer; list-style: none; user-select: none;
-  padding: 3px 0;
+  letter-spacing: 0.04em; text-transform: uppercase;
 }
-.saige-details-toggle::-webkit-details-marker { display: none; }
-.saige-details-toggle::before { content: "▶"; font-size: 8px; transition: transform 0.15s ease; }
-.saige-details[open] .saige-details-toggle::before { transform: rotate(90deg); }
 .saige-card .saige-rationale { color: var(--text); font-size: 13px; line-height: 1.6; }
 .saige-rationale-qs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .saige-q-row {
@@ -11603,8 +11588,8 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
     import re as _re
     _q_pat = _re.compile(r"^(Q\d+)\s*[—\-]\s*([^:]+):\s*(.+)$", _re.DOTALL)
 
-    parts.append(f'<div class="saige-card saige-tier-{_html_escape(css_tier_key)}">')
-    badge_cls = f"saige-tier-badge saige-tier-badge-{_html_escape(css_tier_key)}"
+    parts.append('<div class="saige-card">')
+    badge_cls = "saige-tier-badge"
     parts.append(
         '<div class="saige-card-header">'
         f'<span class="{badge_cls}">{_html_escape(tier_label)}</span>'
@@ -11616,9 +11601,9 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
         '</div>'
     )
 
-    # Collapsible Q-by-Q reasoning
+    # Q-by-Q decision walkthrough — always visible
     if len(q_blocks) > 1:
-        parts.append('<details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1 – Q3)</summary>')
+        parts.append('<div class="saige-walkthrough-label">Decision walkthrough</div>')
         parts.append('<div class="saige-rationale saige-rationale-qs">')
         for block in q_blocks:
             m = _q_pat.match(block)
@@ -11635,7 +11620,7 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
                 )
             else:
                 parts.append(f'<div class="saige-q-row saige-q-plain">{_html_escape(block)}</div>')
-        parts.append('</div></details>')
+        parts.append('</div>')
     else:
         parts.append(f'<div class="saige-rationale">{_html_escape(raw_reasoning)}</div>')
 
