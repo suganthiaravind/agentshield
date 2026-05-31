@@ -487,7 +487,7 @@ def _display_path(path: Path, *roots: Path) -> str:
 
     Lets the scan banner show short, copy-pasteable paths for both the
     Copilot-contract files (under <target>/.agentshield/) and the
-    developer-facing fix-skill files (under <cwd>/output/).
+    developer-facing fix-skill files (under <target>/output/).
     """
     resolved = path.resolve()
     for root in roots:
@@ -677,7 +677,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             target_root,
             findings_dicts,
             scanned_files_rel,
-            output_dir=default_output_dir(),
+            output_dir=target_root / "output",
             scan_started_at=_scan_started_at,
         )
     except FileNotFoundError as exc:
@@ -945,7 +945,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     except MergeError as exc:
         print(f"[agentshield] ERROR: {exc}", file=sys.stderr)
         return 2
-    return _run_checks(result, _latest_scan_output_dir(), target_root, args.path)
+    return _run_checks(result, _latest_scan_output_dir(target_root), target_root, args.path)
 
 
 # ---------- artifact freshness helpers ----------
@@ -996,18 +996,19 @@ def _print_rescan_guidance(target_path_str: str) -> None:
 
 # ---------- output folder helpers ----------
 
-def _scan_output_dir() -> Path:
-    """Return output/<YYYYMMDD-HHMMSS>/ for the current merge run."""
+def _scan_output_dir(target_root: Path | None = None) -> Path:
+    """Return <target>/output/<YYYYMMDD-HHMMSS>/ for the current merge run."""
     from datetime import datetime, timezone
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return default_output_dir() / label
+    base = target_root / "output" if target_root is not None else default_output_dir()
+    return base / label
 
 
-def _latest_scan_output_dir() -> Path:
-    """Return the most recent timestamped output subfolder; fall back to output/."""
+def _latest_scan_output_dir(target_root: Path | None = None) -> Path:
+    """Return the most recent timestamped output subfolder inside target; fall back to output/."""
     import re as _re2
     ts_pat = _re2.compile(r"^\d{8}-\d{6}$")
-    base = default_output_dir()
+    base = target_root / "output" if target_root is not None else default_output_dir()
     if base.is_dir():
         candidates = sorted(
             (d for d in base.iterdir() if d.is_dir() and ts_pat.match(d.name)),
@@ -1061,7 +1062,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         _print_rescan_guidance(args.path)
 
     # If the user didn't pass any --output-* flag (and isn't just printing
-    # to stdout), default to dropping the HTML report into <cwd>/output/.
+    # to stdout), default to dropping the HTML report into <target>/output/.
     # Predictable location, same folder the fix-skill .md files live in,
     # so a developer doesn't have to remember a path. Explicit flags
     # still win when given.
@@ -1072,7 +1073,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         and not args.output_sarif
         and not args.print_md
     ):
-        out_dir = _scan_output_dir()
+        out_dir = _scan_output_dir(target_root)
         out_dir.mkdir(parents=True, exist_ok=True)
         args.output_html = str(out_dir / "agentshield-report.html")
         print(f"[agentshield] No --output-* specified; defaulting to {args.output_html}")
@@ -1122,8 +1123,9 @@ def cmd_merge(args: argparse.Namespace) -> int:
         # Keep output/agentshield-report.html up-to-date as the "latest" copy
         # so git tracking via .gitignore negation (!output/agentshield-report.html)
         # always reflects the most recent scan.
-        if html_path.parent != default_output_dir():
-            latest = default_output_dir() / "agentshield-report.html"
+        target_output_dir = target_root / "output"
+        if html_path.parent != target_output_dir:
+            latest = target_output_dir / "agentshield-report.html"
             latest.parent.mkdir(parents=True, exist_ok=True)
             latest.write_bytes(html_path.read_bytes())
     if written:

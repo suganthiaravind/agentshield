@@ -290,21 +290,21 @@ This step applies 17 OWASP / ATLAS adversary attack classes against every distin
 agentshield merge /path/to/your-agent-repo
 ```
 
-The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, writes the unified report to a timestamped subfolder inside `output/`, and then **automatically runs all 14 health checks** so you see pass/fail in one command:
+The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, writes the unified report to a timestamped subfolder inside your **target repo's** `output/` folder, and then **automatically runs all 14 health checks** so you see pass/fail in one command:
 
 ```
-output/
-└── 20260530-123456/                         ← timestamped subfolder for this run
-    ├── agentshield-report.html              ← interactive (tabs / filter / search / Reference)
-    ├── agentshield-report-print.html        ← stacked / printable (all sections visible)
-    ├── agentshield-findings-fix.md          ← paste into Claude Code to fix all findings
-    └── agentshield-emulator-payloads.md     ← emulator attack walkthroughs per source × transition
-output/agentshield-report.html               ← "latest" copy, updated after every merge run
+<your-agent-repo>/output/
+├── 20260530-123456/                         ← timestamped subfolder for this run
+│   ├── agentshield-report.html              ← interactive (tabs / filter / search / Reference)
+│   ├── agentshield-report-print.html        ← stacked / printable (all sections visible)
+│   ├── agentshield-findings-fix.md          ← paste into Claude Code to fix all findings
+│   └── agentshield-emulator-payloads.md     ← emulator attack walkthroughs per source × transition
+└── agentshield-report.html                  ← "latest" copy, updated after every merge run
 ```
 
-Each run writes to a new folder so successive scans don't overwrite previous results. The `output/agentshield-report.html` file at the root always reflects the most recent run.
+Each run writes to a new folder so successive scans don't overwrite previous results. The `output/agentshield-report.html` at the root of the target repo always reflects the most recent run.
 
-Do **not** pass `--output-html` — the default already writes to `output/<timestamp>/`.
+Do **not** pass `--output-html` — the default already writes to `<repo>/output/<timestamp>/`.
 
 CLI banners you might see:
 
@@ -328,7 +328,7 @@ agentshield merge /path/to/your-agent-repo --require-fresh
 
 #### Option A — open the file directly
 
-Double-click `output/agentshield-report.html` in your file manager. Any modern browser opens it.
+Double-click `output/agentshield-report.html` inside your target repo in your file manager. Any modern browser opens it.
 
 #### Option B — serve over localhost (preferred for VDI)
 

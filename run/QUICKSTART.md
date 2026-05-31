@@ -181,23 +181,23 @@ If the file doesn't appear:
 agentshield merge $REPO
 ```
 
-Combines Tier 1 + Tier 2 + behaviour emulator into a single report, then automatically runs all 14 health checks. Output lands in a timestamped subfolder inside `output/`:
+Combines Tier 1 + Tier 2 + behaviour emulator into a single report, then automatically runs all 14 health checks. Output lands in a timestamped subfolder inside your **target repo's** `output/` folder:
 
 ```
-output/
-└── 20260530-123456/
-    ├── agentshield-report.html            ← interactive (tabs, filter, search, Reference)
-    ├── agentshield-report-print.html      ← printable / stacked view
-    ├── agentshield-findings-fix.md        ← paste into Claude Code to fix all findings
-    └── agentshield-emulator-payloads.md   ← emulator attack walkthroughs per source × transition
-output/agentshield-report.html             ← "latest" copy, always reflects the most recent run
+$REPO/output/
+├── 20260530-123456/
+│   ├── agentshield-report.html            ← interactive (tabs, filter, search, Reference)
+│   ├── agentshield-report-print.html      ← printable / stacked view
+│   ├── agentshield-findings-fix.md        ← paste into Claude Code to fix all findings
+│   └── agentshield-emulator-payloads.md   ← emulator attack walkthroughs per source × transition
+└── agentshield-report.html                ← "latest" copy, always reflects the most recent run
 ```
 
 Open the report:
 ```bash
-open output/agentshield-report.html          # macOS
-# start output/agentshield-report.html       # Windows
-# xdg-open output/agentshield-report.html    # Linux
+open $REPO/output/agentshield-report.html          # macOS
+# start %REPO%\output\agentshield-report.html      # Windows
+# xdg-open $REPO/output/agentshield-report.html    # Linux
 ```
 
 **Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
