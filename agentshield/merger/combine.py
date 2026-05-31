@@ -14286,9 +14286,24 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
                 if _v in ("lands", "partial"):
                     rt_total += 1
                     rt_files[_label] = rt_files.get(_label, 0) + 1
-        # Pipeline-level checks are structural findings reported in D/D/R sections —
-        # exclude them from rt_total so the walkthrough count reflects only transition
-        # attack traces (lands|partial), matching the emulator coverage count.
+        # Pipeline checks: also count actionable ones because _v7_sources_to_attack_class_traces
+        # converts them into full walkthroughs that land in agentshield-emulator-payloads.md.
+        # Use the same verdict mapping defined there so the badge stays consistent.
+        _ACTIONABLE_PC: dict[str, set] = {
+            "audit_trail":                   {"partial", "absent"},
+            "hitl_gates":                    {"ungated"},
+            "loop_termination":              {"absent"},
+            "agent_auth":                    {"bypassable"},
+            "system_prompt_confidentiality": {"exposed"},
+        }
+        _pc = _emu.get("pipeline_checks") or {}
+        for _ck, _actionable_verdicts in _ACTIONABLE_PC.items():
+            _chk = _pc.get(_ck)
+            if not isinstance(_chk, dict):
+                continue
+            if str(_chk.get("verdict") or "") in _actionable_verdicts:
+                rt_total += 1
+                rt_files["pipeline_checks"] = rt_files.get("pipeline_checks", 0) + 1
         # Legacy flat schema (entry_points with attack_class_traces)
         if not _emu.get("untrusted_sources"):
             for _ep in (_emu.get("entry_points") or []):
