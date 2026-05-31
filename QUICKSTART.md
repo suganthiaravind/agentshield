@@ -27,6 +27,44 @@ export REPO=/absolute/path/to/your-agent-repo
 
 ---
 
+## 0.1 — Windows / VDI: one-command runner *(optional)*
+
+> Use this if you are on a **Windows VDI** (e.g. JPMC desktop) where roaming-profile PATH restrictions or Unicode encoding issues block the normal CLI flow. On a standard Mac/Linux machine skip this section entirely.
+
+**Pre-requisite:** open the **AgentShield repo** in your IDE (VS Code / JetBrains), not the target repo.
+
+```powershell
+# From the AgentShield repo root in a PowerShell terminal:
+.\run_tier1.ps1 -RepoPath "H:\path\to\your-agent-repo"
+```
+
+What it does automatically:
+
+| Step | Action |
+|------|--------|
+| Preflight | Sets console encoding to UTF-8; relocates `semgrep.exe` from the blocked roaming profile to `%LOCALAPPDATA%\agentshield-bin` |
+| Install | `pip install -e ".[semgrep,dev]"` (skipped if already installed) |
+| Scan | `agentshield scan <RepoPath> --scan-all-files` |
+| Prompts | Calls `generate_copilot_prompts.ps1` and copies the **Tier 2** prompt to your clipboard |
+
+**Done when you see:** `[done] Tier 1 complete.` and `[prompts] Tier 2 prompt copied to clipboard.`
+
+Switch to VS Code → Copilot Chat → paste (Ctrl+V) to run Tier 2 (step 3 below).
+
+To generate the emulator prompt separately:
+
+```powershell
+.\generate_copilot_prompts.ps1 -RepoPath "H:\path\to\your-agent-repo" -Mode Emulator -CopyToClipboard
+```
+
+Flags for `run_tier1.ps1`:
+
+| Flag | Effect |
+|------|--------|
+| `-SkipInstall` | Skip the `pip install` check |
+
+---
+
 ## 1 — Install AgentShield
 
 ```bash
@@ -170,7 +208,8 @@ open output/agentshield-report.html          # macOS
 
 | Step | What | Where |
 |---|---|---|
-| 0 | `export REPO=…` | Terminal |
+| 0 | `export REPO=…` (Mac/Linux) | Terminal |
+| 0.1 | `.\run_tier1.ps1 -RepoPath "…"` **(Windows/VDI only — does steps 1+2 automatically)** | PowerShell |
 | 1 | `pip install -e ".[semgrep,dev]"` | Terminal |
 | 2 | `agentshield scan $REPO --scan-all-files` | Terminal |
 | 3 | Paste **Tier 2 prompt** into Copilot Chat | VS Code |
