@@ -112,15 +112,17 @@ To run the emulator:
    audit trail, destructive tool gates, loop termination, agent
    authentication, system prompt confidentiality.
 
-   Step 5 — Dedup review (§Step 5 in the instructions): for each
-   actionable finding (transitions with verdict lands/partial, pipeline
-   checks with an actionable verdict), read .agentshield/tier1-results.json
-   and .agentshield/tier2-findings.json. Add judge_verdict (keep/duplicate/fp)
-   and judge_reason to each actionable finding before writing the output.
+   Step 5 — Write ALL findings (including uncertain ones) to
+   .agentshield/agent-emulation-raw.json.
 
-   Write your results to .agentshield/agent-emulation.json following
-   the schema exactly. Cite file:line for every prediction. Do not
-   speculate about downstream consumers outside this repo.
+   Step 6 — Judge review: read agent-emulation-raw.json, assess each
+   actionable finding for correctness (is it supported by code?) and
+   within-emulator duplicates (same code defect already captured by
+   another finding in this file?). Write only the kept findings to
+   .agentshield/agent-emulation.json using the same schema.
+
+   Cite file:line for every prediction. Do not speculate about
+   downstream consumers outside this repo.
    ```
 
 4. Run `agentshield merge <repo>` to produce the unified report.

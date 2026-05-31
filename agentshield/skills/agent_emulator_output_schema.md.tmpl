@@ -1,7 +1,12 @@
 # AgentShield Agent Behaviour Emulator — output JSON schema (v7)
 
-Copilot writes the agent emulation to
-`.agentshield/agent-emulation.json` following this schema exactly.
+Copilot writes two files following this schema:
+
+- **`agent-emulation-raw.json`** — all predictions, unfiltered (Step 5)
+- **`agent-emulation.json`** — judge-reviewed output: FPs and within-emulator
+  duplicates removed (Step 6). This is the file `agentshield merge` reads.
+
+Both files use this schema exactly.
 
 ## Top-level structure
 
@@ -229,8 +234,6 @@ Use the `not_applicable` verdict when the code path doesn't exist.
 | `pipeline_trace` | array | Step-by-step trace for the advancing payload. Each entry: `{"step": "...", "code_basis": [...], "defensive_control_present": bool, "outcome": "advances|blocked|modified|absent_step", "outcome_reasoning": "..."}`. |
 | `sink_type` | string (optional) | For `to_sink` transitions: `"http_response"`, `"sns_publish"`, `"s3_write"`, `"db_write"`, `"email_send"`, `"eval_exec"`. |
 | `sink_code` | string (optional) | For `to_sink` transitions: file:line of the sink. |
-| `judge_verdict` | string (actionable only) | `"keep"` / `"duplicate"` / `"fp"`. Required when `verdict` is `lands` or `partial`. Set after the dedup review in Step 5. |
-| `judge_reason` | string (actionable only) | One sentence explaining the judge verdict, e.g. `"Tier 2 LLM01 TP at controller.py:35 covers the same injection path."` |
 
 ---
 
@@ -282,12 +285,6 @@ fields depend on the check:
 | `agent_auth` | `authenticated` / `bypassable` / `not_applicable` | `auth_sources: []`, `bypass_condition: "..."` |
 | `system_prompt_confidentiality` | `safe` / `exposed` / `not_applicable` | `secret_found: "..."`, `secret_location: "..."` |
 
-All actionable pipeline check entries also carry:
-
-| Field | Type | Notes |
-|---|---|---|
-| `judge_verdict` | string | `"keep"` / `"duplicate"` / `"fp"`. Required on actionable checks after Step 5 dedup review. |
-| `judge_reason` | string | One sentence, e.g. `"Tier 1 D001 at orchestrator.py:114 already flags this hardcoded secret."` |
 
 ---
 

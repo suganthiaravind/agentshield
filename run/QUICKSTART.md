@@ -55,12 +55,14 @@ If the file doesn't appear after Copilot says it's done:
 
 Wait for Copilot to finish (1 entry point ~5 min, 3–5 entry points ~15 min).
 
-**Done when:** `<target-repo>/.agentshield/agent-emulation.json` exists.
+**Done when:** both files exist:
+- `<target-repo>/.agentshield/agent-emulation-raw.json` — all raw predictions
+- `<target-repo>/.agentshield/agent-emulation.json` — judge-reviewed output (FPs and within-emulator duplicates removed)
 
-If the file doesn't appear:
+If `agent-emulation.json` doesn't appear after Copilot says it's done:
 > "You said you finished but `agent-emulation.json` doesn't exist at
-> `<target-repo>/.agentshield/agent-emulation.json`. Please write the
-> JSON output to that exact path."
+> `<target-repo>/.agentshield/agent-emulation.json`. Please complete the
+> judge review step and write the cleaned findings to that exact path."
 
 ---
 
