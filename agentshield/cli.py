@@ -499,36 +499,51 @@ def _display_path(path: Path, *roots: Path) -> str:
 
 
 def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
-    """The mandatory next-step prompt the user pastes into Copilot Chat."""
-    bar = "=" * 70
-    print()
-    print(bar)
-    print("⚠ TIER 2 NOT YET RUN — scanning is INCOMPLETE.")
-    print(bar)
+    """End-of-scan output: file list, then a clearly numbered 3-step guide.
+
+    The Tier 2 prompt is printed last so it is the first thing the user
+    sees when they scroll to the bottom of the terminal — not buried under
+    the emulator output.
+    """
+    bar  = "=" * 70
+    dash = "-" * 70
     print()
     cwd = Path.cwd()
     fix_skill_set = {p.resolve() for p in emit.fix_skill_files}
     contract_files = [p for p in emit.emitted_files if p.resolve() not in fix_skill_set]
-    print(f"Copilot contract files (in {target_root}/.agentshield/):")
+    print(f"[agentshield] Contract files written to {target_root}/.agentshield/:")
     for p in contract_files:
         print(f"  - {_display_path(p, target_root)}")
     if emit.fix_skill_files:
         out_label = _display_path(emit.output_dir or default_output_dir(), cwd)
         print()
-        print(f"Fix-skill files (in {out_label}/):")
+        print(f"[agentshield] Fix-skill files written to {out_label}/:")
         for p in emit.fix_skill_files:
             print(f"  - {_display_path(p, emit.output_dir or default_output_dir(), cwd)}")
     if emit.gitignore_updated:
-        print()
         print(f"  + appended .agentshield/ to {target_root}/.gitignore")
     print()
-    print("Next step — paste this into Copilot Chat in your IDE:")
+    print(bar)
+    print("[agentshield] Tier 1 complete. Run these steps to finish:")
+    print(bar)
     print()
-    print("-" * 70)
+    print("  STEP 2 — Tier 2 LLM scan (Copilot Chat)")
+    print("  Paste the 'Step 1 — Tier 2' block from:")
+    print(f"    {target_root}/.agentshield/copilot-prompts.md")
+    print()
+    print("  STEP 3 — Behaviour emulator (Copilot Chat)")
+    print("  Paste the 'Step 2 — Behaviour emulator' block from the same file.")
+    print()
+    print("  STEP 4 — Merge into unified report")
+    print(f"  agentshield merge {target_root}")
+    print()
+    print(dash)
+    print("  STEP 2 NOW — paste this into Copilot Chat:")
+    print(dash)
+    print()
     print(copilot_prompt())
-    print("-" * 70)
     print()
-    print(f"Then run:  agentshield merge {target_root}")
+    print(dash)
     print()
 
 
@@ -705,23 +720,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
         )
         return 2
 
-    _print_tier2_banner(target_root, emit)
     print()
-    print("[agentshield] Agent behaviour-emulator contract written:")
+    print("[agentshield] Behaviour-emulator contract files written:")
     for p in emu_emitted:
         print(f"[agentshield]   - {p}")
-    print()
-    print(
-        "[agentshield] Optional: emulate this agent's behaviour "
-        "against the catalogued attack classes (Copilot walks the "
-        "pipeline from your code, predicts per-step behaviour, "
-        "cites file:line). Paste this into Copilot Chat after "
-        "Tier 2:"
-    )
-    print()
-    for line in agent_emulator_prompt().splitlines():
-        print(f"    {line}")
-    print()
+
+    _print_tier2_banner(target_root, emit)
     return 0
 
 
