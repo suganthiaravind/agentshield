@@ -541,7 +541,10 @@ def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
     print("  STEP 2 NOW — paste this into Copilot Chat:")
     print(dash)
     print()
-    print(copilot_prompt())
+    # Use absolute paths so the prompt works from any VS Code workspace
+    import os as _os
+    _abs_as = str(target_root.resolve() / ".agentshield")
+    print(copilot_prompt().replace(".agentshield/", _abs_as + _os.sep))
     print()
     print(dash)
     print()

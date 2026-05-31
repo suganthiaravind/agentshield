@@ -439,30 +439,53 @@ def emit_copilot_prompts_md(target_root: Path) -> Path:
     """Write .agentshield/copilot-prompts.md with the ready-to-paste
     Tier 2 and behaviour-emulator prompts.
 
+    All .agentshield/ references in the prompts are rewritten as absolute
+    paths to this target repo so the prompts work when pasted into any
+    Copilot Chat window — including one whose workspace is the AgentShield
+    repo rather than the target repo.
+
     Overwrites on every scan so the prompts are always current.
     Returns the path written.
     """
-    target_root = Path(target_root)
+    import os as _os
+    target_root = Path(target_root).resolve()
     contract_dir = target_root / ".agentshield"
     contract_dir.mkdir(exist_ok=True)
+
+    # Absolute path to .agentshield/ using the OS separator so VS Code can
+    # resolve the files regardless of which workspace is active.
+    abs_as = str(contract_dir)
+
+    def _abs(text: str) -> str:
+        """Replace every .agentshield/<file> with its absolute equivalent."""
+        return text.replace(".agentshield/", abs_as + _os.sep)
+
+    workspace_note = (
+        "> **If you are running Copilot Chat from the AgentShield repo** (not the\n"
+        "> target repo), add the target folder to your VS Code workspace first:\n"
+        f"> **File → Add Folder to Workspace → select `{target_root}`**\n"
+        "> This lets `@workspace` index the target repo's source files.\n"
+    )
 
     sep = "\n" + "-" * 72 + "\n"
     content = (
         "# AgentShield — Copilot Chat Prompts\n\n"
-        "Open this file, copy the block for the step you need,\n"
+        f"Target repo: `{target_root}`\n\n"
+        + workspace_note
+        + "\nOpen this file, copy the block for the step you need,\n"
         "and paste it verbatim into Copilot Chat (`@workspace` must be first).\n"
         + sep
         + "## Step 1 — Tier 2: LLM scan\n\n"
         "Paste **after** `agentshield scan` completes "
         "(`tier1-results.json` must exist).\n\n"
         "```\n"
-        + copilot_prompt()
+        + _abs(copilot_prompt())
         + "\n```\n"
         + sep
         + "## Step 2 — Behaviour emulator\n\n"
         "Paste **after** `tier2-findings.json` exists.\n\n"
         "```\n"
-        + agent_emulator_prompt()
+        + _abs(agent_emulator_prompt())
         + "\n```\n"
     )
 
