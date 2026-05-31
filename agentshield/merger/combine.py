@@ -11603,10 +11603,12 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
         + '</div>'
     )
 
-    # Q-by-Q decision walkthrough — collapsible
+    # Q-by-Q decision walkthrough — always collapsible.
+    # Shows structured Q-rows when reasoning uses "||" separators; falls back
+    # to a plain paragraph when Copilot wrote the reasoning without delimiters.
+    parts.append('<details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1–Q3)</summary>')
+    parts.append('<div class="saige-rationale saige-rationale-qs">')
     if len(q_blocks) > 1:
-        parts.append('<details class="saige-details"><summary class="saige-details-toggle">Decision walkthrough (Q1–Q3)</summary>')
-        parts.append('<div class="saige-rationale saige-rationale-qs">')
         for block in q_blocks:
             m = _q_pat.match(block)
             if m:
@@ -11622,9 +11624,9 @@ def _render_saige_block(r: Any, parts: list[str]) -> None:
                 )
             else:
                 parts.append(f'<div class="saige-q-row saige-q-plain">{_html_escape(block)}</div>')
-        parts.append('</div></details>')
     else:
-        parts.append(f'<div class="saige-rationale">{_html_escape(raw_reasoning)}</div>')
+        parts.append(f'<div class="saige-q-row saige-q-plain">{_html_escape(raw_reasoning)}</div>')
+    parts.append('</div></details>')
 
     parts.append(
         '<div class="saige-footer">Informational only — AgentShield does not '
