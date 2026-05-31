@@ -1457,8 +1457,10 @@ def _render_emu_trace_block(parts: list[str], emu_data: dict) -> None:
     )
 
     # Pre-play summary — shows attack sequence outcome at a glance before animation
-    _n_seeds = sum(1 for sp in seed_payloads if isinstance(sp, dict))
-    _n_muts  = sum(1 for mp in mutation_payloads if isinstance(mp, dict))
+    # Count from catalog_items (already truncated to layers actually tried) so
+    # "X seeds tried" matches what the animation walks through, not all seeds in the JSON.
+    _n_seeds = sum(1 for ci in catalog_items if not ci["layer"].startswith("mutation"))
+    _n_muts  = sum(1 for ci in catalog_items if ci["layer"].startswith("mutation"))
     if _n_seeds or _n_muts:
         _count_parts = []
         if _n_seeds:
@@ -14968,10 +14970,17 @@ def _render_emulator_coverage_block_v7(
                 parts.append('<div class="emu-cov-ac-body">')
 
                 # Full seed → mutation attempt trace
+                # Truncate to layers actually tried: seeds/mutations up to and
+                # including the landing layer. Untried seeds have blocked_at=None
+                # (indistinguishable from "advances") — showing them misleads the reader.
                 all_attempts = (
                     [("seed", sp) for sp in seeds] +
                     [("mutation", mp) for mp in mutations]
                 )
+                if payload_layer and all_attempts:
+                    _al_layers = [a[1].get("layer") for a in all_attempts]
+                    if payload_layer in _al_layers:
+                        all_attempts = all_attempts[:_al_layers.index(payload_layer) + 1]
                 if all_attempts:
                     parts.append('<div class="emu-cov-attempts">')
                     for attempt_type, attempt in all_attempts:
