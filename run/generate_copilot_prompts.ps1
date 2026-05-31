@@ -78,24 +78,15 @@ Group entry points that share an identical pipeline
 configuration — entry points with ANY pipeline difference get
 their own block.
 
-If two or more distinct pipeline configurations exist, use the
-entry_points[] schema (see output schema). Each entry point
-block must contain all 17 attack-class traces evaluated
-independently against that entry point's pipeline. An attack
-blocked by a filter on one route may land on a sibling route
-without a filter — do not share verdicts across entry points.
-
 Then classify the agent type: interactive, batch, sub-agent,
-or orchestrator. Walk each entry point's pipeline from source
-code. For each applicable catalogued attack class, identify the
-pipeline step(s) it targets, predict the pipeline behaviour
-under that attack for each entry point, and cite the file:line
-evidence for every prediction.
-
-Use the GENERIC catalogue payloads exactly as shipped — do not
-adapt the attacker-side text from source code. The intelligence
-comes from what the agent reveals, not from what you read in
-the repo.
+or orchestrator. Map the 8 pipeline steps from source code.
+Enumerate every untrusted data source the agent reads (user
+input, RAG documents, tool outputs, sub-agent messages).
+For each source, trace it through 4 security transitions
+(->LLM, ->tool-args, ->sink, ->store) and record a verdict
+with file:line evidence. Do not share verdicts across entry
+points — a control on one route does not protect a sibling
+route. Finally, evaluate the 5 pipeline-level checks.
 
 Write your pipeline emulations to
 .agentshield/agent-emulation.json following the schema exactly.

@@ -17149,7 +17149,7 @@ def _render_emulator_slide(parts: list[str]) -> None:
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">How the behaviour emulator works</span>'
         '<span class="ref-section-teaser">Copilot walks the agent\'s runtime pipeline from source '
-        'and predicts attack outcomes for 17 classes — no live target, no payloads fired.</span>'
+        'and traces each untrusted data source through 4 security transitions — no live target, no payloads fired.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
         '</summary>'
@@ -17158,8 +17158,8 @@ def _render_emulator_slide(parts: list[str]) -> None:
     parts.append('<div class="emu-slide-inner">')
     parts.append(
         '<div class="emu-slide-hero">Static pipeline analysis — no live agent needed</div>'
-        '<div class="emu-slide-sub">Copilot reads the source, maps the pipeline, and predicts '
-        'whether each of 17 catalogued attacks would land, be blocked, or be inconclusive.</div>'
+        '<div class="emu-slide-sub">Copilot reads the source, maps the 8-step pipeline, enumerates '
+        'untrusted data sources, and predicts per-transition verdicts with file:line evidence.</div>'
     )
     parts.append('<div class="emu-slide-steps">')
     for num, title, desc, tag in _STEPS:
@@ -18637,7 +18637,7 @@ def _render_emulator_reference_body(parts: list[str]) -> None:
 def _render_emulator_reference(parts: list[str]) -> None:
     """Render the Behaviour Emulator deep-dive section in the Reference tab.
 
-    Covers: pipeline step reference, the 17 attack classes, verdict guide,
+    Covers: pipeline step reference, the 4 security transitions, verdict guide,
     how to read the animation UI, and the seed->mutation escalation structure.
     Positioned after _render_how_it_works so readers who want a quick overview
     get the flowchart first and can drill into this for the full detail.
@@ -18649,7 +18649,7 @@ def _render_emulator_reference(parts: list[str]) -> None:
         '<span class="ref-section-chevron">&#9658;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">Behaviour Emulator &mdash; reading your results</span>'
-        '<span class="ref-section-teaser">Pipeline steps, 17 attack classes, verdict meanings, '
+        '<span class="ref-section-teaser">Pipeline steps, 4 security transitions, verdict meanings, '
         'animation guide, and seed &rarr; mutation structure.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
