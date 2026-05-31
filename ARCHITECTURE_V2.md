@@ -1,7 +1,7 @@
 # AgentShield Architecture
 
 Status: 2026-05-22 — current.
-Companion to: [README.md](./README.md) (install + quickstart), [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) (install + run guide), [GLOSSARY.md](./GLOSSARY.md) (security-term definitions).
+Companion to: [README.md](./README.md) (install + quickstart), [EXECUTE_AGENTSHIELD.md](./run/EXECUTE_AGENTSHIELD.md) (install + run guide), [GLOSSARY.md](./GLOSSARY.md) (security-term definitions).
 
 This document describes how AgentShield is built today. For the live, always-current rule list, open the **Reference tab** of any HTML report (`agentshield merge --output-html report.html`) — it's auto-generated from the rule pack, so it can never drift.
 

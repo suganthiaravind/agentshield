@@ -31,7 +31,7 @@ pip install -e ".[semgrep,dev]"        # semgrep is mandatory; dev = pytest + ru
 
 **Step-by-step guide:** [run/QUICKSTART.md](./run/QUICKSTART.md) — covers Mac/Linux and Windows/VDI.
 
-See [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) for flags, CI integration, and troubleshooting. Full v2 flow:
+See [EXECUTE_AGENTSHIELD.md](./run/EXECUTE_AGENTSHIELD.md) for flags, CI integration, and troubleshooting. Full v2 flow:
 
 ```bash
 # 1. Tier 1 scan + emit Tier 2 skill files
@@ -52,7 +52,7 @@ agentshield probe /path/to/your-agent-repo \
 agentshield merge /path/to/your-agent-repo --output-markdown report.md
 ```
 
-For the Copilot Tier 2 step in detail (architectural overview + sample output) see [ARCHITECTURE_V2.md §2.2](./ARCHITECTURE_V2.md). For the probe command see [ARCHITECTURE_V2.md §2.4](./ARCHITECTURE_V2.md). For trouble cases (Copilot misbehaviour, schema errors, etc.) see [EXECUTE_AGENTSHIELD.md §12.3](./EXECUTE_AGENTSHIELD.md).
+For the Copilot Tier 2 step in detail (architectural overview + sample output) see [ARCHITECTURE_V2.md §2.2](./ARCHITECTURE_V2.md). For the probe command see [ARCHITECTURE_V2.md §2.4](./ARCHITECTURE_V2.md). For trouble cases (Copilot misbehaviour, schema errors, etc.) see [EXECUTE_AGENTSHIELD.md §12.3](./run/EXECUTE_AGENTSHIELD.md).
 
 ## CLI reference
 
@@ -109,7 +109,7 @@ agentshield/
 
 | Doc | When to read |
 |---|---|
-| [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch |
+| [EXECUTE_AGENTSHIELD.md](./run/EXECUTE_AGENTSHIELD.md) | Install + execution guide (VDI-friendly); the only doc you need to run AgentShield from scratch |
 | [ARCHITECTURE_V2.md](./ARCHITECTURE_V2.md) | The v2 design doc — why the architecture is what it is |
 | [research.md](./research.md) | Security frameworks (OWASP / Agentic / ATLAS / CWE / NIST) + how AgentShield maps to them, plus the OSS AI-agent-security tool landscape (Promptfoo, Garak, AgentDojo, Agentic Radar, etc.) |
 | **Reference tab in the HTML report** | What every check (Semgrep + Copilot + Manifest) detects, with framework mappings. Auto-generated — run `agentshield merge --output-html report.html` and open the Reference tab; or open `report-print.html` for a printable list. |
