@@ -12,7 +12,7 @@ cd agentshield
 git checkout v6
 ```
 
-> You are now inside the AgentShield repo. This file (`QUICKSTART.md`) is here.
+> You are now inside the AgentShield repo. This file is at `run/QUICKSTART.md`.
 
 ---
 
@@ -35,7 +35,7 @@ export REPO=/absolute/path/to/your-agent-repo
 
 ```powershell
 # From the AgentShield repo root in a PowerShell terminal:
-.\run_tier1.ps1 -RepoPath "H:\path\to\your-agent-repo"
+.\run\run_tier1.ps1 -RepoPath "H:\path\to\your-agent-repo"
 ```
 
 What it does automatically:
@@ -54,7 +54,7 @@ Switch to VS Code → Copilot Chat → paste (Ctrl+V) to run Tier 2 (step 3 belo
 To generate the emulator prompt separately:
 
 ```powershell
-.\generate_copilot_prompts.ps1 -RepoPath "H:\path\to\your-agent-repo" -Mode Emulator -CopyToClipboard
+.\run\generate_copilot_prompts.ps1 -RepoPath "H:\path\to\your-agent-repo" -Mode Emulator -CopyToClipboard
 ```
 
 Flags for `run_tier1.ps1`:
@@ -209,7 +209,7 @@ open output/agentshield-report.html          # macOS
 | Step | What | Where |
 |---|---|---|
 | 0 | `export REPO=…` (Mac/Linux) | Terminal |
-| 0.1 | `.\run_tier1.ps1 -RepoPath "…"` **(Windows/VDI only — does steps 1+2 automatically)** | PowerShell |
+| 0.1 | `.\run\run_tier1.ps1 -RepoPath "…"` **(Windows/VDI only — does steps 1+2 automatically)** | PowerShell |
 | 1 | `pip install -e ".[semgrep,dev]"` | Terminal |
 | 2 | `agentshield scan $REPO --scan-all-files` | Terminal |
 | 3 | Paste **Tier 2 prompt** into Copilot Chat | VS Code |

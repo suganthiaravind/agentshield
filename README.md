@@ -29,7 +29,9 @@ pip install -e ".[semgrep,dev]"        # semgrep is mandatory; dev = pytest + ru
 
 ## Quickstart (5 minutes)
 
-See [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) for the install + execution guide (VDI-friendly). Full v2 flow:
+**Step-by-step guide:** [run/QUICKSTART.md](./run/QUICKSTART.md) — covers Mac/Linux and Windows/VDI.
+
+See [EXECUTE_AGENTSHIELD.md](./EXECUTE_AGENTSHIELD.md) for flags, CI integration, and troubleshooting. Full v2 flow:
 
 ```bash
 # 1. Tier 1 scan + emit Tier 2 skill files
