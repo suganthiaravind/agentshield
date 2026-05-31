@@ -14845,16 +14845,20 @@ def _render_emulator_coverage_block_v7(
         })
     pipeline_rows.sort(key=lambda x: _V_ORDER.get(x["nv"], 9))
 
-    # --- Summary counts (source-transition findings only; pipeline checks owned by T1/T2) ---
+    # --- Summary counts (source-transitions + pipeline checks) ---
     # Count verdicts across all actionable route findings
     all_route_verdicts = [
         ac["nv"]
         for rd in route_map.values()
         for ac in rd["acs"]
     ]
-    cnt_lands   = all_route_verdicts.count("lands")
-    cnt_partial = all_route_verdicts.count("partial")
-    cnt_blocked = all_route_verdicts.count("blocked")
+    # Include pipeline check verdicts so the coverage summary matches
+    # the dashboard headline count.
+    all_pipeline_verdicts = [pr["nv"] for pr in pipeline_rows]
+    all_verdicts = all_route_verdicts + all_pipeline_verdicts
+    cnt_lands   = all_verdicts.count("lands")
+    cnt_partial = all_verdicts.count("partial")
+    cnt_blocked = all_verdicts.count("blocked")
     n_routes    = len(route_map)
 
     # Count not_applicable transitions (path doesn't exist for this source type)
