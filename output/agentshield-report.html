@@ -3344,6 +3344,67 @@ footer {
 .fw-map-chip-cwe           { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
 .fw-map-chip-ast           { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 
+/* F.29: Reference tab — Security Framework Risks glossary. */
+.fw-risks-group {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.fw-risks-group:last-child { margin-bottom: 0; }
+.fw-risks-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+  border-radius: 8px;
+  transition: background 140ms ease;
+}
+.fw-risks-summary::-webkit-details-marker { display: none; }
+.fw-risks-summary:hover { background: #f8fafc; }
+.fw-risks-group[open] > .fw-risks-summary { background: #f8fafc; border-radius: 8px 8px 0 0; }
+.fw-risks-chevron {
+  font-size: 10px; color: var(--text-muted);
+  transition: transform 160ms ease; flex-shrink: 0;
+}
+.fw-risks-group[open] > .fw-risks-summary .fw-risks-chevron { transform: rotate(90deg); }
+.fw-risks-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.fw-risks-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+  background: #f1f5f9; color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.fw-risks-body {
+  padding: 0 12px 12px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.fw-risk-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  border-radius: 4px;
+  transition: background 120ms ease;
+}
+.fw-risk-row:last-child { border-bottom: none; }
+.fw-risk-row:hover { background: #f8fafc; }
+.fw-risk-id {
+  display: inline-block;
+  font-family: monospace; font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px;
+  border: 1px solid; white-space: nowrap; flex-shrink: 0;
+  margin-top: 1px;
+}
+.fw-risk-id-owasp_llm     { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.fw-risk-id-owasp_agentic { background: #f3e8ff; color: #6b21a8; border-color: #ddd6fe; }
+.fw-risk-id-ast           { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
+.fw-risk-id-mitre_atlas   { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+.fw-risk-id-cwe           { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+.fw-risk-detail { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.fw-risk-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.fw-risk-desc  { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
   background: var(--panel);
@@ -10442,6 +10503,267 @@ from config import client, MODEL</div>
 <li><code>LLM01</code>&hellip;<code>LLM10</code> / <code>AST01</code>&hellip;<code>AST10</code> &mdash; OWASP class: LLM Top 10 for code-level risks, Agentic Skills Top 10 for manifest-level risks.</li>
 <li><code>001</code>, <code>002</code>, &hellip; &mdash; sequence within that class, so multiple distinct controls for the same OWASP entry stay individually addressable.</li>
 </ul>
+</div>
+</details>
+<details class="ref-naming">
+<summary class="ref-naming-summary">Security Framework Risks &mdash; What Each Risk Means<span class="ref-naming-hint">click to expand</span></summary>
+<div class="ref-naming-body">
+<p class="panel-subtitle">AgentShield findings are tagged to one or more of these framework items. Expand a framework to see exactly what each risk ID means &mdash; useful when explaining a finding to a reviewer or mapping it to your organisation&rsquo;s risk register.</p>
+<details class="fw-risks-group">
+<summary class="fw-risks-summary"><span class="fw-risks-chevron">&#9656;</span><span class="fw-risks-name">OWASP LLM Top 10 v2</span><span class="fw-risks-badge">10 risks</span></summary>
+<div class="fw-risks-body">
+<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);margin:4px 0 10px;line-height:1.5;">The 10 LLM-specific risk categories defined by OWASP. Every Semgrep and Copilot control in AgentShield maps to at least one of these.</p>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM01</code><div class="fw-risk-detail"><span class="fw-risk-title">Prompt Injection</span>
+<span class="fw-risk-desc">adversary instructions injected via user input (direct) or retrieved content (indirect) override the model's intended behaviour.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM02</code><div class="fw-risk-detail"><span class="fw-risk-title">Sensitive Information Disclosure</span>
+<span class="fw-risk-desc">the model emits secrets, PII, or internal context that should have been redacted before reaching the user.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM03</code><div class="fw-risk-detail"><span class="fw-risk-title">Supply Chain</span>
+<span class="fw-risk-desc">compromised models, datasets, plugins, or training pipelines introduce vulnerabilities upstream of the agent's call site.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM04</code><div class="fw-risk-detail"><span class="fw-risk-title">Data and Model Poisoning</span>
+<span class="fw-risk-desc">training data or fine-tuning corpus tampered with to bias outputs or insert backdoors.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM05</code><div class="fw-risk-detail"><span class="fw-risk-title">Improper Output Handling</span>
+<span class="fw-risk-desc">LLM output piped into eval/exec/subprocess/HTML/SQL without sanitisation, treating untrusted output as trusted code.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM06</code><div class="fw-risk-detail"><span class="fw-risk-title">Excessive Agency</span>
+<span class="fw-risk-desc">the agent has more tool surface, permissions, or autonomy than the task requires; one prompt-injected instruction can fire destructive actions.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM07</code><div class="fw-risk-detail"><span class="fw-risk-title">System Prompt Leakage</span>
+<span class="fw-risk-desc">the system prompt (often containing keys, business rules, or escalation instructions) reaches the user via error paths, debug endpoints, or the model echoing it back.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM08</code><div class="fw-risk-detail"><span class="fw-risk-title">Vector and Embedding Weaknesses</span>
+<span class="fw-risk-desc">RAG/embedding stores leak across tenants or accept adversarial inputs that game similarity scoring.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM09</code><div class="fw-risk-detail"><span class="fw-risk-title">Misinformation</span>
+<span class="fw-risk-desc">confident-but-wrong outputs that downstream consumers trust without verification.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_llm">LLM10</code><div class="fw-risk-detail"><span class="fw-risk-title">Unbounded Consumption</span>
+<span class="fw-risk-desc">no caps on tokens, tool calls, recursion depth, or wall-clock budget; attacker drives cost or denial-of-service.</span>
+</div></div>
+</div>
+</details>
+<details class="fw-risks-group">
+<summary class="fw-risks-summary"><span class="fw-risks-chevron">&#9656;</span><span class="fw-risks-name">OWASP Agentic AI Top 10</span><span class="fw-risks-badge">15 risks</span></summary>
+<div class="fw-risks-body">
+<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);margin:4px 0 10px;line-height:1.5;">15 agentic-specific threats defined by OWASP for autonomous agent systems — covers memory, tool, identity, and multi-agent attack surfaces that the classic LLM Top 10 does not address.</p>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T1</code><div class="fw-risk-detail"><span class="fw-risk-title">Memory Poisoning</span>
+<span class="fw-risk-desc">adversary inputs are persisted into the agent's memory store and later recalled as authoritative context for future LLM calls.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T2</code><div class="fw-risk-detail"><span class="fw-risk-title">Tool Misuse</span>
+<span class="fw-risk-desc">agent calls tools with attacker-shaped arguments (shell/SQL/HTTP/path-traversal) because tool args derive from chat content without validation.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T3</code><div class="fw-risk-detail"><span class="fw-risk-title">Privilege Compromise</span>
+<span class="fw-risk-desc">agent operates with more permissions than the task needs; missing HITL gates on destructive tools.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T4</code><div class="fw-risk-detail"><span class="fw-risk-title">Resource Overload</span>
+<span class="fw-risk-desc">no max-iteration cap, timeout, or circuit breaker; planning loops run away on attacker-shaped inputs.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T5</code><div class="fw-risk-detail"><span class="fw-risk-title">Cascading Hallucination</span>
+<span class="fw-risk-desc">one false output feeds the next planner call, compounding errors across the agent's chain.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T6</code><div class="fw-risk-detail"><span class="fw-risk-title">Intent Breaking and Goal Manipulation</span>
+<span class="fw-risk-desc">user content overrides the developer's intended objective via prompt-injection or social-engineering of the planner.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T7</code><div class="fw-risk-detail"><span class="fw-risk-title">Misaligned and Deceptive Behaviors</span>
+<span class="fw-risk-desc">agent takes plausible-looking actions that don't match the user's actual goal.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T8</code><div class="fw-risk-detail"><span class="fw-risk-title">Repudiation and Untraceability</span>
+<span class="fw-risk-desc">no immutable audit log at the tool layer; the agent's self-report is the only evidence an action happened.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T9</code><div class="fw-risk-detail"><span class="fw-risk-title">Identity Spoofing and Impersonation</span>
+<span class="fw-risk-desc">chat-asserted role (&quot;I'm admin&quot;) accepted as authority because no signed-identity check exists.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T10</code><div class="fw-risk-detail"><span class="fw-risk-title">Overwhelmed Human-in-the-Loop</span>
+<span class="fw-risk-desc">too many approval prompts cause reviewers to rubber-stamp or disable HITL altogether.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T11</code><div class="fw-risk-detail"><span class="fw-risk-title">Unexpected RCE and Code Attacks</span>
+<span class="fw-risk-desc">agent emits or interprets code that executes in a context the developer didn't anticipate.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T12</code><div class="fw-risk-detail"><span class="fw-risk-title">Agent Communication Poisoning</span>
+<span class="fw-risk-desc">upstream agent forwards user input verbatim to a downstream agent; trust boundary missing between agents.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T13</code><div class="fw-risk-detail"><span class="fw-risk-title">Rogue Agents in Multi-Agent Systems</span>
+<span class="fw-risk-desc">peer agents accepted as trusted on unauthenticated signals (e.g., header), no cryptographic peer auth.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T14</code><div class="fw-risk-detail"><span class="fw-risk-title">Human Attacks on Multi-Agent Systems</span>
+<span class="fw-risk-desc">operators socially engineered to approve actions across agents.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-owasp_agentic">T15</code><div class="fw-risk-detail"><span class="fw-risk-title">Human Manipulation</span>
+<span class="fw-risk-desc">agent outputs designed to manipulate operators into harmful decisions.</span>
+</div></div>
+</div>
+</details>
+<details class="fw-risks-group">
+<summary class="fw-risks-summary"><span class="fw-risks-chevron">&#9656;</span><span class="fw-risks-name">OWASP Agentic Skills Top 10 (AST10)</span><span class="fw-risks-badge">10 risks</span></summary>
+<div class="fw-risks-body">
+<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);margin:4px 0 10px;line-height:1.5;">10 risks specific to agent skill and manifest files (SKILL.md, AGENT.md, CLAUDE.md). Checked by the AgentShield Manifest Scanner.</p>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST01</code><div class="fw-risk-detail"><span class="fw-risk-title">Untrusted Skill Loading</span>
+<span class="fw-risk-desc">agent loads skills from an unvetted source (marketplace, user upload, remote URL).</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST02</code><div class="fw-risk-detail"><span class="fw-risk-title">Skill Hijacking</span>
+<span class="fw-risk-desc">a registered skill is replaced or shadowed by an attacker-controlled variant.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST03</code><div class="fw-risk-detail"><span class="fw-risk-title">Insecure Skill Manifest</span>
+<span class="fw-risk-desc">manifest grants overly broad permissions (network: any, shell: true, no allow-list).</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST04</code><div class="fw-risk-detail"><span class="fw-risk-title">Excessive Permissions</span>
+<span class="fw-risk-desc">skill requests more capabilities than its documented action needs.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST05</code><div class="fw-risk-detail"><span class="fw-risk-title">Skill Supply Chain</span>
+<span class="fw-risk-desc">skill bundle includes compromised dependencies or unpinned versions.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST06</code><div class="fw-risk-detail"><span class="fw-risk-title">Secrets in Skill Bundle</span>
+<span class="fw-risk-desc">API keys, tokens, or credentials hardcoded into the skill's source files.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST07</code><div class="fw-risk-detail"><span class="fw-risk-title">Skill Output Injection</span>
+<span class="fw-risk-desc">skill emits content that the host agent re-interprets as instructions.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST08</code><div class="fw-risk-detail"><span class="fw-risk-title">Cross-Skill Privilege Escalation</span>
+<span class="fw-risk-desc">combining permissions from two skills grants an attack surface neither holds alone.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST09</code><div class="fw-risk-detail"><span class="fw-risk-title">Inadequate Skill Logging</span>
+<span class="fw-risk-desc">skill calls aren't logged with sufficient detail to reconstruct what happened.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-ast">AST10</code><div class="fw-risk-detail"><span class="fw-risk-title">Skill Behavior Drift</span>
+<span class="fw-risk-desc">skill's behaviour changes version-to-version without baselines or detection.</span>
+</div></div>
+</div>
+</details>
+<details class="fw-risks-group">
+<summary class="fw-risks-summary"><span class="fw-risks-chevron">&#9656;</span><span class="fw-risks-name">MITRE ATLAS</span><span class="fw-risks-badge">15 risks</span></summary>
+<div class="fw-risks-body">
+<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);margin:4px 0 10px;line-height:1.5;">MITRE's adversarial threat catalogue for AI/ML systems. Technique IDs (AML.T0051, etc.) map to the attacker tactics that AgentShield's behaviour emulator exercises.</p>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0010</code><div class="fw-risk-detail"><span class="fw-risk-title">ML Supply Chain Compromise</span>
+<span class="fw-risk-desc">adversary tampers with model files, training corpora, or ML dependencies upstream of deployment.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0011</code><div class="fw-risk-detail"><span class="fw-risk-title">User Execution: Unsafe ML Artifacts</span>
+<span class="fw-risk-desc">application loads pickled models or other unsafe formats from untrusted sources.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0012</code><div class="fw-risk-detail"><span class="fw-risk-title">Valid Accounts</span>
+<span class="fw-risk-desc">adversary obtains legitimate credentials and uses them to interact with the ML system.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0018</code><div class="fw-risk-detail"><span class="fw-risk-title">Backdoor ML Model</span>
+<span class="fw-risk-desc">adversary inserts a trigger into the model that activates malicious behaviour on specific inputs.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0019</code><div class="fw-risk-detail"><span class="fw-risk-title">Publish Poisoned Datasets</span>
+<span class="fw-risk-desc">adversary releases datasets crafted to corrupt models that train on them.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0024</code><div class="fw-risk-detail"><span class="fw-risk-title">Exfiltration via ML Inference API</span>
+<span class="fw-risk-desc">adversary queries the model to extract training data, prompts, or proprietary parameters.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0029</code><div class="fw-risk-detail"><span class="fw-risk-title">Denial of ML Service</span>
+<span class="fw-risk-desc">adversary drives the model into expensive or infinite computation paths.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0049</code><div class="fw-risk-detail"><span class="fw-risk-title">Exploit Public-Facing Application</span>
+<span class="fw-risk-desc">abuse of a public ML/agent interface to reach internal resources.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0050</code><div class="fw-risk-detail"><span class="fw-risk-title">Command and Scripting Interpreter</span>
+<span class="fw-risk-desc">LLM-derived content executed via shell, eval, or interpreter.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0051</code><div class="fw-risk-detail"><span class="fw-risk-title">LLM Prompt Injection</span>
+<span class="fw-risk-desc">direct or indirect injection that overrides the model's intended behaviour.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0053</code><div class="fw-risk-detail"><span class="fw-risk-title">LLM Plugin Compromise</span>
+<span class="fw-risk-desc">a plugin or tool integrated with the LLM is compromised and abused as a foothold.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0054</code><div class="fw-risk-detail"><span class="fw-risk-title">LLM Jailbreak</span>
+<span class="fw-risk-desc">adversary bypasses content / safety guardrails via crafted prompts.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0055</code><div class="fw-risk-detail"><span class="fw-risk-title">Unsecured Credentials</span>
+<span class="fw-risk-desc">credentials accessible from the agent's runtime context are stolen or leaked.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0056</code><div class="fw-risk-detail"><span class="fw-risk-title">LLM Meta Prompt Extraction</span>
+<span class="fw-risk-desc">adversary extracts the system prompt or hidden instructions.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-mitre_atlas">AML.T0057</code><div class="fw-risk-detail"><span class="fw-risk-title">LLM Data Leakage</span>
+<span class="fw-risk-desc">model emits training data, prompts, or other sensitive context to the user.</span>
+</div></div>
+</div>
+</details>
+<details class="fw-risks-group">
+<summary class="fw-risks-summary"><span class="fw-risks-chevron">&#9656;</span><span class="fw-risks-name">CWE (Common Weakness Enumeration)</span><span class="fw-risks-badge">25 risks</span></summary>
+<div class="fw-risks-body">
+<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);margin:4px 0 10px;line-height:1.5;">MITRE's weakness taxonomy. CWE IDs link AgentShield findings to root-cause weakness categories used by enterprise security dashboards and vulnerability management tools.</p>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-22</code><div class="fw-risk-detail"><span class="fw-risk-title">Path Traversal</span>
+<span class="fw-risk-desc">attacker-controlled path component reaches the filesystem without normalisation, allowing access outside the intended directory.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-78</code><div class="fw-risk-detail"><span class="fw-risk-title">OS Command Injection</span>
+<span class="fw-risk-desc">attacker-controlled string interpolated into a shell command without sanitisation.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-79</code><div class="fw-risk-detail"><span class="fw-risk-title">Cross-site Scripting</span>
+<span class="fw-risk-desc">attacker-controlled content rendered into a web page without escaping.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-89</code><div class="fw-risk-detail"><span class="fw-risk-title">SQL Injection</span>
+<span class="fw-risk-desc">attacker-controlled string concatenated into a SQL query without parameterisation.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-94</code><div class="fw-risk-detail"><span class="fw-risk-title">Code Injection</span>
+<span class="fw-risk-desc">attacker-controlled input passed to eval / exec / dynamic-import without validation.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-95</code><div class="fw-risk-detail"><span class="fw-risk-title">Eval Injection</span>
+<span class="fw-risk-desc">direct eval() of user-influenced or LLM-emitted strings.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-200</code><div class="fw-risk-detail"><span class="fw-risk-title">Information Exposure</span>
+<span class="fw-risk-desc">sensitive content (secrets, system prompt, PII) emitted to a user who shouldn't see it.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-269</code><div class="fw-risk-detail"><span class="fw-risk-title">Improper Privilege Management</span>
+<span class="fw-risk-desc">agent or tool acts with more privilege than the task requires.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-285</code><div class="fw-risk-detail"><span class="fw-risk-title">Improper Authorization</span>
+<span class="fw-risk-desc">action proceeds without verifying the caller has the required permission.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-287</code><div class="fw-risk-detail"><span class="fw-risk-title">Improper Authentication</span>
+<span class="fw-risk-desc">caller's identity isn't verified before sensitive operations.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-319</code><div class="fw-risk-detail"><span class="fw-risk-title">Cleartext Transmission</span>
+<span class="fw-risk-desc">sensitive data sent over a channel without encryption.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-322</code><div class="fw-risk-detail"><span class="fw-risk-title">Key Exchange Without Entity Authentication</span>
+<span class="fw-risk-desc">keys established without verifying the counterparty's identity.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-345</code><div class="fw-risk-detail"><span class="fw-risk-title">Insufficient Verification of Authenticity</span>
+<span class="fw-risk-desc">input accepted as trusted without signature / origin checks.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-400</code><div class="fw-risk-detail"><span class="fw-risk-title">Uncontrolled Resource Consumption</span>
+<span class="fw-risk-desc">no caps on iterations, tokens, or compute time enable denial-of-service.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-489</code><div class="fw-risk-detail"><span class="fw-risk-title">Active Debug Code</span>
+<span class="fw-risk-desc">debug endpoints or paths left enabled in production.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-494</code><div class="fw-risk-detail"><span class="fw-risk-title">Download of Code Without Integrity Check</span>
+<span class="fw-risk-desc">code or models fetched and executed without signature verification.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-502</code><div class="fw-risk-detail"><span class="fw-risk-title">Deserialization of Untrusted Data</span>
+<span class="fw-risk-desc">pickle / yaml.load / similar called on attacker-controlled bytes.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-532</code><div class="fw-risk-detail"><span class="fw-risk-title">Insertion of Sensitive Information into Log File</span>
+<span class="fw-risk-desc">secrets, PII, or prompts written to logs and later exposed.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-639</code><div class="fw-risk-detail"><span class="fw-risk-title">Authorization Bypass Through User-Controlled Key</span>
+<span class="fw-risk-desc">IDOR / tenant-scoping enforced at the prompt layer instead of the data-access layer.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-732</code><div class="fw-risk-detail"><span class="fw-risk-title">Incorrect Permission Assignment for Critical Resource</span>
+<span class="fw-risk-desc">file/manifest/IAM grants are broader than necessary (often the AST03 manifest pattern).</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-778</code><div class="fw-risk-detail"><span class="fw-risk-title">Insufficient Logging</span>
+<span class="fw-risk-desc">actions taken by the agent aren't recorded with enough detail to reconstruct what happened.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-798</code><div class="fw-risk-detail"><span class="fw-risk-title">Use of Hard-coded Credentials</span>
+<span class="fw-risk-desc">API keys, tokens, or passwords baked into source code.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-829</code><div class="fw-risk-detail"><span class="fw-risk-title">Inclusion of Functionality from Untrusted Control Sphere</span>
+<span class="fw-risk-desc">code or skills loaded from untrusted sources.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-835</code><div class="fw-risk-detail"><span class="fw-risk-title">Loop with Unreachable Exit Condition</span>
+<span class="fw-risk-desc">re-planning loop with no max-iteration or timeout safeguard.</span>
+</div></div>
+<div class="fw-risk-row"><code class="fw-risk-id fw-risk-id-cwe">CWE-918</code><div class="fw-risk-detail"><span class="fw-risk-title">Server-Side Request Forgery</span>
+<span class="fw-risk-desc">LLM-derived URL or destination reaches an unrestricted egress channel.</span>
+</div></div>
+</div>
+</details>
 </div>
 </details>
 <details class="ref-naming">

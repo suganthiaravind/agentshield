@@ -7278,6 +7278,67 @@ footer {
 .fw-map-chip-cwe           { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
 .fw-map-chip-ast           { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 
+/* F.29: Reference tab — Security Framework Risks glossary. */
+.fw-risks-group {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.fw-risks-group:last-child { margin-bottom: 0; }
+.fw-risks-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+  border-radius: 8px;
+  transition: background 140ms ease;
+}
+.fw-risks-summary::-webkit-details-marker { display: none; }
+.fw-risks-summary:hover { background: #f8fafc; }
+.fw-risks-group[open] > .fw-risks-summary { background: #f8fafc; border-radius: 8px 8px 0 0; }
+.fw-risks-chevron {
+  font-size: 10px; color: var(--text-muted);
+  transition: transform 160ms ease; flex-shrink: 0;
+}
+.fw-risks-group[open] > .fw-risks-summary .fw-risks-chevron { transform: rotate(90deg); }
+.fw-risks-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.fw-risks-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+  background: #f1f5f9; color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.fw-risks-body {
+  padding: 0 12px 12px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.fw-risk-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  border-radius: 4px;
+  transition: background 120ms ease;
+}
+.fw-risk-row:last-child { border-bottom: none; }
+.fw-risk-row:hover { background: #f8fafc; }
+.fw-risk-id {
+  display: inline-block;
+  font-family: monospace; font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px;
+  border: 1px solid; white-space: nowrap; flex-shrink: 0;
+  margin-top: 1px;
+}
+.fw-risk-id-owasp_llm     { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.fw-risk-id-owasp_agentic { background: #f3e8ff; color: #6b21a8; border-color: #ddd6fe; }
+.fw-risk-id-ast           { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
+.fw-risk-id-mitre_atlas   { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+.fw-risk-id-cwe           { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+.fw-risk-detail { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.fw-risk-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.fw-risk-desc  { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
 /* F.26: Reference tab — "what AgentShield checks for" cards. */
 .reference-card {
   background: var(--panel);
@@ -15308,6 +15369,7 @@ def _render_reference_panel(
     parts.append('</div>')  # /ref-naming-body
     parts.append('</details>')  # /ref-naming
 
+    _render_framework_risks_section(parts)
     _render_framework_mapping_table(parts, refs)
     parts.append('</div>')  # /ref-section-body
     parts.append('</details>')  # /ref-section
@@ -15317,6 +15379,121 @@ def _render_reference_panel(
 
     if report is not None and report.probe_campaigns:
         _render_redteam_campaigns(parts, report.probe_campaigns)
+
+
+def _render_framework_risks_section(parts: list[str]) -> None:
+    """Render the 'Security Framework Risks — What Each Risk Means' glossary.
+
+    One collapsible panel per framework (OWASP LLM, Agentic AI, AST10,
+    MITRE ATLAS, CWE). Each row shows the risk ID, short title, and a
+    one-sentence description pulled from _FRAMEWORK_ITEM_DESCRIPTIONS.
+    Sits inside the 'What AgentShield checks' ref-section so it answers
+    'what does LLM01 / T6 / AML.T0051 actually mean?' without leaving
+    the report.
+    """
+    _FRAMEWORKS = [
+        (
+            "owasp_llm",
+            "OWASP LLM Top 10 v2",
+            "The 10 LLM-specific risk categories defined by OWASP. "
+            "Every Semgrep and Copilot control in AgentShield maps to at "
+            "least one of these.",
+        ),
+        (
+            "owasp_agentic",
+            "OWASP Agentic AI Top 10",
+            "15 agentic-specific threats defined by OWASP for autonomous "
+            "agent systems — covers memory, tool, identity, and multi-agent "
+            "attack surfaces that the classic LLM Top 10 does not address.",
+        ),
+        (
+            "ast",
+            "OWASP Agentic Skills Top 10 (AST10)",
+            "10 risks specific to agent skill and manifest files "
+            "(SKILL.md, AGENT.md, CLAUDE.md). Checked by the AgentShield "
+            "Manifest Scanner.",
+        ),
+        (
+            "mitre_atlas",
+            "MITRE ATLAS",
+            "MITRE's adversarial threat catalogue for AI/ML systems. "
+            "Technique IDs (AML.T0051, etc.) map to the attacker tactics "
+            "that AgentShield's behaviour emulator exercises.",
+        ),
+        (
+            "cwe",
+            "CWE (Common Weakness Enumeration)",
+            "MITRE's weakness taxonomy. CWE IDs link AgentShield findings "
+            "to root-cause weakness categories used by enterprise security "
+            "dashboards and vulnerability management tools.",
+        ),
+    ]
+
+    parts.append('<details class="ref-naming">')
+    parts.append(
+        '<summary class="ref-naming-summary">'
+        'Security Framework Risks &mdash; What Each Risk Means'
+        '<span class="ref-naming-hint">click to expand</span>'
+        '</summary>'
+    )
+    parts.append('<div class="ref-naming-body">')
+    parts.append(
+        '<p class="panel-subtitle">'
+        'AgentShield findings are tagged to one or more of these framework '
+        'items. Expand a framework to see exactly what each risk ID means '
+        '&mdash; useful when explaining a finding to a reviewer or '
+        'mapping it to your organisation&rsquo;s risk register.'
+        '</p>'
+    )
+
+    for field_key, fw_label, fw_blurb in _FRAMEWORKS:
+        items = _FRAMEWORK_ITEM_DESCRIPTIONS.get(field_key, {})
+        if not items:
+            continue
+
+        parts.append('<details class="fw-risks-group">')
+        count = len(items)
+        parts.append(
+            f'<summary class="fw-risks-summary">'
+            f'<span class="fw-risks-chevron">&#9656;</span>'
+            f'<span class="fw-risks-name">{_html_escape(fw_label)}</span>'
+            f'<span class="fw-risks-badge">{count} risk{"s" if count != 1 else ""}</span>'
+            f'</summary>'
+        )
+        parts.append('<div class="fw-risks-body">')
+        parts.append(
+            f'<p class="fw-risks-blurb" style="font-size:11.5px;color:var(--text-muted);'
+            f'margin:4px 0 10px;line-height:1.5;">'
+            f'{_html_escape(fw_blurb)}</p>'
+        )
+
+        for item_id, full_desc in items.items():
+            # Descriptions are "Title — detail text"; split for display.
+            if " — " in full_desc:
+                title, detail = full_desc.split(" — ", 1)
+            elif " - " in full_desc:
+                title, detail = full_desc.split(" - ", 1)
+            else:
+                title, detail = full_desc, ""
+
+            parts.append(
+                f'<div class="fw-risk-row">'
+                f'<code class="fw-risk-id fw-risk-id-{field_key}">'
+                f'{_html_escape(item_id)}</code>'
+                f'<div class="fw-risk-detail">'
+                f'<span class="fw-risk-title">{_html_escape(title)}</span>'
+            )
+            if detail:
+                parts.append(
+                    f'<span class="fw-risk-desc">{_html_escape(detail)}</span>'
+                )
+            parts.append('</div></div>')
+
+        parts.append('</div>')    # /fw-risks-body
+        parts.append('</details>')  # /fw-risks-group
+
+    parts.append('</div>')    # /ref-naming-body
+    parts.append('</details>')  # /ref-naming
 
 
 def _render_framework_mapping_table(
