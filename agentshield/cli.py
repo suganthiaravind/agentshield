@@ -541,10 +541,15 @@ def _print_tier2_banner(target_root: Path, emit: EmitResult) -> None:
     print("  STEP 2 NOW — paste this into Copilot Chat:")
     print(dash)
     print()
-    # Use absolute paths so the prompt works from any VS Code workspace
+    # Remove @workspace and use absolute paths — prompt works from any open workspace
     import os as _os
     _abs_as = str(target_root.resolve() / ".agentshield")
-    print(copilot_prompt().replace(".agentshield/", _abs_as + _os.sep))
+    _prompt = copilot_prompt()
+    _prompt = _prompt.replace("@workspace ", "")
+    _prompt = _prompt.replace(".agentshield/", _abs_as + _os.sep)
+    _prompt = _prompt.replace("in this workspace", f"in {target_root.resolve()}")
+    _prompt = _prompt.replace("this workspace", str(target_root.resolve()))
+    print(_prompt)
     print()
     print(dash)
     print()

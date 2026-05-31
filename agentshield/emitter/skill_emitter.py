@@ -436,13 +436,12 @@ def agent_emulator_prompt() -> str:
 
 
 def emit_copilot_prompts_md(target_root: Path) -> Path:
-    """Write .agentshield/copilot-prompts.md with the ready-to-paste
-    Tier 2 and behaviour-emulator prompts.
+    """Write .agentshield/copilot-prompts.md with target-specific prompts.
 
-    All .agentshield/ references in the prompts are rewritten as absolute
-    paths to this target repo so the prompts work when pasted into any
-    Copilot Chat window — including one whose workspace is the AgentShield
-    repo rather than the target repo.
+    @workspace is replaced with the absolute target repo path so the prompts
+    work when pasted into any Copilot Chat window — Copilot Agent mode reads
+    files directly from the filesystem and does not need @workspace to locate
+    the target repo.
 
     Overwrites on every scan so the prompts are always current.
     Returns the path written.
@@ -452,40 +451,39 @@ def emit_copilot_prompts_md(target_root: Path) -> Path:
     contract_dir = target_root / ".agentshield"
     contract_dir.mkdir(exist_ok=True)
 
-    # Absolute path to .agentshield/ using the OS separator so VS Code can
-    # resolve the files regardless of which workspace is active.
-    abs_as = str(contract_dir)
+    abs_as  = str(contract_dir)
+    abs_sep = _os.sep
 
-    def _abs(text: str) -> str:
-        """Replace every .agentshield/<file> with its absolute equivalent."""
-        return text.replace(".agentshield/", abs_as + _os.sep)
-
-    workspace_note = (
-        "> **If you are running Copilot Chat from the AgentShield repo** (not the\n"
-        "> target repo), add the target folder to your VS Code workspace first:\n"
-        f"> **File → Add Folder to Workspace → select `{target_root}`**\n"
-        "> This lets `@workspace` index the target repo's source files.\n"
-    )
+    def _targeted(text: str) -> str:
+        """Rewrite the generic prompt for this specific target repo:
+        - replace @workspace with the absolute target path
+        - replace .agentshield/<file> with the absolute path
+        - replace 'in this workspace' / 'this workspace' with the absolute path
+        """
+        text = text.replace("@workspace ", "")
+        text = text.replace(".agentshield/", abs_as + abs_sep)
+        text = text.replace("in this workspace", f"in {target_root}")
+        text = text.replace("this workspace", str(target_root))
+        return text
 
     sep = "\n" + "-" * 72 + "\n"
     content = (
         "# AgentShield — Copilot Chat Prompts\n\n"
         f"Target repo: `{target_root}`\n\n"
-        + workspace_note
-        + "\nOpen this file, copy the block for the step you need,\n"
-        "and paste it verbatim into Copilot Chat (`@workspace` must be first).\n"
+        "Paste each block verbatim into Copilot Chat. "
+        "The prompts use absolute paths so they work from any open workspace.\n"
         + sep
         + "## Step 1 — Tier 2: LLM scan\n\n"
         "Paste **after** `agentshield scan` completes "
         "(`tier1-results.json` must exist).\n\n"
         "```\n"
-        + _abs(copilot_prompt())
+        + _targeted(copilot_prompt())
         + "\n```\n"
         + sep
         + "## Step 2 — Behaviour emulator\n\n"
         "Paste **after** `tier2-findings.json` exists.\n\n"
         "```\n"
-        + _abs(agent_emulator_prompt())
+        + _targeted(agent_emulator_prompt())
         + "\n```\n"
     )
 

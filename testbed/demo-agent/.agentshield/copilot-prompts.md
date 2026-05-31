@@ -2,13 +2,7 @@
 
 Target repo: `/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent`
 
-> **If you are running Copilot Chat from the AgentShield repo** (not the
-> target repo), add the target folder to your VS Code workspace first:
-> **File → Add Folder to Workspace → select `/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent`**
-> This lets `@workspace` index the target repo's source files.
-
-Open this file, copy the block for the step you need,
-and paste it verbatim into Copilot Chat (`@workspace` must be first).
+Paste each block verbatim into Copilot Chat. The prompts use absolute paths so they work from any open workspace.
 
 ------------------------------------------------------------------------
 ## Step 1 — Tier 2: LLM scan
@@ -16,11 +10,11 @@ and paste it verbatim into Copilot Chat (`@workspace` must be first).
 Paste **after** `agentshield scan` completes (`tier1-results.json` must exist).
 
 ```
-@workspace Please run AgentShield Tier 2.
+Please run AgentShield Tier 2.
 
 Read the checklist at /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/tier2-checklist.md and the
 output schema at /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/tier2-output-schema.md. Walk every
-source file in this workspace, apply each check that is in scope
+source file in /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent, apply each check that is in scope
 for the file's language, and write your findings to
 /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/tier2-findings.json following the schema exactly.
 
@@ -39,7 +33,7 @@ to detect stale Tier 2 runs.
 Paste **after** `tier2-findings.json` exists.
 
 ```
-@workspace Please run the AgentShield agent behaviour emulator.
+Please run the AgentShield agent behaviour emulator.
 
 Read the instructions at
 /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulator-instructions.md and the output
