@@ -454,7 +454,49 @@ Cite the system_prompt code location and the specific secret or its absence.
 
 ---
 
-## Step 5 — Write the emulation file
+## Step 5 — Dedup review
+
+Before writing the output, cross-check each actionable finding against
+the existing Tier 1 and Tier 2 results so the report doesn't repeat
+findings that Semgrep or Copilot already raised.
+
+**Read:**
+- `.agentshield/tier1-results.json` — each entry has `rule_id`, `path`, `start.line`, `message`.
+- `.agentshield/tier2-findings.json` — each entry has `control_id`, `file`, `line`, `verdict` (`TP` / `CD`).
+
+**For every actionable emulator finding** — transitions where `verdict` is
+`lands` or `partial`, and pipeline checks where the verdict is in the
+actionable set (`audit_trail: partial/absent`, `hitl_gates: ungated`,
+`loop_termination: absent`, `agent_auth: bypassable`,
+`system_prompt_confidentiality: exposed`) — assign a `judge_verdict`:
+
+| `judge_verdict` | When to use |
+|---|---|
+| `keep` | Net-new finding — no Tier 1 rule or Tier 2 TP/CD already covers the same file:line and vulnerability class. |
+| `duplicate` | A Tier 1 rule **or** a Tier 2 TP/CD already flags the same vulnerability at the same code location. The emulator and the upstream scanner are seeing the same defect. |
+| `fp` | A defence is present in code that the emulator overlooked — the prediction is contradicted by observable code evidence. |
+
+Add `judge_verdict` and `judge_reason` (one sentence) to every actionable
+transition and every actionable pipeline check. Skip non-actionable
+entries (`blocked`, `not_applicable`): they do not need a judge verdict.
+
+**Per-check matching guidance:**
+
+| Emulator finding | Check against |
+|---|---|
+| `system_prompt_confidentiality: exposed` | Tier 1 `D001` (hardcoded-llm-key) at the same file:line |
+| `hitl_gates: ungated` | Tier 2 TP/CD for `LLM06` (excessive agency) |
+| `agent_auth: bypassable` | Tier 1 `D001` on the same secret, or Tier 2 TP/CD for `T9` / `CWE-798` |
+| `to_llm` transition | Tier 2 TP/CD for `LLM01` (injection) at the same source file:line |
+| `to_sink` transition | Tier 2 TP/CD for `LLM05` (output handling) at the same source file:line |
+| `to_tool_args` transition | Tier 2 TP/CD for `T2`, `CWE-78`, or `CWE-89` at the source file:line |
+
+Default to `keep` when unsure. A finding shared across multiple transition
+types at the same route is still `keep` — transitions are independent.
+
+---
+
+## Step 6 — Write the emulation file
 
 Write `.agentshield/agent-emulation.json` following the schema in
 `.agentshield/agent-emulator-output-schema.md`.

@@ -1758,6 +1758,8 @@ def _v7_sources_to_attack_class_traces(
             verdict = t.get("verdict")
             if verdict in ("not_applicable", "blocked", None):
                 continue
+            if str(t.get("judge_verdict") or "keep") in ("duplicate", "fp"):
+                continue
 
             attack_class = _V7_SOURCE_TRANSITION_TO_ATTACK_CLASS.get(
                 (src_type, t_key)
@@ -1879,6 +1881,8 @@ def _v7_sources_to_attack_class_traces(
         chk_verdict = str(chk.get("verdict") or "")
         actionable = _ACTIONABLE_PIPELINE_CHECK_VERDICTS.get(check_key, set())
         if chk_verdict not in actionable:
+            continue
+        if str(chk.get("judge_verdict") or "keep") in ("duplicate", "fp"):
             continue
         # Map pipeline check verdict to emulator verdict scale
         emu_verdict = "partial" if chk_verdict in ("partial", "bypassable") else "lands"
@@ -14283,9 +14287,12 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
             for _tk in _T_KEYS:
                 _t = ((_src.get("transitions") or {}).get(_tk)) or {}
                 _v = str(_t.get("verdict") or "not_applicable").strip()
-                if _v in ("lands", "partial"):
-                    rt_total += 1
-                    rt_files[_label] = rt_files.get(_label, 0) + 1
+                if _v not in ("lands", "partial"):
+                    continue
+                if str(_t.get("judge_verdict") or "keep") in ("duplicate", "fp"):
+                    continue
+                rt_total += 1
+                rt_files[_label] = rt_files.get(_label, 0) + 1
         # Pipeline checks: also count actionable ones because _v7_sources_to_attack_class_traces
         # converts them into full walkthroughs that land in agentshield-emulator-payloads.md.
         # Use the same verdict mapping defined there so the badge stays consistent.
@@ -14301,9 +14308,12 @@ def _render_input_output_panel(r: Any, parts: list[str]) -> None:
             _chk = _pc.get(_ck)
             if not isinstance(_chk, dict):
                 continue
-            if str(_chk.get("verdict") or "") in _actionable_verdicts:
-                rt_total += 1
-                rt_files["pipeline_checks"] = rt_files.get("pipeline_checks", 0) + 1
+            if str(_chk.get("verdict") or "") not in _actionable_verdicts:
+                continue
+            if str(_chk.get("judge_verdict") or "keep") in ("duplicate", "fp"):
+                continue
+            rt_total += 1
+            rt_files["pipeline_checks"] = rt_files.get("pipeline_checks", 0) + 1
         # Legacy flat schema (entry_points with attack_class_traces)
         if not _emu.get("untrusted_sources"):
             for _ep in (_emu.get("entry_points") or []):
