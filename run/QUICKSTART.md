@@ -1,34 +1,13 @@
 # AgentShield — Quick Start
 
-Run a complete scan in five steps, all from the **AgentShield repo**.
+> **First time?** Follow [INSTALL.md](./INSTALL.md) before continuing here.
+
+Run a complete scan in four steps, all from the **AgentShield repo**.
 You never need to open the target repo in a separate VS Code window.
 
 ---
 
-## Before you begin — clone AgentShield
-
-```bash
-git clone git@github.com:suganthiaravind/agentshield.git
-cd agentshield
-git checkout v7
-```
-
-Open the **AgentShield repo** in VS Code. Keep this window open for the
-entire scan — every command and every Copilot Chat prompt runs here.
-
----
-
-## 1 — Install AgentShield
-
-```bash
-agentshield --version 2>/dev/null || pip install -e ".[semgrep,dev]"
-```
-
-**Done when you see:** `agentshield 4.x.x`
-
----
-
-## 2 — Tier 1: static scan
+## 1 — Tier 1: static scan
 
 ```bash
 agentshield scan /absolute/path/to/your-agent-repo --scan-all-files
@@ -44,15 +23,11 @@ What this does:
   ready-to-paste file containing the exact Tier 2 and emulator prompts
   with absolute paths to the target repo
 
-**Done when you see:**
-```
-STEP 2 NOW — paste this into Copilot Chat:
-```
-at the bottom of the terminal output.
+**Done when you see** the Tier 2 prompt printed at the bottom of the terminal output.
 
 ---
 
-## 3 — Tier 2: LLM scan *(Copilot Chat)*
+## 2 — Tier 2: LLM scan *(Copilot Chat)*
 
 1. Open **`<target-repo>/.agentshield/copilot-prompts.md`** in VS Code.
 2. Copy the entire **`## Step 1 — Tier 2: LLM scan`** fenced block.
@@ -72,7 +47,7 @@ If the file doesn't appear after Copilot says it's done:
 
 ---
 
-## 4 — Behaviour emulator *(Copilot Chat)*
+## 3 — Behaviour emulator *(Copilot Chat)*
 
 1. In the same **`copilot-prompts.md`** file, copy the entire
    **`## Step 2 — Behaviour emulator`** fenced block.
@@ -89,7 +64,7 @@ If the file doesn't appear:
 
 ---
 
-## 5 — Merge → unified report
+## 4 — Merge → unified report
 
 ```bash
 agentshield merge /absolute/path/to/your-agent-repo
@@ -124,11 +99,10 @@ open <target-repo>/output/agentshield-report.html          # macOS
 
 | Step | What | Where |
 |---|---|---|
-| 1 | `pip install -e ".[semgrep,dev]"` | Terminal (AgentShield repo) |
-| 2 | `agentshield scan <target-path> --scan-all-files` → generates `copilot-prompts.md` | Terminal |
-| 3 | Copy **Step 1** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
-| 4 | Copy **Step 2** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
-| 5 | `agentshield merge <target-path>` → `✓ 14/14` → open `output/agentshield-report.html` | Terminal |
+| 1 | `agentshield scan <target-path> --scan-all-files` → generates `copilot-prompts.md` | Terminal |
+| 2 | Copy **Step 1** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
+| 3 | Copy **Step 2** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
+| 4 | `agentshield merge <target-path>` → `✓ 14/14` → open `output/agentshield-report.html` | Terminal |
 
 ---
 
@@ -155,7 +129,7 @@ What it does automatically:
 **Done when you see:** `[done] Tier 1 complete.`
 
 Then open `<RepoPath>\.agentshield\copilot-prompts.md` in VS Code and
-follow steps 3–5 above.
+follow steps 2–4 above.
 
 Flags for `run_tier1.ps1`:
 
