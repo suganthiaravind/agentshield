@@ -7913,15 +7913,24 @@ from config import client, MODEL</div>
 <div class="framework-group-body">
 <div class="coverage-fw-note">Curated to the 6 call-site / agent-layer items (LLM01, LLM02, LLM05, LLM06, LLM07, LLM10). LLM03 / LLM04 / LLM08 / LLM09 are model-layer.</div>
 <div class="coverage-chips">
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM01" title="LLM01: 5 findings this run — click to filter the D/D/R findings to this item.">LLM01<span class="cov-chip-count">5</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM02" title="LLM02: 4 findings this run — click to filter the D/D/R findings to this item.">LLM02<span class="cov-chip-count">4</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM05" title="LLM05: 1 finding this run — click to filter the D/D/R findings to this item.">LLM05<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM06" title="LLM06: 3 findings this run — click to filter the D/D/R findings to this item.">LLM06<span class="cov-chip-count">3</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM07" title="LLM07: 1 finding this run — click to filter the D/D/R findings to this item.">LLM07<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM10" title="LLM10: 4 findings this run — click to filter the D/D/R findings to this item.">LLM10<span class="cov-chip-count">4</span></button>
-<span class="coverage-chip coverage-chip-clean" title="LLM03: covered by the rule pack, no findings this run">LLM03</span>
-<span class="coverage-chip coverage-chip-clean" title="LLM08: covered by the rule pack, no findings this run">LLM08</span>
-<span class="coverage-chip coverage-chip-clean" title="LLM09: covered by the rule pack, no findings this run">LLM09</span>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM01" title="LLM01 — Prompt Injection — adversary instructions injected via user input (direct) or retrieved content (indirect) override the model's intended behaviour.
+5 findings this run — click to filter the D/D/R findings to this item.">LLM01<span class="cov-chip-count">5</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM02" title="LLM02 — Sensitive Information Disclosure — the model emits secrets, PII, or internal context that should have been redacted before reaching the user.
+4 findings this run — click to filter the D/D/R findings to this item.">LLM02<span class="cov-chip-count">4</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM05" title="LLM05 — Improper Output Handling — LLM output piped into eval/exec/subprocess/HTML/SQL without sanitisation, treating untrusted output as trusted code.
+1 finding this run — click to filter the D/D/R findings to this item.">LLM05<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM06" title="LLM06 — Excessive Agency — the agent has more tool surface, permissions, or autonomy than the task requires; one prompt-injected instruction can fire destructive actions.
+3 findings this run — click to filter the D/D/R findings to this item.">LLM06<span class="cov-chip-count">3</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM07" title="LLM07 — System Prompt Leakage — the system prompt (often containing keys, business rules, or escalation instructions) reaches the user via error paths, debug endpoints, or the model echoing it back.
+1 finding this run — click to filter the D/D/R findings to this item.">LLM07<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_llm:LLM10" title="LLM10 — Unbounded Consumption — no caps on tokens, tool calls, recursion depth, or wall-clock budget; attacker drives cost or denial-of-service.
+4 findings this run — click to filter the D/D/R findings to this item.">LLM10<span class="cov-chip-count">4</span></button>
+<span class="coverage-chip coverage-chip-clean" title="LLM03 — Supply Chain — compromised models, datasets, plugins, or training pipelines introduce vulnerabilities upstream of the agent's call site.
+Covered by the rule pack, no findings this run.">LLM03</span>
+<span class="coverage-chip coverage-chip-clean" title="LLM08 — Vector and Embedding Weaknesses — RAG/embedding stores leak across tenants or accept adversarial inputs that game similarity scoring.
+Covered by the rule pack, no findings this run.">LLM08</span>
+<span class="coverage-chip coverage-chip-clean" title="LLM09 — Misinformation — confident-but-wrong outputs that downstream consumers trust without verification.
+Covered by the rule pack, no findings this run.">LLM09</span>
 </div>
 </div>
 </details>
@@ -7929,21 +7938,36 @@ from config import client, MODEL</div>
 <summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic AI Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">15</span><span class="cov-badge cov-badge-clean">4 scanned clean</span><span class="cov-badge cov-badge-issues">9 scanned with findings</span><span class="cov-badge cov-badge-gap">2 not scanned</span></span><a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-chips">
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T1" title="T1: 1 finding this run — click to filter the D/D/R findings to this item.">T1<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T2" title="T2: 3 findings this run — click to filter the D/D/R findings to this item.">T2<span class="cov-chip-count">3</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T3" title="T3: 2 findings this run — click to filter the D/D/R findings to this item.">T3<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T4" title="T4: 2 findings this run — click to filter the D/D/R findings to this item.">T4<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T6" title="T6: 3 findings this run — click to filter the D/D/R findings to this item.">T6<span class="cov-chip-count">3</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T8" title="T8: 3 findings this run — click to filter the D/D/R findings to this item.">T8<span class="cov-chip-count">3</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T9" title="T9: 1 finding this run — click to filter the D/D/R findings to this item.">T9<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T10" title="T10: 1 finding this run — click to filter the D/D/R findings to this item.">T10<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T13" title="T13: 1 finding this run — click to filter the D/D/R findings to this item.">T13<span class="cov-chip-count">1</span></button>
-<span class="coverage-chip coverage-chip-clean" title="T5: covered by the rule pack, no findings this run">T5</span>
-<span class="coverage-chip coverage-chip-clean" title="T7: covered by the rule pack, no findings this run">T7</span>
-<span class="coverage-chip coverage-chip-clean" title="T11: covered by the rule pack, no findings this run">T11</span>
-<span class="coverage-chip coverage-chip-clean" title="T12: covered by the rule pack, no findings this run">T12</span>
-<span class="coverage-chip coverage-chip-gap" title="T14: Human Attacks on Multi-Agent Systems (social engineering of human-in-the-loop). Operator-layer threat with no code-level signature. Path B's LLM-judge could flag deceptive response patterns as a partial signal, but real coverage is operator training + UX guardrails, not a scanner.">T14</span>
-<span class="coverage-chip coverage-chip-gap" title="T15: Human Manipulation. Operator-layer threat — addressed via operator training and UX guardrails, not scanners or probes. Remains out of scope by design.">T15</span>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T1" title="T1 — Memory Poisoning — adversary inputs are persisted into the agent's memory store and later recalled as authoritative context for future LLM calls.
+1 finding this run — click to filter the D/D/R findings to this item.">T1<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T2" title="T2 — Tool Misuse — agent calls tools with attacker-shaped arguments (shell/SQL/HTTP/path-traversal) because tool args derive from chat content without validation.
+3 findings this run — click to filter the D/D/R findings to this item.">T2<span class="cov-chip-count">3</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T3" title="T3 — Privilege Compromise — agent operates with more permissions than the task needs; missing HITL gates on destructive tools.
+2 findings this run — click to filter the D/D/R findings to this item.">T3<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T4" title="T4 — Resource Overload — no max-iteration cap, timeout, or circuit breaker; planning loops run away on attacker-shaped inputs.
+2 findings this run — click to filter the D/D/R findings to this item.">T4<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T6" title="T6 — Intent Breaking and Goal Manipulation — user content overrides the developer's intended objective via prompt-injection or social-engineering of the planner.
+3 findings this run — click to filter the D/D/R findings to this item.">T6<span class="cov-chip-count">3</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T8" title="T8 — Repudiation and Untraceability — no immutable audit log at the tool layer; the agent's self-report is the only evidence an action happened.
+3 findings this run — click to filter the D/D/R findings to this item.">T8<span class="cov-chip-count">3</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T9" title="T9 — Identity Spoofing and Impersonation — chat-asserted role (&quot;I'm admin&quot;) accepted as authority because no signed-identity check exists.
+1 finding this run — click to filter the D/D/R findings to this item.">T9<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T10" title="T10 — Overwhelmed Human-in-the-Loop — too many approval prompts cause reviewers to rubber-stamp or disable HITL altogether.
+1 finding this run — click to filter the D/D/R findings to this item.">T10<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="owasp_agentic:T13" title="T13 — Rogue Agents in Multi-Agent Systems — peer agents accepted as trusted on unauthenticated signals (e.g., header), no cryptographic peer auth.
+1 finding this run — click to filter the D/D/R findings to this item.">T13<span class="cov-chip-count">1</span></button>
+<span class="coverage-chip coverage-chip-clean" title="T5 — Cascading Hallucination — one false output feeds the next planner call, compounding errors across the agent's chain.
+Covered by the rule pack, no findings this run.">T5</span>
+<span class="coverage-chip coverage-chip-clean" title="T7 — Misaligned and Deceptive Behaviors — agent takes plausible-looking actions that don't match the user's actual goal.
+Covered by the rule pack, no findings this run.">T7</span>
+<span class="coverage-chip coverage-chip-clean" title="T11 — Unexpected RCE and Code Attacks — agent emits or interprets code that executes in a context the developer didn't anticipate.
+Covered by the rule pack, no findings this run.">T11</span>
+<span class="coverage-chip coverage-chip-clean" title="T12 — Agent Communication Poisoning — upstream agent forwards user input verbatim to a downstream agent; trust boundary missing between agents.
+Covered by the rule pack, no findings this run.">T12</span>
+<span class="coverage-chip coverage-chip-gap" title="T14 — Human Attacks on Multi-Agent Systems — operators socially engineered to approve actions across agents.
+Human Attacks on Multi-Agent Systems (social engineering of human-in-the-loop). Operator-layer threat with no code-level signature. Path B's LLM-judge could flag deceptive response patterns as a partial signal, but real coverage is operator training + UX guardrails, not a scanner.">T14</span>
+<span class="coverage-chip coverage-chip-gap" title="T15 — Human Manipulation — agent outputs designed to manipulate operators into harmful decisions.
+Human Manipulation. Operator-layer threat — addressed via operator training and UX guardrails, not scanners or probes. Remains out of scope by design.">T15</span>
 </div>
 <details class="coverage-gap-details">
 <summary>Why 2 items are not scanned</summary>
@@ -7959,22 +7983,38 @@ from config import client, MODEL</div>
 <div class="framework-group-body">
 <div class="coverage-fw-note">MITRE ATLAS is too large to enumerate in full; the universe below is a curated LLM/agent-relevant subset.</div>
 <div class="coverage-chips">
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0024" title="AML.T0024: 1 finding this run — click to filter the D/D/R findings to this item.">AML.T0024<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0051" title="AML.T0051: 4 findings this run — click to filter the D/D/R findings to this item.">AML.T0051<span class="cov-chip-count">4</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0054" title="AML.T0054: 1 finding this run — click to filter the D/D/R findings to this item.">AML.T0054<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0055" title="AML.T0055: 2 findings this run — click to filter the D/D/R findings to this item.">AML.T0055<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0056" title="AML.T0056: 1 finding this run — click to filter the D/D/R findings to this item.">AML.T0056<span class="cov-chip-count">1</span></button>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0010: covered by the rule pack, no findings this run">AML.T0010</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0011: covered by the rule pack, no findings this run">AML.T0011</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0018: covered by the rule pack, no findings this run">AML.T0018</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0019: covered by the rule pack, no findings this run">AML.T0019</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0029: covered by the rule pack, no findings this run">AML.T0029</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0050: covered by the rule pack, no findings this run">AML.T0050</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0053: covered by the rule pack, no findings this run">AML.T0053</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0034: covered by the rule pack, no findings this run">AML.T0034</span>
-<span class="coverage-chip coverage-chip-clean" title="AML.T0040: covered by the rule pack, no findings this run">AML.T0040</span>
-<span class="coverage-chip coverage-chip-gap" title="AML.T0012: AML.T0012 is in the curated framework universe but no rule in the bundled pack covers it yet.">AML.T0012</span>
-<span class="coverage-chip coverage-chip-gap" title="AML.T0057: AML.T0057 is in the curated framework universe but no rule in the bundled pack covers it yet.">AML.T0057</span>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0024" title="AML.T0024 — Exfiltration via ML Inference API — adversary queries the model to extract training data, prompts, or proprietary parameters.
+1 finding this run — click to filter the D/D/R findings to this item.">AML.T0024<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0051" title="AML.T0051 — LLM Prompt Injection — direct or indirect injection that overrides the model's intended behaviour.
+4 findings this run — click to filter the D/D/R findings to this item.">AML.T0051<span class="cov-chip-count">4</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0054" title="AML.T0054 — LLM Jailbreak — adversary bypasses content / safety guardrails via crafted prompts.
+1 finding this run — click to filter the D/D/R findings to this item.">AML.T0054<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0055" title="AML.T0055 — Unsecured Credentials — credentials accessible from the agent's runtime context are stolen or leaked.
+2 findings this run — click to filter the D/D/R findings to this item.">AML.T0055<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="mitre_atlas:AML.T0056" title="AML.T0056 — LLM Meta Prompt Extraction — adversary extracts the system prompt or hidden instructions.
+1 finding this run — click to filter the D/D/R findings to this item.">AML.T0056<span class="cov-chip-count">1</span></button>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0010 — ML Supply Chain Compromise — adversary tampers with model files, training corpora, or ML dependencies upstream of deployment.
+Covered by the rule pack, no findings this run.">AML.T0010</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0011 — User Execution: Unsafe ML Artifacts — application loads pickled models or other unsafe formats from untrusted sources.
+Covered by the rule pack, no findings this run.">AML.T0011</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0018 — Backdoor ML Model — adversary inserts a trigger into the model that activates malicious behaviour on specific inputs.
+Covered by the rule pack, no findings this run.">AML.T0018</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0019 — Publish Poisoned Datasets — adversary releases datasets crafted to corrupt models that train on them.
+Covered by the rule pack, no findings this run.">AML.T0019</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0029 — Denial of ML Service — adversary drives the model into expensive or infinite computation paths.
+Covered by the rule pack, no findings this run.">AML.T0029</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0050 — Command and Scripting Interpreter — LLM-derived content executed via shell, eval, or interpreter.
+Covered by the rule pack, no findings this run.">AML.T0050</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0053 — LLM Plugin Compromise — a plugin or tool integrated with the LLM is compromised and abused as a foothold.
+Covered by the rule pack, no findings this run.">AML.T0053</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0034
+Covered by the rule pack, no findings this run.">AML.T0034</span>
+<span class="coverage-chip coverage-chip-clean" title="AML.T0040
+Covered by the rule pack, no findings this run.">AML.T0040</span>
+<span class="coverage-chip coverage-chip-gap" title="AML.T0012 — Valid Accounts — adversary obtains legitimate credentials and uses them to interact with the ML system.
+AML.T0012 is in the curated framework universe but no rule in the bundled pack covers it yet.">AML.T0012</span>
+<span class="coverage-chip coverage-chip-gap" title="AML.T0057 — LLM Data Leakage — model emits training data, prompts, or other sensitive context to the user.
+AML.T0057 is in the curated framework universe but no rule in the bundled pack covers it yet.">AML.T0057</span>
 </div>
 <details class="coverage-gap-details">
 <summary>Why 2 items are not scanned</summary>
@@ -7990,31 +8030,56 @@ from config import client, MODEL</div>
 <div class="framework-group-body">
 <div class="coverage-fw-note">CWE has 1000+ weaknesses; the universe below is a curated subset most relevant to LLM/agent app code. Generic AppSec items (path traversal, TLS validation, credential transit) are out of scope by design — they belong to a general-purpose static scanner (semgrep-pro, CodeQL, Snyk).</div>
 <div class="coverage-chips">
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-94" title="CWE-94: 1 finding this run — click to filter the D/D/R findings to this item.">CWE-94<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-200" title="CWE-200: 2 findings this run — click to filter the D/D/R findings to this item.">CWE-200<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-345" title="CWE-345: 1 finding this run — click to filter the D/D/R findings to this item.">CWE-345<span class="cov-chip-count">1</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-400" title="CWE-400: 2 findings this run — click to filter the D/D/R findings to this item.">CWE-400<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-732" title="CWE-732: 2 findings this run — click to filter the D/D/R findings to this item.">CWE-732<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-798" title="CWE-798: 5 findings this run — click to filter the D/D/R findings to this item.">CWE-798<span class="cov-chip-count">5</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-918" title="CWE-918: 1 finding this run — click to filter the D/D/R findings to this item.">CWE-918<span class="cov-chip-count">1</span></button>
-<span class="coverage-chip coverage-chip-clean" title="CWE-78: covered by the rule pack, no findings this run">CWE-78</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-79: covered by the rule pack, no findings this run">CWE-79</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-89: covered by the rule pack, no findings this run">CWE-89</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-269: covered by the rule pack, no findings this run">CWE-269</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-287: covered by the rule pack, no findings this run">CWE-287</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-319: covered by the rule pack, no findings this run">CWE-319</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-322: covered by the rule pack, no findings this run">CWE-322</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-494: covered by the rule pack, no findings this run">CWE-494</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-502: covered by the rule pack, no findings this run">CWE-502</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-532: covered by the rule pack, no findings this run">CWE-532</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-778: covered by the rule pack, no findings this run">CWE-778</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-829: covered by the rule pack, no findings this run">CWE-829</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-22: covered by the rule pack, no findings this run">CWE-22</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-285: covered by the rule pack, no findings this run">CWE-285</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-601: covered by the rule pack, no findings this run">CWE-601</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-639: covered by the rule pack, no findings this run">CWE-639</span>
-<span class="coverage-chip coverage-chip-clean" title="CWE-770: covered by the rule pack, no findings this run">CWE-770</span>
-<span class="coverage-chip coverage-chip-gap" title="CWE-489: CWE-489 is in the curated framework universe but no rule in the bundled pack covers it yet.">CWE-489</span>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-94" title="CWE-94 — Code Injection — attacker-controlled input passed to eval / exec / dynamic-import without validation.
+1 finding this run — click to filter the D/D/R findings to this item.">CWE-94<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-200" title="CWE-200 — Information Exposure — sensitive content (secrets, system prompt, PII) emitted to a user who shouldn't see it.
+2 findings this run — click to filter the D/D/R findings to this item.">CWE-200<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-345" title="CWE-345 — Insufficient Verification of Authenticity — input accepted as trusted without signature / origin checks.
+1 finding this run — click to filter the D/D/R findings to this item.">CWE-345<span class="cov-chip-count">1</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-400" title="CWE-400 — Uncontrolled Resource Consumption — no caps on iterations, tokens, or compute time enable denial-of-service.
+2 findings this run — click to filter the D/D/R findings to this item.">CWE-400<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-732" title="CWE-732 — Incorrect Permission Assignment for Critical Resource — file/manifest/IAM grants are broader than necessary (often the AST03 manifest pattern).
+2 findings this run — click to filter the D/D/R findings to this item.">CWE-732<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-798" title="CWE-798 — Use of Hard-coded Credentials — API keys, tokens, or passwords baked into source code.
+5 findings this run — click to filter the D/D/R findings to this item.">CWE-798<span class="cov-chip-count">5</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="cwe:CWE-918" title="CWE-918 — Server-Side Request Forgery — LLM-derived URL or destination reaches an unrestricted egress channel.
+1 finding this run — click to filter the D/D/R findings to this item.">CWE-918<span class="cov-chip-count">1</span></button>
+<span class="coverage-chip coverage-chip-clean" title="CWE-78 — OS Command Injection — attacker-controlled string interpolated into a shell command without sanitisation.
+Covered by the rule pack, no findings this run.">CWE-78</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-79 — Cross-site Scripting — attacker-controlled content rendered into a web page without escaping.
+Covered by the rule pack, no findings this run.">CWE-79</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-89 — SQL Injection — attacker-controlled string concatenated into a SQL query without parameterisation.
+Covered by the rule pack, no findings this run.">CWE-89</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-269 — Improper Privilege Management — agent or tool acts with more privilege than the task requires.
+Covered by the rule pack, no findings this run.">CWE-269</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-287 — Improper Authentication — caller's identity isn't verified before sensitive operations.
+Covered by the rule pack, no findings this run.">CWE-287</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-319 — Cleartext Transmission — sensitive data sent over a channel without encryption.
+Covered by the rule pack, no findings this run.">CWE-319</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-322 — Key Exchange Without Entity Authentication — keys established without verifying the counterparty's identity.
+Covered by the rule pack, no findings this run.">CWE-322</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-494 — Download of Code Without Integrity Check — code or models fetched and executed without signature verification.
+Covered by the rule pack, no findings this run.">CWE-494</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-502 — Deserialization of Untrusted Data — pickle / yaml.load / similar called on attacker-controlled bytes.
+Covered by the rule pack, no findings this run.">CWE-502</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-532 — Insertion of Sensitive Information into Log File — secrets, PII, or prompts written to logs and later exposed.
+Covered by the rule pack, no findings this run.">CWE-532</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-778 — Insufficient Logging — actions taken by the agent aren't recorded with enough detail to reconstruct what happened.
+Covered by the rule pack, no findings this run.">CWE-778</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-829 — Inclusion of Functionality from Untrusted Control Sphere — code or skills loaded from untrusted sources.
+Covered by the rule pack, no findings this run.">CWE-829</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-22 — Path Traversal — attacker-controlled path component reaches the filesystem without normalisation, allowing access outside the intended directory.
+Covered by the rule pack, no findings this run.">CWE-22</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-285 — Improper Authorization — action proceeds without verifying the caller has the required permission.
+Covered by the rule pack, no findings this run.">CWE-285</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-601
+Covered by the rule pack, no findings this run.">CWE-601</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-639 — Authorization Bypass Through User-Controlled Key — IDOR / tenant-scoping enforced at the prompt layer instead of the data-access layer.
+Covered by the rule pack, no findings this run.">CWE-639</span>
+<span class="coverage-chip coverage-chip-clean" title="CWE-770
+Covered by the rule pack, no findings this run.">CWE-770</span>
+<span class="coverage-chip coverage-chip-gap" title="CWE-489 — Active Debug Code — debug endpoints or paths left enabled in production.
+CWE-489 is in the curated framework universe but no rule in the bundled pack covers it yet.">CWE-489</span>
 </div>
 <details class="coverage-gap-details">
 <summary>Why 1 item is not scanned</summary>
@@ -8028,16 +8093,26 @@ from config import client, MODEL</div>
 <summary class="framework-group-summary"><span class="framework-group-name">OWASP Agentic Skills Top 10</span><span class="framework-group-counts"><span class="cov-badge cov-badge-total">10</span><span class="cov-badge cov-badge-clean">5 scanned clean</span><span class="cov-badge cov-badge-issues">2 scanned with findings</span><span class="cov-badge cov-badge-gap">3 not scanned</span></span><a href="https://github.com/OWASP/www-project-agentic-skills-top-10" class="framework-group-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">reference &rarr;</a></summary>
 <div class="framework-group-body">
 <div class="coverage-chips">
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="ast:AST03" title="AST03: 2 findings this run — click to filter the D/D/R findings to this item.">AST03<span class="cov-chip-count">2</span></button>
-<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="ast:AST06" title="AST06: 1 finding this run — click to filter the D/D/R findings to this item.">AST06<span class="cov-chip-count">1</span></button>
-<span class="coverage-chip coverage-chip-clean" title="AST01: covered by the rule pack, no findings this run">AST01</span>
-<span class="coverage-chip coverage-chip-clean" title="AST04: covered by the rule pack, no findings this run">AST04</span>
-<span class="coverage-chip coverage-chip-clean" title="AST05: covered by the rule pack, no findings this run">AST05</span>
-<span class="coverage-chip coverage-chip-clean" title="AST07: covered by the rule pack, no findings this run">AST07</span>
-<span class="coverage-chip coverage-chip-clean" title="AST08: covered by the rule pack, no findings this run">AST08</span>
-<span class="coverage-chip coverage-chip-gap" title="AST02: AST02 is in the curated framework universe but no rule in the bundled pack covers it yet.">AST02</span>
-<span class="coverage-chip coverage-chip-gap" title="AST09: AST09 is in the curated framework universe but no rule in the bundled pack covers it yet.">AST09</span>
-<span class="coverage-chip coverage-chip-gap" title="AST10: Behaviour drift needs persistent baselines and version-to-version comparison. A single scan / probe run can't observe drift by definition. Genuinely out of scope for AgentShield's one-shot model — handled by continuous-monitoring tools.">AST10</span>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="ast:AST03" title="AST03 — Insecure Skill Manifest — manifest grants overly broad permissions (network: any, shell: true, no allow-list).
+2 findings this run — click to filter the D/D/R findings to this item.">AST03<span class="cov-chip-count">2</span></button>
+<button type="button" class="coverage-chip coverage-chip-issues" data-framework-key="ast:AST06" title="AST06 — Secrets in Skill Bundle — API keys, tokens, or credentials hardcoded into the skill's source files.
+1 finding this run — click to filter the D/D/R findings to this item.">AST06<span class="cov-chip-count">1</span></button>
+<span class="coverage-chip coverage-chip-clean" title="AST01 — Untrusted Skill Loading — agent loads skills from an unvetted source (marketplace, user upload, remote URL).
+Covered by the rule pack, no findings this run.">AST01</span>
+<span class="coverage-chip coverage-chip-clean" title="AST04 — Excessive Permissions — skill requests more capabilities than its documented action needs.
+Covered by the rule pack, no findings this run.">AST04</span>
+<span class="coverage-chip coverage-chip-clean" title="AST05 — Skill Supply Chain — skill bundle includes compromised dependencies or unpinned versions.
+Covered by the rule pack, no findings this run.">AST05</span>
+<span class="coverage-chip coverage-chip-clean" title="AST07 — Skill Output Injection — skill emits content that the host agent re-interprets as instructions.
+Covered by the rule pack, no findings this run.">AST07</span>
+<span class="coverage-chip coverage-chip-clean" title="AST08 — Cross-Skill Privilege Escalation — combining permissions from two skills grants an attack surface neither holds alone.
+Covered by the rule pack, no findings this run.">AST08</span>
+<span class="coverage-chip coverage-chip-gap" title="AST02 — Skill Hijacking — a registered skill is replaced or shadowed by an attacker-controlled variant.
+AST02 is in the curated framework universe but no rule in the bundled pack covers it yet.">AST02</span>
+<span class="coverage-chip coverage-chip-gap" title="AST09 — Inadequate Skill Logging — skill calls aren't logged with sufficient detail to reconstruct what happened.
+AST09 is in the curated framework universe but no rule in the bundled pack covers it yet.">AST09</span>
+<span class="coverage-chip coverage-chip-gap" title="AST10 — Skill Behavior Drift — skill's behaviour changes version-to-version without baselines or detection.
+Behaviour drift needs persistent baselines and version-to-version comparison. A single scan / probe run can't observe drift by definition. Genuinely out of scope for AgentShield's one-shot model — handled by continuous-monitoring tools.">AST10</span>
 </div>
 <details class="coverage-gap-details">
 <summary>Why 3 items are not scanned</summary>

@@ -13624,30 +13624,46 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
             # item. Clean / gap chips stay informational (no findings to
             # filter to).
             fkey = f"{k_key}:{item}"
+            _desc = _framework_item_tooltip(k_key, item)
+            _tip = (
+                f"{item}"
+                + (f" — {_desc}" if _desc else "")
+                + f"\n{count} finding{'s' if count != 1 else ''} this run"
+                + " — click to filter the D/D/R findings to this item."
+            )
             parts.append(
                 f'<button type="button" '
                 f'class="coverage-chip coverage-chip-issues" '
                 f'data-framework-key="{_html_escape(fkey)}" '
-                f'title="{_html_escape(item)}: {count} finding'
-                f'{"s" if count != 1 else ""} this run — click to '
-                f'filter the D/D/R findings to this item.">'
+                f'title="{_html_escape(_tip)}">'
                 f'{_html_escape(item)}'
                 f'<span class="cov-chip-count">{count}</span>'
                 f'</button>'
             )
         for item in items_clean:
+            _desc = _framework_item_tooltip(k_key, item)
+            _tip = (
+                f"{item}"
+                + (f" — {_desc}" if _desc else "")
+                + "\nCovered by the rule pack, no findings this run."
+            )
             parts.append(
                 f'<span class="coverage-chip coverage-chip-clean" '
-                f'title="{_html_escape(item)}: covered by the rule pack, '
-                f'no findings this run">'
+                f'title="{_html_escape(_tip)}">'
                 f'{_html_escape(item)}'
                 f'</span>'
             )
         for item in items_gap:
             reason = gap_reason(k_key, item)
+            _desc = _framework_item_tooltip(k_key, item)
+            _tip = (
+                f"{item}"
+                + (f" — {_desc}" if _desc else "")
+                + (f"\n{reason}" if reason else "")
+            )
             parts.append(
                 f'<span class="coverage-chip coverage-chip-gap" '
-                f'title="{_html_escape(item)}: {_html_escape(reason)}">'
+                f'title="{_html_escape(_tip)}">'
                 f'{_html_escape(item)}'
                 f'</span>'
             )
