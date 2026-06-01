@@ -34,6 +34,29 @@ Write `agent_type` and optionally `agent_type_notes` (for mixed types).
 
 ## Step 1 — Map the pipeline
 
+### 1a — Enumerate entry points first
+
+Before mapping pipeline steps, identify every distinct **handler or runtime
+entry surface** in the codebase. These become the `entry_points[]` list.
+
+| Signal | Entry point type | Example |
+|---|---|---|
+| `@app.route(...)` / `@router.post(...)` | HTTP route handler | `POST /chat` |
+| `def lambda_handler(event, context)` | Lambda function | `lambda_handler` |
+| `@app.on_event("startup")` / scheduler | Scheduled trigger | `daily_job` |
+| SQS/SNS consumer, Kafka listener | Queue / event consumer | `process_queue` |
+| Function called by orchestrator / MCP | Sub-agent receiver | `receive` |
+
+**One entry point per handler.** A single handler that reads from multiple
+data sources (e.g. one route that processes both user input and a RAG
+document) is still **one entry point** — do not inflate the count by source
+type. Record each entry point as:
+```json
+{ "id": "<slug>", "route": "<method path or description>", "handler": "<file.py:function>" }
+```
+
+### 1b — Map the pipeline steps
+
 Walk the codebase and locate the code that implements each of the 8
 standard pipeline steps. Use the table for your agent type.
 
@@ -131,14 +154,16 @@ untrusted data enters the system. These are **untrusted sources**.
 ### Source record fields
 
 - `id` — unique slug with no spaces (e.g. `"user_input_chat"`, `"tool_return_delegate"`)
+- `entry_point_id` — **required**; must match an `id` from the `entry_points[]` list built in Step 1a
 - `type` — one of the six types above
 - `route` — HTTP route or handler this source belongs to
 - `code_location` — file:line where the data enters this agent
 - `trust_level` — `"untrusted"` or `"semi_trusted"` (semi_trusted = behind a non-trivial auth check or allowlist that reduces but does not eliminate risk)
 
-**One source per distinct code location.** A single route may have multiple
-sources — for example, `/delegate` has a `user_input` source from the request
-body and a `tool_return` source from the downstream response.
+**One source per distinct code location.** A single entry point may have
+multiple sources — for example, `/delegate` has a `user_input` source from
+the request body and a `tool_return` source from the downstream response.
+Both reference the same `entry_point_id`.
 
 ---
 

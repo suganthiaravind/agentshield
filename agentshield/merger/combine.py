@@ -2042,6 +2042,27 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         # Legacy flat path: root-level attack_class_traces.
         traces_out = _normalize_attack_class_traces(raw.get("attack_class_traces") or [])
 
+    # v7 entry_points: simple {id, route, handler} list (not the legacy
+    # per-entry-point attack_class_traces format). Preserved separately so
+    # _render_emulator_coverage_block_v7 can use len() as the stable
+    # "entries scanned" count rather than deriving it from source routes.
+    v7_entry_points: list[dict] = []
+    if isinstance(raw_untrusted_sources, list) and raw_untrusted_sources:
+        raw_eps = raw.get("entry_points") or []
+        if isinstance(raw_eps, list):
+            for ep in raw_eps:
+                if not isinstance(ep, dict):
+                    continue
+                # Distinguish v7 simple entries (no attack_class_traces key)
+                # from legacy complex entries.
+                if "attack_class_traces" not in ep:
+                    v7_entry_points.append({
+                        "id": str(ep.get("id") or ""),
+                        "route": str(ep.get("route") or ep.get("id") or ""),
+                        "handler": str(ep.get("handler") or ""),
+                        "description": str(ep.get("description") or ""),
+                    })
+
     return {
         "present": True,
         "honesty_label": str(raw.get("honesty_label") or "Behaviour emulator"),
@@ -2051,6 +2072,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         "pipeline_map": pipeline_map,
         "attack_class_traces": traces_out,
         "entry_points": entry_points_out,
+        "v7_entry_points": v7_entry_points,
         "pipeline_checks": raw.get("pipeline_checks") or {},
         "untrusted_sources": raw_untrusted_sources or [],
         "_source_dir": str(source_dir),
@@ -14859,7 +14881,10 @@ def _render_emulator_coverage_block_v7(
     cnt_lands   = all_verdicts.count("lands")
     cnt_partial = all_verdicts.count("partial")
     cnt_blocked = all_verdicts.count("blocked")
-    n_routes    = len(route_map)
+    # Use the explicit entry_points[] list for a stable "entries scanned"
+    # count. Fallback to len(route_map) for files that predate this field.
+    v7_eps = emu.get("v7_entry_points") or []
+    n_routes = len(v7_eps) if v7_eps else len(route_map)
 
     # Count not_applicable transitions (path doesn't exist for this source type)
     cnt_na = 0

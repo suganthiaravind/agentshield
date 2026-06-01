@@ -258,7 +258,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "No persistence call (memory write or equivalent) is made from the /chat route handler. The to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "chat"
     },
     {
       "id": "rag_document_summarise",
@@ -528,7 +529,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "No persistence call is made from /summarise \u2014 to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "summarise"
     },
     {
       "id": "tool_return_delegate",
@@ -613,7 +615,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "No memory persistence at /delegate \u2014 to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "delegate"
     },
     {
       "id": "agent_message_receive",
@@ -817,7 +820,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "No memory persistence at /receive \u2014 to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "receive"
     },
     {
       "id": "user_input_debug",
@@ -1012,7 +1016,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "No memory persistence at /debug \u2014 to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "debug"
     },
     {
       "id": "batch_record_notifications",
@@ -1191,7 +1196,8 @@
           "verdict": "not_applicable",
           "verdict_reasoning": "send_reply publishes to SNS (a sink) and does not write to a persistent store that feeds future LLM calls \u2014 to_store transition does not exist."
         }
-      }
+      },
+      "entry_point_id": "notifications"
     }
   ],
   "pipeline_checks": {
@@ -1243,5 +1249,43 @@
       "secret_found": "SK-OPS-7741-PRIVATE",
       "secret_location": "orchestrator.py:114"
     }
-  }
+  },
+  "entry_points": [
+    {
+      "id": "chat",
+      "route": "POST /chat",
+      "handler": "controller.py:handle_chat",
+      "description": "Primary user-facing chat endpoint"
+    },
+    {
+      "id": "summarise",
+      "route": "POST /summarise",
+      "handler": "orchestrator.py:summarise",
+      "description": "Document summarisation endpoint"
+    },
+    {
+      "id": "delegate",
+      "route": "POST /api/orchestrator/delegate",
+      "handler": "orchestrator.py:delegate",
+      "description": "Task delegation to downstream agents"
+    },
+    {
+      "id": "receive",
+      "route": "POST /api/orchestrator/receive",
+      "handler": "orchestrator.py:receive",
+      "description": "Peer-agent message receiver"
+    },
+    {
+      "id": "debug",
+      "route": "POST /api/orchestrator/debug",
+      "handler": "orchestrator.py:debug",
+      "description": "Debug/diagnostic endpoint"
+    },
+    {
+      "id": "notifications",
+      "route": "internal: send_reply()",
+      "handler": "notifications.py:send_reply",
+      "description": "Internal notification dispatch"
+    }
+  ]
 }
