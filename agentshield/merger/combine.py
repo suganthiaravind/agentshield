@@ -14872,7 +14872,7 @@ def _render_emulator_coverage_block_v7(
         for t_key in _T_KEYS:
             t = (src.get("transitions") or {}).get(t_key) or {}
             raw_v = str(t.get("verdict") or "not_applicable")
-            if raw_v == "not_applicable":
+            if raw_v in ("not_applicable", "inconclusive"):
                 continue
             ac = (
                 _V7_SOURCE_TRANSITION_TO_ATTACK_CLASS.get((src_type, t_key)) or
@@ -14947,7 +14947,7 @@ def _render_emulator_coverage_block_v7(
         for t_key in _T_KEYS:
             t = (src.get("transitions") or {}).get(t_key) or {}
             raw_v = str(t.get("verdict") or "not_applicable")
-            if raw_v == "not_applicable" or not t.get("path_exists", True):
+            if raw_v in ("not_applicable", "inconclusive") or not t.get("path_exists", True):
                 cnt_na += 1
 
     cnt_total_attacks = cnt_lands + cnt_partial + cnt_blocked + cnt_na
@@ -14994,8 +14994,8 @@ def _render_emulator_coverage_block_v7(
     }
 
     for rd in route_map.values():
-        if not rd["acs"]:
-            continue  # all transitions not_applicable — no row to render
+        if not any(ac["nv"] in ("lands", "partial", "blocked") for ac in rd["acs"]):
+            continue  # all transitions not_applicable / inconclusive — no row to render
         route_verdicts = [ac["nv"] for ac in rd["acs"]]
         row_worst = _worst(route_verdicts)
         lands_n   = route_verdicts.count("lands")
