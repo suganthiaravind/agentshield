@@ -216,5 +216,5 @@ def write_entry_points(target_root: Path) -> tuple[Path, list[dict]]:
     }
     out = target_root / ".agentshield" / "entry-points.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2))
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return out, entry_points

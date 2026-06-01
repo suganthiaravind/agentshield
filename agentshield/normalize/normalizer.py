@@ -62,7 +62,7 @@ class Normalizer:
         index: dict[str, dict[str, Any]] = {}
         for yaml_path in rules_path.rglob("*.yaml"):
             try:
-                data = yaml.safe_load(yaml_path.read_text()) or {}
+                data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
             except yaml.YAMLError as exc:
                 raise NormalizerError(f"Failed to parse {yaml_path}: {exc}") from exc
             for rule in data.get("rules") or []:

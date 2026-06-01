@@ -219,7 +219,7 @@ def merge(target_root: Path) -> MergeResult:
         )
 
     try:
-        tier1 = json.loads(tier1_path.read_text())
+        tier1 = json.loads(tier1_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise MergeError(f"tier1-results.json is not valid JSON: {e}") from e
 
@@ -237,7 +237,7 @@ def merge(target_root: Path) -> MergeResult:
 
     if tier2_present:
         try:
-            tier2 = json.loads(tier2_path.read_text())
+            tier2 = json.loads(tier2_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             raise MergeError(f"tier2-findings.json is not valid JSON: {e}") from e
 
@@ -2061,7 +2061,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
     ep_file = source_dir / "entry-points.json"
     if ep_file.exists():
         try:
-            ep_data = json.loads(ep_file.read_text())
+            ep_data = json.loads(ep_file.read_text(encoding="utf-8"))
             for ep in ep_data.get("entry_points") or []:
                 if isinstance(ep, dict):
                     v7_entry_points.append({

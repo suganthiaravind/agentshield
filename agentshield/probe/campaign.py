@@ -740,7 +740,7 @@ def write_campaign_findings(
             for f in findings
         ],
     }
-    path.write_text(json.dumps(payload, indent=2))
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
 
 

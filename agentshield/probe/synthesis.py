@@ -311,7 +311,7 @@ def load_manual_overrides(target_root: Path) -> dict[str, dict[str, str]]:
         return {}
     try:
         import yaml
-        raw = yaml.safe_load(path.read_text()) or {}
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except (OSError, Exception):  # noqa: BLE001
         return {}
     if not isinstance(raw, dict):

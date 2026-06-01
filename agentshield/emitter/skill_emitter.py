@@ -199,16 +199,16 @@ def ensure_gitignored(target_root: Path) -> bool:
     accepted_forms = {".agentshield/", ".agentshield", ".agentshield/*"}
 
     if not gi.exists():
-        gi.write_text(f"{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n")
+        gi.write_text(f"{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n", encoding="utf-8")
         return True
 
-    content = gi.read_text()
+    content = gi.read_text(encoding="utf-8")
     existing_lines = {ln.strip() for ln in content.splitlines()}
     if accepted_forms & existing_lines:
         return False
 
     sep = "" if content.endswith("\n") else "\n"
-    gi.write_text(content + sep + f"\n{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n")
+    gi.write_text(content + sep + f"\n{GITIGNORE_MARKER}\n{GITIGNORE_ENTRY}\n", encoding="utf-8")
     return True
 
 
@@ -288,7 +288,7 @@ def emit_skills(
                 f"Bundled skill template missing: {src} "
                 "(reinstall agentshield package)"
             )
-        dst.write_text(src.read_text())
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     for src_name, dst_name in TIER2_TEMPLATE_FILES.items():
         dst = contract_dir / dst_name
@@ -324,7 +324,7 @@ def emit_skills(
         "scan_duration_seconds": scan_duration_s,
     }
     tier1_path = contract_dir / "tier1-results.json"
-    tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n")
+    tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n", encoding="utf-8")
     emitted.append(tier1_path)
 
     # Deterministic entry-point discovery — runs before emitting prompts
@@ -378,7 +378,7 @@ def emit_redteam_judge_skill(target_root: Path) -> list[Path]:
                 "(reinstall agentshield package)"
             )
         dst = contract_dir / dst_name
-        dst.write_text(src.read_text())
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
         emitted.append(dst)
     return emitted
 
@@ -404,7 +404,7 @@ def emit_agent_emulator_skill(target_root: Path) -> list[Path]:
                 "(reinstall agentshield package)"
             )
         dst = contract_dir / dst_name
-        dst.write_text(src.read_text())
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
         emitted.append(dst)
     return emitted
 
@@ -470,7 +470,7 @@ def _agent_emulator_prompt_with_entry_points(contract_dir: Path) -> str:
         return base
 
     try:
-        data = _json.loads(ep_file.read_text())
+        data = _json.loads(ep_file.read_text(encoding="utf-8"))
         eps = data.get("entry_points") or []
     except Exception:
         return base
@@ -559,7 +559,7 @@ def emit_copilot_prompts_md(target_root: Path) -> Path:
     )
 
     out = contract_dir / "copilot-prompts.md"
-    out.write_text(content)
+    out.write_text(content, encoding="utf-8")
     return out
 
 
@@ -579,7 +579,7 @@ def emit_redteam_mutate_skill(target_root: Path) -> list[Path]:
                 "(reinstall agentshield package)"
             )
         dst = contract_dir / dst_name
-        dst.write_text(src.read_text())
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
         emitted.append(dst)
     return emitted
 

@@ -127,7 +127,7 @@ def load_tier1_references(rules_path: Path) -> list[RuleReference]:
     refs: list[RuleReference] = []
     for yaml_path in sorted(rules_path.rglob("*.yaml")):
         try:
-            raw_text = yaml_path.read_text()
+            raw_text = yaml_path.read_text(encoding="utf-8")
             data = yaml.safe_load(raw_text) or {}
         except yaml.YAMLError:
             continue
