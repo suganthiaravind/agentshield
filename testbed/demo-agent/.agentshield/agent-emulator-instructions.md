@@ -34,6 +34,29 @@ Write `agent_type` and optionally `agent_type_notes` (for mixed types).
 
 ## Step 1 — Map the pipeline
 
+### 1a — Enumerate entry points first
+
+Before mapping pipeline steps, identify every distinct **handler or runtime
+entry surface** in the codebase. These become the `entry_points[]` list.
+
+| Signal | Entry point type | Example |
+|---|---|---|
+| `@app.route(...)` / `@router.post(...)` | HTTP route handler | `POST /chat` |
+| `def lambda_handler(event, context)` | Lambda function | `lambda_handler` |
+| `@app.on_event("startup")` / scheduler | Scheduled trigger | `daily_job` |
+| SQS/SNS consumer, Kafka listener | Queue / event consumer | `process_queue` |
+| Function called by orchestrator / MCP | Sub-agent receiver | `receive` |
+
+**One entry point per handler.** A single handler that reads from multiple
+data sources (e.g. one route that processes both user input and a RAG
+document) is still **one entry point** — do not inflate the count by source
+type. Record each entry point as:
+```json
+{ "id": "<slug>", "route": "<method path or description>", "handler": "<file.py:function>" }
+```
+
+### 1b — Map the pipeline steps
+
 Walk the codebase and locate the code that implements each of the 8
 standard pipeline steps. Use the table for your agent type.
 
@@ -131,14 +154,16 @@ untrusted data enters the system. These are **untrusted sources**.
 ### Source record fields
 
 - `id` — unique slug with no spaces (e.g. `"user_input_chat"`, `"tool_return_delegate"`)
+- `entry_point_id` — **required**; must match an `id` from the `entry_points[]` list built in Step 1a
 - `type` — one of the six types above
 - `route` — HTTP route or handler this source belongs to
 - `code_location` — file:line where the data enters this agent
 - `trust_level` — `"untrusted"` or `"semi_trusted"` (semi_trusted = behind a non-trivial auth check or allowlist that reduces but does not eliminate risk)
 
-**One source per distinct code location.** A single route may have multiple
-sources — for example, `/delegate` has a `user_input` source from the request
-body and a `tool_return` source from the downstream response.
+**One source per distinct code location.** A single entry point may have
+multiple sources — for example, `/delegate` has a `user_input` source from
+the request body and a `tool_return` source from the downstream response.
+Both reference the same `entry_point_id`.
 
 ---
 
@@ -454,10 +479,56 @@ Cite the system_prompt code location and the specific secret or its absence.
 
 ---
 
-## Step 5 — Write the emulation file
+## Step 5 — Write the raw emulation file
 
-Write `.agentshield/agent-emulation.json` following the schema in
-`.agentshield/agent-emulator-output-schema.md`.
+Write **all** findings — including any uncertain or potentially redundant
+predictions — to `.agentshield/agent-emulation-raw.json`.
+
+Use the same schema as `.agentshield/agent-emulator-output-schema.md`.
+This file is the unfiltered audit record. Do not omit any finding at this
+stage, even if you are unsure.
+
+---
+
+## Step 6 — Judge review
+
+Read `.agentshield/agent-emulation-raw.json`. For every actionable finding
+— transitions where `verdict` is `lands` or `partial`, and pipeline checks
+where the verdict is actionable (`audit_trail: partial/absent`,
+`hitl_gates: ungated`, `loop_termination: absent`, `agent_auth: bypassable`,
+`system_prompt_confidentiality: exposed`) — answer two questions:
+
+**Q1 — Is this a real finding?**
+
+| Signal | Conclusion |
+|---|---|
+| Every verdict has at least one `file:line` citation and the cited line exists in the repo | Real |
+| Verdict predicts behaviour not reachable by any code path in this repo | FP |
+| A control blocks the attack at the cited step and no mutation bypasses it | FP |
+| The `path_exists` is false or the pipeline step is `absent` | FP — use `not_applicable` instead |
+
+**Q2 — Is this already captured by another emulator finding?**
+
+Mark a finding `duplicate` only when **both** are true:
+- The same file:line code defect is flagged by another finding in this raw file.
+- The underlying vulnerability is identical (same guard gap, same secret, same missing control).
+
+A finding shared across multiple routes is **not** a duplicate — different
+routes are independent attack surfaces even when the defect is similar.
+A finding shared across multiple transitions at the **same** source is **not**
+a duplicate — each transition is an independent risk.
+
+**Decision:**
+
+| Decision | Action |
+|---|---|
+| Real, not a duplicate | Include in `agent-emulation.json` |
+| Duplicate within emulator | Omit from `agent-emulation.json` — keep only the highest-confidence instance |
+| FP (prediction not supported by code) | Omit from `agent-emulation.json` |
+
+Write only the kept findings to `.agentshield/agent-emulation.json` using
+the same schema. The raw file is the audit trail — do not modify it.
+Non-actionable findings (`blocked`, `not_applicable`) pass through unchanged.
 
 ---
 

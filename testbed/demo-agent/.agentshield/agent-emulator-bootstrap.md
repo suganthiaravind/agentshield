@@ -112,9 +112,17 @@ To run the emulator:
    audit trail, destructive tool gates, loop termination, agent
    authentication, system prompt confidentiality.
 
-   Write your results to .agentshield/agent-emulation.json following
-   the schema exactly. Cite file:line for every prediction. Do not
-   speculate about downstream consumers outside this repo.
+   Step 5 — Write ALL findings (including uncertain ones) to
+   .agentshield/agent-emulation-raw.json.
+
+   Step 6 — Judge review: read agent-emulation-raw.json, assess each
+   actionable finding for correctness (is it supported by code?) and
+   within-emulator duplicates (same code defect already captured by
+   another finding in this file?). Write only the kept findings to
+   .agentshield/agent-emulation.json using the same schema.
+
+   Cite file:line for every prediction. Do not speculate about
+   downstream consumers outside this repo.
    ```
 
 4. Run `agentshield merge <repo>` to produce the unified report.

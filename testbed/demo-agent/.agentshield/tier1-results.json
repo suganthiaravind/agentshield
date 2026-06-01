@@ -1,6 +1,6 @@
 {
   "tier": 1,
-  "scanned_at": "2026-05-31T20:54:20.510554Z",
+  "scanned_at": "2026-06-01T01:08:11.874117Z",
   "agentshield_tier1_fingerprint": "b71035021bdd851b6e732e1b361e1256010bbbcd2c16160047d5aad0d3705c04",
   "scanned_files": [
     "admin.py",
@@ -264,7 +264,7 @@
     }
   ],
   "git_branch": "v7",
-  "git_commit": "f12a935",
+  "git_commit": "04936c3",
   "git_repo_name": "demo-agent",
-  "scan_duration_seconds": 15
+  "scan_duration_seconds": 9
 }

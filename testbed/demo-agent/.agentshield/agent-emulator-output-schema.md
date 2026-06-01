@@ -1,7 +1,12 @@
 # AgentShield Agent Behaviour Emulator — output JSON schema (v7)
 
-Copilot writes the agent emulation to
-`.agentshield/agent-emulation.json` following this schema exactly.
+Copilot writes two files following this schema:
+
+- **`agent-emulation-raw.json`** — all predictions, unfiltered (Step 5)
+- **`agent-emulation.json`** — judge-reviewed output: FPs and within-emulator
+  duplicates removed (Step 6). This is the file `agentshield merge` reads.
+
+Both files use this schema exactly.
 
 ## Top-level structure
 
@@ -12,6 +17,7 @@ Copilot writes the agent emulation to
   "agent_type": "interactive | batch | sub-agent | orchestrator",
   "agent_type_notes": "(optional)",
   "honesty_label": "Behaviour emulator — walks the agent's runtime pipeline statically from source, enumerates untrusted data sources, traces each source through injection / argument-injection / output-handling / persistence transitions, and predicts per-transition verdicts with file:line citations. No payloads are sent; predictions are code-grounded forecasts, not captured exploits.",
+  "entry_points": [],
   "pipeline_map": {},
   "untrusted_sources": [],
   "pipeline_checks": {}
@@ -27,9 +33,42 @@ Copilot writes the agent emulation to
 | `agent_type` | string | `"interactive"`, `"batch"`, `"sub-agent"`, or `"orchestrator"`. |
 | `agent_type_notes` | string (optional) | Mixed types or unusual classification. |
 | `honesty_label` | string | The canonical positioning paragraph — must include `"walks the agent's runtime pipeline statically from source"` and `"predictions are code-grounded forecasts, not captured exploits"`. |
+| `entry_points` | array | **Required.** One item per real handler or runtime entry surface (HTTP route, Lambda handler, queue consumer, etc.). Defines the stable "entries scanned" count. See below. |
 | `pipeline_map` | object | 8-step pipeline description. See below. |
 | `untrusted_sources` | array | One entry per untrusted data source. See below. |
 | `pipeline_checks` | object | Five structural checks evaluated once per agent. See below. |
+
+---
+
+## `entry_points[]`
+
+One item per distinct runtime handler. A single handler that has multiple
+untrusted data sources (e.g. one Lambda reading from both S3 and SQS) is
+still **one entry point**. Do not inflate this list by source count.
+
+```json
+[
+  {
+    "id": "chat",
+    "route": "POST /chat",
+    "handler": "controller.py:handle_chat",
+    "description": "Primary user-facing chat endpoint"
+  },
+  {
+    "id": "receive",
+    "route": "POST /api/orchestrator/receive",
+    "handler": "orchestrator.py:receive",
+    "description": "Peer-agent message receiver"
+  }
+]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Short stable slug, no spaces. Used as the join key for `untrusted_sources[].entry_point_id`. |
+| `route` | string | HTTP method + path, Lambda event type, or handler description. |
+| `handler` | string | `"file.py:function_name"` — the code location of the entry-point handler. |
+| `description` | string (optional) | One sentence on what this entry point does. |
 
 ---
 
@@ -84,6 +123,7 @@ that don't exist in this agent.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | Unique slug, no spaces. Convention: `<type>_<route-slug>` e.g. `"user_input_chat"`, `"tool_return_delegate"`. |
+| `entry_point_id` | string | **Required.** Must match an `id` in the top-level `entry_points[]` list. |
 | `type` | string | One of: `user_input`, `rag_document`, `tool_return`, `batch_record`, `agent_message`, `memory_recall`. |
 | `route` | string | HTTP method + path (e.g. `"POST /chat"`) or handler description. |
 | `code_location` | string | File:line where data enters this agent. |
@@ -279,6 +319,7 @@ fields depend on the check:
 | `loop_termination` | `present` / `absent` / `not_applicable` | — |
 | `agent_auth` | `authenticated` / `bypassable` / `not_applicable` | `auth_sources: []`, `bypass_condition: "..."` |
 | `system_prompt_confidentiality` | `safe` / `exposed` / `not_applicable` | `secret_found: "..."`, `secret_location: "..."` |
+
 
 ---
 
