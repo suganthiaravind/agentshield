@@ -32,7 +32,7 @@ _HTTP_METHODS: frozenset[str] = frozenset({
 
 # Decorator attribute names that suggest queue / event consumers
 _CONSUMER_ATTRS: frozenset[str] = frozenset({
-    "on_event", "scheduled", "consumer", "handler",
+    "on_event", "consumer", "handler",
     "subscribe", "listener", "on_message",
 })
 
