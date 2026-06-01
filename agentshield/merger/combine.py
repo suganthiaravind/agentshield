@@ -12046,11 +12046,39 @@ def render_combined_html(result: MergeResult, *, static: bool = False) -> str:
     # Behaviour Emulator: lands + partial = actionable. Blocked
     # and inconclusive are shown in the breakdown but excluded
     # from the headline value.
+    # For v7 schema: read verdicts directly from untrusted_sources +
+    # pipeline_checks so blocked and N/A counts match the coverage block.
     emu_traces = _all_emu_traces(r.agent_emulation or {})
     emu_landed = sum(1 for t in emu_traces if t.get("verdict") == "lands")
     emu_partial = sum(1 for t in emu_traces if t.get("verdict") == "partial")
-    emu_blocked = sum(1 for t in emu_traces if t.get("verdict") == "blocked")
-    emu_inconclusive = sum(1 for t in emu_traces if t.get("verdict") == "inconclusive")
+    _emu_raw_sources   = (r.agent_emulation or {}).get("untrusted_sources") or []
+    _emu_raw_pchecks   = (r.agent_emulation or {}).get("pipeline_checks") or {}
+    _T_KEYS_CARD = ("to_llm", "to_tool_args", "to_sink", "to_store")
+    if _emu_raw_sources:
+        # v7 schema: count blocked and N/A from raw sources
+        emu_blocked = 0
+        emu_inconclusive = 0
+        for _src in _emu_raw_sources:
+            if not isinstance(_src, dict):
+                continue
+            for _tk in _T_KEYS_CARD:
+                _t = (_src.get("transitions") or {}).get(_tk) or {}
+                _rv = str(_t.get("verdict") or "not_applicable")
+                if _rv in ("blocked", "present", "gated", "authenticated", "safe"):
+                    emu_blocked += 1
+                elif _rv in ("not_applicable",) or not _t.get("path_exists", True):
+                    emu_inconclusive += 1
+        # Also count pipeline check blocked/N/A
+        for _ck in ("system_prompt_confidentiality", "hitl_gates", "loop_termination", "agent_auth", "audit_trail"):
+            _chk = _emu_raw_pchecks.get(_ck)
+            if not isinstance(_chk, dict):
+                continue
+            _rv = str(_chk.get("verdict") or "not_evaluated")
+            if _rv in ("blocked", "present", "gated", "authenticated", "safe"):
+                emu_blocked += 1
+    else:
+        emu_blocked = sum(1 for t in emu_traces if t.get("verdict") == "blocked")
+        emu_inconclusive = sum(1 for t in emu_traces if t.get("verdict") == "inconclusive")
     emu_actionable_n = emu_landed + emu_partial
     input_cards.append(
         f'<div class="metric">'
@@ -14810,9 +14838,9 @@ def _render_emulator_coverage_block_v7(
     }
 
     def _nv(raw: str) -> str:
-        if raw in ("lands", "absent", "ungated", "bypassable", "exposed"):
+        if raw in ("lands", "absent", "ungated", "exposed"):
             return "lands"
-        if raw == "partial":
+        if raw in ("partial", "bypassable"):
             return "partial"
         if raw in ("blocked", "present", "gated", "authenticated", "safe"):
             return "blocked"
