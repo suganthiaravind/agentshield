@@ -1,0 +1,48 @@
+{
+  "generated_by": "agentshield-entry-point-scanner",
+  "target": "/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent",
+  "entry_points": [
+    {
+      "id": "ask",
+      "route": "POST /admin/ask",
+      "handler": "admin.py:admin_ask",
+      "handler_type": "http_route",
+      "description": "POST /admin/ask in admin.py"
+    },
+    {
+      "id": "chat",
+      "route": "POST /chat",
+      "handler": "controller.py:chat",
+      "handler_type": "http_route",
+      "description": "POST /chat in controller.py"
+    },
+    {
+      "id": "summarise",
+      "route": "POST /summarise",
+      "handler": "controller.py:summarise",
+      "handler_type": "http_route",
+      "description": "POST /summarise in controller.py"
+    },
+    {
+      "id": "delegate",
+      "route": "POST /api/orchestrator/delegate",
+      "handler": "orchestrator.py:delegate",
+      "handler_type": "http_route",
+      "description": "POST /api/orchestrator/delegate in orchestrator.py"
+    },
+    {
+      "id": "receive",
+      "route": "POST /api/orchestrator/receive",
+      "handler": "orchestrator.py:receive_from_peer",
+      "handler_type": "http_route",
+      "description": "POST /api/orchestrator/receive in orchestrator.py"
+    },
+    {
+      "id": "debug",
+      "route": "POST /api/orchestrator/debug",
+      "handler": "orchestrator.py:debug_endpoint",
+      "handler_type": "http_route",
+      "description": "POST /api/orchestrator/debug in orchestrator.py"
+    }
+  ]
+}

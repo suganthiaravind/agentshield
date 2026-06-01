@@ -2046,15 +2046,36 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
     # per-entry-point attack_class_traces format). Preserved separately so
     # _render_emulator_coverage_block_v7 can use len() as the stable
     # "entries scanned" count rather than deriving it from source routes.
+    #
+    # Priority order (highest → lowest authority):
+    #  1. entry-points.json written by the AST scanner (deterministic, from code)
+    #  2. entry_points[] in agent-emulation.json (LLM-authored but explicit)
+    #  3. len(route_map) derived from untrusted_sources[].route (fallback)
     v7_entry_points: list[dict] = []
-    if isinstance(raw_untrusted_sources, list) and raw_untrusted_sources:
+
+    # 1. AST-scanner file (most authoritative)
+    ep_file = source_dir / "entry-points.json"
+    if ep_file.exists():
+        try:
+            ep_data = json.loads(ep_file.read_text())
+            for ep in ep_data.get("entry_points") or []:
+                if isinstance(ep, dict):
+                    v7_entry_points.append({
+                        "id": str(ep.get("id") or ""),
+                        "route": str(ep.get("route") or ep.get("id") or ""),
+                        "handler": str(ep.get("handler") or ""),
+                        "description": str(ep.get("description") or ""),
+                    })
+        except Exception:
+            pass
+
+    # 2. entry_points[] from the emulation file (LLM-authored)
+    if not v7_entry_points and isinstance(raw_untrusted_sources, list) and raw_untrusted_sources:
         raw_eps = raw.get("entry_points") or []
         if isinstance(raw_eps, list):
             for ep in raw_eps:
                 if not isinstance(ep, dict):
                     continue
-                # Distinguish v7 simple entries (no attack_class_traces key)
-                # from legacy complex entries.
                 if "attack_class_traces" not in ep:
                     v7_entry_points.append({
                         "id": str(ep.get("id") or ""),

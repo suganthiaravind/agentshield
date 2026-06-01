@@ -327,6 +327,12 @@ def emit_skills(
     tier1_path.write_text(json.dumps(tier1_payload, indent=2) + "\n")
     emitted.append(tier1_path)
 
+    # Deterministic entry-point discovery — runs before emitting prompts
+    # so emit_copilot_prompts_md can inject the list into the emulator prompt.
+    from agentshield.emitter.entry_point_scanner import write_entry_points
+    ep_path, _ep_list = write_entry_points(target_root)
+    emitted.append(ep_path)
+
     prompts_path = emit_copilot_prompts_md(target_root)
     emitted.append(prompts_path)
 
@@ -453,6 +459,53 @@ def agent_emulator_prompt() -> str:
     )
 
 
+def _agent_emulator_prompt_with_entry_points(contract_dir: Path) -> str:
+    """Return the emulator prompt with a pre-discovered entry-point list
+    injected into Step 1 so Copilot uses code-derived IDs, not invented labels."""
+    import json as _json
+    base = agent_emulator_prompt()
+
+    ep_file = contract_dir / "entry-points.json"
+    if not ep_file.exists():
+        return base
+
+    try:
+        data = _json.loads(ep_file.read_text())
+        eps = data.get("entry_points") or []
+    except Exception:
+        return base
+
+    if not eps:
+        return base
+
+    lines = [
+        "\nThe following entry points were discovered deterministically from the"
+        " codebase by AgentShield's AST scanner. Use exactly these IDs in"
+        " entry_points[] and entry_point_id fields. Only add an entry point if"
+        " you find a handler clearly missing from this list:\n",
+    ]
+    for ep in eps:
+        lines.append(
+            f"  - id: \"{ep['id']}\","
+            f" route: \"{ep.get('route','')}\","
+            f" handler: \"{ep.get('handler','')}\""
+        )
+    lines.append("")  # blank line before the rest of the prompt
+
+    injection = "\n".join(lines)
+    # Inject after the Step 1 line in the prompt
+    marker = "Step 1 —"
+    if marker in base:
+        idx = base.index(marker) + len(marker)
+        # find end of that line
+        eol = base.find("\n", idx)
+        if eol == -1:
+            eol = len(base)
+        return base[:eol] + "\n" + injection + base[eol:]
+    # fallback: prepend
+    return injection + base
+
+
 def emit_copilot_prompts_md(target_root: Path) -> Path:
     """Write .agentshield/copilot-prompts.md with target-specific prompts.
 
@@ -501,7 +554,7 @@ def emit_copilot_prompts_md(target_root: Path) -> Path:
         + "## Step 2 — Behaviour emulator\n\n"
         "Paste **after** `tier2-findings.json` exists.\n\n"
         "```\n"
-        + _targeted(agent_emulator_prompt())
+        + _targeted(_agent_emulator_prompt_with_entry_points(contract_dir))
         + "\n```\n"
     )
 
