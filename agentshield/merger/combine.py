@@ -2006,6 +2006,10 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         for ep in raw_entry_points:
             if not isinstance(ep, dict):
                 continue
+            # Skip simple v7 entries (id/route/handler only) — these have no
+            # attack_class_traces and are handled separately as v7_entry_points.
+            if "attack_class_traces" not in ep and "pipeline_map" not in ep:
+                continue
             ep_pmap_in = ep.get("pipeline_map") or {}
             ep_pipeline_map: dict[str, dict] = {}
             for key in _PIPELINE_STEP_KEYS:
