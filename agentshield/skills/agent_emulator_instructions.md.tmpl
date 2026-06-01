@@ -56,7 +56,42 @@ type. Record each entry point as:
 { "id": "<slug>", "route": "<method path or description>", "handler": "<file.py:function>" }
 ```
 
-### 1b — Map the pipeline steps
+### 1b — Gate: validate each entry point before emulation
+
+For every entry point identified in Step 1a, answer these two questions
+before proceeding. Any entry point that fails **either** question must be
+**removed from entry_points[]** and skipped entirely — do not enumerate
+sources, fire seeds, or record findings against it.
+
+**Q1 — Is this handler reachable from outside the system boundary?**
+
+| Reachable — keep | Not reachable — remove |
+|---|---|
+| HTTP / WebSocket endpoint exposed by a server | Internal helper function with no HTTP binding |
+| Lambda function triggered by API Gateway, SQS, SNS, EventBridge (with external producer) | Scheduled / cron timer with no external data input |
+| Kafka/SQS consumer reading messages from an external producer | Admin CLI script run only by operators with shell access |
+| Sub-agent receiver invoked by an orchestrator that itself accepts external input | Health-check / metrics endpoint that reads no user-supplied data |
+| MCP tool endpoint callable by an external client | Internal unit-test fixture or setup helper |
+
+**Q2 — Does this handler ingest data that an attacker could control?**
+
+An attacker can control data that:
+- Comes from user input (HTTP request body, query params, headers, WebSocket message)
+- Comes from an external system the attacker can write to (SQS queue, S3 bucket with public write, third-party API response, database row written by an external actor)
+- Comes from an orchestrator that itself accepts external input (the taint flows upstream)
+
+An attacker **cannot** control data that is:
+- Hardcoded in source code or config files checked into the repo
+- Generated entirely within the system with no external write path
+- Fetched from a read-only internal service with no external write access
+
+> **Decision rule:** If you are not certain a handler is externally reachable
+> and ingests attacker-controllable data, **exclude it**. It is better to miss
+> a low-confidence entry point than to generate false-positive findings against
+> an internal handler. Cite the reason in `agent_type_notes` if you exclude a
+> borderline case.
+
+### 1c — Map the pipeline steps
 
 Walk the codebase and locate the code that implements each of the 8
 standard pipeline steps. Use the table for your agent type.
