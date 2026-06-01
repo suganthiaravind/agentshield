@@ -17201,51 +17201,59 @@ def _render_emulator_slide(parts: list[str]) -> None:
     """Render the behaviour emulator explainer slide."""
     _STEPS = [
         (
-            "1", "Read source",
-            "Copilot reads every source file in the scanned repo — "
-            "controllers, orchestrators, tools, skill manifests. No live agent required.",
-            None,
+            "1", "Discover & gate entry points",
+            "An AST scanner finds every externally reachable handler — HTTP routes, "
+            "Lambda functions, queue consumers, sub-agent receivers. A validation gate "
+            "then removes any handler with no external attack surface (cron triggers, "
+            "internal helpers, test fixtures) before emulation begins.",
+            "pre-emulation gate",
         ),
         (
             "2", "Map the pipeline",
-            "8 standard pipeline steps identified from the code: "
+            "For each validated entry point: 8 standard pipeline steps located in code — "
             "User Input → RAG → System Prompt → Planner LLM → "
-            "Tool Call → Tool Output → Re-plan → Response.",
+            "Tool Call → Tool Output → Re-plan → Response. "
+            "Each step is cited with a file:line reference.",
             "structural",
         ),
         (
-            "3", "Build payload catalogue",
-            "For each untrusted source × transition pair: 3 seed payloads + up to 5 "
-            "dynamically generated mutations, each crafted to bypass the specific "
-            "defence identified at the previous step.",
+            "3", "Enumerate untrusted sources",
+            "For each entry point, identify every data source an attacker could write to: "
+            "user-supplied input, RAG-retrieved documents, tool call returns, "
+            "orchestrator messages. Sources outside the attacker’s reach are excluded.",
+            "per entry point",
+        ),
+        (
+            "4", "Simulate attacks across 4 transitions",
+            "For each source: 3 seed payloads fired across 4 transitions "
+            "(→LLM, →tool-args, →sink, →store). "
+            "If all seeds are blocked, up to 5 escalating mutations are generated "
+            "targeting the specific defence. Every payload is recorded with a "
+            "per-step pipeline trace and file:line citations.",
             "per source × transition",
         ),
         (
-            "4", "Walk each step",
-            "For every step in the attack path: predict what the code does given "
-            "the payload, whether a defence is present, and the outcome — "
-            "advances / blocked / modified / absent.",
-            "per-step",
+            "5", "Pipeline-level checks",
+            "Five structural security properties evaluated once per agent regardless "
+            "of entry point: audit trail gaps, HITL gate coverage, loop termination "
+            "caps, agent-auth bypass conditions, and system-prompt confidentiality.",
+            "agent-wide",
         ),
         (
-            "5", "Predict verdict",
-            "Step outcomes synthesised into a single verdict with a confidence score (0–100%). "
-            "Blocked seeds trigger mutation generation; emulation stops when a payload lands.",
-            None,
-        ),
-        (
-            "6", "Produce trace",
-            "Per-seed pipeline trace with code citations, actor animations, "
-            "payload catalogue, and Fix guidance — all embedded in the report.",
-            "report output",
+            "6", "Judge review — FP filter + dedup",
+            "An LLM-as-judge reviews every raw finding: is it grounded in a real code "
+            "path? Is it a duplicate of another finding in this run? Only findings that "
+            "pass both questions are written to the final output. The raw file is "
+            "preserved as an audit trail.",
+            "quality gate",
         ),
     ]
 
     _VERDICTS = [
-        ("lands",   "emu-slide-v-lands",   "Lands",            "Attack succeeds end-to-end. Fix before ship."),
-        ("partial", "emu-slide-v-partial", "Partially blocked", "Some steps defended, others not. Attacker can pivot."),
-        ("blocked", "emu-slide-v-blocked", "Blocked",          "All steps defended. Attack could not advance."),
-        ("inconc",  "emu-slide-v-inconc",  "Inconclusive",     "Pipeline step absent or evidence insufficient."),
+        ("lands",   "emu-slide-v-lands",   "Lands",            "Attack succeeds end-to-end. No effective control — fix before ship."),
+        ("partial", "emu-slide-v-partial", "Partially blocked", "Seeds blocked; a mutation bypasses the control. Half-defended is still exploitable."),
+        ("blocked", "emu-slide-v-blocked", "Blocked",          "All seeds and mutations stopped. Defence holds — note what controls are working."),
+        ("inconc",  "emu-slide-v-inconc",  "N/A",              "Code path does not exist for this source × transition pair."),
     ]
 
     parts.append('<div class="emu-slide-card">')
@@ -17255,8 +17263,9 @@ def _render_emulator_slide(parts: list[str]) -> None:
         '<span class="ref-section-chevron">&#9654;</span>'
         '<span class="ref-section-heading">'
         '<span class="ref-section-title">How the behaviour emulator works</span>'
-        '<span class="ref-section-teaser">Copilot walks the agent\'s runtime pipeline from source '
-        'and traces each untrusted data source through 4 security transitions — no live target, no payloads fired.</span>'
+        '<span class="ref-section-teaser">Copilot walks the agent’s pipeline from source code — '
+        'discovers entry points, gates out internal handlers, simulates attacks across 4 transitions, '
+        'then filters findings through an LLM judge. No live agent required.</span>'
         '</span>'
         '<span class="ref-section-hint"></span>'
         '</summary>'
@@ -17264,9 +17273,10 @@ def _render_emulator_slide(parts: list[str]) -> None:
     parts.append('<div class="ref-section-body">')
     parts.append('<div class="emu-slide-inner">')
     parts.append(
-        '<div class="emu-slide-hero">Static pipeline analysis — no live agent needed</div>'
-        '<div class="emu-slide-sub">Copilot reads the source, maps the 8-step pipeline, enumerates '
-        'untrusted data sources, and predicts per-transition verdicts with file:line evidence.</div>'
+        '<div class="emu-slide-hero">Source-driven attack simulation — no live agent needed</div>'
+        '<div class="emu-slide-sub">AgentShield reads the source, validates entry points, enumerates '
+        'untrusted data sources, and predicts per-transition verdicts with file:line evidence. '
+        'An LLM-as-judge filters false positives and duplicates before results reach the report.</div>'
     )
     parts.append('<div class="emu-slide-steps">')
     for num, title, desc, tag in _STEPS:
@@ -17294,7 +17304,9 @@ def _render_emulator_slide(parts: list[str]) -> None:
         '<div class="emu-slide-note">'
         'Adjacent to adversary emulation but methodology-distinct: AgentShield walks the pipeline '
         'against catalogued attack pattern classes, not specific threat-actor playbooks. '
-        'No live payloads are fired &mdash; this is structured threat modelling from source.'
+        'The agent does not need to be running &mdash; all analysis is from source code. '
+        'A pre-emulation entry point gate and a post-emulation LLM judge together '
+        'keep false-positive rates low without manual triage.'
         '</div>'
     )
     parts.append('</div>')  # /emu-slide-inner
