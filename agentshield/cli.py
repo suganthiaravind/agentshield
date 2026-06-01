@@ -745,7 +745,7 @@ def _run_checks(
     target_root: Path,
     target_path_str: str,
 ) -> int:
-    """Run the 14-point post-merge health check against an already-merged result.
+    """Run the post-merge health check against an already-merged result.
 
     Shared by cmd_merge (auto-runs after writing files) and cmd_check (standalone).
     Returns 0 if all checks pass, 1 if any fail.
@@ -924,6 +924,114 @@ def _run_checks(
         "tier1 / tier2 / emulator" if not unknown_origins
         else f"unknown origin(s): {', '.join(str(o) for o in unknown_origins)}",
     ))
+
+    # ── 12–16. Emulator data-quality checks ───────────────────────────────
+    emu_path = target_root / ".agentshield" / "agent-emulation.json"
+    if emu_path.exists():
+        try:
+            _emu_raw = json.loads(emu_path.read_text(encoding="utf-8"))
+        except Exception:
+            _emu_raw = {}
+        _raw_sources = _emu_raw.get("untrusted_sources") or []
+        _raw_pchecks = _emu_raw.get("pipeline_checks") or {}
+        _raw_eps     = _emu_raw.get("entry_points") or []
+
+        # 12. Emulator has findings when untrusted_sources are present
+        _emu_emu = result.report.agent_emulation or {}
+        _emu_traces = _emu_emu.get("attack_class_traces") or []
+        _emu_actionable = sum(
+            1 for t in _emu_traces if t.get("verdict") in ("lands", "partial")
+        )
+        if _raw_sources:
+            checks.append((
+                "Emulator has findings when sources present",
+                _emu_actionable > 0,
+                f"{_emu_actionable} actionable emulator finding(s)" if _emu_actionable > 0
+                else "0 emulator findings despite untrusted_sources present — "
+                     "check entry_points[] schema or _load_agent_emulation",
+            ))
+
+        # 13. No N/A or inconclusive transitions with seed/mutation payloads populated
+        _na_with_seeds: list[str] = []
+        for _src in _raw_sources:
+            if not isinstance(_src, dict):
+                continue
+            for _tk, _t in (_src.get("transitions") or {}).items():
+                _v = str(_t.get("verdict") or "not_applicable")
+                if _v in ("not_applicable", "inconclusive"):
+                    _seeds = _t.get("seed_payloads") or []
+                    _muts  = _t.get("mutation_payloads") or []
+                    if _seeds or _muts:
+                        _na_with_seeds.append(
+                            f"{_src.get('id','?')}.{_tk} "
+                            f"(verdict={_v}, seeds={len(_seeds)}, muts={len(_muts)})"
+                        )
+        checks.append((
+            "N/A transitions have no seed/mutation payloads",
+            not _na_with_seeds,
+            "all not_applicable and inconclusive transitions have empty payloads"
+            if not _na_with_seeds
+            else f"{len(_na_with_seeds)} transition(s) with N/A verdict but non-empty payloads: "
+                 + "; ".join(_na_with_seeds[:3]) + ("…" if len(_na_with_seeds) > 3 else ""),
+        ))
+
+        # 14. Blocked transitions either have mutations or explain why in verdict_reasoning
+        _blocked_no_muts: list[str] = []
+        for _src in _raw_sources:
+            if not isinstance(_src, dict):
+                continue
+            for _tk, _t in (_src.get("transitions") or {}).items():
+                if str(_t.get("verdict") or "") == "blocked":
+                    _muts = _t.get("mutation_payloads") or []
+                    _rsn  = str(_t.get("verdict_reasoning") or "").strip()
+                    if not _muts and not _rsn:
+                        _blocked_no_muts.append(f"{_src.get('id','?')}.{_tk}")
+        checks.append((
+            "Blocked transitions have mutations or reasoning",
+            not _blocked_no_muts,
+            "all blocked transitions have mutation_payloads[] or verdict_reasoning"
+            if not _blocked_no_muts
+            else f"{len(_blocked_no_muts)} blocked transition(s) with no mutations and no "
+                 f"reasoning: " + "; ".join(_blocked_no_muts[:3]),
+        ))
+
+        # 15. All source entry_point_ids reference a valid entry in entry_points[]
+        _valid_ep_ids = {ep.get("id") for ep in _raw_eps if isinstance(ep, dict)}
+        _bad_ep_refs: list[str] = []
+        for _src in _raw_sources:
+            if not isinstance(_src, dict):
+                continue
+            _epid = _src.get("entry_point_id")
+            if _epid and _epid not in _valid_ep_ids:
+                _bad_ep_refs.append(f"{_src.get('id','?')} → '{_epid}'")
+        checks.append((
+            "Source entry_point_ids are valid",
+            not _bad_ep_refs,
+            f"all {len(_raw_sources)} source(s) reference valid entry_point ids"
+            if not _bad_ep_refs
+            else f"{len(_bad_ep_refs)} source(s) reference unknown entry_point_id: "
+                 + "; ".join(_bad_ep_refs[:3]),
+        ))
+
+        # 16. No scheduled/cron-only entries in entry_points[]
+        _SCHED_SIGNALS = ("scheduled", "cron", "@Scheduled", "timer", "startup")
+        _sched_eps = [
+            ep.get("id", "?")
+            for ep in _raw_eps
+            if isinstance(ep, dict) and any(
+                sig.lower() in str(ep.get("route", "") + ep.get("handler", "")).lower()
+                for sig in _SCHED_SIGNALS
+            )
+        ]
+        checks.append((
+            "No scheduled/cron triggers in entry_points",
+            not _sched_eps,
+            "no scheduled triggers detected in entry_points[]"
+            if not _sched_eps
+            else f"{len(_sched_eps)} scheduled/cron entry point(s) — these have no "
+                 f"external attack surface and should be excluded: "
+                 + ", ".join(_sched_eps[:4]),
+        ))
 
     # ── Print report ───────────────────────────────────────────────────────
     passed = sum(1 for _, ok, _ in checks if ok)
