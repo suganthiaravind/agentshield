@@ -47,7 +47,9 @@ If the file doesn't appear after Copilot says it's done:
 
 ---
 
-## 3 — Behaviour emulator *(Copilot Chat)*
+## 3 — Behaviour emulator + judge *(Copilot Chat — two passes)*
+
+### 3a — Behaviour emulator
 
 1. In the same **`copilot-prompts.md`** file, copy the entire
    **`## Step 2 — Behaviour emulator`** fenced block.
@@ -55,14 +57,30 @@ If the file doesn't appear after Copilot says it's done:
 
 Wait for Copilot to finish (1 entry point ~5 min, 3–5 entry points ~15 min).
 
-**Done when:** both files exist:
-- `<target-repo>/.agentshield/agent-emulation-raw.json` — all raw predictions
-- `<target-repo>/.agentshield/agent-emulation.json` — judge-reviewed output (FPs and within-emulator duplicates removed)
+**Done when:** `<target-repo>/.agentshield/agent-emulation-raw.json` exists.
 
-If `agent-emulation.json` doesn't appear after Copilot says it's done:
-> "You said you finished but `agent-emulation.json` doesn't exist at
-> `<target-repo>/.agentshield/agent-emulation.json`. Please complete the
-> judge review step and write the cleaned findings to that exact path."
+If the file doesn't appear after Copilot says it's done:
+> "You said you finished but `agent-emulation-raw.json` doesn't exist at
+> `<target-repo>/.agentshield/agent-emulation-raw.json`. Please write all
+> findings to that path — do not skip any uncertain ones."
+
+### 3b — Emulator judge
+
+The judge is a **separate Copilot pass** that reads the raw output and filters
+out false positives and within-file duplicates before the findings reach the report.
+
+1. Still in **`copilot-prompts.md`**, copy the entire
+   **`## Step 3 — Emulator judge`** fenced block.
+2. Paste it into **Copilot Chat** (same session or a new one).
+
+Wait for Copilot to finish (~2–5 min).
+
+**Done when:** `<target-repo>/.agentshield/agent-emulation-judged.json` exists.
+
+If the file doesn't appear:
+> "You said you finished but `agent-emulation-judged.json` doesn't exist at
+> `<target-repo>/.agentshield/agent-emulation-judged.json`. Please write your
+> keep/drop decisions to that exact path using the output schema."
 
 ---
 
@@ -72,9 +90,9 @@ If `agent-emulation.json` doesn't appear after Copilot says it's done:
 agentshield merge /absolute/path/to/your-agent-repo
 ```
 
-Combines Tier 1 + Tier 2 + behaviour emulator into a single report,
-then automatically runs all 14 health checks. Output lands in the
-**target repo's** `output/` folder:
+Combines Tier 1 + Tier 2 + behaviour emulator (raw + judged) into a single
+report, then automatically runs post-merge health checks. Output lands in
+the **target repo's** `output/` folder:
 
 ```
 <target-repo>/output/
@@ -93,7 +111,9 @@ open <target-repo>/output/agentshield-report.html          # macOS
 # xdg-open <target-repo>/output/agentshield-report.html   # Linux
 ```
 
-**Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
+**Done when you see:** `✓  Report health: N/N  —  ALL CHECKS PASSED`
+
+> The check count varies based on which artifacts exist (emulator judge adds checks 17–18 when `agent-emulation-raw.json` is present).
 
 ---
 
@@ -102,9 +122,10 @@ open <target-repo>/output/agentshield-report.html          # macOS
 | Step | What | Where |
 |---|---|---|
 | 1 | `agentshield scan <target-path> --scan-all-files` → generates `copilot-prompts.md` | Terminal |
-| 2 | Copy **Step 1** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
-| 3 | Copy **Step 2** from `copilot-prompts.md` → paste into Copilot Chat | VS Code |
-| 4 | `agentshield merge <target-path>` → `✓ 14/14` → open `output/agentshield-report.html` | Terminal |
+| 2 | Copy **Step 1** from `copilot-prompts.md` → paste into Copilot Chat → writes `tier2-findings.json` | VS Code |
+| 3a | Copy **Step 2** from `copilot-prompts.md` → paste into Copilot Chat → writes `agent-emulation-raw.json` | VS Code |
+| 3b | Copy **Step 3** from `copilot-prompts.md` → paste into Copilot Chat → writes `agent-emulation-judged.json` | VS Code |
+| 4 | `agentshield merge <target-path>` → `✓ N/N ALL CHECKS PASSED` → open `output/agentshield-report.html` | Terminal |
 
 ---
 

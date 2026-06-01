@@ -925,8 +925,11 @@ def _run_checks(
         else f"unknown origin(s): {', '.join(str(o) for o in unknown_origins)}",
     ))
 
-    # ── 12–16. Emulator data-quality checks ───────────────────────────────
-    emu_path = target_root / ".agentshield" / "agent-emulation.json"
+    # ── 12–18. Emulator data-quality checks ───────────────────────────────
+    # Prefer raw file (new emulator); fall back to agent-emulation.json
+    _raw_emu_path  = target_root / ".agentshield" / "agent-emulation-raw.json"
+    _compat_path   = target_root / ".agentshield" / "agent-emulation.json"
+    emu_path = _raw_emu_path if _raw_emu_path.exists() else _compat_path
     if emu_path.exists():
         try:
             _emu_raw = json.loads(emu_path.read_text(encoding="utf-8"))
@@ -1032,6 +1035,55 @@ def _run_checks(
                  f"external attack surface and should be excluded: "
                  + ", ".join(_sched_eps[:4]),
         ))
+
+        # 17. Emulator judge artifact present when actionable findings exist
+        _judged_path = target_root / ".agentshield" / "agent-emulation-judged.json"
+        _judged_present = _judged_path.exists()
+        if _emu_actionable > 0:
+            checks.append((
+                "Emulator judge artifact present",
+                _judged_present,
+                "agent-emulation-judged.json found — judge was separately enforced"
+                if _judged_present
+                else "agent-emulation-judged.json missing — run Step 3 (emulator judge) "
+                     "from copilot-prompts.md then re-merge",
+            ))
+
+        # 18. Judge file covers all actionable source-transition IDs
+        if _judged_present:
+            try:
+                _judged_raw = json.loads(_judged_path.read_text(encoding="utf-8"))
+            except Exception:
+                _judged_raw = {}
+            _j_kept = set(_judged_raw.get("kept_ids") or [])
+            _j_dropped_ids = {d.get("id") for d in (_judged_raw.get("dropped") or []) if d.get("id")}
+            _j_covered = _j_kept | _j_dropped_ids
+            _uncovered: list[str] = []
+            for _src in _raw_sources:
+                if not isinstance(_src, dict):
+                    continue
+                _sid = _src.get("id", "")
+                for _tk, _t in (_src.get("transitions") or {}).items():
+                    _tv = str((_t or {}).get("verdict") or "not_applicable")
+                    if _tv in ("lands", "partial"):
+                        _jid = f"{_sid}:{_tk}"
+                        if _jid not in _j_covered:
+                            _uncovered.append(_jid)
+            for _ck, _cd in (_raw_pchecks or {}).items():
+                _cv = str((_cd or {}).get("verdict") or "")
+                _ACTIONABLE_PC = {"ungated", "bypassable", "exposed", "absent", "partial"}
+                if _cv in _ACTIONABLE_PC:
+                    _jid2 = f"pipeline:{_ck}"
+                    if _jid2 not in _j_covered:
+                        _uncovered.append(_jid2)
+            checks.append((
+                "Judge covers all actionable raw findings",
+                not _uncovered,
+                "all actionable findings are covered in the judge file"
+                if not _uncovered
+                else f"{len(_uncovered)} actionable finding(s) not covered by judge: "
+                     + "; ".join(_uncovered[:4]) + ("…" if len(_uncovered) > 4 else ""),
+            ))
 
     # ── Print report ───────────────────────────────────────────────────────
     passed = sum(1 for _, ok, _ in checks if ok)

@@ -30,7 +30,7 @@ to detect stale Tier 2 runs.
 ------------------------------------------------------------------------
 ## Step 2 — Behaviour emulator
 
-Paste **after** `tier2-findings.json` exists.
+Paste **after** `tier2-findings.json` exists. Writes `agent-emulation-raw.json`.
 
 ```
 Please run the AgentShield agent behaviour emulator.
@@ -73,15 +73,38 @@ confidentiality.
 
 Step 5 — Write ALL findings (including uncertain ones) to
 /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulation-raw.json using the output schema.
-
-Step 6 — Judge review: read agent-emulation-raw.json and assess each
-actionable finding (verdict lands/partial, or actionable pipeline check)
-for two things: (a) is it a real finding supported by code evidence, or
-a false positive? (b) is the same code defect already captured by another
-finding in this file (within-emulator duplicate)? Write only the kept
-findings to /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulation.json using the same schema.
-Omit FPs and within-emulator duplicates — do not modify the raw file.
+This is the only file you write — a separate judge prompt (Step 3 in
+copilot-prompts.md) will review this output and produce the final
+agent-emulation-judged.json. Do not self-filter or omit findings here.
 
 Cite file:line for every prediction. Do not speculate about downstream
 consumers outside this repo.
+```
+
+------------------------------------------------------------------------
+## Step 3 — Emulator judge
+
+Paste **after** `agent-emulation-raw.json` exists. Writes `agent-emulation-judged.json` used by `agentshield merge`.
+
+```
+Please run the AgentShield emulator judge.
+
+Read the instructions at
+/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulator-judge-instructions.md and the output
+schema at /Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulator-judge-output-schema.md.
+Read the raw emulator output at
+/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulation-raw.json.
+
+For every actionable finding (untrusted source transitions with
+verdict lands or partial, plus pipeline checks with ungated /
+bypassable / exposed / absent verdict), decide:
+  1. Is it a genuine finding with a file:line code citation?
+  2. Is it a within-file duplicate of another finding here?
+
+Apply the sink-overclaiming and tool-arg-overclaiming suppression
+rules from the instructions before calling a finding genuine.
+
+Write your decisions to
+/Users/suganthichandrasekaran/AgentShield/testbed/demo-agent/.agentshield/agent-emulation-judged.json following the output
+schema exactly. Do not modify agent-emulation-raw.json.
 ```

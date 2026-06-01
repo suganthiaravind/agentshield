@@ -1732,11 +1732,21 @@ _V7_TRANSITION_LABELS: dict[str, str] = {
 
 
 def _v7_sources_to_attack_class_traces(
-    untrusted_sources: list, pipeline_checks: dict, source_dir: "Path"
+    untrusted_sources: list,
+    pipeline_checks: dict,
+    source_dir: "Path",
+    *,
+    judge_kept_ids: "frozenset[str] | None" = None,
 ) -> list[dict]:
     """Convert v7 untrusted_sources + pipeline_checks into the internal
     attack_class_traces format so the rest of the merger pipeline
-    works without modification."""
+    works without modification.
+
+    If `judge_kept_ids` is provided (from agent-emulation-judged.json),
+    only actionable source-transition pairs whose ID (`{src_id}:{t_key}`)
+    is in the set are included. Items with non-actionable verdicts
+    (blocked, not_applicable) are always passed through unchanged.
+    """
     out: list[dict] = []
 
     for src in untrusted_sources:
@@ -1758,6 +1768,12 @@ def _v7_sources_to_attack_class_traces(
             verdict = t.get("verdict")
             if verdict in ("not_applicable", "blocked", None):
                 continue
+
+            # Judge filter: skip actionable traces the judge dropped
+            if judge_kept_ids is not None:
+                jid = f"{src_id}:{t_key}"
+                if jid not in judge_kept_ids:
+                    continue
 
             attack_class = _V7_SOURCE_TRANSITION_TO_ATTACK_CLASS.get(
                 (src_type, t_key)
@@ -1880,6 +1896,12 @@ def _v7_sources_to_attack_class_traces(
         actionable = _ACTIONABLE_PIPELINE_CHECK_VERDICTS.get(check_key, set())
         if chk_verdict not in actionable:
             continue
+
+        # Judge filter: skip pipeline checks the judge dropped
+        if judge_kept_ids is not None:
+            jid = f"pipeline:{check_key}"
+            if jid not in judge_kept_ids:
+                continue
         # Map pipeline check verdict to emulator verdict scale
         emu_verdict = "partial" if chk_verdict in ("partial", "bypassable") else "lands"
         synthetic_trace = _normalize_trace_steps(
@@ -1910,8 +1932,33 @@ def _v7_sources_to_attack_class_traces(
     return out
 
 
+def _load_emulator_judge(agentshield_dir: Path) -> dict | None:
+    """Load `agent-emulation-judged.json` if present.
+
+    Returns a dict with `present`, `kept_ids` (set), `dropped`, and
+    `summary`, or None if the file is missing or invalid.
+    """
+    path = agentshield_dir / "agent-emulation-judged.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict) or data.get("tier") != "emulator-judge":
+        return None
+    kept = data.get("kept_ids") or []
+    return {
+        "present": True,
+        "judged_at": str(data.get("judged_at") or ""),
+        "summary": data.get("summary") or {},
+        "kept_ids": frozenset(str(k) for k in kept if k),
+        "dropped": list(data.get("dropped") or []),
+    }
+
+
 def _load_agent_emulation(agentshield_dir: Path) -> dict:
-    """Load `.agentshield/agent-emulation.json` if present.
+    """Load emulator output, preferring `agent-emulation-raw.json`.
 
     The behaviour-emulator output is structurally different from
     the older probe-campaigns-simulated.json shape: pipeline_map +
@@ -1920,20 +1967,33 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
     can pull both the pipeline map (shared across attack classes)
     and individual traces cleanly.
 
-    Returns `{"present": False}` when the file is missing or
-    malformed so callers can branch on a single key. Defensive:
-    unrecognised verdict / outcome enums are silently dropped to
+    Loading priority:
+    1. `agent-emulation-raw.json` — written by the emulator (Step 5); the
+       judge runs separately and writes `agent-emulation-judged.json`.
+    2. `agent-emulation.json` — backward compat for older emulator runs
+       that wrote both files in one Copilot pass.
+
+    If `agent-emulation-judged.json` exists the kept_ids list is applied
+    as a filter so only judge-approved findings reach the report. A
+    `judge` key is always present in the returned dict (None when absent).
+
+    Returns `{"present": False}` when the file is missing or malformed.
+    Defensive: unrecognised verdict/outcome enums are silently dropped to
     `None` so a typo can't poison the merge.
     """
-    path = agentshield_dir / "agent-emulation.json"
+    raw_path    = agentshield_dir / "agent-emulation-raw.json"
+    compat_path = agentshield_dir / "agent-emulation.json"
+    path = raw_path if raw_path.exists() else compat_path
     if not path.exists():
-        return {"present": False}
+        return {"present": False, "judge": None}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"present": False}
+        return {"present": False, "judge": None}
     if not isinstance(raw, dict):
-        return {"present": False}
+        return {"present": False, "judge": None}
+
+    judge = _load_emulator_judge(agentshield_dir)
 
     # Pipeline map — normalise: every standard step key present,
     # default to "absent" code_location.
@@ -2036,11 +2096,15 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
     # v7 source-transition schema: untrusted_sources + pipeline_checks.
     # Takes precedence over both entry_points and legacy flat traces when present.
     raw_untrusted_sources = raw.get("untrusted_sources")
+    judge_kept_ids: frozenset[str] | None = (
+        judge["kept_ids"] if judge and judge.get("kept_ids") is not None else None
+    )
     if isinstance(raw_untrusted_sources, list) and raw_untrusted_sources:
         traces_out = _v7_sources_to_attack_class_traces(
             raw_untrusted_sources,
             raw.get("pipeline_checks") or {},
             source_dir,
+            judge_kept_ids=judge_kept_ids,
         )
     else:
         # Legacy flat path: root-level attack_class_traces.
@@ -2101,6 +2165,7 @@ def _load_agent_emulation(agentshield_dir: Path) -> dict:
         "pipeline_checks": raw.get("pipeline_checks") or {},
         "untrusted_sources": raw_untrusted_sources or [],
         "_source_dir": str(source_dir),
+        "judge": judge,  # None when agent-emulation-judged.json absent
     }
 
 
@@ -17924,18 +17989,23 @@ def _render_how_it_works(parts: list[str]) -> None:
         '</span>'
         '</div>'
         '<div class="how-stage-cli">'
-        '<span class="how-stage-cli-label">Emulator runs via:</span>'
+        '<span class="how-stage-cli-label">Two Copilot passes &mdash; both from '
+        '<code>copilot-prompts.md</code>:</span>'
         '<code class="how-stage-cli-cmd">'
-        'agentshield scan &lt;path&gt;  '
         '<span class="how-stage-cli-comment">'
-        '# then paste the Copilot prompt in your IDE &mdash; '
-        'Copilot runs the emulator offline, no live agent needed</span>'
+        '# Step 2 — Behaviour emulator: paste from copilot-prompts.md &mdash; '
+        'Copilot walks the pipeline and writes agent-emulation-raw.json</span>'
+        '</code>'
+        '<span class="how-stage-cli-then">then</span>'
+        '<code class="how-stage-cli-cmd">'
+        '<span class="how-stage-cli-comment">'
+        '# Step 3 — Emulator judge: paste the next block from copilot-prompts.md &mdash; '
+        'Copilot reviews raw.json and writes agent-emulation-judged.json</span>'
         '</code>'
         '<span class="how-stage-cli-note">'
-        '&mdash; emulator output is written to '
-        '<code>.agentshield/agent-emulation.json</code>. '
-        '<code>agentshield merge</code> renders it in '
-        'the Coverage tab with the interactive Play animation.</span>'
+        '&mdash; <code>agentshield merge</code> reads '
+        '<code>agent-emulation-judged.json</code> and renders the '
+        'judge-filtered findings in the Coverage tab.</span>'
         '</div>'
         '<div class="how-stage-body">'
 
@@ -18068,24 +18138,40 @@ def _render_how_it_works(parts: list[str]) -> None:
         '</div>'
         '</li>'
 
-        # Step 6 — Judge review
+        # Step 6 — Judge review (separately enforced second Copilot pass)
         '<li class="how-step">'
-        '<span class="how-step-label">Step 6 &mdash; Judge review &mdash; FP filter &amp; dedup</span>'
+        '<span class="how-step-label">Step 6 &mdash; Emulator judge &mdash; '
+        'separately enforced FP filter &amp; dedup</span>'
         '<div class="how-step-body">'
-        '<p style="margin:0 0 8px">An LLM-as-judge reviews every raw finding before '
-        'it reaches the report. Two questions are asked for each:</p>'
+        '<p style="margin:0 0 8px">'
+        'A second Copilot pass &mdash; the <strong>emulator judge</strong> &mdash; '
+        'reads <code>agent-emulation-raw.json</code> and reviews each actionable '
+        'finding independently. This is a <em>separately enforced</em> pipeline stage '
+        '(not an in-band instruction to the emulator): Copilot must paste a distinct '
+        'prompt from <code>copilot-prompts.md</code> Step 3, and the merger validates '
+        'that <code>agent-emulation-judged.json</code> exists and covers all raw findings '
+        'before surfacing results.</p>'
         '<table class="emu-ref-table" style="margin-top:0;margin-bottom:8px">'
         '<thead><tr><th>Question</th><th>Action if fails</th></tr></thead>'
         '<tbody>'
         '<tr><td>Is the verdict grounded in a real code path with a file:line citation?</td>'
-        '<td>Marked false positive &mdash; omitted from final output</td></tr>'
+        '<td>Marked false positive &mdash; excluded from <code>kept_ids</code></td></tr>'
         '<tr><td>Is the same code defect already captured by another finding in this run?</td>'
-        '<td>Marked duplicate &mdash; only the highest-confidence instance kept</td></tr>'
+        '<td>Marked duplicate &mdash; only the canonical instance kept</td></tr>'
+        '<tr><td>Is a <code>to_sink</code> verdict overclaiming '
+        '(sink has no real render / eval / publish path)?</td>'
+        '<td>Dropped as sink-overclaiming false positive</td></tr>'
+        '<tr><td>Is a <code>to_tool_args</code> verdict overclaiming '
+        '(tool has no interpreter boundary)?</td>'
+        '<td>Dropped as tool-arg-overclaiming false positive</td></tr>'
         '</tbody></table>'
         '<div class="how-step-files">'
-        '<span class="how-step-files-label">Output:</span> '
-        '<code>agent-emulation-raw.json</code> (audit trail) + '
-        '<code>agent-emulation.json</code> (judge-filtered) &rarr; '
+        '<span class="how-step-files-label">Files:</span> '
+        '<code>agent-emulation-raw.json</code> (all predictions, audit trail) '
+        '&rarr; judge prompt (Step 3) &rarr; '
+        '<code>agent-emulation-judged.json</code> '
+        '(<code>kept_ids</code> list + drop log) &rarr; '
+        '<code>agentshield merge</code> &rarr; '
         'Coverage tab &rarr; Behaviour Emulator &rarr; Play'
         '</div>'
         '</div>'

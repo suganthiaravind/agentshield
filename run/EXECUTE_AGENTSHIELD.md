@@ -17,8 +17,9 @@ This is the only file you need to install and run AgentShield in a JPMC VDI (or 
 | §6 | Verify install (`agentshield --version`, optional unit tests) | 1 min |
 | §7.1 | Tier 1 scan: Semgrep + AST10 manifest scanner | 1–3 min |
 | §7.2 | Tier 2: Copilot LLM Scan (paste prompt into Copilot Chat) | 5–15 min |
-| §7.3 | Phase 2: Behaviour emulator (paste prompt into Copilot Chat) | 5–15 min |
-| §7.4 | Merge → unified HTML report + auto health check (14/14) | 30 s |
+| §7.3 | Phase 2a: Behaviour emulator (paste Step 2 from copilot-prompts.md into Copilot Chat) | 5–15 min |
+| §7.3b | Phase 2b: Emulator judge (paste Step 3 from copilot-prompts.md into Copilot Chat) | 2–5 min |
+| §7.4 | Merge → unified HTML report + auto health checks | 30 s |
 | §7.5 | Open the report in a browser (localhost or `file://`) | 30 s |
 | §8 | Privacy review before sharing | 2 min |
 
@@ -220,58 +221,60 @@ After this command finishes, your target repo's `.agentshield/` directory contai
 
 For everything else that can go wrong with Copilot (it summarised instead of executing, it stopped halfway, the JSON is malformed, etc.), see §12.3 "Tier 2 (Copilot) issues" below.
 
-### 7.3 Phase 2 — Behaviour emulator (Copilot Chat — IDE step)
+### 7.3 Phase 2 — Behaviour emulator + judge (two Copilot Chat passes)
 
-This step applies 17 OWASP / ATLAS adversary attack classes against every distinct entry point in the agent's pipeline, predicting step-by-step how each attack would propagate through the code.
+Phase 2 runs in two separate Copilot passes. Both prompts are in
+**`.agentshield/copilot-prompts.md`** — open that file and paste each
+block in order.
 
-1. Keep the same repo open in VS Code with Copilot Chat active.
-2. Paste this prompt verbatim:
+#### 7.3a — Behaviour emulator
 
-   ```
-   @workspace Please run the AgentShield agent behaviour emulator.
+1. Open `<your-agent-repo>/.agentshield/copilot-prompts.md` in VS Code.
+2. Copy the entire **`## Step 2 — Behaviour emulator`** fenced block.
+3. Paste it into **Copilot Chat**.
 
-   Read the instructions at
-   .agentshield/agent-emulator-instructions.md and the output
-   schema at .agentshield/agent-emulator-output-schema.md.
+The emulator traces each untrusted data source through four security
+transitions (→LLM, →tool args, →sink, →store), fires 3 seed payloads then up
+to 5 dynamically-generated mutations per transition, and records step-by-step
+verdicts with file:line citations.
 
-   Step 0 — Enumerate entry points first (mandatory).
-   Before classifying the agent type, list every distinct entry
-   point in the codebase: all HTTP route handlers (@app.route,
-   FastAPI path ops), WebSocket handlers, Lambda handlers,
-   scheduled-job triggers, and inter-agent receivers. For each
-   entry point, note whether it has an input filter, whether it
-   calls chain.invoke, whether it has a system prompt, whether it
-   has tools, and whether it forwards to a downstream agent.
-   Group entry points that share an identical pipeline
-   configuration — entry points with ANY pipeline difference get
-   their own block.
+Wait for Copilot to finish writing. Time depends on entry-point count:
+- 1 entry point: ~3–5 min
+- 3–5 entry points: ~10–20 min
+- 10+ entry points: may need to chunk; see §12.4 below.
 
-   Then classify the agent type: interactive, batch, sub-agent,
-   or orchestrator. Map the 8 pipeline steps from source code.
-   Enumerate every untrusted data source the agent reads (user
-   input, RAG documents, tool outputs, sub-agent messages).
-   For each source, trace it through 4 security transitions
-   (→LLM, →tool-args, →sink, →store) and record a verdict with
-   file:line evidence. Do not share verdicts across entry points
-   — a control on one route does not protect a sibling route.
-   Finally, evaluate the 5 pipeline-level checks.
+4. Confirm `.agentshield/agent-emulation-raw.json` exists. If it doesn't:
 
-   Write your pipeline emulations to
-   .agentshield/agent-emulation.json following the schema exactly.
-   Mark inconclusive when the relevant pipeline step isn't present
-   — do not fabricate behaviour.
-   ```
+   > "You said you finished but `.agentshield/agent-emulation-raw.json`
+   > doesn't exist. Please write all findings — including uncertain ones —
+   > to that path."
 
-3. Wait for Copilot to finish writing. Time depends on entry-point count:
-   - 1 entry point: ~3–5 min
-   - 3–5 entry points: ~10–20 min
-   - 10+ entry points: may need to chunk; see §12.4 below.
+#### 7.3b — Emulator judge
 
-4. Confirm `.agentshield/agent-emulation.json` exists. If it doesn't, follow up:
+The judge is a **separately enforced** second pass. It reads the raw output
+and filters false positives and within-file duplicates before the findings
+reach the report. `agentshield merge` checks that this file exists and
+covers all raw findings.
 
-   > "You said you finished but `.agentshield/agent-emulation.json` doesn't exist. Please write the JSON output to that path."
+1. Still in **`copilot-prompts.md`**, copy the entire
+   **`## Step 3 — Emulator judge`** fenced block.
+2. Paste it into **Copilot Chat** (same session or a new one).
 
-**What this produces:** For each entry point × each attack class, a pipeline trace with step-by-step verdicts (`lands` / `partial` / `blocked` / `inconclusive`) and file:line citations. The merge step renders these as full pipeline-trace cards in the report.
+Wait for Copilot to finish (~2–5 min).
+
+3. Confirm `.agentshield/agent-emulation-judged.json` exists. If it doesn't:
+
+   > "You said you finished but `.agentshield/agent-emulation-judged.json`
+   > doesn't exist. Please write your keep/drop decisions to that exact path
+   > using the output schema at
+   > `.agentshield/agent-emulator-judge-output-schema.md`."
+
+**What this produces:**
+- `agent-emulation-raw.json` — all raw predictions (audit trail)
+- `agent-emulation-judged.json` — `kept_ids` list + drop log with reasoning
+
+`agentshield merge` reads both files: the judge's `kept_ids` controls which
+findings appear in the Coverage tab and headline count.
 
 ---
 
@@ -281,7 +284,7 @@ This step applies 17 OWASP / ATLAS adversary attack classes against every distin
 agentshield merge /path/to/your-agent-repo
 ```
 
-The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json`, validates schemas, writes the unified report to a timestamped subfolder inside your **target repo's** `output/` folder, and then **automatically runs all 14 health checks** so you see pass/fail in one command:
+The merger reads `tier1-results.json` + `tier2-findings.json` + `agent-emulation-raw.json` + `agent-emulation-judged.json`, validates schemas, writes the unified report to a timestamped subfolder inside your **target repo's** `output/` folder, and then **automatically runs post-merge health checks** so you see pass/fail in one command:
 
 ```
 <your-agent-repo>/output/
@@ -308,7 +311,9 @@ CLI banners you might see:
 | `⚠ STALE Copilot LLM Scan.` | Tier 1 fingerprint changed since Copilot ran | Re-run §7.2 |
 | `✓  Report health: 14/14  —  ALL CHECKS PASSED` | All automated checks passed | Open the report |
 
-**Done when you see:** `✓  Report health: 14/14  —  ALL CHECKS PASSED`
+**Done when you see:** `✓  Report health: N/N  —  ALL CHECKS PASSED`
+
+> The check count varies: checks 12–16 run when `agent-emulation-raw.json` is present; checks 17–18 run when the judged file is present too. A complete run with both files produces up to 18 checks.
 
 To enforce freshness in CI (abort if any artifact is older than 7 days):
 ```bash
@@ -404,7 +409,7 @@ Run Tier 1 (Semgrep) + AST10 (manifest scanner). Optionally emit Tier 2 skill fi
 
 ### `agentshield merge <path>`
 
-Combine `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json` into a unified report. Automatically runs all 14 health checks after writing output files.
+Combine `tier1-results.json` + `tier2-findings.json` + `agent-emulation-raw.json` + `agent-emulation-judged.json` into a unified report. Automatically runs post-merge health checks (up to 18, depending on which artifacts are present) after writing output files.
 
 | Flag | Purpose |
 |---|---|
@@ -418,9 +423,9 @@ Combine `tier1-results.json` + `tier2-findings.json` + `agent-emulation.json` in
 
 ### `agentshield check <path>`
 
-Re-run the 14-point health check against existing merged output without re-merging. Reads from the most recent timestamped subfolder in `output/` automatically. Useful for verifying a report without triggering a full merge.
+Re-run post-merge health checks against existing merged output without re-merging. Reads from the most recent timestamped subfolder in `output/` automatically. Useful for verifying a report without triggering a full merge.
 
-Exits `0` if all 14 checks pass, `1` if any fail. No flags.
+Exits `0` if all checks pass, `1` if any fail. No flags. The check count depends on which artifacts are present: a full scan with emulator + judge produces up to 18 checks.
 
 > **Note:** `agentshield merge` already runs these checks automatically at the end of every merge. Use `agentshield check` only when you need to re-verify an existing report.
 
